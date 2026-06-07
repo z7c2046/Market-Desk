@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Inflection Hunter — TradingView Signal Scanner</title>
+    <meta name="description" content="Real-time inflection point signal scanner powered by TradingView data. Identify buy and sell opportunities with radar, backtest, and risk analysis." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div id="app" v-cloak>
+
+      <!-- ── Sidebar ── -->
+      <aside class="sidebar">
+
+        <div class="brand">
+          <div class="brand-mark">IH</div>
+          <div>
+            <h1>Inflection Hunter</h1>
+            <p>TradingView · Public Feed</p>
+          </div>
+        </div>
+
+        <div class="sidebar-divider"></div>
+
+        <!-- Snapshot Controls -->
+        <form class="control-stack" @submit.prevent="loadSnapshot">
+
+          <label>
+            <span>Symbol</span>
+            <input
+              v-model.trim="form.symbol"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="TSLA"
+            />
+          </label>
+
+          <label>
+            <span>Timeframe</span>
+            <select v-model="form.tf" @change="changeTimeframe(form.tf)">
+              <option value="15m">15 min</option>
+              <option value="30m">30 min</option>
+              <option value="1h">1 Hour</option>
+              <option value="4h">4 Hour</option>
+              <option value="1d">1 Day</option>
+            </select>
+          </label>
+
+          <div class="tf-grid" aria-label="Quick timeframe selector">
+            <button
+              v-for="item in timeframes"
+              :key="item.value"
+              class="tf-button"
+              :class="{ active: form.tf === item.value }"
+              type="button"
+              :disabled="loading"
+              @click="changeTimeframe(item.value)"
+            >{{ item.label }}</button>
+          </div>
+
+          <label>
+            <span>Bars</span>
+            <input v-model.number="form.limit" type="number" min="80" max="3000" step="20" />
+          </label>
+
+          <div class="switch-row">
+            <label class="switch">
+              <input v-model="toggles.ema" type="checkbox" @change="renderChart" />
+              <span>EMA</span>
+            </label>
+            <label class="switch">
+              <input v-model="toggles.aux" type="checkbox" @change="renderChart" />
+              <span>AUX</span>
+            </label>
+            <label class="switch">
+              <input v-model="toggles.signals" type="checkbox" @change="renderChart" />
+              <span>Signals</span>
+            </label>
+          </div>
+
+          <button class="primary-button" type="submit" :disabled="loading">
+            <span v-if="loading">Loading…</span>
+            <span v-else>Load Snapshot</span>
+          </button>
+        </form>
+
+        <div class="status-panel" :class="{ bad: error }">
+          <span>{{ statusText }}</span>
+        </div>
+
+        <div class="sidebar-divider"></div>
+
+        <!-- Watchlist -->
+        <section class="watchlist-section">
+          <div class="side-heading">
+            <strong>自选列表</strong>
+            <div class="wl-head-actions">
+              <button class="wl-icon-btn" type="button" title="编辑列表" @click="openWatchlistEdit">✎</button>
+              <button class="wl-icon-btn" type="button" title="恢复默认" @click="resetWatchlist">↺</button>
+            </div>
+          </div>
+
+          <!-- Normal mode: tag chips -->
+          <div v-if="!watchlistEditMode" class="wl-chips">
+            <button
+              v-for="sym in watchlist"
+              :key="sym"
+              class="wl-chip"
+              :class="{ active: form.symbol === sym }"
+              type="button"
+              :disabled="loading"
+              @click="loadWatchlistSymbol(sym)"
+            >
+              <span class="wl-chip-label">{{ sym }}</span>
+              <span
+                class="wl-chip-remove"
+                title="移除"
+                @click.stop="removeWatchlistSymbol(sym)"
+              >×</span>
+            </button>
+          </div>
+
+          <!-- Quick-add input -->
+          <div v-if="!watchlistEditMode" class="wl-add-row">
+            <input
+              v-model.trim="watchlistNewSym"
+              placeholder="输入代码 + Enter"
+              maxlength="12"
+              spellcheck="false"
+              @keydown.enter.prevent="addWatchlistSymbol"
+            />
+            <button class="wl-add-btn" type="button" @click="addWatchlistSymbol">+</button>
+          </div>
+
+          <!-- Scan watchlist button -->
+          <button
+            v-if="!watchlistEditMode"
+            class="wl-scan-btn"
+            type="button"
+            :disabled="radarLoading"
+            @click="runRadarOnWatchlist"
+          >
+            <span v-if="radarLoading">扫描中…</span>
+            <span v-else>⚡ 扫描自选列表 ({{ watchlist.length }} 支)</span>
+          </button>
+
+          <!-- Edit mode: textarea -->
+          <div v-if="watchlistEditMode" class="wl-edit-block">
+            <textarea
+              v-model="watchlistInput"
+              placeholder="每行或逗号分隔输入代码，如: AAPL, TSLA, NVDA"
+              rows="6"
+            ></textarea>
+            <div class="wl-edit-actions">
+              <button class="primary-button" type="button" style="height:34px;font-size:13px" @click="saveWatchlistEdit">保存</button>
+              <button class="secondary-button" type="button" style="height:34px;font-size:13px" @click="cancelWatchlistEdit">取消</button>
+            </div>
+          </div>
+        </section>
+
+        <div class="sidebar-divider"></div>
+
+        <!-- Signal Radar Controls -->
+        <section class="radar-controls">
+          <div class="side-heading">
+            <strong>Signal Radar</strong>
+            <span>{{ radarStatusText }}</span>
+          </div>
+
+          <label>
+            <span>Universe</span>
+            <textarea
+              v-model.trim="radarForm.symbols"
+              spellcheck="false"
+              placeholder="Default: liquid US stocks"
+            ></textarea>
+          </label>
+
+          <div class="radar-input-grid">
+            <label>
+              <span>Lookback</span>
+              <input v-model.number="radarForm.lookback" type="number" min="1" max="20" step="1" />
+            </label>
+            <label>
+              <span>Max</span>
+              <input v-model.number="radarForm.max" type="number" min="5" max="80" step="1" />
+            </label>
+          </div>
+
+          <button class="secondary-button" type="button" :disabled="radarLoading" @click="runRadar">
+            <span v-if="radarLoading">Scanning…</span>
+            <span v-else>Run Radar</span>
+          </button>
+        </section>
+
+      </aside>
+
+      <!-- ── Main Workspace ── -->
+      <main class="workspace">
+
+        <!-- Top Bar -->
+        <section class="topbar">
+          <div>
+            <p class="eyebrow">{{ snapshot?.tvSymbol || "TradingView" }}</p>
+            <h2>{{ displaySymbol }}</h2>
+          </div>
+          <div class="topbar-right">
+            <button
+              class="theme-toggle"
+              type="button"
+              @click="toggleTheme"
+              :title="isDark ? 'Switch to light mode' : 'Switch to dark mode'"
+            >{{ isDark ? "Light" : "Dark" }}</button>
+            <div class="last-price">
+              <span>{{ lastPrice }}</span>
+              <small>{{ snapshot?.tf || form.tf }}</small>
+            </div>
+          </div>
+        </section>
+
+        <!-- Metric Grid -->
+        <section class="metric-grid">
+          <div class="metric">
+            <span>Pulse</span>
+            <strong>{{ pulseScore }}</strong>
+            <small>{{ pulseLabel }}</small>
+          </div>
+          <div class="metric">
+            <span>Bull / Bear / Neutral</span>
+            <strong>{{ splitText }}</strong>
+            <small>20-bar slope · {{ activeTimeframeLabel }}</small>
+          </div>
+          <div class="metric">
+            <span>Risk</span>
+            <strong>{{ riskText }}</strong>
+            <small>{{ targetText }}</small>
+          </div>
+          <div class="metric">
+            <span>Backtest</span>
+            <strong>{{ backtestText }}</strong>
+            <small>{{ expectancyText }}</small>
+          </div>
+        </section>
+
+        <!-- Chart + Mutant Panel -->
+        <section class="chart-band">
+          <div ref="chartHost" class="chart-host"></div>
+          <div class="mutant-panel">
+            <div class="mutant-title">Inflection Mutant</div>
+            <div class="mutant-bars">
+              <span
+                v-for="point in mutantBars"
+                :key="point.time"
+                :class="['mutant-bar', point.value >= 0.18 ? 'up' : point.value <= -0.18 ? 'down' : 'flat']"
+                :style="mutantStyle(point)"
+              ></span>
+            </div>
+          </div>
+        </section>
+
+        <!-- Backtest Board -->
+        <section class="backtest-board">
+          <div class="panel-head backtest-head">
+            <div>
+              <h3>{{ backtestSymbol }} Strategy Backtest</h3>
+              <span>{{ backtestSummary }}</span>
+            </div>
+            <div class="backtest-controls">
+              <div class="bt-tf-grid" aria-label="Backtest timeframe">
+                <button
+                  v-for="item in backtestTimeframes"
+                  :key="item.value"
+                  class="tf-button"
+                  :class="{ active: backtestForm.tf === item.value }"
+                  type="button"
+                  :disabled="backtestLoading"
+                  @click="changeBacktestTimeframe(item.value)"
+                >{{ item.label }}</button>
+              </div>
+              <input v-model="backtestForm.start" type="date" aria-label="Backtest start date" />
+              <input v-model="backtestForm.end"   type="date" aria-label="Backtest end date" />
+              <button class="mini-button" type="button" :disabled="backtestLoading" @click="runBacktest()">
+                <span v-if="backtestLoading">…</span>
+                <span v-else>Run</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="strategy-grid">
+            <div
+              v-for="item in backtestRows"
+              :key="item.id"
+              class="strategy-card"
+              :class="{ winner: item.id === backtest?.bestStrategyId }"
+            >
+              <div class="strategy-title">
+                <strong>{{ item.name }}</strong>
+                <span v-if="item.id === backtest?.bestStrategyId">Best</span>
+              </div>
+              <strong class="strategy-return" :class="returnClass(item.totalReturn)">
+                {{ signedPercent(item.totalReturn) }}
+              </strong>
+              <small>{{ strategyMeta(item) }}</small>
+              <small>{{ signedPercent(item.expectancy) }} avg · {{ percent(item.exposurePct) }} exposure</small>
+            </div>
+            <div v-if="!backtestLoading && !backtestRows.length" class="empty-row">No backtest result</div>
+          </div>
+        </section>
+
+        <!-- Signal Radar Board -->
+        <section class="radar-board">
+          <div class="panel-head radar-head">
+            <div>
+              <h3>Signal Radar</h3>
+              <span>{{ radarSummary }}</span>
+            </div>
+            <button class="mini-button" type="button" :disabled="radarLoading" @click="runRadar">Refresh</button>
+          </div>
+
+          <div class="radar-columns">
+            <!-- Bullish -->
+            <div class="radar-column">
+              <div class="radar-column-head buy-text">
+                <strong>eB / B</strong>
+                <span>{{ radarBullish.length }}</span>
+              </div>
+              <button
+                v-for="item in radarBullish"
+                :key="item.symbol + item.side + item.signalTime"
+                class="radar-row"
+                type="button"
+                @click="openRadarSymbol(item)"
+              >
+                <span class="badge buy">{{ item.side }}</span>
+                <strong>{{ item.symbol }}</strong>
+                <span>{{ money(item.price) }}</span>
+                <small>{{ radarTime(item) }} · {{ item.ageBars }} bars</small>
+              </button>
+              <div v-if="!radarLoading && !radarBullish.length" class="empty-row">No fresh bullish signals</div>
+            </div>
+
+            <!-- Bearish -->
+            <div class="radar-column">
+              <div class="radar-column-head sell-text">
+                <strong>eS / S</strong>
+                <span>{{ radarBearish.length }}</span>
+              </div>
+              <button
+                v-for="item in radarBearish"
+                :key="item.symbol + item.side + item.signalTime"
+                class="radar-row"
+                type="button"
+                @click="openRadarSymbol(item)"
+              >
+                <span class="badge sell">{{ item.side }}</span>
+                <strong>{{ item.symbol }}</strong>
+                <span>{{ money(item.price) }}</span>
+                <small>{{ radarTime(item) }} · {{ item.ageBars }} bars</small>
+              </button>
+              <div v-if="!radarLoading && !radarBearish.length" class="empty-row">No fresh bearish signals</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Details: Signals + Risk -->
+        <section class="details-grid">
+          <div class="panel">
+            <div class="panel-head">
+              <h3>Recent Signals</h3>
+              <span>{{ signalCount }}</span>
+            </div>
+            <div class="signal-list">
+            <div v-for="signal in recentSignals" :key="signal.time + signal.side" class="signal-row">
+                <span :class="['badge', signal.side.includes('B') ? 'buy' : 'sell']">{{ signal.side }}</span>
+                <span>{{ formatSignalTime(signal.time) }}</span>
+                <span>{{ money(signal.price) }}</span>
+                <span v-if="signal.confluence != null" class="signal-confluence" :title="`共振维度 ${signal.confluence}/4`">
+                  <span v-for="n in 4" :key="n" :class="n <= signal.confluence ? 'star-on' : 'star-off'">★</span>
+                </span>
+                <small class="signal-meta">
+                  {{ signal.reason }}
+                  <span v-if="signal.wr != null"> · WR {{ signal.wr }}</span>
+                  <span v-if="signal.volSurge != null"> · Vol {{ signal.volSurge }}x</span>
+                </small>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head">
+              <h3>Risk Copilot</h3>
+              <span>{{ riskDirection }}</span>
+            </div>
+            <div class="kv">
+              <span>Entry</span>     <strong>{{ money(snapshot?.risk?.entry) }}</strong>
+              <span>Stop</span>      <strong>{{ money(snapshot?.risk?.stop) }}</strong>
+              <span>Target 1</span>  <strong>{{ money(snapshot?.risk?.target1) }}</strong>
+              <span>Target 2</span>  <strong>{{ money(snapshot?.risk?.target2) }}</strong>
+              <span>Confidence</span><strong>{{ percent(snapshot?.risk?.confidence) }}</strong>
+            </div>
+          </div>
+        </section>
+
+      </main>
+    </div>
+
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
