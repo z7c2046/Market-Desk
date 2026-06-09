@@ -12,9 +12,14 @@
   </head>
   <body>
     <div id="app" v-cloak>
+      
+      <!-- iOS Bottom Sheet Backdrop -->
+      <div class="ios-backdrop mobile-only" :class="{ show: showSettings }" @click="showSettings = false"></div>
 
-      <!-- ── Sidebar ── -->
-      <aside class="sidebar">
+      <!-- ── Sidebar (Restyled as Bottom Sheet on Mobile) ── -->
+      <aside class="sidebar" :class="{ 'show-mobile': showSettings }">
+        <!-- Bottom Sheet Drag Handle for Mobile -->
+        <div class="bottom-sheet-handle mobile-only" @click="showSettings = false"></div>
 
         <div class="brand">
           <div class="brand-mark">IH</div>
@@ -27,7 +32,7 @@
         <div class="sidebar-divider"></div>
 
         <!-- Snapshot Controls -->
-        <form class="control-stack" @submit.prevent="loadSnapshot">
+        <form class="control-stack" @submit.prevent="loadSnapshotAndClose">
 
           <label>
             <span>Symbol</span>
@@ -94,8 +99,8 @@
 
         <div class="sidebar-divider"></div>
 
-        <!-- Watchlist -->
-        <section class="watchlist-section">
+        <!-- Watchlist (Desktop Only in Sidebar) -->
+        <section class="watchlist-section desktop-only">
           <div class="side-heading">
             <strong>自选列表</strong>
             <div class="wl-head-actions">
@@ -162,7 +167,7 @@
           </div>
         </section>
 
-        <div class="sidebar-divider"></div>
+        <div class="sidebar-divider desktop-only"></div>
 
         <!-- Signal Radar Controls -->
         <section class="radar-controls">
@@ -191,219 +196,360 @@
             </label>
           </div>
 
-          <button class="secondary-button" type="button" :disabled="radarLoading" @click="runRadar">
+          <button class="secondary-button" type="button" :disabled="radarLoading" @click="runRadarAndClose">
             <span v-if="radarLoading">Scanning…</span>
             <span v-else>Run Radar</span>
           </button>
         </section>
 
+        <!-- Theme Toggle in Settings on Mobile -->
+        <div class="sidebar-divider mobile-only"></div>
+        <div class="mobile-theme-row mobile-only">
+          <span>Dark Mode</span>
+          <button
+            class="theme-toggle"
+            type="button"
+            @click="toggleTheme"
+          >{{ isDark ? "On" : "Off" }}</button>
+        </div>
+
       </aside>
 
       <!-- ── Main Workspace ── -->
-      <main class="workspace">
+      <main class="workspace" :class="{ 'mobile-nav-active': isMobile }">
 
         <!-- Top Bar -->
         <section class="topbar">
-          <div>
-            <p class="eyebrow">{{ snapshot?.tvSymbol || "TradingView" }}</p>
-            <h2>{{ displaySymbol }}</h2>
+          <div class="topbar-left-wrapper">
+            <!-- Gear Settings icon on Mobile -->
+            <button
+              class="settings-trigger mobile-only"
+              type="button"
+              @click="showSettings = !showSettings"
+              title="Open Settings"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+              </svg>
+            </button>
+            <div class="topbar-title-block">
+              <p class="eyebrow">{{ snapshot?.tvSymbol || "TradingView" }}</p>
+              <h2>{{ displaySymbol }}</h2>
+            </div>
           </div>
           <div class="topbar-right">
             <button
-              class="theme-toggle"
+              class="theme-toggle desktop-only"
               type="button"
               @click="toggleTheme"
               :title="isDark ? 'Switch to light mode' : 'Switch to dark mode'"
             >{{ isDark ? "Light" : "Dark" }}</button>
             <div class="last-price">
               <span>{{ lastPrice }}</span>
-              <small>{{ snapshot?.tf || form.tf }}</small>
+              <small>{{ (snapshot?.tf || form.tf)?.toUpperCase() }}</small>
             </div>
           </div>
         </section>
 
-        <!-- Metric Grid -->
-        <section class="metric-grid">
-          <div class="metric">
-            <span>Pulse</span>
-            <strong>{{ pulseScore }}</strong>
-            <small>{{ pulseLabel }}</small>
-          </div>
-          <div class="metric">
-            <span>Bull / Bear / Neutral</span>
-            <strong>{{ splitText }}</strong>
-            <small>20-bar slope · {{ activeTimeframeLabel }}</small>
-          </div>
-          <div class="metric">
-            <span>Risk</span>
-            <strong>{{ riskText }}</strong>
-            <small>{{ targetText }}</small>
-          </div>
-          <div class="metric">
-            <span>Backtest</span>
-            <strong>{{ backtestText }}</strong>
-            <small>{{ expectancyText }}</small>
-          </div>
-        </section>
+        <!-- ── Mobile Page Swipe Layout ── -->
+        <div
+          class="mobile-swipe-wrapper"
+          :style="swipeStyle"
+          @touchstart="onTouchStart"
+          @touchmove="onTouchMove"
+          @touchend="onTouchEnd"
+        >
 
-        <!-- Chart + Mutant Panel -->
-        <section class="chart-band">
-          <div ref="chartHost" class="chart-host"></div>
-          <div class="mutant-panel">
-            <div class="mutant-title">Inflection Mutant</div>
-            <div class="mutant-bars">
-              <span
-                v-for="point in mutantBars"
-                :key="point.time"
-                :class="['mutant-bar', point.value >= 0.18 ? 'up' : point.value <= -0.18 ? 'down' : 'flat']"
-                :style="mutantStyle(point)"
-              ></span>
-            </div>
-          </div>
-        </section>
+          <!-- Tab 0: Radar & Watchlist -->
+          <div class="mobile-page-tab tab-radar" :class="{ active: activeTab === 0 }">
+            
+            <!-- Watchlist (Mobile Only) -->
+            <section class="watchlist-section mobile-only">
+              <div class="side-heading">
+                <strong>自选列表</strong>
+                <div class="wl-head-actions">
+                  <button class="wl-icon-btn" type="button" title="编辑列表" @click="openWatchlistEdit">✎</button>
+                  <button class="wl-icon-btn" type="button" title="恢复默认" @click="resetWatchlist">↺</button>
+                </div>
+              </div>
 
-        <!-- Backtest Board -->
-        <section class="backtest-board">
-          <div class="panel-head backtest-head">
-            <div>
-              <h3>{{ backtestSymbol }} Strategy Backtest</h3>
-              <span>{{ backtestSummary }}</span>
-            </div>
-            <div class="backtest-controls">
-              <div class="bt-tf-grid" aria-label="Backtest timeframe">
+              <!-- Normal mode: tag chips -->
+              <div v-if="!watchlistEditMode" class="wl-chips">
                 <button
-                  v-for="item in backtestTimeframes"
-                  :key="item.value"
-                  class="tf-button"
-                  :class="{ active: backtestForm.tf === item.value }"
+                  v-for="sym in watchlist"
+                  :key="sym"
+                  class="wl-chip"
+                  :class="{ active: form.symbol === sym }"
                   type="button"
-                  :disabled="backtestLoading"
-                  @click="changeBacktestTimeframe(item.value)"
-                >{{ item.label }}</button>
+                  :disabled="loading"
+                  @click="loadWatchlistSymbol(sym)"
+                >
+                  <span class="wl-chip-label">{{ sym }}</span>
+                  <span
+                    class="wl-chip-remove"
+                    title="移除"
+                    @click.stop="removeWatchlistSymbol(sym)"
+                  >×</span>
+                </button>
               </div>
-              <input v-model="backtestForm.start" type="date" aria-label="Backtest start date" />
-              <input v-model="backtestForm.end"   type="date" aria-label="Backtest end date" />
-              <button class="mini-button" type="button" :disabled="backtestLoading" @click="runBacktest()">
-                <span v-if="backtestLoading">…</span>
-                <span v-else>Run</span>
-              </button>
-            </div>
-          </div>
 
-          <div class="strategy-grid">
-            <div
-              v-for="item in backtestRows"
-              :key="item.id"
-              class="strategy-card"
-              :class="{ winner: item.id === backtest?.bestStrategyId }"
-            >
-              <div class="strategy-title">
-                <strong>{{ item.name }}</strong>
-                <span v-if="item.id === backtest?.bestStrategyId">Best</span>
+              <!-- Quick-add input -->
+              <div v-if="!watchlistEditMode" class="wl-add-row">
+                <input
+                  v-model.trim="watchlistNewSym"
+                  placeholder="输入代码 + Enter"
+                  maxlength="12"
+                  spellcheck="false"
+                  @keydown.enter.prevent="addWatchlistSymbol"
+                />
+                <button class="wl-add-btn" type="button" @click="addWatchlistSymbol">+</button>
               </div>
-              <strong class="strategy-return" :class="returnClass(item.totalReturn)">
-                {{ signedPercent(item.totalReturn) }}
-              </strong>
-              <small>{{ strategyMeta(item) }}</small>
-              <small>{{ signedPercent(item.expectancy) }} avg · {{ percent(item.exposurePct) }} exposure</small>
-            </div>
-            <div v-if="!backtestLoading && !backtestRows.length" class="empty-row">No backtest result</div>
-          </div>
-        </section>
 
-        <!-- Signal Radar Board -->
-        <section class="radar-board">
-          <div class="panel-head radar-head">
-            <div>
-              <h3>Signal Radar</h3>
-              <span>{{ radarSummary }}</span>
-            </div>
-            <button class="mini-button" type="button" :disabled="radarLoading" @click="runRadar">Refresh</button>
-          </div>
-
-          <div class="radar-columns">
-            <!-- Bullish -->
-            <div class="radar-column">
-              <div class="radar-column-head buy-text">
-                <strong>eB / B</strong>
-                <span>{{ radarBullish.length }}</span>
-              </div>
+              <!-- Scan watchlist button -->
               <button
-                v-for="item in radarBullish"
-                :key="item.symbol + item.side + item.signalTime"
-                class="radar-row"
+                v-if="!watchlistEditMode"
+                class="wl-scan-btn"
                 type="button"
-                @click="openRadarSymbol(item)"
+                :disabled="radarLoading"
+                @click="runRadarOnWatchlist"
               >
-                <span class="badge buy">{{ item.side }}</span>
-                <strong>{{ item.symbol }}</strong>
-                <span>{{ money(item.price) }}</span>
-                <small>{{ radarTime(item) }} · {{ item.ageBars }} bars</small>
+                <span v-if="radarLoading">扫描中…</span>
+                <span v-else>⚡ 扫描自选列表 ({{ watchlist.length }} 支)</span>
               </button>
-              <div v-if="!radarLoading && !radarBullish.length" class="empty-row">No fresh bullish signals</div>
-            </div>
 
-            <!-- Bearish -->
-            <div class="radar-column">
-              <div class="radar-column-head sell-text">
-                <strong>eS / S</strong>
-                <span>{{ radarBearish.length }}</span>
+              <!-- Edit mode: textarea -->
+              <div v-if="watchlistEditMode" class="wl-edit-block">
+                <textarea
+                  v-model="watchlistInput"
+                  placeholder="每行或逗号分隔输入代码，如: AAPL, TSLA, NVDA"
+                  rows="6"
+                ></textarea>
+                <div class="wl-edit-actions">
+                  <button class="primary-button" type="button" style="height:34px;font-size:13px" @click="saveWatchlistEdit">保存</button>
+                  <button class="secondary-button" type="button" style="height:34px;font-size:13px" @click="cancelWatchlistEdit">取消</button>
+                </div>
               </div>
-              <button
-                v-for="item in radarBearish"
-                :key="item.symbol + item.side + item.signalTime"
-                class="radar-row"
-                type="button"
-                @click="openRadarSymbol(item)"
-              >
-                <span class="badge sell">{{ item.side }}</span>
-                <strong>{{ item.symbol }}</strong>
-                <span>{{ money(item.price) }}</span>
-                <small>{{ radarTime(item) }} · {{ item.ageBars }} bars</small>
-              </button>
-              <div v-if="!radarLoading && !radarBearish.length" class="empty-row">No fresh bearish signals</div>
-            </div>
-          </div>
-        </section>
+            </section>
 
-        <!-- Details: Signals + Risk -->
-        <section class="details-grid">
-          <div class="panel">
-            <div class="panel-head">
-              <h3>Recent Signals</h3>
-              <span>{{ signalCount }}</span>
-            </div>
-            <div class="signal-list">
-            <div v-for="signal in recentSignals" :key="signal.time + signal.side" class="signal-row">
-                <span :class="['badge', signal.side.includes('B') ? 'buy' : 'sell']">{{ signal.side }}</span>
-                <span>{{ formatSignalTime(signal.time) }}</span>
-                <span>{{ money(signal.price) }}</span>
-                <span v-if="signal.confluence != null" class="signal-confluence" :title="`共振维度 ${signal.confluence}/4`">
-                  <span v-for="n in 4" :key="n" :class="n <= signal.confluence ? 'star-on' : 'star-off'">★</span>
-                </span>
-                <small class="signal-meta">
-                  {{ signal.reason }}
-                  <span v-if="signal.wr != null"> · WR {{ signal.wr }}</span>
-                  <span v-if="signal.volSurge != null"> · Vol {{ signal.volSurge }}x</span>
-                </small>
+            <!-- Radar Board -->
+            <section class="radar-board">
+              <div class="panel-head radar-head">
+                <div>
+                  <h3>Signal Radar</h3>
+                  <span>{{ radarSummary }}</span>
+                </div>
+                <button class="mini-button" type="button" :disabled="radarLoading" @click="runRadar">Refresh</button>
               </div>
-            </div>
+
+              <div class="radar-columns">
+                <!-- Bullish -->
+                <div class="radar-column">
+                  <div class="radar-column-head buy-text">
+                    <strong>eB / B</strong>
+                    <span>{{ radarBullish.length }}</span>
+                  </div>
+                  <button
+                    v-for="item in radarBullish"
+                    :key="item.symbol + item.side + item.signalTime"
+                    class="radar-row"
+                    type="button"
+                    @click="openRadarSymbol(item)"
+                  >
+                    <span class="badge buy">{{ item.side }}</span>
+                    <strong>{{ item.symbol }}</strong>
+                    <span>{{ money(item.price) }}</span>
+                    <small>{{ radarTime(item) }} · {{ item.ageBars }} bars</small>
+                  </button>
+                  <div v-if="!radarLoading && !radarBullish.length" class="empty-row">No fresh bullish signals</div>
+                </div>
+
+                <!-- Bearish -->
+                <div class="radar-column">
+                  <div class="radar-column-head sell-text">
+                    <strong>eS / S</strong>
+                    <span>{{ radarBearish.length }}</span>
+                  </div>
+                  <button
+                    v-for="item in radarBearish"
+                    :key="item.symbol + item.side + item.signalTime"
+                    class="radar-row"
+                    type="button"
+                    @click="openRadarSymbol(item)"
+                  >
+                    <span class="badge sell">{{ item.side }}</span>
+                    <strong>{{ item.symbol }}</strong>
+                    <span>{{ money(item.price) }}</span>
+                    <small>{{ radarTime(item) }} · {{ item.ageBars }} bars</small>
+                  </button>
+                  <div v-if="!radarLoading && !radarBearish.length" class="empty-row">No fresh bearish signals</div>
+                </div>
+              </div>
+            </section>
           </div>
 
-          <div class="panel">
-            <div class="panel-head">
-              <h3>Risk Copilot</h3>
-              <span>{{ riskDirection }}</span>
-            </div>
-            <div class="kv">
-              <span>Entry</span>     <strong>{{ money(snapshot?.risk?.entry) }}</strong>
-              <span>Stop</span>      <strong>{{ money(snapshot?.risk?.stop) }}</strong>
-              <span>Target 1</span>  <strong>{{ money(snapshot?.risk?.target1) }}</strong>
-              <span>Target 2</span>  <strong>{{ money(snapshot?.risk?.target2) }}</strong>
-              <span>Confidence</span><strong>{{ percent(snapshot?.risk?.confidence) }}</strong>
-            </div>
+          <!-- Tab 1: Chart & Live -->
+          <div class="mobile-page-tab tab-chart" :class="{ active: activeTab === 1 }">
+            <!-- Metric Grid -->
+            <section class="metric-grid">
+              <div class="metric">
+                <span>Pulse</span>
+                <strong>{{ pulseScore }}</strong>
+                <small>{{ pulseLabel }}</small>
+              </div>
+              <div class="metric">
+                <span>Bull / Bear / Neutral</span>
+                <strong>{{ splitText }}</strong>
+                <small>20-bar slope · {{ activeTimeframeLabel }}</small>
+              </div>
+              <div class="metric">
+                <span>Risk</span>
+                <strong>{{ riskText }}</strong>
+                <small>{{ targetText }}</small>
+              </div>
+              <div class="metric">
+                <span>Backtest</span>
+                <strong>{{ backtestText }}</strong>
+                <small>{{ expectancyText }}</small>
+              </div>
+            </section>
+
+            <!-- Chart + Mutant Panel -->
+            <section class="chart-band">
+              <div ref="chartHost" class="chart-host"></div>
+              <div class="mutant-panel">
+                <div class="mutant-title">Inflection Mutant</div>
+                <div class="mutant-bars">
+                  <span
+                    v-for="point in mutantBars"
+                    :key="point.time"
+                    :class="['mutant-bar', point.value >= 0.18 ? 'up' : point.value <= -0.18 ? 'down' : 'flat']"
+                    :style="mutantStyle(point)"
+                  ></span>
+                </div>
+              </div>
+            </section>
           </div>
-        </section>
+
+          <!-- Tab 2: Strategy & Signals -->
+          <div class="mobile-page-tab tab-strategy" :class="{ active: activeTab === 2 }">
+            <!-- Backtest Board -->
+            <section class="backtest-board">
+              <div class="panel-head backtest-head">
+                <div>
+                  <h3>{{ backtestSymbol }} Strategy Backtest</h3>
+                  <span>{{ backtestSummary }}</span>
+                </div>
+                <div class="backtest-controls">
+                  <div class="bt-tf-grid" aria-label="Backtest timeframe">
+                    <button
+                      v-for="item in backtestTimeframes"
+                      :key="item.value"
+                      class="tf-button"
+                      :class="{ active: backtestForm.tf === item.value }"
+                      type="button"
+                      :disabled="backtestLoading"
+                      @click="changeBacktestTimeframe(item.value)"
+                    >{{ item.label }}</button>
+                  </div>
+                  <input v-model="backtestForm.start" type="date" aria-label="Backtest start date" />
+                  <input v-model="backtestForm.end"   type="date" aria-label="Backtest end date" />
+                  <button class="mini-button" type="button" :disabled="backtestLoading" @click="runBacktest()">
+                    <span v-if="backtestLoading">…</span>
+                    <span v-else>Run</span>
+                  </button>
+                </div>
+              </div>
+
+              <div class="strategy-grid">
+                <div
+                  v-for="item in backtestRows"
+                  :key="item.id"
+                  class="strategy-card"
+                  :class="{ winner: item.id === backtest?.bestStrategyId }"
+                >
+                  <div class="strategy-title">
+                    <strong>{{ item.name }}</strong>
+                    <span v-if="item.id === backtest?.bestStrategyId">Best</span>
+                  </div>
+                  <strong class="strategy-return" :class="returnClass(item.totalReturn)">
+                    {{ signedPercent(item.totalReturn) }}
+                  </strong>
+                  <small>{{ strategyMeta(item) }}</small>
+                  <small>{{ signedPercent(item.expectancy) }} avg · {{ percent(item.exposurePct) }} exposure</small>
+                </div>
+                <div v-if="!backtestLoading && !backtestRows.length" class="empty-row">No backtest result</div>
+              </div>
+            </section>
+
+            <!-- Details: Signals + Risk -->
+            <section class="details-grid">
+              <div class="panel">
+                <div class="panel-head">
+                  <h3>Recent Signals</h3>
+                  <span>{{ signalCount }}</span>
+                </div>
+                <div class="signal-list">
+                  <div v-for="signal in recentSignals" :key="signal.time + signal.side" class="signal-row">
+                    <span :class="['badge', signal.side.includes('B') ? 'buy' : 'sell']">{{ signal.side }}</span>
+                    <span>{{ formatSignalTime(signal.time) }}</span>
+                    <span>{{ money(signal.price) }}</span>
+                    <span v-if="signal.confluence != null" class="signal-confluence" :title="`共振维度 ${signal.confluence}/4`">
+                      <span v-for="n in 4" :key="n" :class="n <= signal.confluence ? 'star-on' : 'star-off'">★</span>
+                    </span>
+                    <small class="signal-meta">
+                      {{ signal.reason }}
+                      <span v-if="signal.wr != null"> · WR {{ signal.wr }}</span>
+                      <span v-if="signal.volSurge != null"> · Vol {{ signal.volSurge }}x</span>
+                    </small>
+                  </div>
+                </div>
+              </div>
+
+              <div class="panel">
+                <div class="panel-head">
+                  <h3>Risk Copilot</h3>
+                  <span>{{ riskDirection }}</span>
+                </div>
+                <div class="kv">
+                  <span>Entry</span>     <strong>{{ money(snapshot?.risk?.entry) }}</strong>
+                  <span>Stop</span>      <strong>{{ money(snapshot?.risk?.stop) }}</strong>
+                  <span>Target 1</span>  <strong>{{ money(snapshot?.risk?.target1) }}</strong>
+                  <span>Target 2</span>  <strong>{{ money(snapshot?.risk?.target2) }}</strong>
+                  <span>Confidence</span><strong>{{ percent(snapshot?.risk?.confidence) }}</strong>
+                </div>
+              </div>
+            </section>
+          </div>
+
+        </div>
+
+        <!-- iOS Bottom Fixed Tab Bar -->
+        <nav class="ios-tab-bar mobile-only">
+          <button class="tab-item" :class="{ active: activeTab === 0 }" @click="activeTab = 0" type="button">
+            <svg class="tab-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <circle cx="12" cy="12" r="6"></circle>
+              <circle cx="12" cy="12" r="1.5"></circle>
+            </svg>
+            <span class="tab-label">雷达自选</span>
+          </button>
+          <button class="tab-item" :class="{ active: activeTab === 1 }" @click="activeTab = 1" type="button">
+            <svg class="tab-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="20" x2="18" y2="10"></line>
+              <line x1="12" y1="20" x2="12" y2="4"></line>
+              <line x1="6" y1="20" x2="6" y2="14"></line>
+            </svg>
+            <span class="tab-label">图表行情</span>
+          </button>
+          <button class="tab-item" :class="{ active: activeTab === 2 }" @click="activeTab = 2" type="button">
+            <svg class="tab-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"></path>
+              <path d="m9 12 2 2 4-4"></path>
+            </svg>
+            <span class="tab-label">策略信号</span>
+          </button>
+        </nav>
 
       </main>
     </div>

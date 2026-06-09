@@ -5,15 +5,15 @@ const { ref, nextTick } = Vue;
 const THEMES = {
   light: {
     bg:         { type: "solid", color: "#FFFFFF" },
-    text:       "#6E6E73",
-    grid:       "rgba(0,0,0,0.04)",
-    border:     "rgba(0,0,0,0.08)"
+    text:       "#787878",
+    grid:       "rgba(206,206,206,0.25)",
+    border:     "#cecece"
   },
   dark: {
-    bg:         { type: "solid", color: "#1C1C1E" },
-    text:       "#A1A1A6",
+    bg:         { type: "solid", color: "#2d2d2d" },
+    text:       "#afafaf",
     grid:       "rgba(255,255,255,0.05)",
-    border:     "rgba(255,255,255,0.09)"
+    border:     "rgba(255,255,255,0.08)"
   }
 };
 
@@ -138,13 +138,13 @@ export function useChart(chartHostRef) {
 
     const provider    = _autoscale();
     candleSeries.value = chart.value.addCandlestickSeries({
-      upColor:        "#30D158", downColor:        "#FF453A",
-      borderUpColor:  "#30D158", borderDownColor:  "#FF453A",
-      wickUpColor:    "#30D158", wickDownColor:    "#FF453A",
+      upColor:        "#38ab70", downColor:        "#df4f46",
+      borderUpColor:  "#38ab70", borderDownColor:  "#df4f46",
+      wickUpColor:    "#38ab70", wickDownColor:    "#df4f46",
       autoscaleInfoProvider: provider
     });
-    emaSeries.value = chart.value.addLineSeries({ color: "#0071E3", lineWidth: 2, priceLineVisible: false, autoscaleInfoProvider: provider });
-    auxSeries.value = chart.value.addLineSeries({ color: "#FF9F0A", lineWidth: 2, priceLineVisible: false, autoscaleInfoProvider: provider });
+    emaSeries.value = chart.value.addLineSeries({ color: "#2976ff", lineWidth: 2, priceLineVisible: false, autoscaleInfoProvider: provider });
+    auxSeries.value = chart.value.addLineSeries({ color: "#f37d42", lineWidth: 2, priceLineVisible: false, autoscaleInfoProvider: provider });
 
     _bindEvents(host);
   }

@@ -39,6 +39,63 @@ createApp({
       applyTheme(dark);
     }, { immediate: true });
 
+    // ── Mobile Responsive Swipe States ─────────────────────────
+    const activeTab = ref(1); // Default: Chart view
+    const showSettings = ref(false);
+    const isMobile = ref(window.innerWidth < 768);
+
+    function checkMobileWidth() {
+      isMobile.value = window.innerWidth < 768;
+    }
+    window.addEventListener("resize", checkMobileWidth);
+
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchStartTime = 0;
+
+    function onTouchStart(e) {
+      const target = e.target;
+      if (
+        target.closest(".chart-host") ||
+        target.closest(".chart-band") ||
+        target.closest("input") ||
+        target.closest("select") ||
+        target.closest("textarea") ||
+        target.closest("button") ||
+        target.closest(".wl-chip") ||
+        target.closest(".wl-icon-btn")
+      ) {
+        return;
+      }
+      const touch = e.touches[0];
+      touchStartX = touch.clientX;
+      touchStartY = touch.clientY;
+      touchStartTime = Date.now();
+    }
+
+    function onTouchMove(e) {}
+
+    function onTouchEnd(e) {
+      const touch = e.changedTouches[0];
+      const deltaX = touch.clientX - touchStartX;
+      const deltaY = touch.clientY - touchStartY;
+      const duration = Date.now() - touchStartTime;
+
+      if (duration < 300 && Math.abs(deltaX) > 60 && Math.abs(deltaX) > Math.abs(deltaY)) {
+        if (deltaX > 0) {
+          if (activeTab.value > 0) activeTab.value--;
+        } else {
+          if (activeTab.value < 2) activeTab.value++;
+        }
+      }
+    }
+
+    const swipeStyle = computed(() => {
+      return {
+        transform: isMobile.value ? `translate3d(-${activeTab.value * 33.3333}%, 0, 0)` : "none"
+      };
+    });
+
     // ── State ──────────────────────────────────────────────────
     const loading           = ref(false);
     const error             = ref("");
@@ -110,6 +167,9 @@ createApp({
     function loadWatchlistSymbol(symbol) {
       form.symbol = symbol;
       loadSnapshot();
+      if (isMobile.value) {
+        activeTab.value = 1; // Swipe to Chart
+      }
     }
 
     async function runRadarOnWatchlist() {
@@ -331,6 +391,19 @@ createApp({
       form.symbol = item.symbol;
       if (item.tf) form.tf = item.tf;
       loadSnapshot();
+      if (isMobile.value) {
+        activeTab.value = 1; // Swipe to Chart
+      }
+    }
+
+    function loadSnapshotAndClose() {
+      loadSnapshot();
+      showSettings.value = false;
+    }
+
+    function runRadarAndClose() {
+      runRadar();
+      showSettings.value = false;
     }
 
     onMounted(async () => {
@@ -344,6 +417,10 @@ createApp({
       loading, error, snapshot,
       radarLoading, radar,
       backtestLoading, backtestError, backtest,
+      // mobile states
+      activeTab, showSettings, isMobile, swipeStyle,
+      onTouchStart, onTouchMove, onTouchEnd,
+      loadSnapshotAndClose, runRadarAndClose,
       // forms
       form, radarForm, backtestForm, toggles,
       // constants

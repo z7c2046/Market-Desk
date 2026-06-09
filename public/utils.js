@@ -52,7 +52,7 @@ export function markerFor(signal) {
   return {
     time: Number(signal.time),
     position: isBuy ? "belowBar" : "aboveBar",
-    color: isBuy ? "#0071E3" : "#FF453A",
+    color: isBuy ? "#2976ff" : "#df4f46",
     shape: isBuy ? "arrowUp" : "arrowDown",
     text: signal.side,
     size: isEarly ? 1 : 2
