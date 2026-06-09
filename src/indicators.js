@@ -83,9 +83,17 @@ export function regressionSlope(values) {
   return (n * sxy - sx * sy) / denom;
 }
 
-export function computeMutant(bars, lookback = 260, smooth = 5) {
+function percentile(sortedValues, ratio) {
+  const clean = sortedValues.filter(Number.isFinite);
+  if (!clean.length) return null;
+  const index = Math.min(clean.length - 1, Math.max(0, Math.floor(clean.length * ratio)));
+  return clean[index];
+}
+
+export function computeMutant(bars, lookback = 260, smooth = 5, scaleLookback = 260) {
   const n = Math.min(lookback, bars.length);
   const start = bars.length - n;
+  const scaleWindow = Math.max(5, Math.floor(Number(scaleLookback) || 260));
   const raw = [];
 
   for (let i = 0; i < n; i += 1) {
@@ -96,14 +104,39 @@ export function computeMutant(bars, lookback = 260, smooth = 5) {
   }
 
   const smoothed = ema(raw, smooth);
-  const abs = smoothed.filter(Number.isFinite).map((v) => Math.abs(v)).sort((a, b) => a - b);
-  const p95 = abs.length ? abs[Math.floor(abs.length * 0.95)] : 1;
-  const scale = Math.max(1e-9, p95);
+  const absWindow = [];
+  const out = [];
 
-  return smoothed.map((value, index) => ({
-    time: bars[start + index]?.time,
-    value: Number.isFinite(value) ? clamp(value / scale, -1, 1) : 0
-  }));
+  for (let index = 0; index < smoothed.length; index += 1) {
+    const value = smoothed[index];
+    let normalized = 0;
+
+    if (Number.isFinite(value)) {
+      const absValue = Math.abs(value);
+      const insertAt = absWindow.findIndex((v) => v > absValue);
+      if (insertAt === -1) absWindow.push(absValue);
+      else absWindow.splice(insertAt, 0, absValue);
+    }
+
+    const oldValue = smoothed[index - scaleWindow];
+    if (Number.isFinite(oldValue)) {
+      const oldAbs = Math.abs(oldValue);
+      const removeAt = absWindow.findIndex((v) => v === oldAbs);
+      if (removeAt !== -1) absWindow.splice(removeAt, 1);
+    }
+
+    if (Number.isFinite(value)) {
+      const p95 = percentile(absWindow, 0.95) ?? 1;
+      normalized = clamp(value / Math.max(1e-9, p95), -1, 1);
+    }
+
+    out.push({
+      time: bars[start + index]?.time,
+      value: normalized
+    });
+  }
+
+  return out;
 }
 
 export function deriveMarketPulse(bars) {
