@@ -1,8 +1,10 @@
+import "./env.js"; // loads .env into process.env before anything reads it
 import fs from "node:fs/promises";
 import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { compareStrategyBacktests } from "./backtest.js";
+import { fetchWatchlistSymbols } from "./notion.js";
 import { scanRadar } from "./radar.js";
 import { getMarketSnapshot } from "./snapshot.js";
 
@@ -78,6 +80,21 @@ const server = http.createServer(async (req, res) => {
 
   if (url.pathname === "/api/health") {
     sendJson(res, 200, { ok: true, ts: new Date().toISOString() });
+    return;
+  }
+
+  if (url.pathname === "/api/watchlist") {
+    try {
+      const force = url.searchParams.get("force") === "1";
+      const result = await fetchWatchlistSymbols({ force });
+      sendJson(res, 200, { ok: true, count: result.symbols.length, ...result });
+    } catch (error) {
+      sendJson(res, 502, {
+        ok: false,
+        error: error.message,
+        hint: "Set NOTION_TOKEN and NOTION_DATABASE_ID in .env, and share the database with the integration."
+      });
+    }
     return;
   }
 

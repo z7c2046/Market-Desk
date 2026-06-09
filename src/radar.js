@@ -1,5 +1,6 @@
+import { fetchWatchlistSymbols } from "./notion.js";
 import { getMarketSnapshot } from "./snapshot.js";
-import { DEFAULT_US_UNIVERSE, parseSymbolList } from "./universe.js";
+import { parseSymbolList } from "./universe.js";
 
 const radarCache = new Map();
 
@@ -95,7 +96,10 @@ export async function scanRadar(query) {
   const lookbackBars = Math.max(1, Math.min(20, Number(query.lookback || 4)));
   const limit = Math.max(80, Math.min(1200, Number(query.limit || defaultLimit(tf))));
   const max = Math.max(5, Math.min(80, Number(query.max || 36)));
-  const symbols = parseSymbolList(query.symbols, DEFAULT_US_UNIVERSE).slice(0, max);
+  // Default universe comes from the Notion watchlist; an explicit `symbols`
+  // query param still overrides it via parseSymbolList.
+  const fallbackUniverse = (await fetchWatchlistSymbols()).symbols;
+  const symbols = parseSymbolList(query.symbols, fallbackUniverse).slice(0, max);
   const key = JSON.stringify({ symbols, tf, lookbackBars, limit });
   const now = Date.now();
   const cached = radarCache.get(key);

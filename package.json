@@ -7,6 +7,6 @@
   "scripts": {
     "dev": "node src/server.js",
     "start": "node src/server.js",
-    "check": "node --check src/server.js && node --check src/tradingview.js && node --check src/indicators.js && node --check src/signals.js && node --check src/snapshot.js && node --check src/backtest.js"
+    "check": "node --check src/server.js && node --check src/env.js && node --check src/notion.js && node --check src/radar.js && node --check src/tradingview.js && node --check src/indicators.js && node --check src/signals.js && node --check src/snapshot.js && node --check src/backtest.js"
   }
 }

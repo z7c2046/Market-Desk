@@ -159,9 +159,27 @@ createApp({
       _saveWatchlist();
     }
 
-    function resetWatchlist() {
-      watchlist.value = [...WATCHLIST_DEFAULT];
-      _saveWatchlist();
+    // Pull the watchlist from the Notion-backed /api/watchlist endpoint.
+    // Returns true on success. On any failure the existing list is kept.
+    async function fetchWatchlist() {
+      try {
+        const res  = await fetch("/api/watchlist");
+        const data = await res.json();
+        if (!res.ok || !data.ok || !Array.isArray(data.symbols) || !data.symbols.length) return false;
+        watchlist.value = [...new Set(data.symbols.map((s) => String(s).trim().toUpperCase()).filter(Boolean))];
+        _saveWatchlist();
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
+    async function resetWatchlist() {
+      const ok = await fetchWatchlist();
+      if (!ok) {
+        watchlist.value = [...WATCHLIST_DEFAULT];
+        _saveWatchlist();
+      }
     }
 
     function loadWatchlistSymbol(symbol) {
@@ -407,6 +425,7 @@ createApp({
     }
 
     onMounted(async () => {
+      await fetchWatchlist();   // Notion watchlist is the source of truth on load
       await loadSnapshot();
       runRadar();
     });
