@@ -163,6 +163,13 @@ export function useChart(chartHostRef) {
     auxSeries.value.setData(toggles.aux ? snap.aux_series || [] : []);
     candleSeries.value.setMarkers(toggles.signals ? (snap.signals || []).map(markerFor) : []);
     chart.value.timeScale().fitContent();
+    // Force the price axis to fully recalculate its range for the new symbol.
+    // Without this, switching from a high-price stock (e.g. $400) to a low-price
+    // stock (e.g. $40) keeps the old Y-axis viewport, pushing the new candles
+    // to the bottom of the chart instead of centering them.
+    const priceScale = chart.value.priceScale("right");
+    priceScale.applyOptions({ autoScale: false });
+    priceScale.applyOptions({ autoScale: true });
   }
 
   return { renderChart, resetZoom, applyTheme };
