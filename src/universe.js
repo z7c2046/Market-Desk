@@ -6,7 +6,7 @@ export const DEFAULT_US_UNIVERSE = [
   "META",
   "GOOGL",
   "GOOG",
-  "TSLA",
+  "SNDK",
   "AVGO",
   "AMD",
   "NFLX",

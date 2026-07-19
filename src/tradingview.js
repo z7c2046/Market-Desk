@@ -50,7 +50,7 @@ function httpsJson(url, timeoutMs = 10000) {
 }
 
 export async function resolveTradingViewSymbol(symbol) {
-  const raw = cleanSymbolPart(symbol || "TSLA");
+  const raw = cleanSymbolPart(symbol || "SNDK");
   if (raw.includes(":")) return raw;
 
   const stockUrl = new URL("https://symbol-search.tradingview.com/symbol_search/");

@@ -109,7 +109,7 @@ createApp({
     const backtest          = ref(null);
     const backtestRequestId = ref(0);
 
-    const form         = reactive({ symbol: "TSLA", tf: "15m", limit: 500 });
+    const form         = reactive({ symbol: "SNDK", tf: "15m", limit: 500 });
     const toggles      = reactive({ ema: true, aux: true, signals: true });
     const radarForm    = reactive({ symbols: "", lookback: 4, max: 36 });
     const backtestForm = reactive({ start: "2026-01-01", end: todayIso(), tf: "15m" });
@@ -247,7 +247,7 @@ createApp({
 
     const backtestSummary = computed(() => {
       if (backtestError.value)   return backtestError.value;
-      if (backtestLoading.value) return `Running ${activeBacktestTf.value.label} ${(form.symbol || "TSLA").toUpperCase()} comparison`;
+      if (backtestLoading.value) return `Running ${activeBacktestTf.value.label} ${(form.symbol || "SNDK").toUpperCase()} comparison`;
       if (!backtest.value)       return "No comparison yet";
       const bt    = backtest.value;
       const start = bt.actualStartDate || bt.startDate;
@@ -266,7 +266,7 @@ createApp({
     const radarBearish      = computed(() => radar.value?.bearish || []);
     const backtestRows      = computed(() => backtest.value?.strategies || []);
     const backtestSymbol    = computed(() =>
-      (backtestLoading.value ? form.symbol : backtest.value?.symbol || form.symbol || "TSLA").toUpperCase()
+      (backtestLoading.value ? form.symbol : backtest.value?.symbol || form.symbol || "SNDK").toUpperCase()
     );
     const mutantBars        = computed(() => (snapshot.value?.mutant || []).slice(-180));
 
@@ -323,7 +323,7 @@ createApp({
       error.value   = "";
       resetZoom();
       try {
-        const params = new URLSearchParams({ symbol: form.symbol || "TSLA", tf: form.tf, limit: String(form.limit || 600) });
+        const params = new URLSearchParams({ symbol: form.symbol || "SNDK", tf: form.tf, limit: String(form.limit || 600) });
         const res    = await fetch(`/api/market/snapshot?${params}`);
         const data   = await res.json();
         if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
@@ -366,7 +366,7 @@ createApp({
       backtestError.value   = "";
       try {
         const params = new URLSearchParams({
-          symbol: symbolOverride || form.symbol || "TSLA",
+          symbol: symbolOverride || form.symbol || "SNDK",
           tf:     backtestForm.tf || activeBacktestTf.value.value,
           start:  backtestForm.start || "2026-01-01",
           end:    backtestForm.end   || todayIso()

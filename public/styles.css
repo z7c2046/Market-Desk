@@ -486,6 +486,15 @@ select {
   .mobile-page-tab {
     display: contents;
   }
+  .workspace {
+    grid-template-rows: auto minmax(520px, 1.5fr) auto auto auto auto;
+  }
+  .topbar { order: 1; }
+  .chart-band { order: 2; }
+  .backtest-board { order: 3; }
+  .metric-grid { order: 4; }
+  .radar-board { order: 5; }
+  .details-grid { order: 6; }
 }
 
 /* ── Cards / Panels ───────────────────────────────────── */

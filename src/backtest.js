@@ -305,7 +305,7 @@ function backtestBuyAndHold({ bars, startTime, endTime, costBps, tf }) {
 }
 
 export async function compareStrategyBacktests(query = {}) {
-  const symbol = String(query.symbol || "TSLA").trim().toUpperCase();
+  const symbol = String(query.symbol || "SNDK").trim().toUpperCase();
   const tf = parseTimeframe(query.tf);
   const startDate = parseDate(query.start, DEFAULT_START_DATE);
   const endDate = parseDate(query.end, todayIso());

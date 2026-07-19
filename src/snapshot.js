@@ -31,7 +31,7 @@ function normalizeBars(bars) {
 }
 
 export async function getMarketSnapshot(query) {
-  const symbol = String(query.symbol || "TSLA").trim().toUpperCase();
+  const symbol = String(query.symbol || "SNDK").trim().toUpperCase();
   const tf = String(query.tf || "1d").trim();
   const limit = Math.max(50, Math.min(3000, Number(query.limit || 600)));
   const key = `${symbol}:${tf}:${limit}`;

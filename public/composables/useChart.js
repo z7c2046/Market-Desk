@@ -75,7 +75,7 @@ export function useChart(chartHostRef) {
           : Math.min(10.0, yZoomFactor * 1.1);
         _refresh();
       }
-    }, { passive: false });
+    }, { passive: false, capture: true });
 
     host.addEventListener("dblclick", (e) => {
       if (!chart.value) return;
