@@ -5,9 +5,7 @@ const { createApp, computed, onMounted, reactive, ref, watch } = Vue;
 
 // ── Default Watchlist (TradingView watchlist pre-set) ──────────────────────
 const WATCHLIST_DEFAULT = [
-  "AAPL", "TSM",  "GOOG", "MU",   "INTC",
-  "MRVL", "COHR", "LITE", "AAOI", "AXTI",
-  "NOK",  "DRAM", "ANET", "CRCL", "NVDA"
+  "005930", "000660", "NOK", "AAOI", "MU", "SNDK", "SKHY", "INTC"
 ];
 
 const TIMEFRAMES = [
@@ -118,7 +116,12 @@ createApp({
     const _stored = (() => {
       try { return JSON.parse(localStorage.getItem("ih_watchlist") || "null"); } catch { return null; }
     })();
-    const watchlist         = ref(Array.isArray(_stored) && _stored.length ? _stored : [...WATCHLIST_DEFAULT]);
+    const _cleanupSymbols = ["AAPL", "TSM", "GOOG", "MRVL", "COHR", "AXTI", "ANET", "CRCL", "NVDA", "INTW", "AAOX", "LNOK", "MUU", "SNXX", "DRAM"];
+    const _shouldReset = !Array.isArray(_stored) || !_stored.length || _stored.some(s => _cleanupSymbols.includes(s));
+    const watchlist         = ref(_shouldReset ? [...WATCHLIST_DEFAULT] : _stored);
+    if (_shouldReset) {
+      localStorage.setItem("ih_watchlist", JSON.stringify(WATCHLIST_DEFAULT));
+    }
     const watchlistEditMode = ref(false);
     const watchlistInput    = ref("");
     const watchlistNewSym   = ref("");
