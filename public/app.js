@@ -303,6 +303,32 @@ createApp({ setup() {
     watchlistData.value = { ...watchlistMgr.data };
   }
 
+  // Sidebar Delete Wobble Mode & 2-step delete interaction
+  const isDeleteMode = ref(false);
+  const pendingDeleteSymbol = ref(null);
+
+  function toggleDeleteMode() {
+    isDeleteMode.value = !isDeleteMode.value;
+    pendingDeleteSymbol.value = null;
+  }
+
+  function handleChipClick(sym) {
+    if (!isDeleteMode.value) {
+      selectSymbol(sym);
+      return;
+    }
+
+    if (pendingDeleteSymbol.value === sym) {
+      // 2nd click: execute delete
+      removeWatch(sym);
+      pendingDeleteSymbol.value = null;
+      toast.value = `已移出自选：${sym}`;
+    } else {
+      // 1st click: stage for deletion with blur + red cross
+      pendingDeleteSymbol.value = sym;
+    }
+  }
+
   function handleCreateGroup() {
     const res = watchlistMgr.createGroup(newGroupName.value);
     if (!res.ok) {
@@ -540,6 +566,7 @@ createApp({ setup() {
     showGroupModal, showAddStockModal, showBackupModal, newGroupName, addStockInput, addStockTargetGroup, backupJsonText,
     undoAction, isInteractingWithTable,
     toast, importing, nyClock, dateLabel, refreshing,
+    isDeleteMode, pendingDeleteSymbol, toggleDeleteMode, handleChipClick,
     stockSectors, rankedSectors, quoteWindow, breadth, findQuote, barWidth, walls, num, compact, pct, tone, time,
     selectSymbol, search, refresh, loadOverview, loadChart, loadNews, loadOptions, fetchWatchlistQuotes, importNotion, importFlows, clearFlows
   };
