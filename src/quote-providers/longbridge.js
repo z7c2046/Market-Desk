@@ -18,7 +18,8 @@ async function getSdk() {
 export function toLongbridgeSymbol(raw) {
   if (!raw) return '';
   const s = String(raw).trim().toUpperCase();
-  if (s.endsWith('.US')) return s;
+  if (s.endsWith('.US') || s.endsWith('.HK')) return s;
+  if (/^\d{4,5}$/.test(s)) return `${s.padStart(5, '0')}.HK`;
   // Format BRK-B to BRK.B.US
   const clean = s.replace(/-/g, '.');
   return `${clean}.US`;
@@ -27,6 +28,7 @@ export function toLongbridgeSymbol(raw) {
 export function fromLongbridgeSymbol(longSymbol) {
   if (!longSymbol) return '';
   const s = String(longSymbol).trim().toUpperCase();
+  if (s.endsWith('.HK')) return s;
   const withoutSuffix = s.endsWith('.US') ? s.slice(0, -3) : s;
   // Format BRK.B to BRK-B
   if (withoutSuffix === 'BRK.B') return 'BRK-B';

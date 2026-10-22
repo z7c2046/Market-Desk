@@ -26,8 +26,8 @@ export function number(value) {
 }
 export function ticker(value = 'SPY') {
   const symbol = String(value).trim().toUpperCase();
-  if (!/^\^?[A-Z][A-Z0-9.-]{0,10}$/.test(symbol)) {
-    throw Object.assign(new Error('请输入有效的美股代码，例如 AAPL、BRK-B 或 SPY。'), { status: 400 });
+  if (!/^\^?[A-Z0-9][A-Z0-9.-]{0,11}$/.test(symbol)) {
+    throw Object.assign(new Error('请输入有效的美股或港股代码，例如 AAPL、BRK-B、07709.HK 或 SPY。'), { status: 400 });
   }
   return symbol;
 }

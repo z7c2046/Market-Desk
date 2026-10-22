@@ -51,7 +51,16 @@ export const SYMBOL_NAMES = {
   MOD: '摩丁制造',
   ALAB: 'Astera Labs',
   NVT: 'nVent Electric',
-  NOK: '诺基亚'
+  NOK: '诺基亚',
+
+  // ETF
+  SQQQ: '三倍做空纳指',
+  YANG: '三倍做空中国',
+  TQQQ: '三倍做多纳指',
+  MUU: '2倍做多MU',
+  '07709.HK': 'XL二南方海力士',
+  SNXX: '2倍做多闪迪',
+  SOXL: '三倍做多半导体'
 };
 
 export function sortWatchlistRows(rows, sortField = 'extChange', sortDirection = 'desc') {
@@ -174,16 +183,23 @@ export const PRESET_GROUPS = [
     symbolIds: ['DELL', 'NBIS', 'ANET', 'PENG', 'VRT', 'IREN', 'CRWV', 'APLD', 'MOD', 'ALAB', 'NVT', 'NOK']
   },
   {
+    id: 'etf',
+    name: 'ETF',
+    collapsed: false,
+    order: 4,
+    symbolIds: ['SQQQ', 'YANG', 'TQQQ', 'MUU', '07709.HK', 'SNXX', 'SOXL']
+  },
+  {
     id: 'default',
     name: '未分组',
     collapsed: false,
-    order: 4,
+    order: 5,
     symbolIds: []
   }
 ];
 
 export function validSymbol(s) {
-  return typeof s === 'string' && /^\^?[A-Z][A-Z0-9.-]{0,10}$/.test(s.trim().toUpperCase());
+  return typeof s === 'string' && /^\^?[A-Z0-9][A-Z0-9.-]{0,11}$/.test(s.trim().toUpperCase());
 }
 
 export function createInitialWatchlistData(existingSymbols = null) {
@@ -254,12 +270,26 @@ export class WatchlistManager {
       if (rawV2) {
         const parsed = JSON.parse(rawV2);
         if (parsed && parsed.version === 2 && Array.isArray(parsed.groups)) {
-          // If stored groups still contain old placeholder groups (tech, defensive, pharma, etf), upgrade to new observation groups
-          const hasOldPlaceholders = parsed.groups.some(g => ['tech', 'defensive', 'pharma', 'etf'].includes(g.id));
+          // If stored groups still contain old placeholder groups (tech, defensive, pharma), upgrade to new observation groups
+          const hasOldPlaceholders = parsed.groups.some(g => ['tech', 'defensive', 'pharma'].includes(g.id));
           if (hasOldPlaceholders) {
             const upgraded = createInitialWatchlistData();
             this.save(upgraded);
             return upgraded;
+          }
+          // If existing groups lack the 'etf' group, inject it automatically
+          if (!parsed.groups.some(g => g.id === 'etf')) {
+            const etfGroup = PRESET_GROUPS.find(g => g.id === 'etf');
+            if (etfGroup) {
+              const insertIdx = Math.max(0, parsed.groups.length - 1);
+              parsed.groups.splice(insertIdx, 0, {
+                ...etfGroup,
+                symbolIds: [...etfGroup.symbolIds]
+              });
+              const sanitized = this.sanitizeData(parsed);
+              this.save(sanitized);
+              return sanitized;
+            }
           }
           return this.sanitizeData(parsed);
         }
