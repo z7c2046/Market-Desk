@@ -1,24 +1,31 @@
 <!doctype html><html lang="zh-CN"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Market Desk · 美股观察工作台</title><meta name="description" content="集中观察美股行情、板块热力图、财经新闻与期权持仓分布。">
+<title>Market Desk · 美股观察工作台</title><meta name="description" content="集中观察美股行情、板块热力图、财经新闻、期权持仓分布及多时段自选看板。">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/styles.css">
 <script defer src="/vendor/vue.js"></script><script defer src="/vendor/echarts.js"></script><script type="module" src="/app.js"></script>
 </head><body><div id="app" v-cloak>
 <div class="ios-backdrop mobile-only" :class="{show:showSettings}" @click="closeSettings" aria-hidden="true"></div>
 <aside id="workspace-settings" class="sidebar" :class="{'show-mobile':showSettings}" :inert="isMobile&&!showSettings" :role="isMobile?'dialog':undefined" :aria-modal="isMobile&&showSettings?'true':undefined" aria-label="工作台导航与自选" @keydown="handleDrawerKey">
   <button class="bottom-sheet-handle mobile-only" aria-label="关闭导航" @click="closeSettings"></button>
-  <a class="brand" href="#overview" @click.prevent="navigate('overview')"><span class="brand-mark">MD</span><span>Market Desk<small>美股行情 · 新闻 · 期权</small></span></a>
+  <a class="brand" href="#overview" @click.prevent="navigate('overview')"><span class="brand-mark">MD</span><span>Market Desk<small>美股行情 · 新闻 · 期权 · 自选</small></span></a>
   <div class="sidebar-divider"></div>
   <form class="control-stack" @submit.prevent="search"><label><span>股票代码 / Symbol</span><input aria-label="搜索美股代码" placeholder="NVDA / AAPL / SPY" v-model="searchInput" maxlength="12" autocomplete="off" spellcheck="false"></label><button class="primary-button" type="submit">查看行情</button></form>
-  <div class="status-panel"><span class="status-dot"></span>公开数据 · 可能延迟</div>
+  <div class="status-panel"><span class="status-dot"></span>{{ providerInfo.isConfigured ? '长桥实时 (US LV1)' : '公开数据 · 可能延迟' }}</div>
   <div class="sidebar-divider"></div>
   <div class="nav-label">工作台</div><nav aria-label="主导航"><button v-for="item in nav" :key="item.id" :class="['nav-item',{active:page===item.id}]" @click="navigate(item.id)" :aria-current="page===item.id?'page':undefined"><span class="nav-icon">{{item.icon}}</span>{{item.label}}</button></nav>
   <div class="sidebar-divider"></div>
   <div class="sidebar-watch"><div class="nav-label">自选列表 <span>{{watchlist.length}} 支</span><button title="从已配置的 Notion 导入" @click="importNotion" :disabled="importing">{{importing?'导入中…':'↓ Notion'}}</button></div><div class="watch-chips"><div v-for="s in watchlist" :key="s" class="watch-row" :class="{active:page==='chart'&&symbol===s}"><button class="watch-item" @click="selectSymbol(s)">{{s}}</button><button class="remove" :aria-label="'移除 '+s" @click="removeWatch(s)">×</button></div></div><p v-if="!watchlist.length" class="muted small">搜索代码并加入自选。</p></div>
   <div class="sidebar-bottom"><span>外观</span><button class="theme-toggle" @click="toggleTheme" :aria-pressed="isDark">{{isDark?'切换浅色':'切换深色'}}</button></div>
 </aside>
-<div class="workspace" :inert="isMobile&&showSettings"><header class="topbar"><div class="topbar-left-wrapper"><button class="settings-trigger mobile-only" aria-label="打开导航与自选" aria-controls="workspace-settings" :aria-expanded="showSettings" @click="openSettings">☷</button><div><div class="eyebrow">MARKET DESK · {{currentNav.eyebrow}}</div><h1>{{page==='chart'?symbol:currentNav.label}}</h1></div></div><div class="topbar-right"><button class="theme-toggle desktop-only" @click="toggleTheme" :aria-pressed="isDark">{{isDark?'Light':'Dark'}}</button><div class="market-clock"><strong>{{nyClock}}</strong><small>NEW YORK</small></div><button class="refresh" @click="refresh" :disabled="refreshing">{{refreshing?'刷新中…':'↻ 刷新'}}</button></div></header>
-<main><div v-if="toast" class="toast" role="status">{{toast}}<button aria-label="关闭提示" @click="toast=''">×</button></div><section class="page-heading"><p>{{currentNav.description}}</p><span class="date-label">{{dateLabel}}</span></section>
+<div class="workspace" :inert="isMobile&&showSettings"><header class="topbar"><div class="topbar-left-wrapper"><button class="settings-trigger mobile-only" aria-label="打开导航与自选" aria-controls="workspace-settings" :aria-expanded="showSettings" @click="openSettings">☷</button><div><div class="eyebrow">MARKET DESK · {{currentNav.eyebrow}}</div><h1>{{page==='chart'?symbol:currentNav.label}}</h1></div></div><div class="topbar-right"><button v-if="isWide && page!=='watchlist'" class="theme-toggle desktop-only" @click="compactPanelOpen=!compactPanelOpen">{{compactPanelOpen?'收起自选 ◨':'展开自选 ◧'}}</button><button class="theme-toggle desktop-only" @click="toggleTheme" :aria-pressed="isDark">{{isDark?'Light':'Dark'}}</button><div class="market-clock"><strong>{{nyClock}}</strong><small>NEW YORK</small></div><button class="refresh" @click="refresh" :disabled="refreshing">{{refreshing?'刷新中…':'↻ 刷新'}}</button></div></header>
+<main>
+<div v-if="toast" class="toast" role="status"><span>{{toast}}</span><button v-if="undoAction" class="text-button" @click="undoAction(); toast=''">↶ 撤销</button><button aria-label="关闭提示" @click="toast=''">×</button></div>
+<section class="page-heading"><p>{{currentNav.description}}</p><span class="date-label">{{dateLabel}}</span></section>
+
+<div class="workspace-container">
+<div class="workspace-content">
+<transition name="page" @after-enter="onPageEntered">
+<div :key="page" class="page-container">
 
 <template v-if="page==='overview'||page==='heatmap'">
   <div v-if="states.overview.loading&&!overview" class="loading-block">正在汇集指数、板块与精选美股行情…</div><div v-if="states.overview.error" class="error-box" role="alert">{{states.overview.error}} <button @click="loadOverview">重试</button></div>
@@ -29,6 +36,14 @@
   <div v-if="page==='overview'" class="bottom-grid"><section class="panel"><div class="panel-heading"><div><h2>市场速读</h2><p>来自公开财经 RSS</p></div><button class="text-button" @click="page='news'">全部新闻 ↗</button></div><p v-if="states.news.loading&&!news" class="empty">正在加载新闻…</p><p v-if="states.news.error" class="empty">{{states.news.error}}</p><a v-for="(n,i) in (news?.items||[]).slice(0,4)" :key="n.url" :href="n.url" target="_blank" rel="noopener noreferrer" class="news-compact"><span class="news-number">0{{i+1}}</span><div><h3>{{n.title}}</h3><small>{{n.source}} · {{time(n.publishedAt)}}</small></div><span>↗</span></a></section><section class="panel market-summary"><div class="panel-heading"><div><h2>样本涨跌分布</h2><p>精选 {{overview.stocks.length}} 只股票</p></div></div><div class="breadth-number"><strong class="positive">{{breadth.up}}</strong><span>上涨</span><strong class="negative">{{breadth.down}}</strong><span>下跌</span></div><div class="breadth-track"><span :style="{width:breadth.up/Math.max(1,overview.stocks.length)*100+'%'}"></span></div><p>平盘 {{breadth.flat}} · 缺少涨跌幅 {{breadth.unknown}}</p><div class="summary-callout"><span>◈</span><div><strong>观察期权的持仓分布</strong><p>Call / Put 墙与估算 Gamma 敞口。</p><button class="text-button" @click="page='options'">打开期权墙 →</button></div></div></section></div></template>
 </template>
 
+<template v-if="page==='watchlist'"><section class="panel watchlist-panel"><div class="panel-heading"><div><h2>自选看板 <span class="subtle-badge">{{viewMode==='grouped'?'分组视图':'全部排行'}}</span></h2><p>多时段美股报价 · 常规与盘前 / 盘后 / 隔夜数据独立计算与排序</p></div><div class="controls"><span class="status-pill" :class="providerInfo.isConfigured ? 'realtime' : 'unconfigured'"><i class="dot"></i>{{ providerInfo.isConfigured ? providerInfo.name + ' · 实时' : '实时源未配置' }}</span><span class="session-badge">{{ currentSession.desc }}</span></div></div>
+<div class="watchlist-toolbar"><div class="watchlist-toolbar-left"><button class="primary-button" style="width:auto;height:32px;font-size:12px;padding:0 12px;" @click="showAddStockModal=true">+ 添加股票</button><button @click="showGroupModal=true">管理分组</button><div class="chips"><button :class="{selected: viewMode==='grouped'}" @click="viewMode='grouped'">分组视图</button><button :class="{selected: viewMode==='all'}" @click="viewMode='all'">全部排行</button></div></div><div class="watchlist-toolbar-right"><label style="font-size:12px;color:var(--text-secondary);display:inline-flex;align-items:center;gap:6px;">EXT 时段<select v-model="extMode" aria-label="EXT 时段模式"><option value="auto">自动 (跟随当前时段)</option><option value="pre">盘前 (04:00-09:30)</option><option value="post">盘后 (16:00-20:00)</option><option value="overnight">隔夜 (20:00-04:00)</option></select></label><button :class="{active: !freezeResort}" @click="freezeResort=!freezeResort" :title="freezeResort?'点击恢复自动排序':'点击冻结当前排序'">{{ freezeResort ? '🔒 排序已冻结' : '⚡ 自动重排' }}</button><button class="text-button" @click="handleExportJson">备份 / 恢复 ↗</button></div></div>
+<div v-if="!providerInfo.isConfigured" class="inline-note warning" style="margin:12px 20px 0;">长桥 OpenAPI 实时源未配置（可在 .env 配置 LONGBRIDGE_APP_KEY / SECRET / ACCESS_TOKEN 开启实时报价与夜盘）。当前支持分组、排序及本地管理。</div>
+<div class="watchlist-table-wrap" @mousedown="isInteractingWithTable=true" @mouseup="isInteractingWithTable=false"><table class="watchlist-table" aria-label="美股自选与多时段报价表"><thead><tr><th class="sortable" :class="{sorted: sortField==='symbol'}" @click="toggleSort('symbol')" :aria-sort="sortField==='symbol'?(sortDirection==='asc'?'ascending':'descending'):'none'">代码 / 名称 {{sortField==='symbol'?(sortDirection==='asc'?'▲':'▼'):''}}</th><th class="num sortable" :class="{sorted: sortField==='regularPrice'}" @click="toggleSort('regularPrice')" :aria-sort="sortField==='regularPrice'?(sortDirection==='asc'?'ascending':'descending'):'none'">常规价格 {{sortField==='regularPrice'?(sortDirection==='asc'?'▲':'▼'):''}}</th><th class="num sortable" :class="{sorted: sortField==='regularChange'}" @click="toggleSort('regularChange')" :aria-sort="sortField==='regularChange'?(sortDirection==='asc'?'ascending':'descending'):'none'">常规涨跌% {{sortField==='regularChange'?(sortDirection==='asc'?'▲':'▼'):''}}</th><th class="num sortable" :class="{sorted: sortField==='extPrice'}" @click="toggleSort('extPrice')" :aria-sort="sortField==='extPrice'?(sortDirection==='asc'?'ascending':'descending'):'none'">EXT 价格 {{sortField==='extPrice'?(sortDirection==='asc'?'▲':'▼'):''}}</th><th class="num sortable" :class="{sorted: sortField==='extChange'}" @click="toggleSort('extChange')" :aria-sort="sortField==='extChange'?(sortDirection==='asc'?'ascending':'descending'):'none'">EXT 涨跌% {{sortField==='extChange'?(sortDirection==='asc'?'▲':'▼'):''}}</th><th>时段</th><th class="sortable" :class="{sorted: sortField==='updatedAt'}" @click="toggleSort('updatedAt')">更新时间 / 状态 {{sortField==='updatedAt'?(sortDirection==='asc'?'▲':'▼'):''}}</th><th style="text-align:right;">操作</th></tr></thead>
+<template v-if="viewMode==='grouped'"><tbody v-for="g in groups" :key="g.id"><tr class="group-header-row"><td colspan="8"><button @click="g.collapsed=!g.collapsed" :aria-expanded="!g.collapsed"><span>{{ g.collapsed ? '▸' : '▾' }}</span><span>{{ g.name }}</span><span class="group-badge">{{ g.symbolIds.length }}</span></button><div class="group-header-actions"><button @click.stop="addStockTargetGroup=g.id; showAddStockModal=true">+ 标的</button><button v-if="g.id!=='default'" @click.stop="handleDeleteGroup(g.id)">删除组</button></div></td></tr><tr v-if="!g.collapsed && !groupedRows[g.id]?.length"><td colspan="8" class="muted small" style="padding:14px 20px;text-align:center;">该分组暂无自选，点击“+ 标的”添加代码。</td></tr><template v-if="!g.collapsed"><tr v-for="r in groupedRows[g.id]" :key="r.symbol" @click="selectSymbol(r.symbol)" style="cursor:pointer;"><td><strong>{{ r.symbol }}</strong><span class="muted small" style="margin-left:6px;">{{ r.name }}</span></td><td class="num" :class="cellFlashes[r.symbol + '_regular'] ? 'cell-flash-' + cellFlashes[r.symbol + '_regular'] : ''">{{ num(r.regularPrice) }}</td><td class="num" :class="[tone(r.regularChange), cellFlashes[r.symbol + '_regular'] ? 'cell-flash-' + cellFlashes[r.symbol + '_regular'] : '']">{{ pct(r.regularChange) }}</td><td class="num" :class="cellFlashes[r.symbol + '_ext'] ? 'cell-flash-' + cellFlashes[r.symbol + '_ext'] : ''">{{ num(r.extPrice) }}</td><td class="num" :class="[tone(r.extChange), cellFlashes[r.symbol + '_ext'] ? 'cell-flash-' + cellFlashes[r.symbol + '_ext'] : '']">{{ pct(r.extChange) }}</td><td><span class="session-badge">{{ r.extStatus }}</span></td><td><small class="muted">{{ time(r.updatedAt) }}</small></td><td style="text-align:right;" @click.stop><button class="remove" :aria-label="'从分组移出 '+r.symbol" @click="removeWatch(r.symbol, g.id)" title="移出本组">×</button></td></tr></template></tbody></template>
+<tbody v-else><tr v-if="!allRankedRows.length"><td colspan="8" class="muted small" style="padding:24px;text-align:center;">暂无自选股票，可点击“+ 添加股票”或在左侧搜索。</td></tr><tr v-for="r in allRankedRows" :key="r.symbol" @click="selectSymbol(r.symbol)" style="cursor:pointer;"><td><strong>{{ r.symbol }}</strong><span class="muted small" style="margin-left:6px;">{{ r.name }}</span><span class="group-tags"><span v-for="tag in r.groups" :key="tag" class="group-tag">{{ tag }}</span></span></td><td class="num" :class="cellFlashes[r.symbol + '_regular'] ? 'cell-flash-' + cellFlashes[r.symbol + '_regular'] : ''">{{ num(r.regularPrice) }}</td><td class="num" :class="[tone(r.regularChange), cellFlashes[r.symbol + '_regular'] ? 'cell-flash-' + cellFlashes[r.symbol + '_regular'] : '']">{{ pct(r.regularChange) }}</td><td class="num" :class="cellFlashes[r.symbol + '_ext'] ? 'cell-flash-' + cellFlashes[r.symbol + '_ext'] : ''">{{ num(r.extPrice) }}</td><td class="num" :class="[tone(r.extChange), cellFlashes[r.symbol + '_ext'] ? 'cell-flash-' + cellFlashes[r.symbol + '_ext'] : '']">{{ pct(r.extChange) }}</td><td><span class="session-badge">{{ r.extStatus }}</span></td><td><small class="muted">{{ time(r.updatedAt) }}</small></td><td style="text-align:right;" @click.stop><button class="remove" :aria-label="'全局移除 '+r.symbol" @click="removeWatch(r.symbol)" title="全局移除">×</button></td></tr></tbody></table></div>
+<div class="panel-note">口径说明：常规涨跌幅相对上一交易日常规收盘；盘后 EXT 相对当日 RTH 收盘；隔夜与盘前 EXT 相对该场次前最近一个已完成 RTH 的收盘，跨午夜不重置基准。</div></section></template>
+
 <template v-if="page==='chart'"><section class="panel"><div class="panel-heading"><div><h2>{{symbol}} <span class="muted">{{chart?.name}}</span></h2><div v-if="chart" class="stock-price">{{num(chart.price)}} <small>{{chart.currency}}</small><span :class="tone(chart.changePercent)">{{pct(chart.changePercent)}}</span></div></div><div class="controls"><button @click="addWatch(symbol)">{{watchlist.includes(symbol)?'✓ 已在自选':'+ 加入自选'}}</button><select v-model="chartRange" aria-label="行情周期"><option value="1d">日内 · 5 分钟</option><option value="1mo">1 个月</option><option value="3mo">3 个月</option><option value="6mo">6 个月</option><option value="1y">1 年</option></select></div></div><div v-if="states.chart.loading" class="loading-block">正在获取 {{symbol}} 行情…</div><div v-if="states.chart.error" class="error-box">{{states.chart.error}} <button @click="loadChart">重试</button></div><div v-show="chart&&!states.chart.loading" id="price-chart" class="price-chart" role="img" :aria-label="symbol+'价格与成交量图'"></div><div v-if="chart" class="panel-note">{{chart.source}} · {{chart.delay}} · 最新交易 {{time(chart.asOf)}} · {{chart.bars.length}} 根 K 线 · 最新一根可能尚未收盘 <strong v-if="chart.stale" class="warning">· 旧快照</strong></div></section><div class="quick-actions"><button @click="optionSymbol=symbol;page='options'">{{symbol}} 期权墙 →</button><button @click="newsSymbol=symbol;page='news'">{{symbol}} 相关新闻 →</button></div></template>
 
 <template v-if="page==='flows'"><div class="tabs"><button :class="{selected:flowTab==='rotation'}" @click="flowTab='rotation'">板块轮动与成交</button><button :class="{selected:flowTab==='net'}" @click="flowTab='net'">ETF 净申赎</button></div><section v-if="flowTab==='rotation'" class="panel"><div class="panel-heading"><div><h2>资金关注哪些板块？</h2><p>横轴：当日涨跌幅 · 纵轴：估算成交额（美元）</p></div></div><div v-if="states.overview.error" class="error-box">{{states.overview.error}} <button @click="loadOverview">重试</button></div><div v-if="!overview" class="loading-block">正在加载板块行情…</div><div id="rotation-chart" class="wide-chart" role="img" aria-label="板块涨跌幅与成交额散点图"></div><div class="panel-note">估算成交额 = 最新价 × 当日成交股数，用于比较活跃度。交易有买有卖，不能由此推断净流入、主力买卖或 ETF 净申赎。Yahoo Finance · 可能延迟。</div></section>
@@ -38,6 +53,93 @@
 
 <template v-if="page==='news'"><div class="news-controls"><div class="tabs"><button :class="{selected:!newsSymbol}" @click="newsSymbol=''">市场新闻</button><button v-for="s in watchlist.slice(0,6)" :key="s" :class="{selected:newsSymbol===s}" @click="newsSymbol=s">{{s}}</button></div><form class="controls" @submit.prevent="newsSymbol=newsSearch.trim().toUpperCase()"><input v-model="newsSearch" aria-label="新闻股票代码" placeholder="代码筛选"><button type="submit">查看</button></form></div><div v-if="states.news.loading" class="loading-block">正在读取新闻源…</div><div v-if="states.news.error" class="error-box">{{states.news.error}} <button @click="loadNews">重试</button></div><template v-if="news"><div class="inline-note">{{news.symbol?news.symbol+' 相关新闻':'市场新闻'}} · {{news.items.length}} 条 · 获取 {{time(news.fetchedAt)}} · RSS 缓存 5 分钟 <span v-if="news.stale" class="warning">· 旧快照</span><span v-if="news.unavailable.length" class="warning"> · 暂缺 {{news.unavailable.join('、')}}</span></div><div class="news-grid"><a v-for="n in news.items" :key="n.url" :href="n.url" target="_blank" rel="noopener noreferrer" class="panel news-card"><div><span class="source-label">{{n.source}}</span><span>↗</span></div><h2>{{n.title}}</h2><small>{{time(n.publishedAt)}} · 阅读原文</small></a></div></template></template>
 
-<template v-if="page==='sources'"><section class="panel documentation"><h2>每一个图表，都有明确的数据口径</h2><div class="table-wrap"><table><thead><tr><th>模块</th><th>来源与刷新</th><th>如何阅读</th></tr></thead><tbody><tr><td>行情 / 热力图</td><td>Yahoo Finance · 60 秒缓存</td><td>可能延迟；显示源站最近交易时间。18 只精选股不代表全市场。</td></tr><tr><td>资金观察</td><td>11 个板块 ETF / 用户 CSV</td><td>成交活跃度与 ETF 净申赎分别显示，不推算主力净流入。</td></tr><tr><td>期权墙</td><td>Cboe · 15 分钟缓存</td><td>延迟快照；OI 通常每日更新。GEX 是带符号假设的估算。</td></tr><tr><td>新闻</td><td>CNBC、MarketWatch、Yahoo RSS · 5 分钟缓存</td><td>标题、来源、发布时间与原文链接。</td></tr><tr><td>自选</td><td>浏览器本地 / 已配置的 Notion 导入</td><td>手动导入后本地保存；未实现跨设备同步。</td></tr></tbody></table></div><h2>开源融合</h2><p><a href="https://github.com/aaguiar10/gflows" target="_blank" rel="noopener">G|Flows · MIT</a>：移植 Cboe 接入和按行权价计算的逻辑，补充校验、缺失值处理和明确单位。</p><p><a href="https://github.com/apache/echarts" target="_blank" rel="noopener">Apache ECharts · Apache-2.0</a>：热力图、K 线、板块轮动及期权分布图。</p><p><a href="https://github.com/Open-Dev-Society/OpenStock" target="_blank" rel="noopener">OpenStock</a>、<a href="https://github.com/openbq-org/OpenBB" target="_blank" rel="noopener">OpenBB</a>：产品与数据分层参考，未复制其应用代码。</p><h2>产品定位</h2><p>Market Desk 是美股信息与分析辅助工作台。旧版拐点策略、买卖标记和胜率回测入口已停用，历史代码保留归档。网络失败会显示明确状态，已有缓存会标注为旧快照。</p></section></template>
+<template v-if="page==='sources'"><section class="panel documentation"><h2>每一个图表，都有明确的数据口径</h2><div class="table-wrap"><table><thead><tr><th>模块</th><th>来源与刷新</th><th>如何阅读</th></tr></thead><tbody><tr><td>行情 / 热力图</td><td>Yahoo Finance · 60 秒缓存</td><td>可能延迟；显示源站最近交易时间。18 只精选股不代表全市场。</td></tr><tr><td>资金观察</td><td>11 个板块 ETF / 用户 CSV</td><td>成交活跃度与 ETF 净申赎分别显示，不推算主力净流入。</td></tr><tr><td>期权墙</td><td>Cboe · 15 分钟缓存</td><td>延迟快照；OI 通常每日更新。GEX 是带符号假设的估算。</td></tr><tr><td>新闻</td><td>CNBC、MarketWatch、Yahoo RSS · 5 分钟缓存</td><td>标题、来源、发布时间与原文链接。</td></tr><tr><td>自选与多时段</td><td>长桥 (Longbridge) OpenAPI US LV1 / 本地分组模型</td><td>覆盖常规、盘前、盘后与隔夜时段；基准收盘相对最近真实 RTH。</td></tr></tbody></table></div><h2>开源融合</h2><p><a href="https://github.com/aaguiar10/gflows" target="_blank" rel="noopener">G|Flows · MIT</a>：移植 Cboe 接入和按行权价计算的逻辑，补充校验、缺失值处理和明确单位。</p><p><a href="https://github.com/apache/echarts" target="_blank" rel="noopener">Apache ECharts · Apache-2.0</a>：热力图、K 线、板块轮动及期权分布图。</p><p><a href="https://github.com/Open-Dev-Society/OpenStock" target="_blank" rel="noopener">OpenStock</a>、<a href="https://github.com/openbq-org/OpenBB" target="_blank" rel="noopener">OpenBB</a>：产品与数据分层参考，未复制其应用代码。</p><h2>产品定位</h2><p>Market Desk 是美股信息与分析辅助工作台。旧版拐点策略、买卖标记和胜率回测入口已停用，历史代码保留归档。网络失败会显示明确状态，已有缓存会标注为旧快照。</p></section></template>
+
+</div>
+</transition>
+</div>
+
+<!-- Wide screen (>=1600px) compact watchlist panel -->
+<aside v-if="isWide && compactPanelOpen && page!=='watchlist'" class="compact-watchlist-panel desktop-only" aria-label="快捷自选面板">
+  <div class="compact-header">
+    <h3>★ 实时自选 ({{watchlist.length}})</h3>
+    <button class="text-button" @click="navigate('watchlist')">完整看板 ↗</button>
+  </div>
+  <div class="compact-list">
+    <button v-for="r in compactRows" :key="r.symbol" class="compact-row" @click="selectSymbol(r.symbol)">
+      <span class="sym">{{ r.symbol }}</span>
+      <span class="num" :class="tone(r.regularChange)">{{ pct(r.regularChange) }}</span>
+      <span class="num" :class="tone(r.extChange)">{{ pct(r.extChange) }}</span>
+    </button>
+  </div>
+  <p v-if="!compactRows.length" class="muted small" style="text-align:center;padding:12px;">暂无自选</p>
+</aside>
+</div>
+
+<!-- Modal: Group Management -->
+<div v-if="showGroupModal" class="modal-backdrop" @click.self="showGroupModal=false">
+  <div class="modal-card" role="dialog" aria-modal="true" aria-label="自选分组管理">
+    <div class="modal-heading"><h2>管理自选分组</h2><button class="modal-close" aria-label="关闭" @click="showGroupModal=false">×</button></div>
+    <div class="modal-body">
+      <form @submit.prevent="handleCreateGroup" style="display:flex;gap:8px;">
+        <input v-model="newGroupName" placeholder="输入新分组名称，如：科技核心" maxlength="16">
+        <button class="primary-button" style="width:auto;height:38px;padding:0 14px;" type="submit">新建</button>
+      </form>
+      <div style="border-top:1px solid var(--border);padding-top:12px;display:grid;gap:8px;">
+        <div v-for="g in groups" :key="g.id" style="display:flex;justify-content:space-between;align-items:center;padding:8px;background:var(--card-bg);border-radius:var(--radius-sm);">
+          <div><strong>{{ g.name }}</strong> <small class="muted">({{ g.symbolIds.length }} 支)</small></div>
+          <div style="display:flex;gap:6px;">
+            <button v-if="g.id!=='default'" style="font-size:11px;padding:2px 8px;" @click="handleDeleteGroup(g.id)">删除</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-actions"><button @click="showGroupModal=false">完成</button></div>
+  </div>
+</div>
+
+<!-- Modal: Add Stock -->
+<div v-if="showAddStockModal" class="modal-backdrop" @click.self="showAddStockModal=false">
+  <div class="modal-card" role="dialog" aria-modal="true" aria-label="添加自选股票">
+    <div class="modal-heading"><h2>添加股票到自选</h2><button class="modal-close" aria-label="关闭" @click="showAddStockModal=false">×</button></div>
+    <form @submit.prevent="handleAddStockModalSubmit" class="modal-body">
+      <label><span>加入到分组</span>
+        <select v-model="addStockTargetGroup">
+          <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }}</option>
+        </select>
+      </label>
+      <label><span>美股代码 / Symbol</span>
+        <input v-model="addStockInput" placeholder="例如 NVDA / AAPL / SPY" maxlength="12" autofocus>
+      </label>
+      <div class="modal-actions">
+        <button type="button" @click="showAddStockModal=false">取消</button>
+        <button type="submit" class="primary-button" style="width:auto;height:36px;padding:0 16px;">确认添加</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: Backup & Restore JSON -->
+<div v-if="showBackupModal" class="modal-backdrop" @click.self="showBackupModal=false">
+  <div class="modal-card" role="dialog" aria-modal="true" aria-label="分组备份与还原">
+    <div class="modal-heading"><h2>自选分组配置 (JSON)</h2><button class="modal-close" aria-label="关闭" @click="showBackupModal=false">×</button></div>
+    <div class="modal-body">
+      <p class="small">可复制以下配置到安全位置备份，或粘贴已有备份文本后点击“导入配置”。</p>
+      <textarea v-model="backupJsonText" spellcheck="false" placeholder="在此粘贴 JSON 配置..."></textarea>
+      <div class="modal-actions">
+        <button type="button" @click="showBackupModal=false">取消</button>
+        <button type="button" class="primary-button" style="width:auto;height:36px;padding:0 16px;" @click="handleImportJson">导入配置</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <footer>MARKET DESK <span>信息辅助 · 数据可能延迟 · 不自动生成买卖指令</span><button class="text-button" @click="page='sources'">数据来源与口径 ↗</button></footer>
-</main></div><nav class="ios-tab-bar mobile-only" aria-label="底部导航" :inert="isMobile&&showSettings"><button v-for="item in mobileNav" :key="item.id" :class="['tab-item',{active:page===item.id}]" :aria-current="page===item.id?'page':undefined" @click="navigate(item.id)"><span class="tab-icon">{{item.icon}}</span>{{item.label}}</button><button class="tab-item" @click="openSettings"><span class="tab-icon">☷</span>更多</button></nav></div><noscript>请启用 JavaScript 以使用 Market Desk。</noscript></body></html>
+</main></div>
+<nav class="ios-tab-bar mobile-only" aria-label="底部导航" :inert="isMobile&&showSettings">
+  <button v-for="item in mobileNav" :key="item.id" :class="['tab-item',{active:page===item.id}]" :aria-current="page===item.id?'page':undefined" @click="navigate(item.id)">
+    <span class="tab-icon">{{item.icon}}</span>{{item.label}}
+  </button>
+  <button class="tab-item" @click="openSettings"><span class="tab-icon">☷</span>更多</button>
+</nav>
+</div><noscript>请启用 JavaScript 以使用 Market Desk。</noscript></body></html>

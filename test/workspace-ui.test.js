@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import { JSDOM, VirtualConsole } from 'jsdom';
 import { parseFlows } from '../public/flows.js';
+import * as watchlistModel from '../public/watchlist-model.js';
 const tick = () => new Promise(resolve => setTimeout(resolve, 30));
 async function mount(t, fetchImpl) {
   const errors = [], configs = new Map();
@@ -12,10 +13,17 @@ async function mount(t, fetchImpl) {
   const dom = new JSDOM(html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, ''), { url: 'http://localhost/', runScripts: 'outside-only', virtualConsole });
   t.after(() => dom.window.close()); const w = dom.window;
   w.fetch = fetchImpl; w.parseFlows = parseFlows; w.ResizeObserver = class { observe() {} disconnect() {} };
+  w.EventSource = class { constructor() {} close() {} };
+  w.requestAnimationFrame = cb => setTimeout(cb, 16);
+  w.cancelAnimationFrame = id => clearTimeout(id);
+  Object.assign(w, watchlistModel);
   Object.defineProperty(w.HTMLElement.prototype, 'clientWidth', { get: () => 800 });
   w.echarts = { init: el => ({ setOption: config => configs.set(el.id, config), off() {}, on() {}, resize() {}, dispose() {} }) };
   w.eval(await fs.readFile(new URL('../node_modules/vue/dist/vue.global.prod.js', import.meta.url), 'utf8'));
-  w.eval((await fs.readFile(new URL('../public/app.js', import.meta.url), 'utf8')).replace("import { parseFlows } from './flows.js';", 'const parseFlows = window.parseFlows;'));
+  const appSrc = (await fs.readFile(new URL('../public/app.js', import.meta.url), 'utf8'))
+    .replace("import { parseFlows } from './flows.js';", 'const parseFlows = window.parseFlows;')
+    .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/watchlist-model\.js';/, 'const { WatchlistManager, sortWatchlistRows, getSelectedExtQuote, MAX_UNIQUE_SYMBOLS, validSymbol } = window;');
+  w.eval(appSrc);
   await tick();
   const button = text => [...w.document.querySelectorAll('button')].find(el => el.textContent.trim() === text || el.textContent.trim().endsWith(text));
   const click = async text => { const el = button(text); assert.ok(el, `Missing button ${text}`); el.click(); await tick(); };
@@ -28,6 +36,7 @@ const fixture = url => {
   if (u.pathname === '/api/news') return { symbol: u.searchParams.get('symbol'), fetchedAt: '2026-10-22T00:00:00Z', unavailable: [], items: [{ title: 'A test headline', url: 'https://example.com', source: 'Test', publishedAt: '2026-10-21T21:00:00Z' }] };
   if (u.pathname.endsWith('chart')) return { ...q, symbol: u.searchParams.get('symbol'), currency: 'USD', range: u.searchParams.get('range'), bars: [{ time: 1792612800, open: 99, close: 100, low: 98, high: 101, volume: 1000 }] };
   if (u.pathname === '/api/options') return { symbol: 'SPY', spot: 100, expiration: '2026-10-23', expirations: ['2026-10-23'], callWall: [105], putWall: [95], callOi: 100, putOi: 50, putCallRatio: .5, netGex: 10000, missingOi: 0, missingGamma: 0, contracts: 2, rows: [{ strike: 105, callOi: 100, putOi: 50, callGex: 20000, putGex: -10000 }], asOf: '2026-10-22 00:00:00' };
+  if (u.pathname.includes('/watchlist/quotes')) return { quotes: { NVDA: { symbol: 'NVDA', name: 'NVIDIA', regular: { price: 100, changePercent: 2 }, post: { price: 102, changePercent: 2 }, meta: { status: 'active', delayStatus: 'realtime' } } }, session: { session: 'regular', desc: '常规交易' }, provider: { isConfigured: false, name: 'Longbridge' } };
 };
 test('Vue page mounts, navigates all modules, wires chart data and handles watchlist', async t => {
   const ui = await mount(t, async url => ({ ok: true, json: async () => fixture(url) }));
@@ -43,6 +52,13 @@ test('Vue page mounts, navigates all modules, wires chart data and handles watch
   assert.match(ui.w.document.querySelector('main h2').textContent, /AMD/);
   await ui.click('Light');
   assert.equal(ui.w.document.documentElement.classList.contains('dark'), false);
+  await ui.click('自选看板');
+  assert.ok(ui.w.document.querySelector('.watchlist-table'));
+  assert.ok(ui.w.document.querySelector('.watchlist-toolbar'));
+  await ui.click('全部排行');
+  assert.ok(ui.w.document.querySelector('.watchlist-table'));
+  await ui.click('分组视图');
+  assert.ok(ui.w.document.querySelector('.watchlist-table'));
   await ui.click('资金观察'); assert.ok(ui.configs.has('rotation-chart')); await ui.click('ETF 净申赎'); assert.match(ui.w.document.querySelector('main').textContent, /接入你有来源/);
   await ui.click('期权墙'); assert.ok(ui.configs.has('options-chart')); await ui.click('估算 GEX'); assert.equal(ui.configs.get('options-chart').series[1].data[0], -10000);
   await ui.click('新闻资讯'); assert.match(ui.w.document.querySelector('.news-card').textContent, /A test headline/);

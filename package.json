@@ -8,12 +8,13 @@
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
     "test": "node --test test/*.test.js",
-    "check": "node --check src/server.js && node --check src/workspace-data.js && node --check src/market-workspace.js && node --check src/options-wall.js && node --check public/app.js && node --check public/flows.js",
-    "test:workspace": "node --test test/workspace.test.js test/workspace-http.test.js test/workspace-ui.test.js"
+    "check": "node --check src/server.js && node --check src/market-sessions.js && node --check src/watchlist-quotes.js && node --check src/quote-providers/longbridge.js && node --check src/workspace-data.js && node --check src/market-workspace.js && node --check src/options-wall.js && node --check public/watchlist-model.js && node --check public/app.js && node --check public/flows.js",
+    "test:workspace": "node --test test/market-sessions.test.js test/watchlist-model.test.js test/watchlist-api.test.js test/workspace.test.js test/workspace-http.test.js test/workspace-ui.test.js"
   },
   "dependencies": {
     "echarts": "6.1.0",
     "fast-xml-parser": "5.11.2",
+    "longport": "^4.3.7",
     "vue": "3.5.44"
   },
   "devDependencies": {

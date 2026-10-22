@@ -5,17 +5,28 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { fetchWatchlistSymbols } from './notion.js';
 import { createMarketWorkspace } from './market-workspace.js';
+import { getWatchlistQuoteService } from './watchlist-quotes.js';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const publicDir = path.join(root, 'public');
 const vendor = { '/vendor/vue.js': 'node_modules/vue/dist/vue.global.prod.js', '/vendor/echarts.js': 'node_modules/echarts/dist/echarts.min.js' };
 const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.json': 'application/json', '.csv': 'text/csv; charset=utf-8' };
 function json(res, status, data) { res.writeHead(status, { 'Content-Type': mime['.json'], 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' }); res.end(JSON.stringify(data)); }
-export function createServer({ workspace = createMarketWorkspace(), watchlist = fetchWatchlistSymbols } = {}) {
+export function createServer({ workspace = createMarketWorkspace(), watchlist = fetchWatchlistSymbols, quoteService = getWatchlistQuoteService() } = {}) {
   return http.createServer(async (req, res) => {
     try {
       const url = new URL(req.url, 'http://localhost');
       if (!['GET', 'HEAD'].includes(req.method)) { res.setHeader('Allow', 'GET, HEAD'); json(res, 405, { error: 'Method not allowed' }); return; }
       const params = Object.fromEntries(url.searchParams);
+      if (url.pathname === '/api/watchlist/stream') {
+        const symbols = (params.symbols || '').split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+        quoteService.addClient(req, res, symbols);
+        return;
+      }
+      if (url.pathname === '/api/watchlist/quotes') {
+        const symbols = (params.symbols || '').split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+        json(res, 200, await quoteService.getQuotes(symbols));
+        return;
+      }
       const routes = {
         '/api/health': () => ({ ok: true, product: 'Market Desk', version: '1.0.0' }),
         '/api/market/overview': () => workspace.overview(), '/api/market/chart': () => workspace.chart(params),
