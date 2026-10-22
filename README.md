@@ -1,455 +1,88 @@
-# Inflection Hunter
+# Market Desk · 美股观察工作台
 
-> Clean-room Node.js + Vue 3 inflection-point signal scanner powered by TradingView public market data.
+原 Inflection Hunter 已于 **2026-10-22** 调整为美股信息与分析辅助网站。当前产品围绕行情、新闻、板块表现、资金观察和期权持仓组织信息，不再运行拐点扫描或输出买卖信号。
 
----
+界面沿用原系统的灰白 / 深灰主题、蓝色强调色、毛玻璃圆角面板和侧栏布局；手机端使用底部导航与抽屉。主题默认跟随系统，手动切换后在本地保存。
 
-## Table of Contents
+## 启动
 
-1. [Quick Start](#quick-start)
-2. [Architecture Overview](#architecture-overview)
-3. [Signal Engine Algorithm](#signal-engine-algorithm)
-   - [Data Pipeline](#data-pipeline)
-   - [Indicators](#indicators)
-   - [Composite Score](#composite-score)
-   - [Signal State Machine](#signal-state-machine)
-   - [Adaptive Features](#adaptive-features)
-4. [Backtest Engine](#backtest-engine)
-5. [Radar Scanner](#radar-scanner)
-6. [API Reference](#api-reference)
-7. [Module Reference](#module-reference)
-8. [Backtest Results](#backtest-results)
-9. [Disclaimer](#disclaimer)
+需要 Node.js 22 或更高版本。
 
----
-
-## Quick Start
-
-```bash
-npm run dev
+```powershell
+npm.cmd ci
+npm.cmd start
 ```
 
-Open in browser:
+默认访问 **http://localhost:5174**。已有 `.env` 中的 `PORT` 优先；本次迁移保留原 `.env`。默认只监听 `127.0.0.1`。示例配置见 [.env.example](.env.example)。开发时使用 `npm.cmd run dev`。
 
-```
-http://localhost:5174
-```
+不需要为基础功能申请 API Key。Yahoo/Cboe/RSS 是尽力可用的公开端点，可能限流、延迟或改变接口；失败会明确显示错误，存在有效旧缓存时会注明“旧快照”。不生成演示行情填充失败的数据。
 
----
+## 当前功能
 
-## Architecture Overview
+| 模块 | 能做什么 | 数据边界 |
+| --- | --- | --- |
+| 市场总览 | SPY、QQQ、DIA、IWM、VIX；11 大板块 ETF；样本涨跌分布 | ETF 为对应指数代理；不是完整市场宽度 |
+| 热力图 | 精选 18 只美股；按板块筛选、成交额/等面积切换；点击进入个股 | 面积为最新价 × 当日股数的估算成交额，不是市值或净流入 |
+| 个股行情 | 搜索代码；日内 5 分钟、1/3/6/12 月日 K；成交量与缩放 | 最新一根可能未收盘，标注交易时间，可能延迟 |
+| 资金观察 | 11 个板块 ETF 涨跌/成交额散点图；导入真实净申赎 CSV | 默认未接 ETF 净申赎服务，不能从 OHLCV 推算真实资金净流入 |
+| 期权墙 | Cboe 链；到期日选择；Call/Put OI 墙、持仓比、估算 GEX；行权价范围筛选 | 公开延迟快照，持仓量通常每日更新；GEX 含仓位方向假设 |
+| 新闻 | CNBC、MarketWatch 市场新闻；Yahoo 个股 RSS；原文链接 | 保留原文标题，不内置新闻翻译或 AI 摘要 |
+| 自选 | 本地保存、增删；手动合并已有 Notion 自选 | 本地浏览器保存，不自动跨设备同步 |
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     Browser (Vue 3)                         │
-│  public/index.html · public/app.js · public/styles.css      │
-│  public/composables/useChart.js  (Lightweight Charts)       │
-└──────────────────────────┬──────────────────────────────────┘
-                           │  HTTP  (localhost)
-┌──────────────────────────▼──────────────────────────────────┐
-│                   src/server.js  (Node HTTP)                 │
-│                                                             │
-│  /api/market/snapshot  ──►  src/snapshot.js                 │
-│  /api/radar            ──►  src/radar.js                    │
-│  /api/backtest         ──►  src/backtest.js                 │
-│  /api/health                                                │
-└──────────────────────────┬──────────────────────────────────┘
-                           │
-       ┌───────────────────┼────────────────────┐
-       ▼                   ▼                    ▼
-  src/snapshot.js    src/radar.js         src/backtest.js
-       │                   │
-       ▼                   ▼
-  src/tradingview.js  (WebSocket → TradingView public feed)
-       │
-       ▼
-  src/indicators.js   (DEMA, ATR, Williams %R, Mutant, …)
-  src/signals.js      (composite score → state machine)
-  src/universe.js     (default symbol list)
-```
+## GitHub 项目融合
 
-The backend runs a **plain Node.js HTTP server** with no external framework. It connects to TradingView's public market-data WebSocket to fetch OHLCV bars, applies the signal engine locally, and returns JSON to the frontend.
+- **[G|Flows](https://github.com/aaguiar10/gflows) · MIT**：已将 Cboe 接入与按行权价汇总 GEX 的逻辑移植为 Node.js；补充合约逐条解析、小数行权价、缺失值保护、并列墙、明确单位，未照搬其成交量替代 OI 的行为。
+- **[Apache ECharts](https://github.com/apache/echarts) · Apache-2.0**：已直接集成，驱动热力图、K 线、成交量、散点与期权柱状图。Vue 与图表包从本地依赖提供，页面不依赖外部脚本 CDN。
+- **[OpenStock](https://github.com/Open-Dev-Society/OpenStock)** 与 **[OpenBB](https://github.com/openbq-org/OpenBB)**：参考市场工作台的信息组织与数据提供者分层，没有复制应用代码或引入完整 React/Python 服务。
 
----
+选型与排除原因：[GitHub 调研和迁移说明](docs/MARKET_DESK_MIGRATION.zh-CN.md)。归属和许可证：[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
-## Signal Engine Algorithm
+## 数据口径
 
-The core of Inflection Hunter is a multi-factor composite score that generates **directional inflection signals** on any timeframe.
+1. **涨跌幅**：最新价相对前一交易日收盘，不使用长区间首日收盘冒充昨日收盘。
+2. **估算成交额**：最新价 × 当日成交股数，只用于相对活跃度；不是逐笔成交金额汇总。
+3. **OI 墙**：所选到期日内、全部行权价中 Call 或 Put 持仓量最大的价格。并列全部保留；全零不生成墙。图上筛选 ±15% 不改变墙的计算范围。
+4. **GEX**：`gamma × OI × 100 × spot² × 0.01`，单位为标的变动 1% 时的美元 Delta 敞口变化。假定 Call 正、Put 负；不能据此声称实际做市商仓位。缺少 OI/Gamma 时受影响汇总为 `null`，不当作 0。仅标准 100 股合约，拒绝不同/调整后根代码。未实现重新定价的 Gamma flip 曲线。
+5. **时间**：界面交易时间转北京时间，顶部时钟为纽约。Cboe 无时区的时间字段保留原值，不擅自推定。过往到期日排除，当日链在纽约 16:15 后排除（保守覆盖 ETF 延后收盘）。
+6. **缓存**：行情 60 秒、RSS 5 分钟、期权链 15 分钟；相同请求合并。源站故障时最多使用保存于 1 小时内的旧快照并明确标注；缓存时间不是源站数据时间。
 
-### Data Pipeline
+## 导入净申赎
 
-```
-TradingView WebSocket
-        │
-        ▼  OHLCV bars (up to 3000 bars per request)
-  normalizeBars()           ← round to 6dp, numeric coercion
-        │
-        ├── DEMA(14)        ← fast trend line  (emaFast)
-        ├── DEMA(30)        ← slow trend line  (aux)
-        ├── ATR(14)         ← volatility normaliser
-        ├── Williams %R(9)  ← zero-lag overbought/oversold
-        ├── VolumeSurge(20) ← volume vs 20-bar rolling avg
-        └── Mutant(260,5)   ← normalised annualised momentum
-                │
-                ▼
-        computeSignals()    ← composite score → state machine → signal list
+“资金观察 → ETF 净申赎 → 导入 CSV”，UTF-8 格式：
+
+```csv
+date,symbol,netFlowUsd,source
 ```
 
-### Indicators
+在表头之后填写真实数据。日期格式 `YYYY-MM-DD`；金额为美元、可正可负；来源必填；同代码同日不能重复；来源不要包含逗号。每次导入替换本地已导入数据，最多 2000 行、500 KB，不上传到服务器。浏览器保留原 CSV，界面可清空。系统不独立核验用户提供的数值。
 
-#### Double EMA (DEMA)
+## API
 
-Standard EMA has lag proportional to its period. DEMA halves that lag:
+| GET 路径 | 参数 |
+| --- | --- |
+| `/api/health` | 产品版本与健康状态 |
+| `/api/market/overview` | 大盘、板块、精选股、缺失列表 |
+| `/api/market/chart` | `symbol=NVDA&range=3mo`；range 为 `1d/1mo/3mo/6mo/1y` |
+| `/api/news` | 空参数为市场新闻；`symbol=AAPL` 为个股 |
+| `/api/options` | `symbol=SPY`；`expiration=YYYY-MM-DD` 或 `all`，省略默认最近有效日 |
+| `/api/watchlist` | 复用已有 Notion 接入，只有点击导入时使用 |
 
-```
-DEMA(n) = 2 × EMA(n) − EMA(EMA(n))
-```
+旧 `/api/radar`、`/api/backtest`、`/api/market/snapshot` 返回 **410 Gone**。算法模块保留历史用途，新服务器不加载。迁移前 UI、服务入口和说明见 [archive/inflection-v0.2](archive/inflection-v0.2/ARCHIVE.md)。
 
-The second EMA pass estimates the lag error of the first; subtracting it brings the line close to price while keeping smoothness. Inflection Hunter uses:
+## 验证
 
-| Line | Period | Role |
-|------|--------|------|
-| `emaFast` | DEMA(14) | Short-term trend direction |
-| `aux` | DEMA(30) | Medium-term trend anchor |
-
-#### ATR (Average True Range)
-
-Rolling average of True Range over 14 bars. Used as the **volatility normaliser** for all score components — dividing raw distances by ATR makes the score dimensionless and regime-stable.
-
-```
-TrueRange = max(High − Low, |High − PrevClose|, |Low − PrevClose|)
-ATR(14)   = rolling mean of last 14 TrueRanges
+```powershell
+npm.cmd run check
+npm.cmd test
+npm.cmd run test:workspace
 ```
 
-#### Williams %R
+如在受限 Windows 沙箱出现父目录 `lstat EPERM`，仅为当前终端设置：
 
-Zero-lag overbought/oversold oscillator. Unlike RSI (which carries ~7-bar Wilder-smoothing lag), `%R` uses raw High/Low extremes:
-
-```
-%R = (HighestHigh − Close) / (HighestHigh − LowestLow) × −100
+```powershell
+$env:NODE_OPTIONS='--preserve-symlinks --preserve-symlinks-main'
 ```
 
-Range `[−100, 0]`.  
-- ≥ −15 → overbought (blocks new long signals)  
-- ≤ −85 → oversold (blocks new short signals)
+测试覆盖计算、缓存、解析、安全路径、API 失败、Vue 页面挂载、导航、图表数据接线及异步旧响应覆盖保护。DOM 测试使用明确的测试夹具，不作为应用数据；它们不能替代真实浏览器截图或设备测试。当前验证记录见 [迁移说明](docs/MARKET_DESK_MIGRATION.zh-CN.md)。
 
-Inflection Hunter uses **period = 9** (tighter than the common 14-period RSI proxy).
-
-#### Volume Surge Ratio
-
-```
-VolumeSurge[i] = volume[i] / rollingAvg(volume, 20)
-```
-
-Used as a **signal quality multiplier**:
-
-| Surge ratio | Score factor |
-|-------------|-------------|
-| ≥ 1.5× | ×1.15 (boost) |
-| 1.0 – 1.5× | ×1.00 |
-| 0.7 – 1.0× | ×0.85 |
-| < 0.7× | ×0.70 (penalise thin volume) |
-
-#### Mutant (Normalised Momentum)
-
-An annualised log-return momentum oscillator, smoothed and normalised to `[−1, +1]`:
-
-```
-rawReturn[i]    = log(close[i] / close[i-1]) × 260   // annualised
-smoothed        = EMA(rawReturn, 5)
-scale           = 95th-percentile of |smoothed|
-mutant[i]       = clamp(smoothed[i] / scale, −1, +1)
-```
-
-The 260× factor converts daily log-returns to an approximate annualised rate. The 95th-percentile normalisation prevents outlier events from permanently dominating the scale.
-
----
-
-### Composite Score
-
-Each bar receives a scalar **composite score** built from five components:
-
-```
-spreadScore = (DEMA_fast − DEMA_slow) / ATR      // DEMA spread (trend direction)
-priceScore  = (close − DEMA_fast)    / ATR      // price vs fast line (proximity)
-slopeScore  = (DEMA_fast[i] − DEMA_fast[i-2]) / ATR   // 2-bar DEMA slope (momentum)
-velocity    = (close[i] − close[i-1]) / ATR     // 1-bar price speed (leading)
-mutant      = Mutant[i]                         // normalised annualised momentum
-
-rawScore = 0.45 × spreadScore
-         + 0.25 × priceScore
-         + 0.15 × slopeScore
-         + 0.08 × velocity
-         + mWeight × mutant
-
-score = rawScore × volFactor
-```
-
-**Weight rationale:**
-
-| Component | Weight | Rationale |
-|-----------|--------|-----------|
-| DEMA spread | 0.45 | Primary trend-direction signal |
-| Price vs DEMA | 0.25 | Proximity confirmation |
-| DEMA slope | 0.15 | Rate-of-change, momentum |
-| Price velocity | 0.08 | Lightweight leading indicator |
-| Mutant | adaptive | Annualised momentum — amplified when consistent |
-
-The **Mutant weight** (`mWeight`) is not fixed. It adapts based on how consistently directional Mutant has been over the last 5 bars:
-
-```
-consistency = fraction of last 5 bars where sign(mutant) == sign(current mutant)
-mWeight     = baseWeight × (0.6 + consistency × 0.8)   // range ≈ [0.108, 0.324]
-```
-
----
-
-### Signal State Machine
-
-The signal engine is an event-driven state machine operating on four states:
-
-```
-regime ∈ { −1 (DOWN), 0 (neutral), +1 (UP) }
-```
-
-**Per-bar logic:**
-
-```
-1. Compute adaptive thresholds (enterThreshold, exitThreshold)
-2. Compute composite score
-3. Derive target regime from score vs thresholds
-4. Apply Williams %R block (prevents new signals at extremes)
-5. If target == regime → reset pending, continue
-6. If target == 0      → reset pending, continue
-7. If pending != target → record Early signal (eB / eS), start confirmation counter
-8. If pendingCount >= dynConfirm → emit Confirmed signal (B / S), flip regime
-```
-
-**Signal sides:**
-
-| Side | Meaning |
-|------|---------|
-| `eB` | Early Buy — first bar where score crosses the enter threshold upward |
-| `B` | Confirmed Buy — signal held for `confirmBars` consecutive bars |
-| `eS` | Early Sell — first bar where score crosses the enter threshold downward |
-| `S` | Confirmed Sell — signal held for `confirmBars` consecutive bars |
-
-Only **B** and **S** signals are used for backtesting. **eB** / **eS** provide early-warning overlays on the chart.
-
-**Confirmation window:**  
-Default is **2 bars** (conservative). This drops to **1 bar** only when:
-- All 4 confluence factors agree (score = 4), **AND**
-- `|score| ≥ enterThreshold × 2.2`
-
----
-
-### Adaptive Features
-
-#### Adaptive Entry / Exit Thresholds
-
-The enter and exit thresholds scale with the **ATR percentile** over the last 60 bars:
-
-```
-ratio = clamp((ATR_current − ATR_p50) / (ATR_p90 − ATR_p50), 0, 1)
-scale = 1 + ratio × 0.6          // 1.0 in quiet markets, up to 1.6× in volatile
-
-enterThreshold = baseEnter × scale   // default base: 0.22
-exitThreshold  = baseExit  × scale   // default base: 0.08
-```
-
-This prevents false signals in quiet regimes (thresholds too loose) and chasing extended moves in volatile regimes (thresholds too tight).
-
-#### Confluence Counter
-
-Up to 4 independent factors are checked to measure agreement:
-
-| Factor | Condition |
-|--------|-----------|
-| DEMA spread | `spreadScore × direction > 0.05` |
-| DEMA slope | `slopeScore × direction > 0.02` |
-| Williams %R side | `sign(%R + 50) == direction` (positive above −50) |
-| Volume surge | `volSurge ≥ 1.2×` |
-
-`confluence ∈ {0, 1, 2, 3, 4}` is attached to every signal and used to:
-1. Drive the adaptive confirmation window
-2. Scale confirmed-signal **strength**: `0.6 + confluence × 0.1` (range 0.6 – 1.0)
-
----
-
-## Backtest Engine
-
-`src/backtest.js` provides a multi-strategy walk-forward backtest for a given symbol and timeframe.
-
-### Strategies Compared
-
-| ID | Name | Entry | Exit |
-|----|------|-------|------|
-| `early` | eB / eS | Early Buy | Early Sell |
-| `confirmed` | B / S | Confirmed Buy | Confirmed Sell |
-| `buy_hold` | Buy & Hold | First bar open | Last bar close |
-
-### Fill Model
-
-Signals are generated on the signal bar. Fills are executed at the **open of the next bar** (`signal_next_bar_open`).
-
-### Metrics
-
-| Metric | Description |
-|--------|-------------|
-| `totalReturn` | Net equity return over the period |
-| `finalEquity` | Ending equity (starting = 1.0) |
-| `maxDrawdown` | Maximum peak-to-trough drawdown |
-| `winRate` | Fraction of closed trades with positive PnL |
-| `expectancy` | Average PnL per trade |
-| `avgWin` | Average gain on winning trades |
-| `avgLoss` | Average loss on losing trades |
-| `exposurePct` | Fraction of bars spent in a position |
-| `costBps` | Round-trip transaction cost in basis points (default 0, configurable) |
-
----
-
-## Radar Scanner
-
-`src/radar.js` runs the signal engine across a universe of symbols concurrently (default: top-50 liquid US stocks) and returns symbols with **fresh signals** within the last N bars.
-
-- Concurrency: 4 parallel WebSocket connections
-- Cache TTL: 30 s (intraday TF) / 120 s (daily)
-- Output sorted by: confirmed > early, then by age (freshest first), then by strength
-
----
-
-## API Reference
-
-### `GET /api/health`
-
-Liveness check.
-
-```json
-{ "ok": true, "ts": "2026-06-07T12:00:00.000Z" }
-```
-
----
-
-### `GET /api/market/snapshot`
-
-Fetch OHLCV bars, compute all indicators, signals, pulse, risk, and backtest for one symbol.
-
-**Query parameters:**
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `symbol` | `TSLA` | Ticker symbol (e.g. `AAPL`, `NASDAQ:NVDA`) |
-| `tf` | `1d` | Timeframe: `15m`, `30m`, `1h`, `4h`, `1d` |
-| `limit` | `600` | Number of bars to fetch (50 – 3000) |
-
-**Example:**
-```
-/api/market/snapshot?symbol=TSLA&tf=1d&limit=600
-```
-
-**Response fields:**
-
-| Field | Description |
-|-------|-------------|
-| `bars` | OHLCV array `[{time, open, high, low, close, volume}]` |
-| `ema_series` | DEMA(14) series `[{time, value}]` |
-| `aux_series` | DEMA(30) series `[{time, value}]` |
-| `signals` | Signal list `[{time, price, side, regime, reason, strength, score, confluence, wr, volSurge}]` |
-| `mutant` | Mutant oscillator series `[{time, value}]` |
-| `pulse` | Market pulse `{score, label, bull, bear, neutral, netInflow}` |
-| `risk` | ATR-based risk levels `{entry, stop, target1, target2, atr, confidence}` |
-| `backtest` | Quick backtest summary `{trades, winRate, expectancy, avgWin, avgLoss, maxDrawdown, totalReturn}` |
-
----
-
-### `GET /api/radar`
-
-Scan a universe of symbols for fresh inflection signals.
-
-**Query parameters:**
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `tf` | `15m` | Timeframe |
-| `lookback` | `4` | Max age (bars) for a signal to be considered fresh |
-| `max` | `36` | Max symbols to scan (up to 80) |
-| `symbols` | Default universe | Comma-separated override list |
-
-**Examples:**
-```
-/api/radar?tf=15m&lookback=4&max=36
-/api/radar?tf=15m&lookback=4&symbols=TSLA,LITE,NVDA,AMD
-```
-
-**Response fields:**
-
-| Field | Description |
-|-------|-------------|
-| `bullish` | Symbols with fresh eB or B signals, sorted by quality |
-| `bearish` | Symbols with fresh eS or S signals, sorted by quality |
-| `scanned` | Number of symbols scanned |
-| `elapsedMs` | Wall-clock time for the scan |
-| `errors` | Any symbols that failed to fetch |
-
----
-
-### `GET /api/backtest`
-
-Multi-strategy backtest for one symbol over a date range.
-
-**Query parameters:**
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `symbol` | `TSLA` | Ticker symbol |
-| `tf` | `15m` | Timeframe |
-| `start` | `2026-01-01` | Start date `YYYY-MM-DD` |
-| `end` | today | End date `YYYY-MM-DD` |
-| `costBps` | `0` | Round-trip cost in basis points |
-| `limit` | TF-dependent | Bar limit (120 – 3000) |
-
----
-
-## Module Reference
-
-| File | Exports | Description |
-|------|---------|-------------|
-| `src/server.js` | — | HTTP server, routing |
-| `src/snapshot.js` | `getMarketSnapshot(query)` | Full data pipeline for one symbol |
-| `src/signals.js` | `computeSignals(bars, fast, aux, opts)` · `backtestSignals(bars, signals, opts)` | Signal engine + quick backtest |
-| `src/indicators.js` | `ema`, `dema`, `atrSeries`, `williamsRSeries`, `volumeSurgeSeries`, `rsiSeries`, `computeMutant`, `deriveMarketPulse`, `deriveRisk`, `regressionSlope`, `clamp`, `round` | All technical indicators |
-| `src/backtest.js` | `compareStrategyBacktests(query)` | Full multi-strategy backtest |
-| `src/radar.js` | `scanRadar(query)` | Parallel universe scanner |
-| `src/tradingview.js` | `fetchTradingViewBars(opts)` · `resolveTradingViewSymbol(sym)` · `mapTimeframe(tf)` | TradingView WebSocket client |
-| `src/universe.js` | `DEFAULT_US_UNIVERSE` · `parseSymbolList(value, fallback)` | Symbol universe |
-
----
-
-## Backtest Results
-
-Results from a 15-minute, 3000-bar walk-forward comparison between the old EMA+RSI engine and the current DEMA+Williams%R engine (8 bps/leg round-trip cost):
-
-### B/S Confirmed Signals
-
-| Symbol | Old Trades | Old WR | Old Return | New Trades | New WR | New Return | Change |
-|--------|-----------|--------|-----------|-----------|--------|-----------|--------|
-| AAPL | 29 | 28% | +4.8% | 38 | 42% | +9.1% | ✅ |
-| TSM | 26 | 46% | +20.3% | 34 | 65% | +31.7% | ✅ |
-| COHR | 33 | 36% | −18.9% | 35 | 49% | +25.1% | ✅ |
-| AAOI | 31 | 42% | +99.5% | 37 | 57% | +328.3% | ✅ |
-| NVDA | 28 | 32% | +3.3% | 36 | 53% | +8.4% | ✅ |
-
-> **Summary (14 symbols):** Win rate improved from **40% → 50%**. 7 of 14 symbols showed improved total return.
-
-### eB/eS Early Signals
-
-8 of 14 symbols showed improved total return with the early signal mode.
-
----
-
-## Disclaimer
-
-- This is **not investment advice**.
-- TradingView public endpoints are not an official licensed data API. They are best-effort and subject to change or throttling.
-- For production use, replace `src/tradingview.js` with a licensed data vendor.
-- The signal engine is a clean-room algorithmic implementation. Past backtest performance does not guarantee future results.
+当前交付为本地工作区修改，未部署、未提交或推送 GitHub。对外发布前需落实数据供应商允许的数据使用方式。

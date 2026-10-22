@@ -1,0 +1,696 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Inflection Hunter — TradingView Signal Scanner</title>
+    <meta name="description" content="Real-time inflection point signal scanner powered by TradingView data. Identify buy and sell opportunities with radar, backtest, and risk analysis." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" />
+    <link rel="stylesheet" href="/styles.css?v=2" />
+  </head>
+  <body>
+    <div id="app" v-cloak>
+      
+      <!-- iOS Bottom Sheet Backdrop -->
+      <div class="ios-backdrop mobile-only" :class="{ show: showSettings }" @click="showSettings = false"></div>
+
+      <!-- ── Sidebar (Restyled as Bottom Sheet on Mobile) ── -->
+      <aside class="sidebar" :class="{ 'show-mobile': showSettings }">
+        <!-- Bottom Sheet Drag Handle for Mobile -->
+        <div class="bottom-sheet-handle mobile-only" @click="showSettings = false"></div>
+
+        <div class="brand">
+          <div class="brand-mark">IH</div>
+          <div>
+            <h1>Inflection Hunter</h1>
+            <p>TradingView · Public Feed</p>
+          </div>
+        </div>
+
+        <div class="sidebar-divider"></div>
+
+        <!-- Snapshot Controls -->
+        <form class="control-stack" @submit.prevent="loadSnapshotAndClose">
+
+          <label>
+            <span>Symbol</span>
+            <input
+              v-model.trim="form.symbol"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="SNDK"
+            />
+          </label>
+
+          <label>
+            <span>Timeframe</span>
+            <div class="tf-grid" style="grid-template-columns: 1fr;">
+              <button class="tf-button active" type="button" disabled style="opacity:1;cursor:default;">日线 1D (完整交易日)</button>
+            </div>
+          </label>
+
+          <label>
+            <span>Strategy Algorithm (核心策略)</span>
+            <select v-model="form.algorithm" style="width: 100%; height: 38px; background: var(--input-bg); color: var(--text-primary); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0 10px; font-size: 13px;">
+              <option v-for="opt in algorithmOptions" :key="opt.id" :value="opt.id">{{ opt.label }}</option>
+            </select>
+          </label>
+
+          <label>
+            <span>Bars</span>
+            <input v-model.number="form.limit" type="number" min="80" max="3000" step="20" />
+          </label>
+
+          <div class="switch-row">
+            <label class="switch">
+              <input v-model="toggles.ema" type="checkbox" @change="renderChart" />
+              <span>EMA</span>
+            </label>
+            <label class="switch">
+              <input v-model="toggles.aux" type="checkbox" @change="renderChart" />
+              <span>AUX</span>
+            </label>
+            <label class="switch">
+              <input v-model="toggles.signals" type="checkbox" @change="renderChart" />
+              <span>Signals</span>
+            </label>
+          </div>
+
+          <button class="primary-button" type="submit" :disabled="loading">
+            <span v-if="loading">Loading…</span>
+            <span v-else>Load Snapshot</span>
+          </button>
+        </form>
+
+        <div class="status-panel" :class="{ bad: error }">
+          <span>{{ statusText }}</span>
+        </div>
+
+        <div class="sidebar-divider"></div>
+
+        <!-- Watchlist (Desktop Only in Sidebar) -->
+        <section class="watchlist-section desktop-only">
+          <div class="side-heading">
+            <strong>自选列表</strong>
+            <div class="wl-head-actions">
+              <button
+                class="wl-icon-btn"
+                :class="{ active: isDeleteMode }"
+                type="button"
+                :title="isDeleteMode ? '完成删除' : '删除标的'"
+                @click="toggleDeleteMode"
+              >
+                <svg v-if="!isDeleteMode" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3 6h18"></path>
+                  <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                  <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                  <line x1="10" y1="11" x2="10" y2="17"></line>
+                  <line x1="14" y1="11" x2="14" y2="17"></line>
+                </svg>
+                <span v-else style="font-size: 11px; font-weight: 700; color: var(--apple-blue);">✓</span>
+              </button>
+              <button class="wl-icon-btn" type="button" title="编辑列表" @click="openWatchlistEdit">✎</button>
+              <button class="wl-icon-btn" type="button" title="恢复默认" @click="resetWatchlist">↺</button>
+            </div>
+          </div>
+
+          <!-- Normal mode: tag chips -->
+          <div v-if="!watchlistEditMode" class="wl-chips" :class="{ 'is-delete-mode': isDeleteMode }">
+            <button
+              v-for="sym in watchlist"
+              :key="sym"
+              class="wl-chip"
+              :class="{
+                active: form.symbol === sym && !isDeleteMode,
+                'is-confirming': confirmDeleteSym === sym
+              }"
+              type="button"
+              :disabled="loading && !isDeleteMode"
+              @click="handleChipClick(sym)"
+            >
+              <span class="wl-chip-label">{{ sym }}</span>
+              <!-- Frosted Glass Confirmation Overlay -->
+              <div
+                v-if="confirmDeleteSym === sym"
+                class="wl-chip-frosted-overlay"
+                title="再次点击确认删除"
+                @click.stop="confirmDelete(sym)"
+              >
+                <span class="wl-delete-cross">✕</span>
+              </div>
+            </button>
+          </div>
+
+          <!-- Quick-add input -->
+          <div v-if="!watchlistEditMode" class="wl-add-row">
+            <input
+              v-model.trim="watchlistNewSym"
+              placeholder="输入代码 + Enter"
+              maxlength="12"
+              spellcheck="false"
+              @keydown.enter.prevent="addWatchlistSymbol"
+            />
+            <button class="wl-add-btn" type="button" @click="addWatchlistSymbol">+</button>
+          </div>
+
+          <!-- Scan watchlist button -->
+          <button
+            v-if="!watchlistEditMode"
+            class="wl-scan-btn"
+            type="button"
+            :disabled="radarLoading"
+            @click="runRadarOnWatchlist"
+          >
+            <span v-if="radarLoading">扫描中…</span>
+            <span v-else>⚡ 扫描自选列表 ({{ watchlist.length }} 支)</span>
+          </button>
+
+          <!-- Edit mode: textarea -->
+          <div v-if="watchlistEditMode" class="wl-edit-block">
+            <textarea
+              v-model="watchlistInput"
+              placeholder="每行或逗号分隔输入代码，如: AAPL, TSLA, NVDA"
+              rows="6"
+            ></textarea>
+            <div class="wl-edit-actions">
+              <button class="primary-button" type="button" style="height:34px;font-size:13px" @click="saveWatchlistEdit">保存</button>
+              <button class="secondary-button" type="button" style="height:34px;font-size:13px" @click="cancelWatchlistEdit">取消</button>
+            </div>
+          </div>
+        </section>
+
+        <div class="sidebar-divider desktop-only"></div>
+
+        <!-- Signal Radar Controls -->
+        <section class="radar-controls">
+          <div class="side-heading">
+            <strong>Signal Radar</strong>
+            <span>{{ radarStatusText }}</span>
+          </div>
+
+          <label>
+            <span>Universe (股票池)</span>
+            <textarea
+              v-model.trim="radarForm.symbols"
+              spellcheck="false"
+              placeholder="默认: 纳指100科技股 (Nasdaq 100 Tech)"
+            ></textarea>
+          </label>
+
+          <div class="radar-input-grid">
+            <label>
+              <span>Lookback</span>
+              <input v-model.number="radarForm.lookback" type="number" min="1" max="60" step="1" />
+            </label>
+            <label>
+              <span>Max</span>
+              <input v-model.number="radarForm.max" type="number" min="5" max="80" step="1" />
+            </label>
+          </div>
+
+          <button class="secondary-button" type="button" :disabled="radarLoading" @click="runRadarAndClose">
+            <span v-if="radarLoading">Scanning…</span>
+            <span v-else>Run Radar</span>
+          </button>
+        </section>
+
+        <!-- Theme Toggle in Settings on Mobile -->
+        <div class="sidebar-divider mobile-only"></div>
+        <div class="mobile-theme-row mobile-only">
+          <span>Dark Mode</span>
+          <button
+            class="theme-toggle"
+            type="button"
+            @click="toggleTheme"
+          >{{ isDark ? "On" : "Off" }}</button>
+        </div>
+
+      </aside>
+
+      <!-- ── Main Workspace ── -->
+      <main class="workspace" :class="{ 'mobile-nav-active': isMobile }">
+
+        <!-- Top Bar -->
+        <section class="topbar">
+          <div class="topbar-left-wrapper">
+            <!-- Gear Settings icon on Mobile -->
+            <button
+              class="settings-trigger mobile-only"
+              type="button"
+              @click="showSettings = !showSettings"
+              title="Open Settings"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+              </svg>
+            </button>
+            <div class="topbar-title-block">
+              <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <p class="eyebrow" style="margin: 0;">{{ snapshot?.tvSymbol || "TradingView" }}</p>
+                <span v-if="regimeText" class="regime-tag" :title="regimeText">🛡️ {{ regimeText }}</span>
+              </div>
+              <h2>{{ displaySymbol }}</h2>
+            </div>
+          </div>
+          <div class="topbar-right">
+            <button
+              class="theme-toggle desktop-only"
+              type="button"
+              @click="toggleTheme"
+              :title="isDark ? 'Switch to light mode' : 'Switch to dark mode'"
+            >{{ isDark ? "Light" : "Dark" }}</button>
+            <div class="last-price">
+              <span>{{ lastPrice }}</span>
+              <small>{{ (snapshot?.tf || form.tf)?.toUpperCase() }}</small>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── Mobile Page Swipe Layout ── -->
+        <div
+          class="mobile-swipe-wrapper"
+          :style="swipeStyle"
+          @touchstart="onTouchStart"
+          @touchmove="onTouchMove"
+          @touchend="onTouchEnd"
+        >
+
+          <!-- Tab 0: Radar & Watchlist -->
+          <div class="mobile-page-tab tab-radar" :class="{ active: activeTab === 0 }">
+            
+            <!-- Watchlist (Mobile Only) -->
+            <section class="watchlist-section mobile-only">
+              <div class="side-heading">
+                <strong>自选列表</strong>
+                <div class="wl-head-actions">
+                  <button
+                    class="wl-icon-btn"
+                    :class="{ active: isDeleteMode }"
+                    type="button"
+                    :title="isDeleteMode ? '完成删除' : '删除标的'"
+                    @click="toggleDeleteMode"
+                  >
+                    <svg v-if="!isDeleteMode" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M3 6h18"></path>
+                      <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                      <line x1="10" y1="11" x2="10" y2="17"></line>
+                      <line x1="14" y1="11" x2="14" y2="17"></line>
+                    </svg>
+                    <span v-else style="font-size: 11px; font-weight: 700; color: var(--apple-blue);">✓</span>
+                  </button>
+                  <button class="wl-icon-btn" type="button" title="编辑列表" @click="openWatchlistEdit">✎</button>
+                  <button class="wl-icon-btn" type="button" title="恢复默认" @click="resetWatchlist">↺</button>
+                </div>
+              </div>
+
+              <!-- Normal mode: tag chips -->
+              <div v-if="!watchlistEditMode" class="wl-chips" :class="{ 'is-delete-mode': isDeleteMode }">
+                <button
+                  v-for="sym in watchlist"
+                  :key="sym"
+                  class="wl-chip"
+                  :class="{
+                    active: form.symbol === sym && !isDeleteMode,
+                    'is-confirming': confirmDeleteSym === sym
+                  }"
+                  type="button"
+                  :disabled="loading && !isDeleteMode"
+                  @click="handleChipClick(sym)"
+                >
+                  <span class="wl-chip-label">{{ sym }}</span>
+                  <!-- Frosted Glass Confirmation Overlay -->
+                  <div
+                    v-if="confirmDeleteSym === sym"
+                    class="wl-chip-frosted-overlay"
+                    title="再次点击确认删除"
+                    @click.stop="confirmDelete(sym)"
+                  >
+                    <span class="wl-delete-cross">✕</span>
+                  </div>
+                </button>
+              </div>
+
+              <!-- Quick-add input -->
+              <div v-if="!watchlistEditMode" class="wl-add-row">
+                <input
+                  v-model.trim="watchlistNewSym"
+                  placeholder="输入代码 + Enter"
+                  maxlength="12"
+                  spellcheck="false"
+                  @keydown.enter.prevent="addWatchlistSymbol"
+                />
+                <button class="wl-add-btn" type="button" @click="addWatchlistSymbol">+</button>
+              </div>
+
+              <!-- Scan watchlist button -->
+              <button
+                v-if="!watchlistEditMode"
+                class="wl-scan-btn"
+                type="button"
+                :disabled="radarLoading"
+                @click="runRadarOnWatchlist"
+              >
+                <span v-if="radarLoading">扫描中…</span>
+                <span v-else>⚡ 扫描自选列表 ({{ watchlist.length }} 支)</span>
+              </button>
+
+              <!-- Edit mode: textarea -->
+              <div v-if="watchlistEditMode" class="wl-edit-block">
+                <textarea
+                  v-model="watchlistInput"
+                  placeholder="每行或逗号分隔输入代码，如: AAPL, TSLA, NVDA"
+                  rows="6"
+                ></textarea>
+                <div class="wl-edit-actions">
+                  <button class="primary-button" type="button" style="height:34px;font-size:13px" @click="saveWatchlistEdit">保存</button>
+                  <button class="secondary-button" type="button" style="height:34px;font-size:13px" @click="cancelWatchlistEdit">取消</button>
+                </div>
+              </div>
+            </section>
+
+            <!-- Radar Board -->
+            <section class="radar-board">
+              <div class="panel-head radar-head">
+                <div>
+                  <h3>Signal Radar</h3>
+                  <span>{{ radarSummary }}</span>
+                </div>
+                <button class="mini-button" type="button" :disabled="radarLoading" @click="runRadar">Refresh</button>
+              </div>
+
+              <div class="radar-columns">
+                <!-- Bullish -->
+                <div class="radar-column">
+                  <div class="radar-column-head buy-text">
+                    <strong>eB / B</strong>
+                    <span>{{ radarBullish.length }}</span>
+                  </div>
+                  <button
+                    v-for="item in radarBullish"
+                    :key="item.symbol + item.side + item.signalTime"
+                    class="radar-row"
+                    type="button"
+                    @click="openRadarSymbol(item)"
+                  >
+                    <span class="badge buy">{{ item.side }}</span>
+                    <strong>{{ item.symbol }}</strong>
+                    <span>{{ money(item.price) }}</span>
+                    <small>{{ radarTime(item) }} · {{ item.ageBars }} bars</small>
+                  </button>
+                  <div v-if="!radarLoading && !radarBullish.length" class="empty-row">No fresh bullish signals</div>
+                </div>
+
+                <!-- Bearish -->
+                <div class="radar-column">
+                  <div class="radar-column-head sell-text">
+                    <strong>eS / S</strong>
+                    <span>{{ radarBearish.length }}</span>
+                  </div>
+                  <button
+                    v-for="item in radarBearish"
+                    :key="item.symbol + item.side + item.signalTime"
+                    class="radar-row"
+                    type="button"
+                    @click="openRadarSymbol(item)"
+                  >
+                    <span class="badge sell">{{ item.side }}</span>
+                    <strong>{{ item.symbol }}</strong>
+                    <span>{{ money(item.price) }}</span>
+                    <small>{{ radarTime(item) }} · {{ item.ageBars }} bars</small>
+                  </button>
+                  <div v-if="!radarLoading && !radarBearish.length" class="empty-row">No fresh bearish signals</div>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <!-- Tab 1: Chart & Live -->
+          <div class="mobile-page-tab tab-chart" :class="{ active: activeTab === 1 }">
+            <!-- Metric Grid -->
+            <section class="metric-grid">
+              <div class="metric">
+                <span>Pulse</span>
+                <strong>{{ pulseScore }}</strong>
+                <small>{{ pulseLabel }}</small>
+              </div>
+              <div class="metric">
+                <span>Bull / Bear / Neutral</span>
+                <strong>{{ splitText }}</strong>
+                <small>20-bar slope · {{ activeTimeframeLabel }}</small>
+              </div>
+              <div class="metric">
+                <span>Risk</span>
+                <strong>{{ riskText }}</strong>
+                <small>{{ targetText }}</small>
+              </div>
+              <div class="metric">
+                <span>Backtest</span>
+                <strong>{{ backtestText }}</strong>
+                <small>{{ expectancyText }}</small>
+              </div>
+            </section>
+
+            <!-- Chart + Mutant Panel -->
+            <section class="chart-band">
+              <div ref="chartHost" class="chart-host"></div>
+              <div class="mutant-panel">
+                <div class="mutant-title">Inflection Mutant</div>
+                <div class="mutant-bars">
+                  <span
+                    v-for="point in mutantBars"
+                    :key="point.time"
+                    :class="['mutant-bar', point.value >= 0.18 ? 'up' : point.value <= -0.18 ? 'down' : 'flat']"
+                    :style="mutantStyle(point)"
+                  ></span>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <!-- Tab 2: Strategy & Signals -->
+          <div class="mobile-page-tab tab-strategy" :class="{ active: activeTab === 2 }">
+            <!-- Backtest Board -->
+            <section class="backtest-board">
+              <div class="panel-head backtest-head">
+                <div>
+                  <h3>{{ backtestSymbol }} Strategy Backtest</h3>
+                  <span>{{ backtestSummary }}</span>
+                </div>
+                <div class="backtest-controls">
+                  <div class="bt-preset-grid" aria-label="Quick backtest range">
+                    <button
+                      v-for="preset in backtestPresets"
+                      :key="preset.id"
+                      class="bt-preset-btn"
+                      :class="{ active: activePreset === preset.id }"
+                      type="button"
+                      :disabled="backtestLoading"
+                      @click="setBacktestRange(preset.id)"
+                    >{{ preset.label }}</button>
+                  </div>
+                  <input v-model="backtestForm.start" type="date" aria-label="Backtest start date" @change="onDateRangeChange" />
+                  <input v-model="backtestForm.end"   type="date" aria-label="Backtest end date"   @change="onDateRangeChange" />
+                  <button class="mini-button" type="button" :disabled="backtestLoading" @click="runBacktest()">
+                    <span v-if="backtestLoading">…</span>
+                    <span v-else>Run</span>
+                  </button>
+                </div>
+              </div>
+
+              <div class="strategy-grid">
+                <div
+                  v-for="item in backtestRows"
+                  :key="item.id"
+                  class="strategy-card"
+                  :class="{ winner: item.id === backtest?.bestStrategyId }"
+                >
+                  <div class="strategy-title">
+                    <strong>{{ item.name }}</strong>
+                    <span v-if="item.id === backtest?.bestStrategyId">Best</span>
+                  </div>
+                  <strong class="strategy-return" :class="returnClass(item.totalReturn)">
+                    {{ signedPercent(item.totalReturn) }}
+                  </strong>
+                  <small>{{ strategyMeta(item) }}</small>
+                  <small>{{ signedPercent(item.expectancy) }} avg · {{ percent(item.exposurePct) }} exposure</small>
+                </div>
+                <div v-if="!backtestLoading && !backtestRows.length" class="empty-row">No backtest result</div>
+              </div>
+            </section>
+
+            <!-- Swing Wave Multi-Horizon Evaluation -->
+            <section v-if="swingEvaluation && swingEvaluation.byWindow" class="swing-eval-board">
+              <div class="swing-eval-head">
+                <div>
+                  <h3>5～20日波段预警多维评估 (Swing Pulse Evaluation)</h3>
+                  <span>以10日为主要波段窗口 · 严格先达目标判定 · 待完成窗口单列 · MFE/MAE非负</span>
+                </div>
+                <div v-if="swingEvaluation.majorMoveCoverage" style="font-size: 12px; color: var(--text-secondary);">
+                  已捕捉 <strong>{{ swingEvaluation.majorMoveCoverage.capturedSwings }}/{{ swingEvaluation.majorMoveCoverage.totalMajorSwings }}</strong> 次重大波段
+                </div>
+              </div>
+
+              <div class="swing-metrics-summary">
+                <div class="swing-metric-card">
+                  <span>10日先达目标率 (风控胜率)</span>
+                  <strong class="positive">{{ percent(swingEvaluation.byWindow?.[10]?.firstTouchRate) }}</strong>
+                  <small>{{ swingEvaluation.byWindow?.[10]?.firstTouchHits || 0 }} / {{ swingEvaluation.byWindow?.[10]?.evaluatedClusters || 0 }} 批次 (触达率 {{ percent(swingEvaluation.byWindow?.[10]?.favorableTouchRate) }})</small>
+                </div>
+                <div class="swing-metric-card">
+                  <span>重大波段覆盖率</span>
+                  <strong class="positive">{{ percent(swingEvaluation.majorMoveCoverage?.coveragePct) }}</strong>
+                  <small>波段 ≥2 ATR / ≥7% 抓取率</small>
+                </div>
+                <div class="swing-metric-card">
+                  <span>平均提前量</span>
+                  <strong>{{ swingEvaluation.majorMoveCoverage?.avgLeadBars != null ? swingEvaluation.majorMoveCoverage.avgLeadBars + ' 根K线' : '-' }}</strong>
+                  <small>上涨/转弱前早期发现</small>
+                </div>
+                <div class="swing-metric-card">
+                  <span>月均无效提醒</span>
+                  <strong :class="{ negative: (swingEvaluation.falseAlarmRate?.falseAlertsPerMonth || 0) > 1 }">
+                    {{ swingEvaluation.falseAlarmRate?.falseAlertsPerMonth ?? 0 }} 次/月
+                  </strong>
+                  <small>总预警 {{ swingEvaluation.falseAlarmRate?.alertsPerMonth ?? 0 }} 次/月</small>
+                </div>
+              </div>
+
+              <div class="swing-eval-table-wrap">
+                <table class="swing-eval-table">
+                  <thead>
+                    <tr>
+                      <th>观察窗口</th>
+                      <th>已评估 / 待评估</th>
+                      <th>先达目标率 (风控胜率)</th>
+                      <th>触达率 (曾达目标)</th>
+                      <th>平均有利走幅 (MFE)</th>
+                      <th>平均不利回撤 (MAE)</th>
+                      <th>风盈比 (MFE/MAE)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="win in [5, 10, 20]" :key="win" :style="win === 10 ? 'font-weight:600;background:rgba(0,113,227,0.04);' : ''">
+                      <td>
+                        <strong>{{ win }} 个交易日</strong>
+                        <span v-if="win === 10" style="color:var(--apple-blue);font-size:11px;margin-left:4px;">(核心波段)</span>
+                        <span v-else-if="win === 5" style="color:var(--text-tertiary);font-size:11px;margin-left:4px;">(短期启动)</span>
+                        <span v-else style="color:var(--text-tertiary);font-size:11px;margin-left:4px;">(中长波段)</span>
+                      </td>
+                      <td>
+                        {{ swingEvaluation.byWindow?.[win]?.evaluatedClusters ?? 0 }}
+                        <span v-if="swingEvaluation.byWindow?.[win]?.pendingClusters" style="color:var(--text-tertiary);font-size:11px;">
+                          (+{{ swingEvaluation.byWindow[win].pendingClusters }}待完)
+                        </span>
+                      </td>
+                      <td>
+                        <strong :class="returnClass(swingEvaluation.byWindow?.[win]?.firstTouchRate)">
+                          {{ percent(swingEvaluation.byWindow?.[win]?.firstTouchRate) }}
+                        </strong>
+                      </td>
+                      <td style="color:var(--text-secondary);">
+                        {{ percent(swingEvaluation.byWindow?.[win]?.favorableTouchRate) }}
+                      </td>
+                      <td class="positive">
+                        +{{ percent(swingEvaluation.byWindow?.[win]?.avgMfePct) }}
+                        <small style="color:var(--text-tertiary);">({{ swingEvaluation.byWindow?.[win]?.avgMfeAtr }} ATR)</small>
+                      </td>
+                      <td class="negative">
+                        -{{ percent(swingEvaluation.byWindow?.[win]?.avgMaePct) }}
+                        <small style="color:var(--text-tertiary);">({{ swingEvaluation.byWindow?.[win]?.avgMaeAtr }} ATR)</small>
+                      </td>
+                      <td>
+                        <strong>
+                          {{
+                            swingEvaluation.byWindow?.[win]?.avgMaePct > 0
+                              ? round(swingEvaluation.byWindow[win].avgMfePct / swingEvaluation.byWindow[win].avgMaePct, 2) + ':1'
+                              : '∞'
+                          }}
+                        </strong>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <!-- Details: Signals + Risk -->
+            <section class="details-grid">
+              <div class="panel">
+                <div class="panel-head">
+                  <h3>Recent Signals</h3>
+                  <span>{{ signalCount }}</span>
+                </div>
+                <div class="signal-list">
+                  <div v-for="signal in recentSignals" :key="signal.time + signal.side" class="signal-row">
+                    <span :class="['badge', signal.side === 'B' ? 'badge-b' : signal.side === 'eB' ? 'badge-eb' : signal.side === 'eS' ? 'badge-es' : 'badge-s']">{{ signal.side }}</span>
+                    <span>{{ formatSignalTime(signal.time) }}</span>
+                    <span>{{ money(signal.price) }}</span>
+                    <span v-if="signal.confluence != null" class="signal-confluence" :title="`共振维度 ${signal.confluence}/4`">
+                      <span v-for="n in 4" :key="n" :class="n <= signal.confluence ? 'star-on' : 'star-off'">★</span>
+                    </span>
+                    <small class="signal-meta">
+                      {{ reasonLabel(signal.reason) }}
+                      <span v-if="signal.wr != null"> · WR {{ signal.wr }}</span>
+                      <span v-if="signal.volSurge != null"> · Vol {{ signal.volSurge }}x</span>
+                    </small>
+                  </div>
+                </div>
+              </div>
+
+              <div class="panel">
+                <div class="panel-head">
+                  <h3>Risk Copilot</h3>
+                  <span>{{ riskDirection }}</span>
+                </div>
+                <div class="kv">
+                  <span>Entry (入场参考)</span>     <strong>{{ money(snapshot?.risk?.entry) }}</strong>
+                  <span>Stop (实际风险线)</span>      <strong>{{ money(snapshot?.risk?.stop) }}</strong>
+                  <span>Target 1 (第一目标)</span>  <strong>{{ money(snapshot?.risk?.target1) }}</strong>
+                  <span>Target 2 (第二目标)</span>  <strong>{{ money(snapshot?.risk?.target2) }}</strong>
+                  <span>近20日阳线比率</span>       <strong>{{ percent(snapshot?.risk?.confidence) }}</strong>
+                </div>
+              </div>
+            </section>
+          </div>
+
+        </div>
+
+        <!-- iOS Bottom Fixed Tab Bar -->
+        <nav class="ios-tab-bar mobile-only">
+          <button class="tab-item" :class="{ active: activeTab === 0 }" @click="activeTab = 0" type="button">
+            <svg class="tab-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <circle cx="12" cy="12" r="6"></circle>
+              <circle cx="12" cy="12" r="1.5"></circle>
+            </svg>
+            <span class="tab-label">雷达自选</span>
+          </button>
+          <button class="tab-item" :class="{ active: activeTab === 1 }" @click="activeTab = 1" type="button">
+            <svg class="tab-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="20" x2="18" y2="10"></line>
+              <line x1="12" y1="20" x2="12" y2="4"></line>
+              <line x1="6" y1="20" x2="6" y2="14"></line>
+            </svg>
+            <span class="tab-label">图表行情</span>
+          </button>
+          <button class="tab-item" :class="{ active: activeTab === 2 }" @click="activeTab = 2" type="button">
+            <svg class="tab-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"></path>
+              <path d="m9 12 2 2 4-4"></path>
+            </svg>
+            <span class="tab-label">策略信号</span>
+          </button>
+        </nav>
+
+      </main>
+    </div>
+
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+    <script type="module" src="/app.js?v=6"></script>
+  </body>
+</html>

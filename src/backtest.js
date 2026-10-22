@@ -1,16 +1,31 @@
-import { getMarketSnapshot } from "./snapshot.js";
+/**
+ * Long-Only Cash Backtesting Engine
+ * Pure function core for trade simulation, mark-to-market daily close drawdown,
+ * strict openPosition vs closedTrades separation, and fee/slippage modeling.
+ */
 
-const DEFAULT_START_DATE = "2026-01-01";
-const BACKTEST_TIMEFRAMES = new Map([
-  ["15m", { label: "15m", limit: 3000 }],
-  ["30m", { label: "30m", limit: 2200 }],
-  ["1h", { label: "1h", limit: 1600 }],
-  ["4h", { label: "4h", limit: 900 }],
-  ["1d", { label: "1D", limit: 900 }]
-]);
+import { round, wilderAtrSeries, dema } from "./indicators.js";
+import { normalizeBars, assessDataQuality, formatEasternDate } from "./market-data.js";
+import { computeRsiVolumeSignals, computeSwingPulseSignals } from "./rsi-volume-signals.js";
+import { computeMajorTurnSignals } from "./major-turn-signals.js";
+import { computeSignalsLegacyV1, computeSignalsLegacyV2 } from "./signals.js";
+import { fetchTradingViewBars } from "./tradingview.js";
+import { getCachedBenchmarkBars, buildSynchronizedRegimeMap } from "./regime.js";
 
+/**
+ * Returns YYYY-MM-DD for today in UTC.
+ */
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * One year ago in YYYY-MM-DD.
+ */
+function oneYearAgoIso() {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() - 1);
+  return d.toISOString().slice(0, 10);
 }
 
 function parseDate(value, fallback) {
@@ -28,366 +43,912 @@ function dateEnd(date) {
   return Math.floor(Date.parse(`${date}T23:59:59Z`) / 1000);
 }
 
-function dateFor(time) {
-  const n = Number(time);
-  if (!Number.isFinite(n)) return "";
-  return new Date(n * 1000).toISOString().slice(0, 10);
-}
+/**
+ * Pure function backtest execution core.
+ * Receives normalized bars, signal events, and configuration.
+ * Does NOT call any network services or snapshot functions.
+ */
+export function runLongOnlyBacktest({
+  id = "strategy",
+  name = "Strategy",
+  bars = [],
+  events = [],
+  startTime,
+  endTime,
+  feeBps = 5,
+  slippageBps = 5
+}) {
+  const feeRate = (Number.isFinite(Number(feeBps)) ? Math.max(0, Number(feeBps)) : 5) / 10000;
+  const slipRate = (Number.isFinite(Number(slippageBps)) ? Math.max(0, Number(slippageBps)) : 5) / 10000;
 
-function timestampFor(tf, time) {
-  const n = Number(time);
-  if (!Number.isFinite(n)) return "";
-  const date = new Date(n * 1000);
-  if (String(tf).toLowerCase() === "1d") return date.toISOString().slice(0, 10);
-  return date.toISOString().slice(0, 16).replace("T", " ");
-}
-
-function parseTimeframe(value) {
-  const raw = String(value || "15m").trim().toLowerCase();
-  return BACKTEST_TIMEFRAMES.has(raw) ? raw : "15m";
-}
-
-function defaultLimitForTimeframe(tf) {
-  return BACKTEST_TIMEFRAMES.get(tf)?.limit || 900;
-}
-
-function round(value, digits = 6) {
-  if (!Number.isFinite(value)) return null;
-  const m = 10 ** digits;
-  return Math.round(value * m) / m;
-}
-
-function drawdownFromCurve(curve) {
-  let peak = 1;
-  let maxDrawdown = 0;
-
-  for (const point of curve) {
-    const equity = Number(point.equity);
-    if (!Number.isFinite(equity)) continue;
-    peak = Math.max(peak, equity);
-    maxDrawdown = Math.min(maxDrawdown, equity / peak - 1);
-  }
-
-  return maxDrawdown;
-}
-
-function summarizeTrades(trades) {
-  const wins = trades.filter((trade) => trade.pnlPct > 0);
-  const losses = trades.filter((trade) => trade.pnlPct <= 0);
-  const avgWin = wins.length ? wins.reduce((sum, trade) => sum + trade.pnlPct, 0) / wins.length : 0;
-  const avgLoss = losses.length ? losses.reduce((sum, trade) => sum + trade.pnlPct, 0) / losses.length : 0;
-  const expectancy = trades.length
-    ? trades.reduce((sum, trade) => sum + trade.pnlPct, 0) / trades.length
-    : 0;
-
-  return {
-    trades: trades.length,
-    winRate: trades.length ? wins.length / trades.length : null,
-    expectancy,
-    avgWin,
-    avgLoss
-  };
-}
-
-function buildSignalEvents(bars, signals, buySide, sellSide, startTime, endTime) {
-  const byTime = new Map(bars.map((bar, index) => [Number(bar.time), index]));
-  const events = [];
-
-  for (const signal of signals) {
-    const signalTime = Number(signal.time);
-    const side = String(signal.side || "");
-    if (side !== buySide && side !== sellSide) continue;
-    if (signalTime < startTime || signalTime > endTime) continue;
-
-    const signalIndex = byTime.get(signalTime);
-    if (!Number.isInteger(signalIndex) || signalIndex + 1 >= bars.length) continue;
-
-    const fillIndex = signalIndex + 1;
-    const fillBar = bars[fillIndex];
-    const fillTime = Number(fillBar?.time);
-    const fillPrice = Number(fillBar?.open || fillBar?.close);
-    if (!Number.isFinite(fillTime) || !Number.isFinite(fillPrice)) continue;
-    if (fillTime < startTime || fillTime > endTime) continue;
-
-    events.push({
-      type: side === buySide ? "buy" : "sell",
-      side,
-      signalTime,
-      signalPrice: Number(signal.price),
-      signalReason: signal.reason,
-      fillIndex,
-      fillTime,
-      fillPrice
-    });
-  }
-
-  events.sort((a, b) => {
-    if (a.fillIndex !== b.fillIndex) return a.fillIndex - b.fillIndex;
-    return a.signalTime - b.signalTime;
-  });
-
-  return events;
-}
-
-function backtestSignalStrategy({ id, name, bars, signals, buySide, sellSide, startTime, endTime, costBps, tf }) {
+  // Find index range for evaluation period
   const startIndex = bars.findIndex((bar) => Number(bar.time) >= startTime);
-  const endIndex = bars.reduce((last, bar, index) => Number(bar.time) <= endTime ? index : last, -1);
+  const endIndex = bars.reduce((last, bar, index) => (Number(bar.time) <= endTime ? index : last), -1);
 
   if (startIndex < 0 || endIndex < startIndex) {
     return {
       id,
       name,
       totalReturn: null,
-      finalEquity: null,
-      maxDrawdown: null,
+      finalEquity: 1,
+      maxDrawdown: 0,
       trades: 0,
       winRate: null,
       expectancy: 0,
+      avgWin: 0,
+      avgLoss: 0,
       exposurePct: 0,
-      events: [],
-      sample: []
+      closedTrades: [],
+      openPosition: null,
+      curve: []
     };
   }
 
-  const events = buildSignalEvents(bars, signals, buySide, sellSide, startTime, endTime);
-  const eventsByIndex = new Map();
-  for (const event of events) {
-    const list = eventsByIndex.get(event.fillIndex) || [];
-    list.push(event);
-    eventsByIndex.set(event.fillIndex, list);
+  // Index bars by timestamp
+  const byTime = new Map(bars.map((bar, index) => [Number(bar.time), index]));
+
+  // Map events to fill bars (Next Valid Trading Day Open)
+  // Event must have occurred at or after startTime
+  const fillEvents = [];
+  for (const ev of events) {
+    const signalTime = Number(ev.time);
+    const signalIndex = byTime.get(signalTime);
+    if (!Number.isInteger(signalIndex) || signalIndex + 1 >= bars.length) continue;
+
+    const fillIndex = signalIndex + 1;
+    const fillBar = bars[fillIndex];
+    const fillTime = Number(fillBar?.time);
+    const rawOpen = Number(fillBar?.open);
+
+    if (!Number.isFinite(fillTime) || !Number.isFinite(rawOpen) || rawOpen <= 0) continue;
+    // Fill must occur within the study window [startIndex .. endIndex]
+    if (fillIndex < startIndex || fillIndex > endIndex) continue;
+
+    const action = ev.side === "B" || ev.side === "eB" || ev.side === "DV-B" || ev.side === "AV-B"
+      ? "buy"
+      : ev.side === "S" || ev.side === "eS" || ev.side === "DV-S"
+        ? "sell"
+        : null;
+
+    if (!action) continue;
+
+    fillEvents.push({
+      action,
+      side: ev.side,
+      kind: ev.kind,
+      signalTime,
+      signalIndex,
+      fillIndex,
+      fillTime,
+      rawOpen
+    });
   }
 
-  const costRate = Math.max(0, Number(costBps || 0)) / 10000;
-  const trades = [];
-  const curve = [];
-  const eventLog = [];
-  let equity = 1;
-  let position = null;
+  // Group events by fillIndex
+  const eventsByFillIndex = new Map();
+  for (const fe of fillEvents) {
+    const list = eventsByFillIndex.get(fe.fillIndex) || [];
+    list.push(fe);
+    eventsByFillIndex.set(fe.fillIndex, list);
+  }
+
+  // ── Execute Simulation ─────────────────────────────────────────────────────
+  let equity = 1.0;
+  let position = null; // { shares, entryEquity, entryPrice, entryTime, entryIndex, side }
+  let peakEquity = 1.0;
+  let maxDrawdown = 0.0;
   let exposureBars = 0;
+
+  const closedTrades = [];
+  const curve = [];
 
   for (let i = startIndex; i <= endIndex; i += 1) {
     const bar = bars[i];
-    const dayEvents = eventsByIndex.get(i) || [];
+    const dayEvents = eventsByFillIndex.get(i) || [];
 
-    for (const event of dayEvents) {
-      if (event.type === "buy" && !position) {
-        const entryEquity = equity;
-        const shares = (equity * (1 - costRate)) / event.fillPrice;
-        position = {
-          shares,
-          entryEquity,
-          entry: event.fillPrice,
-          entryTime: event.fillTime,
-          entrySignalTime: event.signalTime,
-          entrySide: event.side
-        };
-        eventLog.push({ ...event, ignored: false });
-      } else if (event.type === "sell" && position) {
-        const exitEquity = position.shares * event.fillPrice * (1 - costRate);
-        const pnlPct = exitEquity / position.entryEquity - 1;
-        trades.push({
-          entrySide: position.entrySide,
-          exitSide: event.side,
+    // Conflict handling: if both buy and sell exist on the same bar
+    const hasBuy = dayEvents.some((e) => e.action === "buy");
+    const hasSell = dayEvents.some((e) => e.action === "sell");
+
+    if (hasBuy && hasSell) {
+      if (position) {
+        // Position priority: exit to cash
+        const fillPrice = bar.open * (1 - slipRate);
+        const gross = position.shares * fillPrice;
+        const fee = gross * feeRate;
+        const net = gross - fee;
+        const pnlPct = (net - position.entryEquity) / position.entryEquity;
+
+        closedTrades.push({
+          entrySide: position.side,
+          exitSide: "conflict_sell",
           entryTime: position.entryTime,
-          exitTime: event.fillTime,
-          entryDate: timestampFor(tf, position.entryTime),
-          exitDate: timestampFor(tf, event.fillTime),
-          entry: position.entry,
-          exit: event.fillPrice,
-          pnlPct
+          exitTime: bar.time,
+          entryDate: formatEasternDate(position.entryTime),
+          exitDate: formatEasternDate(bar.time),
+          entryPrice: round(position.entryPrice, 4),
+          exitPrice: round(fillPrice, 4),
+          pnlPct: round(pnlPct, 6)
         });
-        equity = exitEquity;
+
+        equity = net;
         position = null;
-        eventLog.push({ ...event, ignored: false });
-      } else {
-        eventLog.push({ ...event, ignored: true });
       }
-    }
+      // If was cash, remain in cash
+    } else if (hasSell && position) {
+      // Execute Sell
+      const fillPrice = bar.open * (1 - slipRate);
+      const gross = position.shares * fillPrice;
+      const fee = gross * feeRate;
+      const net = gross - fee;
+      const pnlPct = (net - position.entryEquity) / position.entryEquity;
 
-    const close = Number(bar.close);
-    const marketEquity = position && Number.isFinite(close) ? position.shares * close : equity;
-    if (position) exposureBars += 1;
-    curve.push({ time: bar.time, equity: marketEquity });
-  }
-
-  let finalEquity = equity;
-  if (position) {
-    const last = bars[endIndex];
-    const exit = Number(last.close);
-    if (Number.isFinite(exit)) {
-      finalEquity = position.shares * exit;
-      trades.push({
-        entrySide: position.entrySide,
-        exitSide: "mark",
+      closedTrades.push({
+        entrySide: position.side,
+        exitSide: dayEvents[0].side,
         entryTime: position.entryTime,
-        exitTime: last.time,
-        entryDate: timestampFor(tf, position.entryTime),
-        exitDate: timestampFor(tf, last.time),
-        entry: position.entry,
-        exit,
-        pnlPct: finalEquity / position.entryEquity - 1,
-        openEnded: true
+        exitTime: bar.time,
+        entryDate: formatEasternDate(position.entryTime),
+        exitDate: formatEasternDate(bar.time),
+        entryPrice: round(position.entryPrice, 4),
+        exitPrice: round(fillPrice, 4),
+        pnlPct: round(pnlPct, 6)
       });
+
+      equity = net;
+      position = null;
+    } else if (hasBuy && !position) {
+      // Execute Buy
+      const fillPrice = bar.open * (1 + slipRate);
+      const entryFee = equity * feeRate;
+      const investable = equity - entryFee;
+      const shares = investable / fillPrice;
+
+      position = {
+        shares,
+        entryEquity: equity,
+        entryPrice: fillPrice,
+        entryTime: bar.time,
+        entryIndex: i,
+        side: dayEvents[0].side
+      };
     }
+
+    // Daily close mark-to-market equity
+    const closePrice = Number(bar.close);
+    const dayEquity = position && Number.isFinite(closePrice)
+      ? position.shares * closePrice
+      : equity;
+
+    if (position) exposureBars += 1;
+
+    peakEquity = Math.max(peakEquity, dayEquity);
+    const dd = dayEquity / peakEquity - 1;
+    maxDrawdown = Math.min(maxDrawdown, dd);
+
+    curve.push({
+      time: bar.time,
+      date: formatEasternDate(bar.time),
+      equity: round(dayEquity, 6)
+    });
   }
 
-  const summary = summarizeTrades(trades);
+  // Handle open position at end of study window
+  let openPosition = null;
+  let finalEquity = equity;
+
+  if (position) {
+    const lastBar = bars[endIndex];
+    const markPrice = Number(lastBar.close);
+    finalEquity = position.shares * markPrice;
+    const unrealizedPnlPct = (finalEquity - position.entryEquity) / position.entryEquity;
+
+    openPosition = {
+      entrySide: position.side,
+      entryTime: position.entryTime,
+      entryDate: formatEasternDate(position.entryTime),
+      entryPrice: round(position.entryPrice, 4),
+      currentPrice: round(markPrice, 4),
+      shares: round(position.shares, 4),
+      unrealizedPnlPct: round(unrealizedPnlPct, 6)
+    };
+  }
+
+  // ── Compute Statistics ─────────────────────────────────────────────────────
+  const wins = closedTrades.filter((t) => t.pnlPct > 0);
+  const losses = closedTrades.filter((t) => t.pnlPct <= 0);
+  const winRate = closedTrades.length > 0 ? wins.length / closedTrades.length : null;
+  const avgWin = wins.length ? wins.reduce((sum, t) => sum + t.pnlPct, 0) / wins.length : 0;
+  const avgLoss = losses.length ? losses.reduce((sum, t) => sum + t.pnlPct, 0) / losses.length : 0;
+  const expectancy = closedTrades.length
+    ? closedTrades.reduce((sum, t) => sum + t.pnlPct, 0) / closedTrades.length
+    : 0;
+
+  const totalBars = endIndex - startIndex + 1;
 
   return {
     id,
     name,
-    buySide,
-    sellSide,
-    totalReturn: finalEquity - 1,
-    finalEquity,
-    maxDrawdown: drawdownFromCurve(curve),
-    exposurePct: curve.length ? exposureBars / curve.length : 0,
-    events: eventLog.slice(-12),
-    sample: trades.slice(-10),
-    ...summary
+    totalReturn: round(finalEquity - 1, 6),
+    finalEquity: round(finalEquity, 6),
+    maxDrawdown: round(maxDrawdown, 6),
+    trades: closedTrades.length,
+    winRate: winRate !== null ? round(winRate, 4) : null,
+    expectancy: round(expectancy, 6),
+    avgWin: round(avgWin, 6),
+    avgLoss: round(avgLoss, 6),
+    exposurePct: totalBars > 0 ? round(exposureBars / totalBars, 4) : 0,
+    closedTrades,
+    openPosition,
+    sample: closedTrades.slice(-10),
+    curve
   };
 }
 
-function backtestBuyAndHold({ bars, startTime, endTime, costBps, tf }) {
-  const periodBars = bars.filter((bar) => Number(bar.time) >= startTime && Number(bar.time) <= endTime);
+/**
+ * Buy & Hold strategy:
+ * Enters at first bar open * (1 + slip), holds until end of period, marked at close.
+ */
+export function backtestBuyAndHold({
+  bars = [],
+  startTime,
+  endTime,
+  feeBps = 5,
+  slippageBps = 5
+}) {
+  const feeRate = (Number.isFinite(Number(feeBps)) ? Math.max(0, Number(feeBps)) : 5) / 10000;
+  const slipRate = (Number.isFinite(Number(slippageBps)) ? Math.max(0, Number(slippageBps)) : 5) / 10000;
+
+  const periodBars = bars.filter((b) => Number(b.time) >= startTime && Number(b.time) <= endTime);
   if (!periodBars.length) {
     return {
       id: "buy_hold",
       name: "Buy & Hold",
       totalReturn: null,
-      finalEquity: null,
-      maxDrawdown: null,
+      finalEquity: 1,
+      maxDrawdown: 0,
       trades: 0,
       winRate: null,
       expectancy: 0,
       exposurePct: 0,
-      sample: []
+      closedTrades: [],
+      openPosition: null,
+      curve: []
     };
   }
 
-  const costRate = Math.max(0, Number(costBps || 0)) / 10000;
   const first = periodBars[0];
   const last = periodBars.at(-1);
-  const entry = Number(first.open || first.close);
-  const exit = Number(last.close);
-  const shares = Number.isFinite(entry) && entry > 0 ? (1 - costRate) / entry : 0;
-  const finalEquity = Number.isFinite(exit) ? shares * exit : null;
-  const curve = periodBars.map((bar) => ({
-    time: bar.time,
-    equity: shares * Number(bar.close)
-  }));
-  const pnlPct = Number.isFinite(finalEquity) ? finalEquity - 1 : null;
-  const trade = {
+  const entryPrice = Number(first.open) * (1 + slipRate);
+  const entryFee = 1.0 * feeRate;
+  const shares = (1.0 - entryFee) / entryPrice;
+
+  let peak = 1.0;
+  let maxDrawdown = 0.0;
+  const curve = [];
+
+  for (const bar of periodBars) {
+    const mark = shares * Number(bar.close);
+    peak = Math.max(peak, mark);
+    maxDrawdown = Math.min(maxDrawdown, mark / peak - 1);
+    curve.push({
+      time: bar.time,
+      date: formatEasternDate(bar.time),
+      equity: round(mark, 6)
+    });
+  }
+
+  const finalEquity = shares * Number(last.close);
+  const totalReturn = finalEquity - 1;
+
+  const openPosition = {
     entrySide: "buy",
-    exitSide: "mark",
     entryTime: first.time,
-    exitTime: last.time,
-    entryDate: timestampFor(tf, first.time),
-    exitDate: timestampFor(tf, last.time),
-    entry,
-    exit,
-    pnlPct,
-    openEnded: true
+    entryDate: formatEasternDate(first.time),
+    entryPrice: round(entryPrice, 4),
+    currentPrice: round(Number(last.close), 4),
+    shares: round(shares, 4),
+    unrealizedPnlPct: round(totalReturn, 6)
   };
-  const summary = summarizeTrades(Number.isFinite(pnlPct) ? [trade] : []);
 
   return {
     id: "buy_hold",
     name: "Buy & Hold",
-    totalReturn: pnlPct,
-    finalEquity,
-    maxDrawdown: drawdownFromCurve(curve),
-    exposurePct: 1,
-    events: [],
-    sample: Number.isFinite(pnlPct) ? [trade] : [],
-    ...summary
+    totalReturn: round(totalReturn, 6),
+    finalEquity: round(finalEquity, 6),
+    maxDrawdown: round(maxDrawdown, 6),
+    trades: 0,
+    winRate: null,
+    expectancy: 0,
+    avgWin: 0,
+    avgLoss: 0,
+    exposurePct: 1.0,
+    closedTrades: [],
+    openPosition,
+    sample: [],
+    curve
   };
 }
 
+/**
+ * Evaluates swing prediction effectiveness over 5, 10, and 20 bar observation windows.
+ *
+ * Metrics:
+ * - 预警命中率 (Warning Hit Rate)
+ * - 大波动覆盖率 (Coverage of Large Moves)
+ * - 提前量与滞后量 (Lead / Lag Bars)
+ * - 误报频率 (False Alarm Rate per month)
+ * - 不利波动 (MAE, Maximum Adverse Excursion)
+ */
+export function evaluateSwingAlerts({
+  bars = [],
+  signals = [],
+  windows = [5, 10, 20],
+  atrMultiplier = 1.5,
+  minPctThreshold = 0.04,
+  startIndex = 0,
+  endIndex = null
+}) {
+  const actualEndIndex = Number.isInteger(endIndex) && endIndex >= 0
+    ? Math.min(bars.length - 1, endIndex)
+    : bars.length - 1;
+  const actualStartIndex = Number.isInteger(startIndex) && startIndex >= 0
+    ? Math.min(actualEndIndex, startIndex)
+    : 0;
+
+  if (!Array.isArray(bars) || bars.length < 5 || !Array.isArray(signals) || !signals.length) {
+    return {
+      totalAlerts: 0,
+      totalSignals: 0,
+      clustersCount: 0,
+      byWindow: {},
+      majorMoveCoverage: null,
+      falseAlarmRate: null
+    };
+  }
+
+  const atr = wilderAtrSeries(bars, 14);
+  const byTime = new Map(bars.map((b, i) => [Number(b.time), i]));
+
+  // 1. Filter directional signals
+  const directional = signals.filter((s) =>
+    s.direction === "bullish" ||
+    s.direction === "bearish" ||
+    (s.side && s.side.includes("B")) ||
+    (s.side && s.side.includes("S"))
+  );
+
+  // 2. Cluster adjacent alerts within 3 bars in the same direction
+  const allClusters = [];
+  let currentCluster = null;
+
+  for (const sig of directional) {
+    const idx = byTime.get(Number(sig.time));
+    if (!Number.isInteger(idx)) continue;
+
+    const dir = sig.direction || (sig.side.includes("B") ? "bullish" : "bearish");
+    const barClose = Number(bars[idx].close);
+    const barAtr = Number(atr[idx]) || Math.max(1e-4, barClose * 0.02);
+
+    if (
+      currentCluster &&
+      currentCluster.direction === dir &&
+      idx - currentCluster.anchorIndex <= 3
+    ) {
+      currentCluster.signals.push(sig);
+      currentCluster.lastIndex = idx;
+      if (sig.invalidationLevel != null) {
+        currentCluster.invalidationLevel = currentCluster.invalidationLevel != null
+          ? (dir === "bullish"
+              ? Math.max(currentCluster.invalidationLevel, sig.invalidationLevel)
+              : Math.min(currentCluster.invalidationLevel, sig.invalidationLevel))
+          : sig.invalidationLevel;
+      }
+    } else {
+      currentCluster = {
+        direction: dir,
+        anchorIndex: idx,
+        lastIndex: idx,
+        anchorTime: Number(bars[idx].time),
+        anchorDate: formatEasternDate(bars[idx].time),
+        anchorPrice: barClose,
+        anchorAtr: barAtr,
+        kind: sig.kind || "unknown",
+        stage: sig.stage || "confirmed",
+        invalidationLevel: sig.invalidationLevel != null ? sig.invalidationLevel : null,
+        signals: [sig]
+      };
+      allClusters.push(currentCluster);
+    }
+  }
+
+  // Filter clusters whose anchor is within the selected evaluation window [actualStartIndex .. actualEndIndex]
+  const clusters = allClusters.filter((c) =>
+    c.anchorIndex >= actualStartIndex && c.anchorIndex <= actualEndIndex
+  );
+
+  // 3. Multi-Window Evaluation
+  const byWindow = {};
+  for (const W of windows) {
+    let favorableTouchHits = 0;
+    let firstTouchHits = 0;
+    let evaluatedClusters = 0;
+    let pendingClusters = 0;
+    let sumMfePct = 0;
+    let sumMfeAtr = 0;
+    let sumMaePct = 0;
+    let sumMaeAtr = 0;
+
+    const byDirection = {
+      bullish: { evaluated: 0, firstTouchHits: 0, favorableTouchHits: 0, sumMfePct: 0, sumMaePct: 0 },
+      bearish: { evaluated: 0, firstTouchHits: 0, favorableTouchHits: 0, sumMfePct: 0, sumMaePct: 0 }
+    };
+    const byStage = {
+      confirmed: { evaluated: 0, firstTouchHits: 0, favorableTouchHits: 0 },
+      candidate: { evaluated: 0, firstTouchHits: 0, favorableTouchHits: 0 }
+    };
+    const byKind = {};
+
+    for (const cluster of clusters) {
+      const startIdx = cluster.anchorIndex;
+      // If remaining bars < W, classify as pending / incomplete
+      if (bars.length - 1 - startIdx < W) {
+        pendingClusters += 1;
+        continue;
+      }
+
+      const endIdx = startIdx + W;
+      evaluatedClusters += 1;
+
+      const anchorPrice = cluster.anchorPrice;
+      const anchorAtr = cluster.anchorAtr;
+      const dir = cluster.direction;
+      const stage = cluster.stage === "candidate" ? "candidate" : "confirmed";
+      const kind = cluster.kind;
+
+      if (!byKind[kind]) {
+        byKind[kind] = { evaluated: 0, firstTouchHits: 0, favorableTouchHits: 0 };
+      }
+      byKind[kind].evaluated += 1;
+      byStage[stage].evaluated += 1;
+      byDirection[dir].evaluated += 1;
+
+      let maxHigh = -Infinity;
+      let minLow = Infinity;
+
+      // Targets and stops
+      const targetDelta = Math.max(anchorPrice * minPctThreshold, anchorAtr * atrMultiplier);
+      const isBull = dir === "bullish";
+      const targetPrice = isBull ? anchorPrice + targetDelta : anchorPrice - targetDelta;
+      const stopPrice = cluster.invalidationLevel != null
+        ? cluster.invalidationLevel
+        : (isBull ? anchorPrice - anchorAtr * atrMultiplier : anchorPrice + anchorAtr * atrMultiplier);
+
+      let firstTouchHit = false;
+      let resolvedFirstTouch = false;
+      let favorableTouch = false;
+
+      for (let j = startIdx + 1; j <= endIdx; j += 1) {
+        const h = Number(bars[j].high);
+        const l = Number(bars[j].low);
+        if (h > maxHigh) maxHigh = h;
+        if (l < minLow) minLow = l;
+
+        if (isBull) {
+          const hitTarget = h >= targetPrice;
+          const hitStop = l <= stopPrice;
+
+          if (hitTarget) favorableTouch = true;
+
+          if (!resolvedFirstTouch) {
+            if (hitTarget && hitStop) {
+              // Same day both touched: conservative stance -> stopped out first
+              resolvedFirstTouch = true;
+              firstTouchHit = false;
+            } else if (hitTarget) {
+              resolvedFirstTouch = true;
+              firstTouchHit = true;
+            } else if (hitStop) {
+              resolvedFirstTouch = true;
+              firstTouchHit = false;
+            }
+          }
+        } else {
+          const hitTarget = l <= targetPrice;
+          const hitStop = h >= stopPrice;
+
+          if (hitTarget) favorableTouch = true;
+
+          if (!resolvedFirstTouch) {
+            if (hitTarget && hitStop) {
+              resolvedFirstTouch = true;
+              firstTouchHit = false;
+            } else if (hitTarget) {
+              resolvedFirstTouch = true;
+              firstTouchHit = true;
+            } else if (hitStop) {
+              resolvedFirstTouch = true;
+              firstTouchHit = false;
+            }
+          }
+        }
+      }
+
+      // Guaranteed non-negative MFE and MAE
+      const mfe = isBull ? Math.max(0, maxHigh - anchorPrice) : Math.max(0, anchorPrice - minLow);
+      const mae = isBull ? Math.max(0, anchorPrice - minLow) : Math.max(0, maxHigh - anchorPrice);
+
+      const mfePct = mfe / anchorPrice;
+      const maePct = mae / anchorPrice;
+      const mfeAtr = mfe / anchorAtr;
+      const maeAtr = mae / anchorAtr;
+
+      sumMfePct += mfePct;
+      sumMfeAtr += mfeAtr;
+      sumMaePct += maePct;
+      sumMaeAtr += maeAtr;
+
+      byDirection[dir].sumMfePct += mfePct;
+      byDirection[dir].sumMaePct += maePct;
+
+      if (favorableTouch) {
+        favorableTouchHits += 1;
+        byDirection[dir].favorableTouchHits += 1;
+        byStage[stage].favorableTouchHits += 1;
+        byKind[kind].favorableTouchHits += 1;
+      }
+
+      if (firstTouchHit) {
+        firstTouchHits += 1;
+        byDirection[dir].firstTouchHits += 1;
+        byStage[stage].firstTouchHits += 1;
+        byKind[kind].firstTouchHits += 1;
+      }
+    }
+
+    const calcRate = (hits, total) => total > 0 ? round(hits / total, 4) : null;
+
+    byWindow[W] = {
+      windowBars: W,
+      evaluatedClusters,
+      pendingClusters,
+      hits: firstTouchHits,
+      firstHits: firstTouchHits,
+      favorableHits: favorableTouchHits,
+      firstTouchHits,
+      firstTouchRate: calcRate(firstTouchHits, evaluatedClusters),
+      favorableTouchHits,
+      favorableTouchRate: calcRate(favorableTouchHits, evaluatedClusters),
+      hitRate: calcRate(firstTouchHits, evaluatedClusters), // Primary conservative hit rate
+      avgMfePct: evaluatedClusters > 0 ? round(sumMfePct / evaluatedClusters, 4) : 0,
+      avgMfeAtr: evaluatedClusters > 0 ? round(sumMfeAtr / evaluatedClusters, 2) : 0,
+      avgMaePct: evaluatedClusters > 0 ? round(sumMaePct / evaluatedClusters, 4) : 0,
+      avgMaeAtr: evaluatedClusters > 0 ? round(sumMaeAtr / evaluatedClusters, 2) : 0,
+      byDirection: {
+        bullish: {
+          evaluated: byDirection.bullish.evaluated,
+          firstTouchRate: calcRate(byDirection.bullish.firstTouchHits, byDirection.bullish.evaluated),
+          favorableTouchRate: calcRate(byDirection.bullish.favorableTouchHits, byDirection.bullish.evaluated),
+          avgMfePct: byDirection.bullish.evaluated > 0 ? round(byDirection.bullish.sumMfePct / byDirection.bullish.evaluated, 4) : 0,
+          avgMaePct: byDirection.bullish.evaluated > 0 ? round(byDirection.bullish.sumMaePct / byDirection.bullish.evaluated, 4) : 0
+        },
+        bearish: {
+          evaluated: byDirection.bearish.evaluated,
+          firstTouchRate: calcRate(byDirection.bearish.firstTouchHits, byDirection.bearish.evaluated),
+          favorableTouchRate: calcRate(byDirection.bearish.favorableTouchHits, byDirection.bearish.evaluated),
+          avgMfePct: byDirection.bearish.evaluated > 0 ? round(byDirection.bearish.sumMfePct / byDirection.bearish.evaluated, 4) : 0,
+          avgMaePct: byDirection.bearish.evaluated > 0 ? round(byDirection.bearish.sumMaePct / byDirection.bearish.evaluated, 4) : 0
+        }
+      },
+      byStage: {
+        confirmed: {
+          evaluated: byStage.confirmed.evaluated,
+          firstTouchRate: calcRate(byStage.confirmed.firstTouchHits, byStage.confirmed.evaluated),
+          favorableTouchRate: calcRate(byStage.confirmed.favorableTouchHits, byStage.confirmed.evaluated)
+        },
+        candidate: {
+          evaluated: byStage.candidate.evaluated,
+          firstTouchRate: calcRate(byStage.candidate.firstTouchHits, byStage.candidate.evaluated),
+          favorableTouchRate: calcRate(byStage.candidate.favorableTouchHits, byStage.candidate.evaluated)
+        }
+      },
+      byKind: Object.fromEntries(
+        Object.entries(byKind).map(([k, v]) => [
+          k,
+          {
+            evaluated: v.evaluated,
+            firstTouchRate: calcRate(v.firstTouchHits, v.evaluated),
+            favorableTouchRate: calcRate(v.favorableTouchHits, v.evaluated)
+          }
+        ])
+      )
+    };
+  }
+
+  // 4. Identify Major Swings within [actualStartIndex .. actualEndIndex]
+  const majorSwings = [];
+  const checkLookback = 10;
+  let sIdx = Math.max(checkLookback, actualStartIndex + checkLookback);
+  const swingLimit = Math.min(bars.length, actualEndIndex + 1);
+
+  while (sIdx < swingLimit) {
+    const pStart = Number(bars[sIdx - checkLookback].close);
+    const pEnd = Number(bars[sIdx].close);
+    const currAtr = Number(atr[sIdx - checkLookback]) || (pStart * 0.02);
+    const move = pEnd - pStart;
+    const moveAtr = Math.abs(move) / currAtr;
+    const movePct = Math.abs(move) / pStart;
+
+    if (moveAtr >= 2.0 || movePct >= 0.07) {
+      majorSwings.push({
+        startIndex: sIdx - checkLookback,
+        endIndex: sIdx,
+        direction: move > 0 ? "bullish" : "bearish",
+        movePct: round(movePct, 4),
+        moveAtr: round(moveAtr, 2)
+      });
+      sIdx += checkLookback;
+    } else {
+      sIdx += 2;
+    }
+  }
+
+  let capturedSwings = 0;
+  let totalLeadBars = 0;
+  let capturedWithLead = 0;
+
+  for (const swing of majorSwings) {
+    const matched = clusters.find((c) =>
+      c.direction === swing.direction &&
+      c.anchorIndex >= swing.startIndex - 4 &&
+      c.anchorIndex <= swing.startIndex + 4
+    );
+
+    if (matched) {
+      capturedSwings += 1;
+      const lead = swing.startIndex - matched.anchorIndex;
+      totalLeadBars += lead;
+      capturedWithLead += 1;
+    }
+  }
+
+  const coveragePct = majorSwings.length > 0 ? round(capturedSwings / majorSwings.length, 4) : null;
+  const avgLeadBars = capturedWithLead > 0 ? round(totalLeadBars / capturedWithLead, 1) : 0;
+
+  // Monthly False Alarm Frequency
+  const tenDayEval = byWindow[10];
+  const totalClusters = clusters.length;
+  const totalMonths = Math.max(1, (actualEndIndex - actualStartIndex + 1) / 21);
+  const falseAlerts = tenDayEval ? (tenDayEval.evaluatedClusters - tenDayEval.firstTouchHits) : 0;
+  const alertsPerMonth = round(totalClusters / totalMonths, 2);
+  const falseAlertsPerMonth = round(falseAlerts / totalMonths, 2);
+
+  return {
+    totalSignals: clusters.reduce((sum, c) => sum + c.signals.length, 0),
+    clustersCount: totalClusters,
+    byWindow,
+    majorMoveCoverage: {
+      totalMajorSwings: majorSwings.length,
+      capturedSwings,
+      coveragePct,
+      avgLeadBars
+    },
+    falseAlarmRate: {
+      totalAlerts: totalClusters,
+      falseAlerts,
+      alertsPerMonth,
+      falseAlertsPerMonth
+    }
+  };
+}
+
+/**
+ * Compare all strategies on the same normalized bars and parameters.
+ */
 export async function compareStrategyBacktests(query = {}) {
-  const symbol = String(query.symbol || "SNDK").trim().toUpperCase();
-  const tf = parseTimeframe(query.tf);
-  const startDate = parseDate(query.start, DEFAULT_START_DATE);
-  const endDate = parseDate(query.end, todayIso());
+  const options = query;
+  const symbol = String(options.symbol || "SNDK").trim().toUpperCase();
+  const tf = "1d";
+  const startDate = parseDate(options.start, oneYearAgoIso());
+  const endDate = parseDate(options.end, todayIso());
   const startTime = dateStart(startDate);
   const endTime = dateEnd(endDate);
-  const costBps = Math.max(0, Number(query.costBps || 0));
-  const limit = Math.max(120, Math.min(3000, Number(query.limit || defaultLimitForTimeframe(tf))));
-  const snapshot = await getMarketSnapshot({ symbol, tf, limit });
-  const bars = snapshot.bars || [];
-  const signals = snapshot.signals || [];
+  const feeBps = Number.isFinite(Number(options.feeBps)) ? Number(options.feeBps) : 5;
+  const slippageBps = Number.isFinite(Number(options.slippageBps)) ? Number(options.slippageBps) : 5;
+  const limit = Math.max(260, Math.min(3000, Number(options.limit || 900)));
+  const algorithm = String(options.algorithm || "swing_pulse_v1").trim().toLowerCase();
+
+  // Fetch raw daily bars from TradingView
+  const tv = await fetchTradingViewBars({ symbol, tf, limit });
+  const allBars = normalizeBars(tv.bars);
+  const completedBars = allBars.filter((b) => b.isCompleted);
+  const quality = assessDataQuality(allBars);
+
+  // Fetch benchmark bars (QQQ / SMH) for sector/market regime filter
+  const { qqqBars, smhBars } = await getCachedBenchmarkBars({ limit: completedBars.length });
+  const regimeMap = buildSynchronizedRegimeMap(completedBars, qqqBars, smhBars);
+
+  // Compute indicators on all completed bars
+  const closes = completedBars.map((b) => Number(b.close));
+  const demaFast = dema(closes, 14);
+  const demaSlow = dema(closes, 30);
+
+  // 1. Swing Pulse (重构版 - 启动预警 + 转弱预警 + 跟踪止损 + 自适应背离)
+  const swingPulseResult = computeSwingPulseSignals(completedBars, { symbol, regimeMap, divergenceMode: "adaptive" });
+  const swingPulseEvents = swingPulseResult.signals.filter((s) => s.stage === "confirmed");
+
+  // 2. RSI + Volume V1 基准
+  const rsiVolResult = computeRsiVolumeSignals(completedBars, { symbol, divergenceMode: "strict" });
+  const rsiVolEvents = rsiVolResult.signals.filter((s) => s.stage === "confirmed");
+
+  // 3. Legacy V1 signals (B/S and eB/eS)
+  const legacyV1Signals = computeSignalsLegacyV1(completedBars, demaFast, demaSlow);
+  const legacyV1ConfirmedEvents = legacyV1Signals.filter((s) => s.side === "B" || s.side === "S");
+  const legacyV1EarlyEvents = legacyV1Signals.filter((s) => s.side === "eB" || s.side === "eS");
+
+  // 4. Legacy V2 signals (fixed B/S)
+  const legacyV2Signals = computeSignalsLegacyV2(completedBars, demaFast, demaSlow);
+  const legacyV2ConfirmedEvents = legacyV2Signals.filter((s) => s.side === "B" || s.side === "S");
+
+  // 5. Major Turn V1 signals (macro inflection only)
+  const majorTurnResult = computeMajorTurnSignals(completedBars, { symbol });
+  const majorTurnConfirmedEvents = majorTurnResult.signals
+    .filter((s) => (s.side === "B" || s.side === "S") && s.actionable !== false)
+    .map((s) => ({ time: s.time, side: s.side }));
+
+  // Run backtests using the pure execution core
+  const stratSwingPulse = runLongOnlyBacktest({
+    id: "swing_pulse_v1",
+    name: "波段启动+转弱预警 (重构版)",
+    bars: completedBars,
+    events: swingPulseEvents,
+    startTime,
+    endTime,
+    feeBps,
+    slippageBps
+  });
+
+  const stratRsiVol = runLongOnlyBacktest({
+    id: "rsi_volume_v1",
+    name: "RSI + 成交量基准",
+    bars: completedBars,
+    events: rsiVolEvents,
+    startTime,
+    endTime,
+    feeBps,
+    slippageBps
+  });
+
+  const stratMajorTurn = runLongOnlyBacktest({
+    id: "major_turn_v1",
+    name: "重要顶底确认 (V1)",
+    bars: completedBars,
+    events: majorTurnConfirmedEvents,
+    startTime,
+    endTime,
+    feeBps,
+    slippageBps
+  });
+
+  const stratLegacyV2 = runLongOnlyBacktest({
+    id: "legacy_v2_confirmed",
+    name: "趋势修正版 B/S",
+    bars: completedBars,
+    events: legacyV2ConfirmedEvents,
+    startTime,
+    endTime,
+    feeBps,
+    slippageBps
+  });
+
+  const stratLegacyV1 = runLongOnlyBacktest({
+    id: "legacy_v1_confirmed",
+    name: "原版 B/S 基准",
+    bars: completedBars,
+    events: legacyV1ConfirmedEvents,
+    startTime,
+    endTime,
+    feeBps,
+    slippageBps
+  });
+
+  const stratLegacyV1Early = runLongOnlyBacktest({
+    id: "legacy_v1_early",
+    name: "原版 eB/eS 基准",
+    bars: completedBars,
+    events: legacyV1EarlyEvents,
+    startTime,
+    endTime,
+    feeBps,
+    slippageBps
+  });
+
+  const stratBnH = backtestBuyAndHold({
+    bars: completedBars,
+    startTime,
+    endTime,
+    feeBps,
+    slippageBps
+  });
+
+  // Compute indices corresponding to requested time range
+  const startIndex = completedBars.findIndex((bar) => Number(bar.time) >= startTime);
+  const endIndex = completedBars.reduce((last, bar, index) => (Number(bar.time) <= endTime ? index : last), -1);
+
+  // Evaluate swing prediction effectiveness over the selected range
+  const swingEvaluation = evaluateSwingAlerts({
+    bars: completedBars,
+    signals: swingPulseResult.signals,
+    windows: [5, 10, 20],
+    startIndex: startIndex >= 0 ? startIndex : 0,
+    endIndex: endIndex >= 0 ? endIndex : completedBars.length - 1
+  });
+
+  const rsiVolEvaluation = evaluateSwingAlerts({
+    bars: completedBars,
+    signals: rsiVolResult.signals,
+    windows: [5, 10, 20],
+    startIndex: startIndex >= 0 ? startIndex : 0,
+    endIndex: endIndex >= 0 ? endIndex : completedBars.length - 1
+  });
+
+  const majorTurnEvaluation = evaluateSwingAlerts({
+    bars: completedBars,
+    signals: majorTurnResult.signals,
+    windows: [5, 10, 20],
+    startIndex: startIndex >= 0 ? startIndex : 0,
+    endIndex: endIndex >= 0 ? endIndex : completedBars.length - 1
+  });
+
+  stratSwingPulse.evaluation = swingEvaluation;
+  stratRsiVol.evaluation = rsiVolEvaluation;
+  stratMajorTurn.evaluation = majorTurnEvaluation;
 
   const strategies = [
-    backtestSignalStrategy({
-      id: "early",
-      name: "eB / eS",
-      bars,
-      signals,
-      buySide: "eB",
-      sellSide: "eS",
-      startTime,
-      endTime,
-      costBps,
-      tf
-    }),
-    backtestSignalStrategy({
-      id: "confirmed",
-      name: "B / S",
-      bars,
-      signals,
-      buySide: "B",
-      sellSide: "S",
-      startTime,
-      endTime,
-      costBps,
-      tf
-    }),
-    backtestBuyAndHold({ bars, startTime, endTime, costBps, tf })
-  ].map((strategy) => ({
-    ...strategy,
-    totalReturn: round(strategy.totalReturn),
-    finalEquity: round(strategy.finalEquity),
-    maxDrawdown: round(strategy.maxDrawdown),
-    expectancy: round(strategy.expectancy),
-    avgWin: round(strategy.avgWin),
-    avgLoss: round(strategy.avgLoss),
-    exposurePct: round(strategy.exposurePct),
-    sample: (strategy.sample || []).map((trade) => ({
-      ...trade,
-      entry: round(trade.entry),
-      exit: round(trade.exit),
-      pnlPct: round(trade.pnlPct)
-    }))
-  }));
+    stratSwingPulse,
+    stratMajorTurn,
+    stratRsiVol,
+    stratLegacyV2,
+    stratLegacyV1,
+    stratLegacyV1Early,
+    stratBnH
+  ].sort((a, b) => {
+    const retA = Number.isFinite(Number(a?.totalReturn)) ? Number(a.totalReturn) : -Infinity;
+    const retB = Number.isFinite(Number(b?.totalReturn)) ? Number(b.totalReturn) : -Infinity;
+    return retB - retA;
+  });
 
-  const ranked = strategies
-    .filter((strategy) => Number.isFinite(strategy.totalReturn))
-    .sort((a, b) => b.totalReturn - a.totalReturn);
-  const best = ranked[0] || null;
-  const periodBars = bars.filter((bar) => Number(bar.time) >= startTime && Number(bar.time) <= endTime);
+  const best = strategies[0] || null;
+
+  const periodBars = completedBars.filter((b) => Number(b.time) >= startTime && Number(b.time) <= endTime);
 
   return {
     ok: true,
     symbol,
-    tvSymbol: snapshot.tvSymbol,
-    tf,
-    tfLabel: BACKTEST_TIMEFRAMES.get(tf)?.label || tf,
+    tvSymbol: tv.symbol,
+    tf: "1d",
+    tfLabel: "1D",
     startDate,
     endDate,
-    actualStartDate: dateFor(periodBars[0]?.time),
-    actualEndDate: dateFor(periodBars.at(-1)?.time),
+    actualStartDate: periodBars[0]?.date || null,
+    actualEndDate: periodBars.at(-1)?.date || null,
     bars: periodBars.length,
-    costBps,
+    feeBps,
+    slippageBps,
+    costBps: feeBps + slippageBps,
     startingPosition: "cash",
     fillModel: "signal_next_bar_open",
     bestStrategyId: best?.id || null,
     bestStrategyName: best?.name || null,
     bestReturn: best?.totalReturn ?? null,
     strategies,
+    swingEvaluation: algorithm === "major_turn_v1" ? majorTurnEvaluation : (algorithm === "rsi_volume_v1" ? rsiVolEvaluation : swingEvaluation),
+    dataQuality: quality,
     meta: {
       generatedAt: new Date().toISOString(),
-      signalSource: "existing_ema_aux_mutant_engine",
-      note: "Signal strategies are long-only: buy on the buy signal, sell to cash on the sell signal."
+      feeModel: `${feeBps} bps/leg commission, ${slippageBps} bps/leg slippage`,
+      drawdownModel: "Mark-to-market daily close",
+      note: "Pure signal comparison without discretionary stops. Long-only cash execution."
     }
   };
 }

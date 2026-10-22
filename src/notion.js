@@ -29,6 +29,7 @@ async function queryAllPages(token, dbId) {
 
   do {
     const res = await fetch(`https://api.notion.com/v1/databases/${dbId}/query`, {
+      signal: AbortSignal.timeout(12000),
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,

@@ -1,476 +1,191 @@
-import { money, percent, signedPercent, todayIso, formatTimeFor } from "./utils.js";
-import { useChart } from "./composables/useChart.js";
-
-const { createApp, computed, onMounted, reactive, ref, watch } = Vue;
-
-// ── Default Watchlist (TradingView watchlist pre-set) ──────────────────────
-const WATCHLIST_DEFAULT = [
-  "005930", "000660", "NOK", "AAOI", "MU", "SNDK", "SKHY", "INTC"
+import { parseFlows } from './flows.js';
+const { createApp, ref, computed, reactive, watch, nextTick, onMounted, onUnmounted } = window.Vue;
+const green = '#38ab70', red = '#df4f46', blue = '#2976ff';
+const nav = [
+  { id: 'overview', icon: '◫', label: '市场总览', eyebrow: 'MARKET OVERVIEW', title: '市场，全景在握。', description: '从大盘到板块，从价格到事件。在这里建立你的市场视角。' },
+  { id: 'heatmap', icon: '▦', label: '市场热力图', eyebrow: 'MARKET MAP', title: '看见市场的温度。', description: '观察精选美股的涨跌与成交活跃度，点击方块深入了解。' },
+  { id: 'chart', icon: '⌁', label: '个股行情', eyebrow: 'PRICE & VOLUME', title: '让价格与成交量说话。', description: '查看真实 K 线、成交量与不同周期的价格变化。' },
+  { id: 'flows', icon: '⇄', label: '资金观察', eyebrow: 'SECTOR ROTATION', title: '关注度，流向哪里？', description: '并排观察板块表现与成交活跃度，单独查看有来源的净申赎数据。' },
+  { id: 'options', icon: '◈', label: '期权墙', eyebrow: 'OPTIONS POSITIONING', title: '读懂持仓的分布。', description: '按到期日与行权价，观察 Call / Put 持仓集中区及估算 Gamma 敞口。' },
+  { id: 'news', icon: '▤', label: '新闻资讯', eyebrow: 'MARKET BRIEFING', title: '价格背后的新消息。', description: '汇集市场与个股新闻。保留来源，直接阅读原文。' },
+  { id: 'sources', icon: 'ⓘ', label: '数据与说明', eyebrow: 'DATA & METHODOLOGY', title: '知道数据从哪里来。', description: '来源、时效与计算口径，都清楚展示。' },
 ];
+const validSymbol = s => /^\^?[A-Z][A-Z0-9.-]{0,10}$/.test(s);
+const num = v => Number.isFinite(v) ? v.toLocaleString('en-US', { maximumFractionDigits: 2, minimumFractionDigits: 2 }) : '—';
+const compact = v => Number.isFinite(v) ? new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 2 }).format(v) : '—';
+const pct = v => Number.isFinite(v) ? `${v > 0 ? '+' : ''}${v.toFixed(2)}%` : '—';
+const tone = v => !Number.isFinite(v) || v === 0 ? 'muted' : v > 0 ? 'positive' : 'negative';
+const time = v => v && Number.isFinite(Date.parse(v)) ? new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(v)) + ' 北京' : '时间未提供';
+function readStorage(key, fallback) { try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; } }
 
-const TIMEFRAMES = [
-  { label: "15m", value: "15m", limit: 500 },
-  { label: "30m", value: "30m", limit: 500 },
-  { label: "1h",  value: "1h",  limit: 500 },
-  { label: "4h",  value: "4h",  limit: 500 },
-  { label: "1D",  value: "1d",  limit: 600 }
-];
-
-const BACKTEST_TIMEFRAMES = [
-  { label: "15m", value: "15m" },
-  { label: "30m", value: "30m" },
-  { label: "1h",  value: "1h"  },
-  { label: "4h",  value: "4h"  },
-  { label: "1D",  value: "1d"  }
-];
-
-createApp({
-  setup() {
-    // ── Chart ─────────────────────────────────────────────────
-    const chartHost = ref(null);
-    const { renderChart: _renderChart, resetZoom, applyTheme } = useChart(chartHost);
-
-    // ── Theme ──────────────────────────────────────────────────
-    const isDark = ref(window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false);
-    watch(isDark, (dark) => {
-      document.documentElement.classList.toggle("dark", dark);
-      applyTheme(dark);
-    }, { immediate: true });
-
-    // ── Mobile Responsive Swipe States ─────────────────────────
-    const activeTab = ref(1); // Default: Chart view
-    const showSettings = ref(false);
-    const isMobile = ref(window.innerWidth < 768);
-
-    function checkMobileWidth() {
-      isMobile.value = window.innerWidth < 768;
-    }
-    window.addEventListener("resize", checkMobileWidth);
-
-    let touchStartX = 0;
-    let touchStartY = 0;
-    let touchStartTime = 0;
-
-    function onTouchStart(e) {
-      const target = e.target;
-      if (
-        target.closest(".chart-host") ||
-        target.closest(".chart-band") ||
-        target.closest("input") ||
-        target.closest("select") ||
-        target.closest("textarea") ||
-        target.closest("button") ||
-        target.closest(".wl-chip") ||
-        target.closest(".wl-icon-btn")
-      ) {
-        return;
-      }
-      const touch = e.touches[0];
-      touchStartX = touch.clientX;
-      touchStartY = touch.clientY;
-      touchStartTime = Date.now();
-    }
-
-    function onTouchMove(e) {}
-
-    function onTouchEnd(e) {
-      const touch = e.changedTouches[0];
-      const deltaX = touch.clientX - touchStartX;
-      const deltaY = touch.clientY - touchStartY;
-      const duration = Date.now() - touchStartTime;
-
-      if (duration < 300 && Math.abs(deltaX) > 60 && Math.abs(deltaX) > Math.abs(deltaY)) {
-        if (deltaX > 0) {
-          if (activeTab.value > 0) activeTab.value--;
-        } else {
-          if (activeTab.value < 2) activeTab.value++;
-        }
-      }
-    }
-
-    const swipeStyle = computed(() => {
-      return {
-        transform: isMobile.value ? `translate3d(-${activeTab.value * 33.3333}%, 0, 0)` : "none"
-      };
-    });
-
-    // ── State ──────────────────────────────────────────────────
-    const loading           = ref(false);
-    const error             = ref("");
-    const snapshot          = ref(null);
-    const requestId         = ref(0);
-    const radarLoading      = ref(false);
-    const radarError        = ref("");
-    const radar             = ref(null);
-    const backtestLoading   = ref(false);
-    const backtestError     = ref("");
-    const backtest          = ref(null);
-    const backtestRequestId = ref(0);
-
-    const form         = reactive({ symbol: "SNDK", tf: "15m", limit: 500 });
-    const toggles      = reactive({ ema: true, aux: true, signals: true });
-    const radarForm    = reactive({ symbols: "", lookback: 4, max: 36 });
-    const backtestForm = reactive({ start: "2026-01-01", end: todayIso(), tf: "15m" });
-
-    // ── Watchlist ──────────────────────────────────────────────
-    const _stored = (() => {
-      try { return JSON.parse(localStorage.getItem("ih_watchlist") || "null"); } catch { return null; }
-    })();
-    const _cleanupSymbols = ["AAPL", "TSM", "GOOG", "MRVL", "COHR", "AXTI", "ANET", "CRCL", "NVDA", "INTW", "AAOX", "LNOK", "MUU", "SNXX", "DRAM"];
-    const _shouldReset = !Array.isArray(_stored) || !_stored.length || _stored.some(s => _cleanupSymbols.includes(s));
-    const watchlist         = ref(_shouldReset ? [...WATCHLIST_DEFAULT] : _stored);
-    if (_shouldReset) {
-      localStorage.setItem("ih_watchlist", JSON.stringify(WATCHLIST_DEFAULT));
-    }
-    const watchlistEditMode = ref(false);
-    const watchlistInput    = ref("");
-    const watchlistNewSym   = ref("");
-
-    function _saveWatchlist() {
-      localStorage.setItem("ih_watchlist", JSON.stringify(watchlist.value));
-    }
-
-    function openWatchlistEdit() {
-      watchlistInput.value = watchlist.value.join(", ");
-      watchlistEditMode.value = true;
-    }
-
-    function saveWatchlistEdit() {
-      const symbols = watchlistInput.value
-        .split(/[,\n\s]+/)
-        .map((s) => s.trim().toUpperCase())
-        .filter((s) => s.length > 0);
-      watchlist.value = [...new Set(symbols)];
-      _saveWatchlist();
-      watchlistEditMode.value = false;
-    }
-
-    function cancelWatchlistEdit() {
-      watchlistEditMode.value = false;
-    }
-
-    function addWatchlistSymbol() {
-      const sym = watchlistNewSym.value.trim().toUpperCase();
-      if (!sym || watchlist.value.includes(sym)) { watchlistNewSym.value = ""; return; }
-      watchlist.value = [...watchlist.value, sym];
-      _saveWatchlist();
-      watchlistNewSym.value = "";
-    }
-
-    function removeWatchlistSymbol(symbol) {
-      watchlist.value = watchlist.value.filter((s) => s !== symbol);
-      _saveWatchlist();
-    }
-
-    // Pull the watchlist from the Notion-backed /api/watchlist endpoint.
-    // Returns true on success. On any failure the existing list is kept.
-    async function fetchWatchlist() {
-      try {
-        const res  = await fetch("/api/watchlist");
-        const data = await res.json();
-        if (!res.ok || !data.ok || !Array.isArray(data.symbols) || !data.symbols.length) return false;
-        watchlist.value = [...new Set(data.symbols.map((s) => String(s).trim().toUpperCase()).filter(Boolean))];
-        _saveWatchlist();
-        return true;
-      } catch {
-        return false;
-      }
-    }
-
-    async function resetWatchlist() {
-      const ok = await fetchWatchlist();
-      if (!ok) {
-        watchlist.value = [...WATCHLIST_DEFAULT];
-        _saveWatchlist();
-      }
-    }
-
-    function loadWatchlistSymbol(symbol) {
-      form.symbol = symbol;
-      loadSnapshot();
-      if (isMobile.value) {
-        activeTab.value = 1; // Swipe to Chart
-      }
-    }
-
-    async function runRadarOnWatchlist() {
-      if (!watchlist.value.length) return;
-      radarLoading.value = true;
-      radarError.value   = "";
-      try {
-        const params = new URLSearchParams({
-          tf:       form.tf,
-          limit:    String(form.limit || activeTimeframe.value.limit),
-          lookback: String(radarForm.lookback || 4),
-          max:      String(watchlist.value.length),
-          symbols:  watchlist.value.join(",")
-        });
-        const res  = await fetch(`/api/radar?${params}`);
-        const data = await res.json();
-        if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
-        radar.value = data;
-      } catch (err) {
-        radarError.value = err.message || String(err);
-      } finally {
-        radarLoading.value = false;
-      }
-    }
-
-    // ── Computed ───────────────────────────────────────────────
-    const activeTimeframe = computed(() =>
-      TIMEFRAMES.find((t) => t.value === form.tf) || TIMEFRAMES[0]
-    );
-    const activeBacktestTf = computed(() =>
-      BACKTEST_TIMEFRAMES.find((t) => t.value === backtestForm.tf) || BACKTEST_TIMEFRAMES[0]
-    );
-
-    const statusText = computed(() => {
-      if (error.value)             return error.value;
-      if (loading.value)           return "Fetching TradingView data";
-      if (snapshot.value?.cached)  return "Cached snapshot loaded";
-      if (snapshot.value?.ok)      return "Snapshot loaded";
-      return "Ready";
-    });
-
-    const radarStatusText = computed(() => {
-      if (radarError.value)      return "Error";
-      if (radarLoading.value)    return "Scanning";
-      if (radar.value?.cached)   return "Cached";
-      if (radar.value?.ok)       return "Ready";
-      return "Idle";
-    });
-
-    const radarSummary = computed(() => {
-      if (radarError.value)   return radarError.value;
-      if (radarLoading.value) return `Scanning ${radarForm.max} symbols on ${activeTimeframe.value.label}`;
-      if (!radar.value)       return "No scan yet";
-      const { scanned, bullish, bearish, elapsedMs } = radar.value;
-      return `${scanned} scanned · ${(bullish || []).length} bullish · ${(bearish || []).length} bearish · ${Math.round(elapsedMs / 1000)}s`;
-    });
-
-    const backtestSummary = computed(() => {
-      if (backtestError.value)   return backtestError.value;
-      if (backtestLoading.value) return `Running ${activeBacktestTf.value.label} ${(form.symbol || "SNDK").toUpperCase()} comparison`;
-      if (!backtest.value)       return "No comparison yet";
-      const bt    = backtest.value;
-      const start = bt.actualStartDate || bt.startDate;
-      const end   = bt.actualEndDate   || bt.endDate;
-      return `${start} to ${end} · ${bt.tfLabel || bt.tf} · best ${bt.bestStrategyName || "..."}`;
-    });
-
-    const displaySymbol     = computed(() => snapshot.value?.symbol || form.symbol.toUpperCase());
-    const lastPrice         = computed(() => money(snapshot.value?.bars?.at(-1)?.close));
-    const pulseScore        = computed(() => snapshot.value?.pulse?.score ?? "...");
-    const pulseLabel        = computed(() => snapshot.value?.pulse?.label || "Neutral");
-    const signalCount       = computed(() => `${snapshot.value?.signals?.length || 0} marks`);
-    const recentSignals     = computed(() => [...(snapshot.value?.signals || [])].slice(-12).reverse());
-    const riskDirection     = computed(() => snapshot.value?.risk?.direction || "long");
-    const radarBullish      = computed(() => radar.value?.bullish || []);
-    const radarBearish      = computed(() => radar.value?.bearish || []);
-    const backtestRows      = computed(() => backtest.value?.strategies || []);
-    const backtestSymbol    = computed(() =>
-      (backtestLoading.value ? form.symbol : backtest.value?.symbol || form.symbol || "SNDK").toUpperCase()
-    );
-    const mutantBars        = computed(() => (snapshot.value?.mutant || []).slice(-180));
-
-    const splitText = computed(() => {
-      const p = snapshot.value?.pulse;
-      return p ? `${percent(p.bull)} / ${percent(p.bear)} / ${percent(p.neutral)}` : "...";
-    });
-    const riskText = computed(() => {
-      const r = snapshot.value?.risk;
-      return r ? `${money(r.entry)} / ${money(r.stop)}` : "...";
-    });
-    const targetText = computed(() => {
-      const r = snapshot.value?.risk;
-      return r ? `${money(r.target1)} / ${money(r.target2)}` : "No risk model";
-    });
-    const backtestText = computed(() => {
-      const bt = snapshot.value?.backtest;
-      return bt?.winRate != null ? `${percent(bt.winRate)} WR` : "...";
-    });
-    const expectancyText = computed(() => {
-      const bt = snapshot.value?.backtest;
-      return bt ? `${bt.trades} trades, ${percent(bt.expectancy)} avg` : "No trades";
-    });
-
-    // ── Helpers ────────────────────────────────────────────────
-    function strategyMeta(item) {
-      if (!item) return "";
-      const wr = Number.isFinite(Number(item.winRate)) ? `${percent(item.winRate)} WR` : "No WR";
-      return `${item.trades || 0} trades · ${wr} · ${signedPercent(item.maxDrawdown)} DD`;
-    }
-    function returnClass(value) {
-      const n = Number(value);
-      return { positive: n > 0, negative: n < 0 };
-    }
-    function formatSignalTime(time) { return formatTimeFor(snapshot.value?.tf || form.tf, time); }
-    function radarTime(item)        { return formatTimeFor(item?.tf || form.tf, item?.signalTime); }
-    function mutantStyle(point) {
-      const v      = Number(point.value || 0);
-      const height = 12 + Math.abs(v) * 48;
-      const top    = v >= 0 ? 60 - height : 60;
-      return { height: `${height}px`, transform: `translateY(${top}px)` };
-    }
-
-    // ── Chart rendering ────────────────────────────────────────
-    async function doRender(snap) {
-      await _renderChart(snap || snapshot.value, toggles, isDark.value);
-      applyTheme(isDark.value);
-    }
-
-    // ── API ────────────────────────────────────────────────────
-    async function loadSnapshot() {
-      const id = ++requestId.value;
-      loading.value = true;
-      error.value   = "";
-      resetZoom();
-      try {
-        const params = new URLSearchParams({ symbol: form.symbol || "SNDK", tf: form.tf, limit: String(form.limit || 600) });
-        const res    = await fetch(`/api/market/snapshot?${params}`);
-        const data   = await res.json();
-        if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
-        if (id !== requestId.value) return;
-        snapshot.value = data;
-        await doRender(data);
-        if (!backtest.value || backtest.value.symbol !== data.symbol) runBacktest(data.symbol);
-      } catch (err) {
-        if (id === requestId.value) error.value = err.message || String(err);
-      } finally {
-        if (id === requestId.value) loading.value = false;
-      }
-    }
-
-    async function runRadar() {
-      radarLoading.value = true;
-      radarError.value   = "";
-      try {
-        const params = new URLSearchParams({
-          tf:       form.tf,
-          limit:    String(form.limit || activeTimeframe.value.limit),
-          lookback: String(radarForm.lookback || 4),
-          max:      String(radarForm.max || 36)
-        });
-        if (radarForm.symbols) params.set("symbols", radarForm.symbols);
-        const res  = await fetch(`/api/radar?${params}`);
-        const data = await res.json();
-        if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
-        radar.value = data;
-      } catch (err) {
-        radarError.value = err.message || String(err);
-      } finally {
-        radarLoading.value = false;
-      }
-    }
-
-    async function runBacktest(symbolOverride) {
-      const id = ++backtestRequestId.value;
-      backtestLoading.value = true;
-      backtestError.value   = "";
-      try {
-        const params = new URLSearchParams({
-          symbol: symbolOverride || form.symbol || "SNDK",
-          tf:     backtestForm.tf || activeBacktestTf.value.value,
-          start:  backtestForm.start || "2026-01-01",
-          end:    backtestForm.end   || todayIso()
-        });
-        const res  = await fetch(`/api/backtest?${params}`);
-        const data = await res.json();
-        if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
-        if (id !== backtestRequestId.value) return;
-        backtest.value = data;
-      } catch (err) {
-        if (id === backtestRequestId.value) backtestError.value = err.message || String(err);
-      } finally {
-        if (id === backtestRequestId.value) backtestLoading.value = false;
-      }
-    }
-
-    function changeTimeframe(tf) {
-      const next = TIMEFRAMES.find((t) => t.value === tf) || TIMEFRAMES[0];
-      form.tf    = next.value;
-      form.limit = next.limit;
-      loadSnapshot();
-      runRadar();
-    }
-
-    function changeBacktestTimeframe(tf) {
-      const found = BACKTEST_TIMEFRAMES.find((t) => t.value === tf) || BACKTEST_TIMEFRAMES[0];
-      backtestForm.tf = found.value;
-      // ── Sync main chart to the same timeframe ──────────────────
-      const chartTf = TIMEFRAMES.find((t) => t.value === found.value);
-      if (chartTf) {
-        form.tf    = chartTf.value;
-        form.limit = chartTf.limit;
-        loadSnapshot();   // reload chart with new TF
-      }
-      runBacktest();
-    }
-
-    function openRadarSymbol(item) {
-      if (!item?.symbol) return;
-      form.symbol = item.symbol;
-      if (item.tf) form.tf = item.tf;
-      loadSnapshot();
-      if (isMobile.value) {
-        activeTab.value = 1; // Swipe to Chart
-      }
-    }
-
-    function loadSnapshotAndClose() {
-      loadSnapshot();
-      showSettings.value = false;
-    }
-
-    function runRadarAndClose() {
-      runRadar();
-      showSettings.value = false;
-    }
-
-    onMounted(async () => {
-      await fetchWatchlist();   // Notion watchlist is the source of truth on load
-      await loadSnapshot();
-      runRadar();
-    });
-
-    return {
-      // refs
-      chartHost, isDark,
-      loading, error, snapshot,
-      radarLoading, radar,
-      backtestLoading, backtestError, backtest,
-      // mobile states
-      activeTab, showSettings, isMobile, swipeStyle,
-      onTouchStart, onTouchMove, onTouchEnd,
-      loadSnapshotAndClose, runRadarAndClose,
-      // forms
-      form, radarForm, backtestForm, toggles,
-      // constants
-      timeframes: TIMEFRAMES,
-      backtestTimeframes: BACKTEST_TIMEFRAMES,
-      // computed
-      statusText, radarStatusText, radarSummary, backtestSummary,
-      displaySymbol, lastPrice, pulseScore, pulseLabel,
-      splitText, riskText, targetText, backtestText, expectancyText,
-      activeTimeframeLabel: computed(() => activeTimeframe.value.label),
-      radarBullish, radarBearish, backtestRows, backtestSymbol,
-      signalCount, recentSignals, riskDirection, mutantBars,
-      // watchlist
-      watchlist, watchlistEditMode, watchlistInput, watchlistNewSym,
-      openWatchlistEdit, saveWatchlistEdit, cancelWatchlistEdit,
-      addWatchlistSymbol, removeWatchlistSymbol, resetWatchlist, loadWatchlistSymbol, runRadarOnWatchlist,
-      // formatters
-      money, percent, signedPercent, strategyMeta,
-      returnClass, formatSignalTime, radarTime, mutantStyle,
-      // actions
-      toggleTheme:              () => { isDark.value = !isDark.value; },
-      loadSnapshot,
-      renderChart:              () => doRender(),
-      changeTimeframe,
-      runRadar,
-      runBacktest,
-      changeBacktestTimeframe,
-      openRadarSymbol
-    };
+createApp({ setup() {
+  const systemTheme = window.matchMedia?.('(prefers-color-scheme: dark)');
+  const savedTheme = readStorage('market-desk-theme', null);
+  const isDark = ref(savedTheme === 'dark' || (savedTheme !== 'light' && Boolean(systemTheme?.matches)));
+  const isMobile = ref(window.innerWidth < 768), showSettings = ref(false);
+  const mobileNav = nav.filter(item => ['overview', 'chart', 'options', 'news'].includes(item.id));
+  let themeOverride = savedTheme === 'dark' || savedTheme === 'light';
+  let muted, gridColor, chartText, chartSurface, axis, tooltip;
+  document.documentElement.classList.toggle('dark', isDark.value);
+  function toggleTheme() { themeOverride = true; isDark.value = !isDark.value; persist('market-desk-theme', isDark.value ? 'dark' : 'light'); }
+  function followSystemTheme(event) { if (!themeOverride) isDark.value = event.matches; }
+  function resizeLayout() { isMobile.value = window.innerWidth < 768; if (!isMobile.value) showSettings.value = false; }
+  async function openSettings() { showSettings.value = true; await nextTick(); document.querySelector('#workspace-settings .bottom-sheet-handle')?.focus(); }
+  async function closeSettings() { if (!showSettings.value) return; showSettings.value = false; await nextTick(); document.querySelector('.settings-trigger')?.focus(); }
+  function navigate(id) { page.value = id; closeSettings(); }
+  function handleDrawerKey(event) {
+    if (!isMobile.value || !showSettings.value) return;
+    if (event.key === 'Escape') { event.preventDefault(); closeSettings(); return; }
+    if (event.key !== 'Tab') return;
+    const nodes = [...event.currentTarget.querySelectorAll('button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled)')];
+    const first = nodes[0], last = nodes.at(-1);
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
   }
-}).mount("#app");
+  const initial = location.hash.slice(1);
+  const page = ref(nav.some(n => n.id === initial) ? initial : 'overview');
+  const currentNav = computed(() => nav.find(n => n.id === page.value));
+  const overview = ref(null), chart = ref(null), options = ref(null), news = ref(null);
+  const states = reactive(Object.fromEntries(['overview', 'chart', 'options', 'news'].map(k => [k, { loading: false, error: '' }])));
+  const searchInput = ref(''), symbol = ref('SPY'), chartRange = ref('3mo');
+  const optionSymbol = ref('SPY'), optionExpiry = ref(''), optionMetric = ref('oi'), strikeRange = ref('0.15');
+  const newsSymbol = ref(''), newsSearch = ref(''), heatSize = ref('turnover'), sectorFilter = ref('全部');
+  const flowTab = ref('rotation'), flows = ref([]), flowDate = ref('');
+  const savedFlows = readStorage('market-desk-flows', '');
+  try { if (typeof savedFlows === 'string' && savedFlows) flows.value = parseFlows(savedFlows); } catch { /* Ignore corrupted local data. */ }
+  flowDate.value = flows.value[0]?.date || '';
+  const storedWatchlist = readStorage('market-desk-watchlist', ['SPY', 'QQQ', 'NVDA', 'AAPL', 'MSFT']);
+  const watchlist = ref(Array.isArray(storedWatchlist) ? [...new Set(storedWatchlist.filter(s => typeof s === 'string' && validSymbol(s)))].slice(0, 30) : ['SPY', 'QQQ']);
+  const toast = ref(''), importing = ref(false), clock = ref(new Date());
+  const nyClock = computed(() => new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', hour12: false }).format(clock.value));
+  const dateLabel = computed(() => new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }).format(clock.value));
+  const refreshing = computed(() => Object.values(states).some(s => s.loading));
+  const stockSectors = computed(() => [...new Set((overview.value?.stocks || []).map(q => q.sector))]);
+  const rankedSectors = computed(() => [...(overview.value?.sectors || [])].sort((a, b) => (b.changePercent ?? -Infinity) - (a.changePercent ?? -Infinity)));
+  const quoteWindow = computed(() => { const dates = (overview.value?.stocks || []).map(q => q.asOf).filter(Boolean).sort(); return dates.length ? time(dates[0]) + (dates[0] !== dates.at(-1) ? ' — ' + time(dates.at(-1)) : '') : '未提供'; });
+  const breadth = computed(() => { const values = (overview.value?.stocks || []).map(q => q.changePercent); return { up: values.filter(v => v > 0).length, down: values.filter(v => v < 0).length, flat: values.filter(v => v === 0).length, unknown: values.filter(v => !Number.isFinite(v)).length }; });
+  const flowDates = computed(() => [...new Set(flows.value.map(f => f.date))]);
+  const dayFlows = computed(() => flows.value.filter(f => f.date === flowDate.value).sort((a, b) => b.netFlowUsd - a.netFlowUsd));
+  const charts = new Map(), sequences = {}, controllers = {};
+  let clockTimer;
+  const findQuote = s => [...(overview.value?.stocks || []), ...(overview.value?.benchmarks || []), ...(overview.value?.sectors || [])].find(q => q.symbol === s);
+  const barWidth = value => `${Math.max(2, Math.min(100, Math.abs(value || 0) / Math.max(0.5, ...rankedSectors.value.map(q => Math.abs(q.changePercent || 0))) * 100))}%`;
+  const walls = values => values?.length ? values.map(num).join(' / ') : '—';
+  function persist(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch { toast.value = '浏览器存储不可用，本次修改只保留在当前页面。'; } }
+  watch(watchlist, value => persist('market-desk-watchlist', value), { deep: true });
+  function addWatch(s) { if (!validSymbol(s)) return; if (watchlist.value.includes(s)) return; if (watchlist.value.length >= 30) { toast.value = '自选最多保留 30 个代码。'; return; } watchlist.value.push(s); toast.value = `${s} 已加入自选`; }
+  function removeWatch(s) { watchlist.value = watchlist.value.filter(x => x !== s); }
+  function selectSymbol(s) { symbol.value = s; navigate('chart'); }
+  function search() { const s = searchInput.value.trim().toUpperCase(); if (!validSymbol(s)) { toast.value = '请输入有效代码，例如 AAPL、SPY 或 BRK-B。'; return; } selectSymbol(s); }
+  async function request(key, endpoint, params, target) {
+    const seq = sequences[key] = (sequences[key] || 0) + 1;
+    controllers[key]?.abort(); const controller = controllers[key] = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 85000);
+    states[key] = { loading: true, error: '' }; target.value = null;
+    try {
+      const response = await fetch(endpoint + '?' + new URLSearchParams(params), { signal: controller.signal });
+      const data = await response.json(); if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+      if (seq === sequences[key]) target.value = data;
+    } catch (e) { if (seq === sequences[key]) states[key].error = e.name === 'AbortError' ? '请求超时，请重试。' : e.message; }
+    finally { clearTimeout(timer); if (seq === sequences[key]) { states[key].loading = false; await nextTick(); render(); } }
+    return seq === sequences[key] ? target.value : null;
+  }
+  const loadOverview = () => request('overview', '/api/market/overview', {}, overview);
+  const loadChart = () => request('chart', '/api/market/chart', { symbol: symbol.value, range: chartRange.value }, chart);
+  const loadNews = () => request('news', '/api/news', { symbol: page.value === 'overview' ? '' : newsSymbol.value }, news);
+  async function loadOptions(reset = false) {
+    const s = optionSymbol.value.trim().toUpperCase();
+    if (!validSymbol(s)) { toast.value = '请输入有效的期权标的代码。'; return; }
+    optionSymbol.value = s;
+    const data = await request('options', '/api/options', { symbol: s, expiration: reset ? '' : optionExpiry.value }, options);
+    if (data) optionExpiry.value = data.expiration;
+  }
+  function refresh() {
+    if (page.value === 'overview' || page.value === 'heatmap' || page.value === 'flows') loadOverview();
+    if (page.value === 'overview' || page.value === 'news') loadNews();
+    if (page.value === 'chart') loadChart();
+    if (page.value === 'options') loadOptions();
+  }
+  async function importNotion() {
+    importing.value = true;
+    try { const r = await fetch('/api/watchlist'); const data = await r.json(); if (!r.ok) throw new Error('Notion 自选导入失败。'); if (data.source !== 'notion') throw new Error('未取得 Notion 自选，请检查已有的 Notion 配置与网络。'); const valid = data.symbols.filter(s => validSymbol(s)); watchlist.value = [...new Set([...watchlist.value, ...valid])].slice(0, 30); toast.value = `已合并 Notion 自选${data.stale ? '（来自旧缓存）' : ''}，当前 ${watchlist.value.length} 个代码。`; } catch (e) { toast.value = e.message; } finally { importing.value = false; }
+  }
+  async function importFlows(event) {
+    const file = event.target.files[0]; if (!file) return;
+    try { if (file.size > 500000) throw new Error('文件不能超过 500 KB。'); const text = await file.text(); const parsed = parseFlows(text); flows.value = parsed; flowDate.value = parsed[0].date; persist('market-desk-flows', text); toast.value = `已导入 ${parsed.length} 条净申赎记录。`; await nextTick(); render(); } catch (e) { toast.value = e.message; } finally { event.target.value = ''; }
+  }
+  function clearFlows() { flows.value = []; persist('market-desk-flows', ''); }
+
+  function makeChart(id, config, onClick) {
+    const el = document.getElementById(id); if (!el || !el.clientWidth) return;
+    let entry = charts.get(id);
+    if (entry && entry.el !== el) { entry.observer.disconnect(); entry.chart.dispose(); charts.delete(id); entry = null; }
+    if (!entry) {
+      const instance = echarts.init(el, null, { renderer: 'canvas' });
+      const observer = new ResizeObserver(() => instance.resize()); observer.observe(el);
+      entry = { chart: instance, el, observer }; charts.set(id, entry);
+    }
+    entry.chart.setOption({ animation: false, textStyle: { fontFamily: 'Segoe UI, Microsoft YaHei, sans-serif', color: muted }, ...config }, true);
+    entry.chart.off('click'); if (onClick) entry.chart.on('click', onClick); entry.chart.resize();
+  }
+  function updateChartTheme() {
+    muted = isDark.value ? '#afafaf' : '#787878';
+    gridColor = isDark.value ? 'rgba(255,255,255,0.08)' : '#cecece';
+    chartText = isDark.value ? '#ffffff' : '#101010';
+    chartSurface = isDark.value ? '#2d2d2d' : '#f9f9f9';
+    axis = { axisLine: { lineStyle: { color: gridColor } }, axisTick: { show: false }, axisLabel: { color: muted }, splitLine: { lineStyle: { color: gridColor, type: 'dashed' } } };
+    tooltip = { renderMode: 'richText', backgroundColor: chartSurface, borderColor: gridColor, textStyle: { color: chartText }, confine: true };
+  }
+  function renderHeatmap() {
+    if (!overview.value) return;
+    const selected = overview.value.stocks.filter(q => sectorFilter.value === '全部' || q.sector === sectorFilter.value);
+    const color = v => !Number.isFinite(v) || v === 0 ? '#787878' : v >= 3 ? '#24794d' : v >= 1 ? green : v > 0 ? '#699a80' : v > -1 ? '#b6807b' : v > -3 ? red : '#ad3730';
+    const data = selected.filter(q => heatSize.value === 'equal' || q.turnover > 0).map(q => ({ name: q.symbol, value: heatSize.value === 'equal' ? 1 : q.turnover, quote: q, itemStyle: { color: color(q.changePercent) } }));
+    makeChart('heatmap-chart', { tooltip: { ...tooltip, formatter: p => { const q = p.data.quote; return q ? `${q.symbol} · ${q.name}\n${num(q.price)} USD   ${pct(q.changePercent)}\n估算成交额 ${compact(q.turnover)}\n${time(q.asOf)}${q.stale ? '\n旧快照' : ''}` : ''; } }, series: [{ type: 'treemap', data, roam: false, nodeClick: false, breadcrumb: { show: false }, left: 0, right: 0, top: 0, bottom: 0, itemStyle: { borderColor: chartSurface, borderWidth: 2, gapWidth: 3, borderRadius: 5 }, label: { show: true, color: '#ffffff', fontSize: 13, formatter: p => `${p.name}\n${pct(p.data.quote?.changePercent)}`, lineHeight: 23 }, emphasis: { itemStyle: { borderColor: blue, borderWidth: 2 } } }] }, p => { if (p.data.quote) selectSymbol(p.data.quote.symbol); });
+  }
+  function renderPrice() {
+    const d = chart.value; if (!d || states.chart.loading) return;
+    const labels = d.bars.map(b => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', month: '2-digit', day: '2-digit', ...(d.range === '1d' ? { hour: '2-digit', minute: '2-digit', hour12: false } : {}) }).format(new Date(b.time * 1000)));
+    makeChart('price-chart', { tooltip: { ...tooltip, trigger: 'axis' }, axisPointer: { link: [{ xAxisIndex: 'all' }] }, grid: [{ left: 70, right: 25, top: 30, height: '62%' }, { left: 70, right: 25, top: '76%', height: '13%' }], xAxis: [0, 1].map(i => ({ ...axis, type: 'category', data: labels, gridIndex: i, axisLabel: { show: i === 1, color: muted }, boundaryGap: true })), yAxis: [{ ...axis, scale: true, name: d.currency }, { ...axis, gridIndex: 1, name: '成交量', axisLabel: { color: muted, formatter: compact } }], dataZoom: [{ type: 'inside', xAxisIndex: [0, 1] }, { type: 'slider', xAxisIndex: [0, 1], bottom: 0, height: 18, borderColor: gridColor, textStyle: { color: muted } }], series: [{ name: '价格 OHLC', type: 'candlestick', data: d.bars.map(b => [b.open, b.close, b.low, b.high]), itemStyle: { color: green, color0: red, borderColor: green, borderColor0: red } }, { name: '成交股数', type: 'bar', xAxisIndex: 1, yAxisIndex: 1, data: d.bars.map(b => ({ value: b.volume, itemStyle: { color: b.close >= b.open ? green : red } })) }] });
+  }
+  function renderRotation() {
+    if (!overview.value) return;
+    makeChart('rotation-chart', { tooltip: { ...tooltip, formatter: p => `${p.data.name} · ${p.data.symbol}\n涨跌 ${pct(p.value[0])}\n估算成交额 ${compact(p.value[1])}` }, grid: { left: 75, right: 55, top: 35, bottom: 50 }, xAxis: { ...axis, type: 'value', name: '涨跌 %', axisLabel: { color: muted, formatter: '{value}%' } }, yAxis: { ...axis, type: 'value', name: '估算成交额 USD', axisLabel: { color: muted, formatter: compact } }, series: [{ type: 'scatter', symbolSize: 22, label: { show: true, formatter: p => p.data.name, position: 'top', color: chartText, fontSize: 11 }, data: overview.value.sectors.filter(q => Number.isFinite(q.changePercent) && q.turnover !== null).map(q => ({ value: [q.changePercent, q.turnover], name: q.name, symbol: q.symbol, itemStyle: { color: q.changePercent >= 0 ? green : red } })), markLine: { silent: true, symbol: 'none', label: { show: false }, lineStyle: { color: muted }, data: [{ xAxis: 0 }] } }] }, p => selectSymbol(p.data.symbol));
+  }
+  function renderFlows() {
+    const data = dayFlows.value;
+    makeChart('flows-chart', { tooltip: { ...tooltip, trigger: 'axis' }, grid: { left: 80, right: 30, top: 35, bottom: 45 }, xAxis: { ...axis, type: 'category', data: data.map(f => f.symbol) }, yAxis: { ...axis, type: 'value', name: '净申赎 USD', axisLabel: { color: muted, formatter: compact } }, series: [{ type: 'bar', barMaxWidth: 70, data: data.map(f => ({ value: f.netFlowUsd, itemStyle: { color: f.netFlowUsd >= 0 ? green : red } })) }] });
+  }
+  function renderOptions() {
+    const d = options.value; if (!d || states.options.loading) return;
+    const rows = d.rows.filter(r => strikeRange.value === 'all' || Math.abs(r.strike / d.spot - 1) <= Number(strikeRange.value));
+    const gex = optionMetric.value === 'gex';
+    const missing = d.missingOi || (gex && d.missingGamma);
+    makeChart('options-chart', { title: missing ? { text: '数据不完整，暂不展示该汇总图', left: 'center', top: 'center', textStyle: { color: muted, fontSize: 14 } } : undefined, tooltip: { ...tooltip, trigger: 'axis' }, legend: { data: ['Call', 'Put'], textStyle: { color: muted }, top: 8 }, grid: { left: 80, right: 35, top: 50, bottom: 65 }, xAxis: { ...axis, type: 'category', name: '行权价', data: rows.map(r => String(r.strike)) }, yAxis: { ...axis, type: 'value', name: gex ? 'USD / 1% 波动' : '持仓量（合约）', axisLabel: { color: muted, formatter: compact } }, dataZoom: [{ type: 'inside' }, { type: 'slider', bottom: 5, height: 20, borderColor: gridColor, textStyle: { color: muted } }], series: missing ? [] : [{ type: 'bar', name: 'Call', itemStyle: { color: green }, data: rows.map(r => gex ? r.callGex : r.callOi) }, { type: 'bar', name: 'Put', itemStyle: { color: red }, data: rows.map(r => gex ? r.putGex : r.putOi) }] });
+  }
+  function render() {
+    updateChartTheme();
+    for (const [id, entry] of charts) { if (!document.contains(entry.el)) { entry.observer.disconnect(); entry.chart.dispose(); charts.delete(id); } }
+    if (page.value === 'overview' || page.value === 'heatmap') renderHeatmap();
+    if (page.value === 'chart') renderPrice();
+    if (page.value === 'flows') flowTab.value === 'rotation' ? renderRotation() : renderFlows();
+    if (page.value === 'options') renderOptions();
+  }
+  watch(page, async value => {
+    history.replaceState(null, '', '#' + value); await nextTick();
+    if (['overview', 'heatmap', 'flows'].includes(value) && !overview.value && !states.overview.loading) loadOverview();
+    if (value === 'chart') loadChart();
+    if (value === 'options') loadOptions(options.value?.symbol !== optionSymbol.value);
+    if (value === 'news' || value === 'overview') loadNews();
+    render();
+  });
+  watch([symbol, chartRange], () => { if (page.value === 'chart') loadChart(); });
+  watch(newsSymbol, () => { if (page.value === 'news') loadNews(); });
+  watch(optionExpiry, value => { if (page.value === 'options' && value && value !== options.value?.expiration) loadOptions(); });
+  watch([heatSize, sectorFilter, flowTab, flowDate, optionMetric, strikeRange], async () => { await nextTick(); render(); });
+  watch(isDark, async value => { document.documentElement.classList.toggle('dark', value); await nextTick(); render(); });
+  watch(showSettings, value => { document.body.classList.toggle('drawer-open', value && isMobile.value); });
+  onMounted(() => { refresh(); window.addEventListener('resize', resizeLayout); systemTheme?.addEventListener?.('change', followSystemTheme); clockTimer = setInterval(() => { clock.value = new Date(); }, 30000); });
+  onUnmounted(() => { clearInterval(clockTimer); window.removeEventListener('resize', resizeLayout); systemTheme?.removeEventListener?.('change', followSystemTheme); document.body.classList.remove('drawer-open'); Object.values(controllers).forEach(c => c.abort()); for (const e of charts.values()) { e.observer.disconnect(); e.chart.dispose(); } });
+  return { nav, mobileNav, isDark, isMobile, showSettings, toggleTheme, openSettings, closeSettings, navigate, handleDrawerKey, page, currentNav, overview, chart, options, news, states, searchInput, symbol, chartRange, optionSymbol, optionExpiry, optionMetric, strikeRange, newsSymbol, newsSearch, heatSize, sectorFilter, flowTab, flows, flowDate, flowDates, dayFlows, watchlist, toast, importing, nyClock, dateLabel, refreshing, stockSectors, rankedSectors, quoteWindow, breadth, findQuote, barWidth, walls, num, compact, pct, tone, time, addWatch, removeWatch, selectSymbol, search, refresh, loadOverview, loadChart, loadNews, loadOptions, importNotion, importFlows, clearFlows };
+} }).mount('#app');

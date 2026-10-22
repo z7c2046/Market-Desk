@@ -17,8 +17,25 @@ export function signedPercent(value) {
   return `${sign}${(n * 100).toFixed(1)}%`;
 }
 
+export function round(value, digits = 2) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "...";
+  return n.toFixed(digits);
+}
+
 export function todayIso() {
   return new Date().toISOString().slice(0, 10);
+}
+
+export function getDateOffset(daysAgo) {
+  const d = new Date();
+  d.setDate(d.getDate() - daysAgo);
+  return d.toISOString().slice(0, 10);
+}
+
+export function getYtdIso() {
+  const d = new Date();
+  return `${d.getFullYear()}-01-01`;
 }
 
 export function formatTimeFor(tf, time) {
@@ -47,14 +64,43 @@ export function toChartBar(bar) {
 }
 
 export function markerFor(signal) {
-  const isBuy = signal.side.includes("B");
-  const isEarly = signal.side.startsWith("e");
+  const side = String(signal.side || "");
+  const isBuy = side.includes("B");
+  const isEarly = side.startsWith("e");
+  const isWeakness = signal.kind === "structural_weakness" || side === "eS";
+
   return {
     time: Number(signal.time),
     position: isBuy ? "belowBar" : "aboveBar",
-    color: isBuy ? "#2976ff" : "#df4f46",
+    color: isBuy
+      ? (isEarly ? "#0284c7" : "#10b981")
+      : (isWeakness ? "#f59e0b" : "#ef4444"),
     shape: isBuy ? "arrowUp" : "arrowDown",
-    text: signal.side,
+    text: side,
     size: isEarly ? 1 : 2
   };
+}
+
+export function reasonLabel(reason) {
+  const r = String(reason || "");
+  const map = {
+    consolidation_launch_observation: "强势整理启动观察 (eB)",
+    consolidation_launch_confirmed: "突破20日高点启动 (B)",
+    pullback_reversal_confirmed: "20SMA缩量回调转强 (B)",
+    breakdown_volume_weakness_warning: "放量跌破5日低点转弱 (eS)",
+    atr_trailing_stop_exit: "跌破3xATR跟踪线止损 (S)",
+    setup_invalidation_exit: "形态失效止损退出 (S)",
+    top_divergence_warning: "RSI顶背离预警 (eS)",
+    top_divergence_confirmed: "RSI顶背离确认 (S)",
+    bottom_divergence_warning: "RSI底背离观察 (eB)",
+    bottom_divergence_confirmed: "RSI底背离确认 (B)",
+    oversold_volume_observation: "超卖巨量止跌观察 (eB)",
+    oversold_volume_confirmed: "超卖反转确认 (B)",
+    panic_bottom_observation: "恐慌放量底部观察 (eB)",
+    panic_bottom_confirmed: "恐慌底恢复确认 (B)",
+    exhaustion_top_observation: "高位缩量动能衰竭 (eS)",
+    exhaustion_top_confirmed: "高位转弱顶部确认 (S)",
+    momentum_breakout_confirmed: "放量突破20日新高 (B)"
+  };
+  return map[r] || r;
 }

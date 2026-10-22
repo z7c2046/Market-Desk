@@ -1,0 +1,13 @@
+{
+  "name": "inflection-hunter",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Clean-room Node.js + Vue 3 daily swing inflection-point signal scanner using TradingView public market data.",
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "test": "node --test test/*.test.js",
+    "check": "node --check src/server.js && node --check src/env.js && node --check src/notion.js && node --check src/radar.js && node --check src/tradingview.js && node --check src/indicators.js && node --check src/signals.js && node --check src/snapshot.js && node --check src/backtest.js && node --check src/strategy-config.js && node --check src/pivots.js && node --check src/market-data.js && node --check src/rsi-volume-signals.js && node --check src/regime.js && node --check src/major-turn-signals.js"
+  }
+}

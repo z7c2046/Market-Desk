@@ -359,10 +359,25 @@ export async function fetchTradingViewBars({ symbol, tf = "1d", limit = 600, tim
               return;
             }
 
+            if (packet?.m === "symbol_resolved") {
+              const meta = packet.p?.[2] || {};
+              state.resolvedExchange = meta.exchange || meta.listed_exchange || "";
+              state.resolvedCurrency = meta.currency_code || meta.currency || "USD";
+            }
+
             const bars = parseBarsFromPacket(packet);
             if (bars && bars.length) {
+              const parts = resolvedSymbol.split(":");
+              const fallbackExchange = parts.length > 1 ? parts[0] : "US";
+              const rawTicker = parts.length > 1 ? parts[1] : resolvedSymbol;
+
               finish(null, {
                 symbol: resolvedSymbol,
+                rawTicker,
+                exchange: state.resolvedExchange || fallbackExchange,
+                currency: state.resolvedCurrency || "USD",
+                session: "regular",
+                adjustment: "splits",
                 interval,
                 bars
               });

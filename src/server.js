@@ -1,154 +1,42 @@
-import "./env.js"; // loads .env into process.env before anything reads it
-import fs from "node:fs/promises";
-import http from "node:http";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { compareStrategyBacktests } from "./backtest.js";
-import { fetchWatchlistSymbols } from "./notion.js";
-import { scanRadar } from "./radar.js";
-import { getMarketSnapshot } from "./snapshot.js";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const rootDir = path.resolve(__dirname, "..");
-const publicDir = path.join(rootDir, "public");
-const port = Number(process.env.PORT || 5174);
-
-const mimeTypes = new Map([
-  [".html", "text/html; charset=utf-8"],
-  [".js", "text/javascript; charset=utf-8"],
-  [".css", "text/css; charset=utf-8"],
-  [".json", "application/json; charset=utf-8"],
-  [".svg", "image/svg+xml"],
-  [".png", "image/png"],
-  [".ico", "image/x-icon"]
-]);
-
-function sendJson(res, status, payload) {
-  const body = JSON.stringify(payload, null, 2);
-  res.writeHead(status, {
-    "Content-Type": "application/json; charset=utf-8",
-    "Cache-Control": "no-store",
-    "Access-Control-Allow-Origin": "*"
+import './env.js';
+import fs from 'node:fs/promises';
+import http from 'node:http';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { fetchWatchlistSymbols } from './notion.js';
+import { createMarketWorkspace } from './market-workspace.js';
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const publicDir = path.join(root, 'public');
+const vendor = { '/vendor/vue.js': 'node_modules/vue/dist/vue.global.prod.js', '/vendor/echarts.js': 'node_modules/echarts/dist/echarts.min.js' };
+const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.json': 'application/json', '.csv': 'text/csv; charset=utf-8' };
+function json(res, status, data) { res.writeHead(status, { 'Content-Type': mime['.json'], 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' }); res.end(JSON.stringify(data)); }
+export function createServer({ workspace = createMarketWorkspace(), watchlist = fetchWatchlistSymbols } = {}) {
+  return http.createServer(async (req, res) => {
+    try {
+      const url = new URL(req.url, 'http://localhost');
+      if (!['GET', 'HEAD'].includes(req.method)) { res.setHeader('Allow', 'GET, HEAD'); json(res, 405, { error: 'Method not allowed' }); return; }
+      const params = Object.fromEntries(url.searchParams);
+      const routes = {
+        '/api/health': () => ({ ok: true, product: 'Market Desk', version: '1.0.0' }),
+        '/api/market/overview': () => workspace.overview(), '/api/market/chart': () => workspace.chart(params),
+        '/api/news': () => workspace.news(params), '/api/options': () => workspace.options(params),
+        '/api/watchlist': () => watchlist({ force: params.force === '1' }),
+      };
+      if (routes[url.pathname]) { json(res, 200, await routes[url.pathname]()); return; }
+      if (['/api/market/snapshot', '/api/radar', '/api/backtest'].includes(url.pathname)) { json(res, 410, { error: '拐点研究功能已停用。当前产品为美股信息与分析工作台。' }); return; }
+      if (url.pathname.startsWith('/api/')) { json(res, 404, { error: '接口不存在' }); return; }
+      const decoded = decodeURIComponent(url.pathname);
+      const target = vendor[decoded] ? path.join(root, vendor[decoded]) : path.resolve(publicDir, '.' + (decoded === '/' ? '/index.html' : decoded));
+      if (!vendor[decoded] && !target.startsWith(publicDir + path.sep)) { json(res, 403, { error: 'Forbidden' }); return; }
+      try {
+        const body = await fs.readFile(target);
+        res.writeHead(200, { 'Content-Type': mime[path.extname(target)] || 'application/octet-stream', 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff' });
+        res.end(req.method === 'HEAD' ? undefined : body);
+      } catch { json(res, 404, { error: '页面不存在' }); }
+    } catch (error) { json(res, error instanceof URIError ? 400 : error.status || 502, { error: error.message || '数据暂不可用' }); }
   });
-  res.end(body);
 }
-
-async function serveStatic(req, res, pathname) {
-  const safePath = pathname === "/" ? "/index.html" : pathname;
-  const decoded = decodeURIComponent(safePath);
-  const target = path.normalize(path.join(publicDir, decoded));
-
-  if (!target.startsWith(publicDir)) {
-    res.writeHead(403);
-    res.end("Forbidden");
-    return;
-  }
-
-  try {
-    const stat = await fs.stat(target);
-    if (!stat.isFile()) throw new Error("not_file");
-    const ext = path.extname(target).toLowerCase();
-    const body = await fs.readFile(target);
-    res.writeHead(200, {
-      "Content-Type": mimeTypes.get(ext) || "application/octet-stream",
-      "Cache-Control": "no-store"
-    });
-    res.end(body);
-  } catch (_) {
-    if (path.extname(target)) {
-      res.writeHead(404);
-      res.end("Not found");
-      return;
-    }
-    await serveStatic(req, res, "/index.html");
-  }
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const port = Number(process.env.PORT || 5174);
+  createServer().listen(port, process.env.HOST || '127.0.0.1', () => console.log(`Market Desk running at http://localhost:${port}`));
 }
-
-const server = http.createServer(async (req, res) => {
-  const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
-
-  if (req.method === "OPTIONS") {
-    res.writeHead(204, {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET,OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type"
-    });
-    res.end();
-    return;
-  }
-
-  if (url.pathname === "/api/health") {
-    sendJson(res, 200, { ok: true, ts: new Date().toISOString() });
-    return;
-  }
-
-  if (url.pathname === "/api/watchlist") {
-    try {
-      const force = url.searchParams.get("force") === "1";
-      const result = await fetchWatchlistSymbols({ force });
-      sendJson(res, 200, { ok: true, count: result.symbols.length, ...result });
-    } catch (error) {
-      sendJson(res, 502, {
-        ok: false,
-        error: error.message,
-        hint: "Set NOTION_TOKEN and NOTION_DATABASE_ID in .env, and share the database with the integration."
-      });
-    }
-    return;
-  }
-
-  if (url.pathname === "/api/market/snapshot") {
-    try {
-      const snapshot = await getMarketSnapshot(Object.fromEntries(url.searchParams));
-      sendJson(res, 200, snapshot);
-    } catch (error) {
-      sendJson(res, 502, {
-        ok: false,
-        error: error.message,
-        hint: "TradingView public endpoints are best-effort and may require outbound network access."
-      });
-    }
-    return;
-  }
-
-  if (url.pathname === "/api/radar") {
-    try {
-      const result = await scanRadar(Object.fromEntries(url.searchParams));
-      sendJson(res, 200, result);
-    } catch (error) {
-      sendJson(res, 502, {
-        ok: false,
-        error: error.message,
-        hint: "Radar scans multiple TradingView websocket snapshots. Use fewer symbols or a larger timeframe if public endpoints throttle."
-      });
-    }
-    return;
-  }
-
-  if (url.pathname === "/api/backtest") {
-    try {
-      const result = await compareStrategyBacktests(Object.fromEntries(url.searchParams));
-      sendJson(res, 200, result);
-    } catch (error) {
-      sendJson(res, 502, {
-        ok: false,
-        error: error.message,
-        hint: "Backtest uses TradingView public daily bars and the local signal engine."
-      });
-    }
-    return;
-  }
-
-  if (req.method !== "GET" && req.method !== "HEAD") {
-    res.writeHead(405);
-    res.end("Method not allowed");
-    return;
-  }
-
-  await serveStatic(req, res, url.pathname);
-});
-
-server.listen(port, () => {
-  console.log(`Inflection Hunter running at http://localhost:${port}`);
-});

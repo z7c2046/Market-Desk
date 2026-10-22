@@ -185,9 +185,21 @@ export function deriveMarketPulse(bars) {
   };
 }
 
+function calcRsiFromAverages(avgGain, avgLoss) {
+  if (avgGain === 0 && avgLoss === 0) return 50; // Project convention: flat market returns 50
+  if (avgLoss === 0) return 100;
+  if (avgGain === 0) return 0;
+  return 100 - 100 / (1 + avgGain / avgLoss);
+}
+
 /**
  * RSI series (Wilder smoothing).
- * Returns an array of {time, value} — value in [0, 100], null when not enough data.
+ * Returns an array of numbers in [0, 100], null when not enough data.
+ * Boundary convention:
+ * - avgGain == 0 && avgLoss == 0 => 50 (flat market)
+ * - avgLoss == 0 && avgGain > 0  => 100
+ * - avgGain == 0 && avgLoss > 0  => 0
+ * - insufficient bars (< period + 1) => null
  */
 export function rsiSeries(bars, period = 14) {
   const out = new Array(bars.length).fill(null);
@@ -199,28 +211,375 @@ export function rsiSeries(bars, period = 14) {
   // Seed with simple average over first `period` changes
   for (let i = 1; i <= period; i += 1) {
     const delta = Number(bars[i].close) - Number(bars[i - 1].close);
+    if (!Number.isFinite(delta)) return out;
     if (delta > 0) avgGain += delta;
     else avgLoss += -delta;
   }
   avgGain /= period;
   avgLoss /= period;
-  out[period] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
+  out[period] = calcRsiFromAverages(avgGain, avgLoss);
 
   // Wilder smoothing for the rest
   for (let i = period + 1; i < bars.length; i += 1) {
     const delta = Number(bars[i].close) - Number(bars[i - 1].close);
+    if (!Number.isFinite(delta)) {
+      out[i] = null;
+      continue;
+    }
     const gain = delta > 0 ? delta : 0;
     const loss = delta < 0 ? -delta : 0;
     avgGain = (avgGain * (period - 1) + gain) / period;
     avgLoss = (avgLoss * (period - 1) + loss) / period;
-    out[i] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
+    out[i] = calcRsiFromAverages(avgGain, avgLoss);
+  }
+
+  return out;
+}
+
+export const wilderRsiSeries = rsiSeries;
+
+/**
+ * Wilder-smoothed ATR series.
+ * Initialized with 14-period SMA of True Range (indices 0..13).
+ * Subsequent values smoothed as: (prevATR * (period - 1) + TR) / period.
+ */
+export function wilderAtrSeries(bars, period = 14) {
+  const out = new Array(bars.length).fill(null);
+  if (!Array.isArray(bars) || bars.length < period) return out;
+
+  const trs = bars.map((bar, index) => trueRange(bar, bars[index - 1]));
+  let initialTrSum = 0;
+  for (let i = 0; i < period; i += 1) {
+    const tr = trs[i];
+    if (!Number.isFinite(tr)) return out;
+    initialTrSum += tr;
+  }
+
+  let prevAtr = initialTrSum / period;
+  out[period - 1] = prevAtr;
+
+  for (let i = period; i < bars.length; i += 1) {
+    const tr = trs[i];
+    if (!Number.isFinite(tr)) {
+      out[i] = null;
+      continue;
+    }
+    prevAtr = (prevAtr * (period - 1) + tr) / period;
+    out[i] = prevAtr;
   }
 
   return out;
 }
 
 /**
- * Volume surge ratio series.
+ * Relative Volume RVOL20 series.
+ * Formula: RVOL20(i) = V(i) / mean(V(i-20) ... V(i-1))
+ * Strictly excludes current day V(i) from the benchmark denominator.
+ * Returns null if insufficient history, unknown volume, or any zero volume in past 20 bars.
+ */
+export function rvol20Series(bars, period = 20) {
+  const out = new Array(bars.length).fill(null);
+  if (!Array.isArray(bars) || bars.length <= period) return out;
+
+  for (let i = period; i < bars.length; i += 1) {
+    const currVol = Number(bars[i]?.volume);
+    if (!Number.isFinite(currVol) || currVol < 0) {
+      out[i] = null;
+      continue;
+    }
+
+    let sum = 0;
+    let hasInvalid = false;
+    for (let k = i - period; k < i; k += 1) {
+      const v = Number(bars[k]?.volume);
+      // If missing, non-finite, or zero (e.g. trading halt / missing data) -> null
+      if (!Number.isFinite(v) || v <= 0) {
+        hasInvalid = true;
+        break;
+      }
+      sum += v;
+    }
+
+    if (hasInvalid) {
+      out[i] = null;
+      continue;
+    }
+
+    const baseline = sum / period;
+    out[i] = baseline > 0 ? currVol / baseline : null;
+  }
+
+  return out;
+}
+
+/**
+ * Close Location Value (CLV).
+ * Formula: CLV = (close - low) / (high - low)
+ * Range: [0, 1]. Returns 0.5 when high == low.
+ */
+export function clvSeries(bars) {
+  if (!Array.isArray(bars)) return [];
+  return bars.map((bar) => {
+    const high = Number(bar?.high);
+    const low = Number(bar?.low);
+    const close = Number(bar?.close);
+    if (!Number.isFinite(high) || !Number.isFinite(low) || !Number.isFinite(close)) return null;
+    const range = high - low;
+    if (range <= 0) return 0.5;
+    return clamp((close - low) / range, 0, 1);
+  });
+}
+
+/**
+ * Standard Volume Moving Average (SMA) over past period bars (inclusive of current bar).
+ */
+export function volumeMaSeries(bars, period = 20) {
+  const out = new Array(bars.length).fill(null);
+  if (!Array.isArray(bars) || bars.length < period) return out;
+
+  let sum = 0;
+  for (let i = 0; i < bars.length; i += 1) {
+    const v = Number(bars[i]?.volume || 0);
+    sum += v;
+    if (i >= period) {
+      sum -= Number(bars[i - period]?.volume || 0);
+    }
+    if (i >= period - 1) {
+      out[i] = sum / period;
+    }
+  }
+
+  return out;
+}
+
+/**
+ * Simple Moving Average (SMA) series over numerical values.
+ */
+export function smaSeries(values, period) {
+  const out = new Array(values.length).fill(null);
+  const n = Math.max(1, Math.floor(period));
+  if (!Array.isArray(values) || values.length < n) return out;
+
+  let sum = 0;
+  let count = 0;
+  for (let i = 0; i < values.length; i += 1) {
+    const v = Number(values[i]);
+    if (!Number.isFinite(v)) {
+      sum = 0;
+      count = 0;
+      continue;
+    }
+    sum += v;
+    count += 1;
+    if (count > n) {
+      sum -= Number(values[i - n]);
+      count -= 1;
+    }
+    if (count === n) {
+      out[i] = sum / n;
+    }
+  }
+  return out;
+}
+
+/**
+ * Mean percentage amplitude series: mean of ((high - low) / close) over past period bars (inclusive).
+ */
+export function meanAmplitudeSeries(bars, period) {
+  const out = new Array(bars.length).fill(null);
+  const n = Math.max(1, Math.floor(period));
+  if (!Array.isArray(bars) || bars.length < n) return out;
+
+  const amps = bars.map((b) => {
+    const h = Number(b.high);
+    const l = Number(b.low);
+    const c = Number(b.close);
+    if (!Number.isFinite(h) || !Number.isFinite(l) || !Number.isFinite(c) || c <= 0) return null;
+    return (h - l) / c;
+  });
+
+  let sum = 0;
+  let count = 0;
+  for (let i = 0; i < amps.length; i += 1) {
+    const a = amps[i];
+    if (a === null) {
+      sum = 0;
+      count = 0;
+      continue;
+    }
+    sum += a;
+    count += 1;
+    if (count > n) {
+      sum -= amps[i - n];
+      count -= 1;
+    }
+    if (count === n) {
+      out[i] = sum / n;
+    }
+  }
+  return out;
+}
+
+/**
+ * Highest high in bars[startIndex .. endIndex].
+ */
+export function highestHigh(bars, startIndex, endIndex) {
+  let hh = -Infinity;
+  const s = Math.max(0, startIndex);
+  const e = Math.min(bars.length - 1, endIndex);
+  for (let i = s; i <= e; i += 1) {
+    const h = Number(bars[i]?.high);
+    if (Number.isFinite(h) && h > hh) hh = h;
+  }
+  return Number.isFinite(hh) ? hh : null;
+}
+
+/**
+ * Lowest low in bars[startIndex .. endIndex].
+ */
+export function lowestLow(bars, startIndex, endIndex) {
+  let ll = Infinity;
+  const s = Math.max(0, startIndex);
+  const e = Math.min(bars.length - 1, endIndex);
+  for (let i = s; i <= e; i += 1) {
+    const l = Number(bars[i]?.low);
+    if (Number.isFinite(l) && l < ll) ll = l;
+  }
+  return Number.isFinite(ll) ? ll : null;
+}
+
+/**
+ * Rolling highest high over past period bars.
+ * If excludeCurrent = true, searches [i - period .. i - 1].
+ */
+export function highestHighSeries(bars, period = 20, excludeCurrent = true) {
+  const out = new Array(bars.length).fill(null);
+  const p = Math.max(1, Math.floor(period));
+  for (let i = 0; i < bars.length; i += 1) {
+    const end = excludeCurrent ? i - 1 : i;
+    const start = end - p + 1;
+    if (start < 0) continue;
+    out[i] = highestHigh(bars, start, end);
+  }
+  return out;
+}
+
+/**
+ * Rolling lowest low over past period bars.
+ * If excludeCurrent = true, searches [i - period .. i - 1].
+ */
+export function lowestLowSeries(bars, period = 5, excludeCurrent = true) {
+  const out = new Array(bars.length).fill(null);
+  const p = Math.max(1, Math.floor(period));
+  for (let i = 0; i < bars.length; i += 1) {
+    const end = excludeCurrent ? i - 1 : i;
+    const start = end - p + 1;
+    if (start < 0) continue;
+    out[i] = lowestLow(bars, start, end);
+  }
+  return out;
+}
+
+export function highestClose(bars, startIndex, endIndex) {
+  let hc = -Infinity;
+  const s = Math.max(0, startIndex);
+  const e = Math.min(bars.length - 1, endIndex);
+  for (let i = s; i <= e; i += 1) {
+    const c = Number(bars[i]?.close);
+    if (Number.isFinite(c) && c > hc) hc = c;
+  }
+  return Number.isFinite(hc) ? hc : null;
+}
+
+export function highestCloseSeries(bars, period = 60, excludeCurrent = false) {
+  const out = new Array(bars.length).fill(null);
+  const p = Math.max(1, Math.floor(period));
+  for (let i = 0; i < bars.length; i += 1) {
+    const end = excludeCurrent ? i - 1 : i;
+    const start = end - p + 1;
+    if (start < 0) continue;
+    out[i] = highestClose(bars, start, end);
+  }
+  return out;
+}
+
+export function maxSeries(series, period = 20, excludeCurrent = false) {
+  const out = new Array(series.length).fill(null);
+  const p = Math.max(1, Math.floor(period));
+  for (let i = 0; i < series.length; i += 1) {
+    const end = excludeCurrent ? i - 1 : i;
+    const start = end - p + 1;
+    if (start < 0) continue;
+    let m = -Infinity;
+    for (let k = start; k <= end; k += 1) {
+      const v = Number(series[k]);
+      if (Number.isFinite(v) && v > m) m = v;
+    }
+    out[i] = Number.isFinite(m) ? m : null;
+  }
+  return out;
+}
+
+/**
+ * VP95: 95th percentile volume of past period bars, excluding current bar t.
+ * Nearest-rank: sort ascending, ceil(0.95 * n) - 1.
+ */
+export function vp95Series(bars, period = 120) {
+  const out = new Array(bars.length).fill(null);
+  const p = Math.max(1, Math.floor(period));
+  for (let i = p; i < bars.length; i += 1) {
+    const windowVols = [];
+    for (let k = i - p; k < i; k += 1) {
+      const v = Number(bars[k]?.volume);
+      if (Number.isFinite(v) && v > 0) windowVols.push(v);
+    }
+    if (windowVols.length < p) continue;
+    windowVols.sort((a, b) => a - b);
+    const n = windowVols.length;
+    const rankIndex = Math.ceil(0.95 * n) - 1;
+    out[i] = windowVols[rankIndex];
+  }
+  return out;
+}
+
+/**
+ * VDECAY: mean(V[t-2 ... t]) / mean(V[t-22 ... t-3])
+ * Numerator (3 bars) and denominator (20 bars) are completely non-overlapping.
+ */
+export function vdecaySeries(bars) {
+  const out = new Array(bars.length).fill(null);
+  for (let i = 22; i < bars.length; i += 1) {
+    let sumNum = 0;
+    let countNum = 0;
+    for (let k = i - 2; k <= i; k += 1) {
+      const v = Number(bars[k]?.volume);
+      if (Number.isFinite(v)) {
+        sumNum += v;
+        countNum += 1;
+      }
+    }
+    if (countNum < 3) continue;
+    const meanNum = sumNum / 3;
+
+    let sumDen = 0;
+    let countDen = 0;
+    for (let k = i - 22; k <= i - 3; k += 1) {
+      const v = Number(bars[k]?.volume);
+      if (Number.isFinite(v)) {
+        sumDen += v;
+        countDen += 1;
+      }
+    }
+    if (countDen < 20 || sumDen <= 0) continue;
+    const meanDen = sumDen / 20;
+
+    out[i] = meanDen > 0 ? meanNum / meanDen : null;
+  }
+  return out;
+}
+
+/**
+ * Volume surge ratio series (legacy compatibility).
  * value = bar.volume / rolling_avg(volume, period).
  * Returns 1.0 when volume equals the average, null when not enough data.
  */
@@ -251,34 +610,59 @@ export function volumeSurgeSeries(bars, period = 20) {
   return out;
 }
 
-export function deriveRisk(bars, direction = "long") {
+export function deriveRisk(bars, options = "long") {
   if (!Array.isArray(bars) || bars.length < 20) return null;
 
-  const entry = Number(bars.at(-1)?.close);
-  if (!Number.isFinite(entry)) return null;
+  const rawDir = typeof options === "string" ? options : (options?.direction || "long");
+  const activePosition = typeof options === "object" ? options?.activePosition : null;
+
+  const lastBarClose = Number(bars.at(-1)?.close);
+  if (!Number.isFinite(lastBarClose)) return null;
 
   const atr = atrSeries(bars, 14).at(-1);
   if (!Number.isFinite(atr)) return null;
 
-  const isShort = direction === "short";
-  const risk = atr * 1.5;
-  const stop = isShort ? entry + risk : entry - risk;
-  const target1 = isShort ? entry - risk : entry + risk;
-  const target2 = isShort ? entry - 2 * risk : entry + 2 * risk;
-
   const segment = bars.slice(-20);
   const upBars = segment.filter((bar) => Number(bar.close) >= Number(bar.open)).length;
-  const confidence = segment.length ? upBars / segment.length : 0;
-  const sideConfidence = isShort ? 1 - confidence : confidence;
+  const upBarRatio = segment.length ? round(upBars / segment.length, 3) : 0;
+
+  if (activePosition && Number.isFinite(activePosition.entryPrice)) {
+    const entry = Number(activePosition.entryPrice);
+    const stop = Number(activePosition.trailingStop) || (entry - atr * 1.5);
+    return {
+      direction: "holding_long",
+      statusLabel: "多头持仓跟踪",
+      isHolding: true,
+      entry: round(entry, 4),
+      stop: round(stop, 4),
+      target1: round(entry + atr * 1.5, 4),
+      target2: round(entry + atr * 3.0, 4),
+      atr: round(atr, 4),
+      confidence: upBarRatio,
+      upBarRatio
+    };
+  }
+
+  const isShortOrFlat = rawDir === "short" || rawDir === "flat" || rawDir === "flat_cash";
+  const direction = isShortOrFlat ? "flat_cash" : "long";
+  const statusLabel = isShortOrFlat ? "空仓观望" : "多头观察";
+  const entry = lastBarClose;
+  const risk = atr * 1.5;
+  const stop = entry - risk;
+  const target1 = entry + risk;
+  const target2 = entry + 2 * risk;
 
   return {
     direction,
-    entry,
-    stop,
-    target1,
-    target2,
-    atr,
-    confidence: sideConfidence
+    statusLabel,
+    isHolding: false,
+    entry: round(entry, 4),
+    stop: round(stop, 4),
+    target1: round(target1, 4),
+    target2: round(target2, 4),
+    atr: round(atr, 4),
+    confidence: isShortOrFlat ? round(1 - upBarRatio, 3) : upBarRatio,
+    upBarRatio
   };
 }
 

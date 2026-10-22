@@ -1,21 +1,18 @@
+/**
+ * Signal Radar Scanner
+ * Scans a watchlist of symbols on daily (1d) timeframe using the selected algorithm.
+ * Groups matches into Bottom Confirmed, Top Confirmed, and Candidates.
+ */
+
 import { fetchWatchlistSymbols } from "./notion.js";
 import { getMarketSnapshot } from "./snapshot.js";
-import { parseSymbolList } from "./universe.js";
+import { parseSymbolList, NASDAQ_100_TECH_UNIVERSE } from "./universe.js";
+import { ALGORITHMS, DEFAULT_ALGORITHM, normalizeAlgorithm } from "./strategy-config.js";
 
 const radarCache = new Map();
 
-function radarTtl(tf) {
-  const key = String(tf || "").toLowerCase();
-  if (key.includes("m") || key.includes("h") || /^\d+$/.test(key)) return 30_000;
-  return 120_000;
-}
-
-function defaultLimit(tf) {
-  const key = String(tf || "").toLowerCase();
-  if (key === "5m" || key === "15m" || key === "30m" || key === "1h") return 500;
-  if (key === "4h") return 420;
-  if (key === "1m" || key === "1mo") return 360;
-  return 600;
+function radarTtl() {
+  return 90_000; // 90s TTL for daily scan
 }
 
 function pctChange(bars) {
@@ -25,7 +22,7 @@ function pctChange(bars) {
   return (last - prev) / prev;
 }
 
-function findFreshSignals(snapshot, lookbackBars) {
+export function findFreshSignals(snapshot, lookbackBars) {
   const bars = snapshot.bars || [];
   const signals = snapshot.signals || [];
   const indexByTime = new Map(bars.map((bar, index) => [Number(bar.time), index]));
@@ -35,8 +32,6 @@ function findFreshSignals(snapshot, lookbackBars) {
   for (const signal of signals) {
     const index = indexByTime.get(Number(signal.time));
     if (!Number.isInteger(index) || index < threshold) continue;
-    const side = String(signal.side || "");
-    if (!["eB", "B", "eS", "S"].includes(side)) continue;
     fresh.push({
       ...signal,
       ageBars: bars.length - 1 - index
@@ -57,17 +52,23 @@ function summarizeMatch(snapshot, signal) {
     price: Number(last.close),
     changePct: pctChange(bars),
     side: signal.side,
+    direction: signal.direction,
+    stage: signal.stage,
+    kind: signal.kind,
     reason: signal.reason,
     signalTime: signal.time,
     signalPrice: signal.price,
-    strength: signal.strength,
+    triggerLevel: signal.triggerLevel,
+    invalidationLevel: signal.invalidationLevel,
+    evidence: signal.evidence,
     ageBars: signal.ageBars,
     pulse: snapshot.pulse,
     risk: snapshot.risk,
     backtest: {
       trades: snapshot.backtest?.trades ?? 0,
       winRate: snapshot.backtest?.winRate ?? null,
-      expectancy: snapshot.backtest?.expectancy ?? null
+      totalReturn: snapshot.backtest?.totalReturn ?? null,
+      maxDrawdown: snapshot.backtest?.maxDrawdown ?? null
     }
   };
 }
@@ -91,60 +92,83 @@ async function runPool(items, concurrency, worker) {
   return out;
 }
 
-export async function scanRadar(query) {
-  const tf = String(query.tf || "15m").trim();
-  const lookbackBars = Math.max(1, Math.min(20, Number(query.lookback || 4)));
-  const limit = Math.max(80, Math.min(1200, Number(query.limit || defaultLimit(tf))));
+export async function scanRadar(query = {}) {
+  const tf = "1d";
+  const algorithm = query.algorithm ? normalizeAlgorithm(query.algorithm) : DEFAULT_ALGORITHM;
+  const lookbackBars = Math.max(1, Math.min(60, Number(query.lookback || 15)));
+  const limit = Math.max(100, Math.min(1200, Number(query.limit || 900)));
   const max = Math.max(5, Math.min(80, Number(query.max || 36)));
-  // Default universe comes from the Notion watchlist; an explicit `symbols`
-  // query param still overrides it via parseSymbolList.
-  const fallbackUniverse = (await fetchWatchlistSymbols()).symbols;
-  const symbols = parseSymbolList(query.symbols, fallbackUniverse).slice(0, max);
-  const key = JSON.stringify({ symbols, tf, lookbackBars, limit });
+
+  const symbols = parseSymbolList(query.symbols, NASDAQ_100_TECH_UNIVERSE).slice(0, max);
+  const key = JSON.stringify({ symbols, tf, algorithm, lookbackBars, limit });
   const now = Date.now();
   const cached = radarCache.get(key);
 
-  if (cached && now - cached.createdAt < radarTtl(tf)) {
+  if (cached && now - cached.createdAt < radarTtl()) {
     return { ...cached.result, cached: true };
   }
 
   const startedAt = Date.now();
-  const bullish = [];
-  const bearish = [];
+  const bottomConfirmed = [];
+  const topConfirmed = [];
+  const candidates = [];
   const errors = [];
 
   await runPool(symbols, 4, async (symbol) => {
     try {
-      const snapshot = await getMarketSnapshot({ symbol, tf, limit });
+      const snapshot = await getMarketSnapshot({ symbol, tf, algorithm, limit });
       const fresh = findFreshSignals(snapshot, lookbackBars);
-      const bull = fresh.find((signal) => signal.side === "eB" || signal.side === "B");
-      const bear = fresh.find((signal) => signal.side === "eS" || signal.side === "S");
-      if (bull) bullish.push(summarizeMatch(snapshot, bull));
-      if (bear) bearish.push(summarizeMatch(snapshot, bear));
+      if (!fresh.length) return;
+
+      const botConf = fresh.find((s) => s.side === "DV-B" || s.side === "AV-B" || s.side === "B");
+      const topConf = fresh.find((s) => s.side === "DV-S" || s.side === "S");
+      const cand = fresh.find(
+        (s) => s.side === "cDV-B" || s.side === "cAV-B" || s.side === "cDV-S" || s.side === "eB" || s.side === "eS"
+      );
+
+      // Add confirmed signals if found
+      if (botConf) bottomConfirmed.push(summarizeMatch(snapshot, botConf));
+      if (topConf) topConfirmed.push(summarizeMatch(snapshot, topConf));
+
+      // Candidates (eS/eB) must NEVER be suppressed by older confirmed signals!
+      // If cand is fresher than the confirmed signals, or if no conflicting confirmed signal exists
+      if (cand) {
+        const newerThanBot = !botConf || cand.ageBars <= botConf.ageBars;
+        const newerThanTop = !topConf || cand.ageBars <= topConf.ageBars;
+        if (newerThanBot || newerThanTop) {
+          candidates.push(summarizeMatch(snapshot, cand));
+        }
+      }
     } catch (error) {
       errors.push({ symbol, error: error.message || String(error) });
     }
   });
 
   const rank = (a, b) => {
-    const aConfirmed = a.side.length === 1 ? 1 : 0;
-    const bConfirmed = b.side.length === 1 ? 1 : 0;
-    if (aConfirmed !== bConfirmed) return bConfirmed - aConfirmed;
-    if (a.ageBars !== b.ageBars) return a.ageBars - b.ageBars;
-    return Number(b.strength || 0) - Number(a.strength || 0);
+    if (a.ageBars !== b.ageBars) return a.ageBars - b.ageBars; // Fresher first
+    return (b.changePct || 0) - (a.changePct || 0);
   };
 
-  bullish.sort(rank);
-  bearish.sort(rank);
+  bottomConfirmed.sort(rank);
+  topConfirmed.sort(rank);
+  candidates.sort(rank);
+
+  // Backward compatibility: bullish and bearish arrays
+  const bullish = [...bottomConfirmed, ...candidates.filter((c) => c.direction === "bullish" || c.side.includes("B"))];
+  const bearish = [...topConfirmed, ...candidates.filter((c) => c.direction === "bearish" || c.side.includes("S"))];
 
   const result = {
     ok: true,
-    tf,
+    tf: "1d",
+    algorithm,
     lookbackBars,
     limit,
     scanned: symbols.length,
     elapsedMs: Date.now() - startedAt,
     generatedAt: new Date().toISOString(),
+    bottomConfirmed,
+    topConfirmed,
+    candidates,
     bullish,
     bearish,
     errors
