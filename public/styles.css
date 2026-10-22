@@ -362,6 +362,7 @@ td { color: var(--text-primary); }
 .status-pill .dot { width: 6px; height: 6px; border-radius: 50%; }
 .status-pill.realtime .dot { background: var(--apple-green); }
 .status-pill.unconfigured .dot { background: var(--apple-orange); }
+.status-pill.fallback .dot { background: var(--apple-blue); }
 .status-pill.error .dot { background: var(--apple-red); }
 
 /* Cell flash highlights */

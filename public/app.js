@@ -146,7 +146,7 @@ createApp({ setup() {
     const groupsBelonged = watchlistMgr.getGroupsForSymbol(sym);
     return {
       symbol: sym,
-      name: q.name || SYMBOL_NAMES[sym] || sym,
+      name: (q.name && q.name !== sym) ? q.name : (SYMBOL_NAMES[sym] || sym),
       regularPrice: regPrice,
       regularChange: regChange,
       extPrice: ext.price,

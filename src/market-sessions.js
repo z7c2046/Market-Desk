@@ -212,7 +212,7 @@ export function buildMultiSessionQuote({
 
   return {
     symbol,
-    name: name || symbol,
+    name: name || null,
     regular: {
       price: regularPrice,
       referenceClose: regularPrevClose,

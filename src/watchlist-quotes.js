@@ -2,7 +2,70 @@
 // Merges multi-session quotes, handles deduplication, throttling (100-250ms batching), and SSE streams.
 
 import { LongbridgeProvider } from './quote-providers/longbridge.js';
-import { getCurrentSession, calcChangePercent, resolveExtReferenceClose, SESSION_TYPES } from './market-sessions.js';
+import { getCurrentSession, calcChangePercent, resolveExtReferenceClose, SESSION_TYPES, buildMultiSessionQuote } from './market-sessions.js';
+
+const yahooCache = new Map(); // symbol -> { quote, expiresAt }
+
+export async function fetchYahooQuote(rawSymbol) {
+  const sym = String(rawSymbol).trim().toUpperCase();
+  const cached = yahooCache.get(sym);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.quote;
+  }
+
+  try {
+    const yahooSymbol = sym.endsWith('.HK')
+      ? sym.replace(/^0+/, '')
+      : sym.replace(/-/g, '.');
+
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=1d&range=1d&includePrePost=true`;
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+      signal: AbortSignal.timeout(6000)
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    const meta = json.chart?.result?.[0]?.meta;
+    if (!meta || meta.regularMarketPrice == null) return null;
+
+    const regularPrice = meta.regularMarketPrice;
+    const prevClose = meta.chartPreviousClose ?? null;
+    const regularTime = meta.regularMarketTime ? new Date(meta.regularMarketTime * 1000).toISOString() : null;
+    const regularVolume = meta.regularMarketVolume ?? null;
+
+    const prePrice = meta.preMarketPrice ?? null;
+    const preTime = meta.preMarketTime ? new Date(meta.preMarketTime * 1000).toISOString() : null;
+
+    const postPrice = meta.postMarketPrice ?? null;
+    const postTime = meta.postMarketTime ? new Date(meta.postMarketTime * 1000).toISOString() : null;
+
+    const quote = buildMultiSessionQuote({
+      symbol: sym,
+      name: meta.shortName || meta.longName || null,
+      regularPrice,
+      regularPrevClose: prevClose,
+      regularVolume,
+      regularTime,
+      todayRthClose: regularPrice,
+      prePrice,
+      preVolume: null,
+      preTime,
+      postPrice,
+      postVolume: null,
+      postTime,
+      provider: 'Yahoo Finance',
+      coverage: '公开延迟',
+      delayStatus: 'delayed',
+      status: 'active',
+      statusReason: '来自公开市场备用源'
+    });
+
+    yahooCache.set(sym, { quote, expiresAt: Date.now() + 30000 });
+    return quote;
+  } catch (err) {
+    return null;
+  }
+}
 
 export class WatchlistQuoteService {
   constructor({ provider = new LongbridgeProvider(), batchIntervalMs = 150 } = {}) {
@@ -23,8 +86,32 @@ export class WatchlistQuoteService {
   }
 
   startHeartbeat() {
-    this.heartbeatTimer = setInterval(() => {
+    this.heartbeatTimer = setInterval(async () => {
       this.broadcast({ type: 'heartbeat', ts: Date.now() });
+
+      // If provider is unconfigured, periodically refresh active symbols for connected clients
+      if (!this.provider.isConfigured() && this.sseClients.size > 0) {
+        const clientSymbols = new Set();
+        for (const c of this.sseClients) {
+          for (const s of c.symbols || []) clientSymbols.add(s);
+        }
+        for (const sym of clientSymbols) {
+          const updated = await fetchYahooQuote(sym);
+          if (updated) {
+            this.quotes.set(sym, updated);
+            const current = getCurrentSession();
+            this.queueUpdate(sym, {
+              symbol: sym,
+              session: current.session,
+              price: updated[current.session]?.price ?? updated.regular?.price,
+              changePercent: updated[current.session]?.changePercent ?? updated.regular?.changePercent,
+              volume: updated.regular?.volume,
+              sourceTime: updated.regular?.sourceTime,
+              updatedAt: new Date().toISOString()
+            });
+          }
+        }
+      }
     }, 15000);
     this.heartbeatTimer.unref?.();
   }
@@ -131,6 +218,25 @@ export class WatchlistQuoteService {
       this.quotes.set(sym, q);
     }
 
+    // Auto-fallback to public Yahoo Finance quotes if provider returned null prices
+    const missingSymbols = symList.filter(s => {
+      const q = this.quotes.get(s);
+      return !q || q.regular?.price == null;
+    });
+
+    if (missingSymbols.length > 0) {
+      const chunkSize = 8;
+      for (let i = 0; i < missingSymbols.length; i += chunkSize) {
+        const chunk = missingSymbols.slice(i, i + chunkSize);
+        await Promise.all(chunk.map(async sym => {
+          const fallback = await fetchYahooQuote(sym);
+          if (fallback) {
+            this.quotes.set(sym, fallback);
+          }
+        }));
+      }
+    }
+
     // Auto-subscribe to pushes for requested symbols
     this.provider.subscribe?.(symList);
 
@@ -139,14 +245,15 @@ export class WatchlistQuoteService {
       result[s] = this.quotes.get(s) || fresh[s];
     }
 
+    const isConfigured = this.provider.isConfigured();
     return {
       quotes: result,
       session: sessionInfo,
       provider: {
-        name: 'Longbridge',
-        status: this.provider.status,
-        reason: this.provider.statusReason,
-        isConfigured: this.provider.isConfigured()
+        name: isConfigured ? 'Longbridge' : 'Yahoo Finance (备用源)',
+        status: isConfigured ? this.provider.status : 'active',
+        reason: isConfigured ? this.provider.statusReason : '已启用公开市场备用源',
+        isConfigured
       }
     };
   }
