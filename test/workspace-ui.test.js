@@ -42,14 +42,14 @@ test('Vue page mounts, navigates all modules, wires chart data and handles watch
   const ui = await mount(t, async url => ({ ok: true, json: async () => fixture(url) }));
   assert.ok(ui.w.document.querySelector('#heatmap-chart')); assert.equal(ui.configs.get('heatmap-chart').series[0].data[0].name, 'NVDA');
   await ui.click('个股行情'); assert.equal(ui.configs.get('price-chart').series[0].data[0][1], 100);
-  const search = ui.w.document.querySelector('[aria-label="搜索美股代码"]'); search.value = 'GOOGL'; search.dispatchEvent(new ui.w.Event('input', { bubbles: true })); search.form.dispatchEvent(new ui.w.Event('submit', { bubbles: true, cancelable: true })); await tick();
-  assert.match(ui.w.document.querySelector('main h2').textContent, /GOOGL/); await ui.click('+ 加入自选'); assert.ok(JSON.parse(ui.w.localStorage.getItem('market-desk-watchlist')).includes('GOOGL'));
+  const search = ui.w.document.querySelector('[aria-label="搜索美股代码"]'); search.value = 'BABA'; search.dispatchEvent(new ui.w.Event('input', { bubbles: true })); search.form.dispatchEvent(new ui.w.Event('submit', { bubbles: true, cancelable: true })); await tick();
+  assert.match(ui.w.document.querySelector('main h2').textContent, /BABA/); await ui.click('+ 加入自选'); assert.ok(JSON.parse(ui.w.localStorage.getItem('market-desk-watchlist')).includes('BABA'));
   const lightAxis = ui.configs.get('price-chart').yAxis[0].axisLine.lineStyle.color;
   await ui.click('Dark');
   assert.ok(ui.w.document.documentElement.classList.contains('dark'));
   assert.equal(JSON.parse(ui.w.localStorage.getItem('market-desk-theme')), 'dark');
   assert.notEqual(ui.configs.get('price-chart').yAxis[0].axisLine.lineStyle.color, lightAxis);
-  assert.match(ui.w.document.querySelector('main h2').textContent, /GOOGL/);
+  assert.match(ui.w.document.querySelector('main h2').textContent, /BABA/);
   await ui.click('Light');
   assert.equal(ui.w.document.documentElement.classList.contains('dark'), false);
   await ui.click('自选看板');

@@ -60,7 +60,17 @@ export const SYMBOL_NAMES = {
   MUU: '2倍做多MU',
   '07709.HK': 'XL二南方海力士',
   SNXX: '2倍做多闪迪',
-  SOXL: '三倍做多半导体'
+  SOXL: '三倍做多半导体',
+
+  // 万亿市值俱乐部 (1T+ Market Cap)
+  AAPL: '苹果',
+  MSFT: '微软',
+  GOOGL: '谷歌',
+  AMZN: '亚马逊',
+  META: 'Meta',
+  TSLA: '特斯拉',
+  'BRK-B': '伯克希尔',
+  LLY: '礼来'
 };
 
 export function sortWatchlistRows(rows, sortField = 'extChange', sortDirection = 'desc') {
@@ -190,10 +200,17 @@ export const PRESET_GROUPS = [
     symbolIds: ['SQQQ', 'YANG', 'TQQQ', 'MUU', '07709.HK', 'SNXX', 'SOXL']
   },
   {
+    id: 'trillion',
+    name: '万亿市值',
+    collapsed: false,
+    order: 5,
+    symbolIds: ['NVDA', 'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSM', 'AVGO', 'TSLA', 'BRK-B', 'LLY']
+  },
+  {
     id: 'default',
     name: '未分组',
     collapsed: false,
-    order: 5,
+    order: 6,
     symbolIds: []
   }
 ];
@@ -286,12 +303,22 @@ export class WatchlistManager {
                 ...etfGroup,
                 symbolIds: [...etfGroup.symbolIds]
               });
-              const sanitized = this.sanitizeData(parsed);
-              this.save(sanitized);
-              return sanitized;
             }
           }
-          return this.sanitizeData(parsed);
+          // If existing groups lack the 'trillion' group, inject it automatically
+          if (!parsed.groups.some(g => g.id === 'trillion')) {
+            const trillionGroup = PRESET_GROUPS.find(g => g.id === 'trillion');
+            if (trillionGroup) {
+              const insertIdx = Math.max(0, parsed.groups.length - 1);
+              parsed.groups.splice(insertIdx, 0, {
+                ...trillionGroup,
+                symbolIds: [...trillionGroup.symbolIds]
+              });
+            }
+          }
+          const sanitized = this.sanitizeData(parsed);
+          this.save(sanitized);
+          return sanitized;
         }
       }
     } catch (err) {
