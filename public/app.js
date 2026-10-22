@@ -4,7 +4,8 @@ import {
   sortWatchlistRows,
   getSelectedExtQuote,
   MAX_UNIQUE_SYMBOLS,
-  validSymbol
+  validSymbol,
+  SYMBOL_NAMES
 } from './watchlist-model.js';
 
 const { createApp, ref, computed, reactive, watch, nextTick, onMounted, onUnmounted } = window.Vue;
@@ -145,7 +146,7 @@ createApp({ setup() {
     const groupsBelonged = watchlistMgr.getGroupsForSymbol(sym);
     return {
       symbol: sym,
-      name: q.name || sym,
+      name: q.name || SYMBOL_NAMES[sym] || sym,
       regularPrice: regPrice,
       regularChange: regChange,
       extPrice: ext.price,

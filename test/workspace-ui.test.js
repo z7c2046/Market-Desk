@@ -22,7 +22,7 @@ async function mount(t, fetchImpl) {
   w.eval(await fs.readFile(new URL('../node_modules/vue/dist/vue.global.prod.js', import.meta.url), 'utf8'));
   const appSrc = (await fs.readFile(new URL('../public/app.js', import.meta.url), 'utf8'))
     .replace("import { parseFlows } from './flows.js';", 'const parseFlows = window.parseFlows;')
-    .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/watchlist-model\.js';/, 'const { WatchlistManager, sortWatchlistRows, getSelectedExtQuote, MAX_UNIQUE_SYMBOLS, validSymbol } = window;');
+    .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/watchlist-model\.js';/, 'const { WatchlistManager, sortWatchlistRows, getSelectedExtQuote, MAX_UNIQUE_SYMBOLS, validSymbol, SYMBOL_NAMES } = window;');
   w.eval(appSrc);
   await tick();
   const button = text => [...w.document.querySelectorAll('button')].find(el => el.textContent.trim() === text || el.textContent.trim().endsWith(text));
@@ -42,14 +42,14 @@ test('Vue page mounts, navigates all modules, wires chart data and handles watch
   const ui = await mount(t, async url => ({ ok: true, json: async () => fixture(url) }));
   assert.ok(ui.w.document.querySelector('#heatmap-chart')); assert.equal(ui.configs.get('heatmap-chart').series[0].data[0].name, 'NVDA');
   await ui.click('个股行情'); assert.equal(ui.configs.get('price-chart').series[0].data[0][1], 100);
-  const search = ui.w.document.querySelector('[aria-label="搜索美股代码"]'); search.value = 'AMD'; search.dispatchEvent(new ui.w.Event('input', { bubbles: true })); search.form.dispatchEvent(new ui.w.Event('submit', { bubbles: true, cancelable: true })); await tick();
-  assert.match(ui.w.document.querySelector('main h2').textContent, /AMD/); await ui.click('+ 加入自选'); assert.ok(JSON.parse(ui.w.localStorage.getItem('market-desk-watchlist')).includes('AMD'));
+  const search = ui.w.document.querySelector('[aria-label="搜索美股代码"]'); search.value = 'GOOGL'; search.dispatchEvent(new ui.w.Event('input', { bubbles: true })); search.form.dispatchEvent(new ui.w.Event('submit', { bubbles: true, cancelable: true })); await tick();
+  assert.match(ui.w.document.querySelector('main h2').textContent, /GOOGL/); await ui.click('+ 加入自选'); assert.ok(JSON.parse(ui.w.localStorage.getItem('market-desk-watchlist')).includes('GOOGL'));
   const lightAxis = ui.configs.get('price-chart').yAxis[0].axisLine.lineStyle.color;
   await ui.click('Dark');
   assert.ok(ui.w.document.documentElement.classList.contains('dark'));
   assert.equal(JSON.parse(ui.w.localStorage.getItem('market-desk-theme')), 'dark');
   assert.notEqual(ui.configs.get('price-chart').yAxis[0].axisLine.lineStyle.color, lightAxis);
-  assert.match(ui.w.document.querySelector('main h2').textContent, /AMD/);
+  assert.match(ui.w.document.querySelector('main h2').textContent, /GOOGL/);
   await ui.click('Light');
   assert.equal(ui.w.document.documentElement.classList.contains('dark'), false);
   await ui.click('自选看板');

@@ -26,30 +26,30 @@ test('WatchlistManager: migrations from v1 array and creates preset groups', () 
   assert.ok(storage.getItem(STORAGE_KEY_V2));
 });
 
-test('WatchlistManager: 30 unique symbols limit enforced, multiple groups permitted', () => {
+test('WatchlistManager: unique symbols limit enforced, multiple groups permitted', () => {
   const storage = new MockStorage();
   const manager = new WatchlistManager({ storage });
-  // Clear initial 5 symbols for exact limit testing
-  manager.getGroup('default').symbolIds = [];
+  // Clear initial symbols for exact limit testing
+  for (const g of manager.getGroups()) g.symbolIds = [];
   manager.save();
 
-  // Add 30 symbols to default group
-  for (let i = 1; i <= 30; i++) {
+  // Add MAX_UNIQUE_SYMBOLS symbols to default group
+  for (let i = 1; i <= MAX_UNIQUE_SYMBOLS; i++) {
     const res = manager.addSymbol(`SYM${i}`, 'default');
     assert.ok(res.ok, `Should add SYM${i}`);
   }
-  assert.equal(manager.getAllUniqueSymbols().length, 30);
+  assert.equal(manager.getAllUniqueSymbols().length, MAX_UNIQUE_SYMBOLS);
 
-  // Adding 31st unique symbol fails
-  const res31 = manager.addSymbol('SYM31', 'default');
-  assert.equal(res31.ok, false);
-  assert.match(res31.error, /已达上限/);
+  // Adding one more unique symbol fails
+  const resOver = manager.addSymbol(`SYM${MAX_UNIQUE_SYMBOLS + 1}`, 'default');
+  assert.equal(resOver.ok, false);
+  assert.match(resOver.error, /已达上限/);
 
-  // But adding an ALREADY EXISTING symbol to another group (e.g. 'tech') succeeds!
-  const resTech = manager.addSymbol('SYM1', 'tech');
-  assert.equal(resTech.ok, true);
-  assert.equal(manager.getAllUniqueSymbols().length, 30);
-  assert.ok(manager.getGroup('tech').symbolIds.includes('SYM1'));
+  // But adding an ALREADY EXISTING symbol to another group (e.g. 'chips') succeeds!
+  const resChips = manager.addSymbol('SYM1', 'chips');
+  assert.equal(resChips.ok, true);
+  assert.equal(manager.getAllUniqueSymbols().length, MAX_UNIQUE_SYMBOLS);
+  assert.ok(manager.getGroup('chips').symbolIds.includes('SYM1'));
 });
 
 test('WatchlistManager: deleteGroup moves orphaned symbols to default with one-step undo', () => {

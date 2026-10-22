@@ -3,7 +3,56 @@
 
 export const STORAGE_KEY_V1 = 'market-desk-watchlist';
 export const STORAGE_KEY_V2 = 'market-desk-watchlist-v2';
-export const MAX_UNIQUE_SYMBOLS = 30;
+export const MAX_UNIQUE_SYMBOLS = 100;
+
+export const SYMBOL_NAMES = {
+  // 存储
+  NTAP: '美国网存',
+  MU: '美光科技',
+  SKHY: 'SK海力士',
+  WDC: '西部数据',
+  P: 'Everpure',
+  SNDK: '闪迪',
+  KXIAY: 'KIOXIA',
+  STX: '希捷科技',
+
+  // 芯片
+  NVDA: '英伟达',
+  AVGO: '博通',
+  TSM: '台积电',
+  ASML: '阿斯麦',
+  SOXX: '半导体 ETF',
+  INTC: '英特尔',
+  AMAT: '应用材料',
+  CBRS: 'Cerebras Systems',
+  AMD: '美国超微公司',
+  LRCX: '泛林集团',
+
+  // 光
+  POET: 'POET Technologies',
+  GLW: '康宁',
+  MRVL: '迈威尔科技',
+  CIEN: 'Ciena',
+  CRDO: 'Credo Technology',
+  LITE: 'Lumentum',
+  FN: 'Fabrinet',
+  AAOI: 'AOI',
+  COHR: 'Coherent',
+
+  // 数据中心
+  DELL: '戴尔科技',
+  NBIS: 'NEBIUS',
+  ANET: 'Arista Networks',
+  PENG: 'Penguin Solutions',
+  VRT: 'Vertiv Holdings',
+  IREN: 'IREN Ltd',
+  CRWV: 'CoreWeave',
+  APLD: 'Applied Digital',
+  MOD: '摩丁制造',
+  ALAB: 'Astera Labs',
+  NVT: 'nVent Electric',
+  NOK: '诺基亚'
+};
 
 export function sortWatchlistRows(rows, sortField = 'extChange', sortDirection = 'desc') {
   const dir = sortDirection === 'asc' ? 1 : -1;
@@ -96,24 +145,74 @@ export function getSelectedExtQuote(quote, extMode = 'auto', currentSession = nu
 }
 
 export const PRESET_GROUPS = [
-  { id: 'default', name: '未分组', collapsed: false, order: 0 },
-  { id: 'tech', name: '科技', collapsed: false, order: 1 },
-  { id: 'defensive', name: '防御', collapsed: false, order: 2 },
-  { id: 'pharma', name: '医药', collapsed: false, order: 3 },
-  { id: 'etf', name: '杠杆 ETF', collapsed: false, order: 4 }
+  {
+    id: 'storage',
+    name: '存储',
+    collapsed: false,
+    order: 0,
+    symbolIds: ['NTAP', 'MU', 'SKHY', 'WDC', 'P', 'SNDK', 'KXIAY', 'STX']
+  },
+  {
+    id: 'chips',
+    name: '芯片',
+    collapsed: false,
+    order: 1,
+    symbolIds: ['NVDA', 'AVGO', 'TSM', 'ASML', 'SOXX', 'INTC', 'AMAT', 'CBRS', 'AMD', 'LRCX']
+  },
+  {
+    id: 'optics',
+    name: '光',
+    collapsed: false,
+    order: 2,
+    symbolIds: ['POET', 'GLW', 'MRVL', 'CIEN', 'CRDO', 'LITE', 'FN', 'AAOI', 'COHR']
+  },
+  {
+    id: 'datacenter',
+    name: '数据中心',
+    collapsed: false,
+    order: 3,
+    symbolIds: ['DELL', 'NBIS', 'ANET', 'PENG', 'VRT', 'IREN', 'CRWV', 'APLD', 'MOD', 'ALAB', 'NVT', 'NOK']
+  },
+  {
+    id: 'default',
+    name: '未分组',
+    collapsed: false,
+    order: 4,
+    symbolIds: []
+  }
 ];
 
 export function validSymbol(s) {
   return typeof s === 'string' && /^\^?[A-Z][A-Z0-9.-]{0,10}$/.test(s.trim().toUpperCase());
 }
 
-export function createInitialWatchlistData(existingSymbols = ['SPY', 'QQQ', 'NVDA', 'AAPL', 'MSFT']) {
-  const cleanSymbols = [...new Set(existingSymbols.filter(validSymbol).map(s => s.trim().toUpperCase()))].slice(0, MAX_UNIQUE_SYMBOLS);
+export function createInitialWatchlistData(existingSymbols = null) {
+  if (Array.isArray(existingSymbols) && existingSymbols.length > 0) {
+    const cleanSymbols = [...new Set(existingSymbols.filter(validSymbol).map(s => s.trim().toUpperCase()))].slice(0, MAX_UNIQUE_SYMBOLS);
+    return {
+      version: 2,
+      groups: PRESET_GROUPS.map(g => ({
+        ...g,
+        symbolIds: g.id === 'default' ? cleanSymbols : []
+      })),
+      preferences: {
+        currentGroup: 'all', // 'all' or groupId
+        viewMode: 'grouped', // 'grouped' | 'all'
+        sortField: 'extChange', // 'symbol' | 'regularPrice' | 'regularChange' | 'extPrice' | 'extChange' | 'updatedAt'
+        sortDirection: 'desc', // 'asc' | 'desc'
+        extMode: 'auto', // 'auto' | 'pre' | 'post' | 'overnight'
+        autoResort: true,
+        freezeResort: false,
+        compactPanelOpen: true
+      }
+    };
+  }
+
   return {
     version: 2,
     groups: PRESET_GROUPS.map(g => ({
       ...g,
-      symbolIds: g.id === 'default' ? cleanSymbols : []
+      symbolIds: [...g.symbolIds]
     })),
     preferences: {
       currentGroup: 'all', // 'all' or groupId
@@ -155,6 +254,13 @@ export class WatchlistManager {
       if (rawV2) {
         const parsed = JSON.parse(rawV2);
         if (parsed && parsed.version === 2 && Array.isArray(parsed.groups)) {
+          // If stored groups still contain old placeholder groups (tech, defensive, pharma, etf), upgrade to new observation groups
+          const hasOldPlaceholders = parsed.groups.some(g => ['tech', 'defensive', 'pharma', 'etf'].includes(g.id));
+          if (hasOldPlaceholders) {
+            const upgraded = createInitialWatchlistData();
+            this.save(upgraded);
+            return upgraded;
+          }
           return this.sanitizeData(parsed);
         }
       }
