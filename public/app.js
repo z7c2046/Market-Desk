@@ -672,11 +672,13 @@ createApp({ setup() {
     const ma5 = calcMA(d.bars, 5);
     const ma20 = calcMA(d.bars, 20);
     const ma60 = calcMA(d.bars, 60);
+    const ma120 = calcMA(d.bars, 120);
+    const ma250 = calcMA(d.bars, 250);
 
     makeChart('price-chart', {
       tooltip: { ...tooltip, trigger: 'axis' },
       axisPointer: { link: [{ xAxisIndex: 'all' }] },
-      legend: { data: ['价格 OHLC', 'MA5', 'MA20', 'MA60', '成交股数'], textStyle: { color: muted }, top: 0, right: 30 },
+      legend: { data: ['价格 OHLC', 'MA5', 'MA20', 'MA60', 'MA120', 'MA250', '成交股数'], textStyle: { color: muted }, top: 0, right: 20 },
       grid: [{ left: 70, right: 25, top: 32, height: '62%' }, { left: 70, right: 25, top: '76%', height: '13%' }],
       xAxis: [0, 1].map(i => ({ ...axis, type: 'category', data: labels, gridIndex: i, axisLabel: { show: i === 1, color: muted }, boundaryGap: true })),
       yAxis: [
@@ -723,9 +725,11 @@ createApp({ setup() {
       ],
       series: [
         { name: '价格 OHLC', type: 'candlestick', data: d.bars.map(b => [b.open, b.close, b.low, b.high]), itemStyle: { color: green, color0: red, borderColor: green, borderColor0: red } },
-        { name: 'MA5', type: 'line', data: ma5, smooth: true, showSymbol: false, lineStyle: { width: 1.5, color: '#f37d42' } },
-        { name: 'MA20', type: 'line', data: ma20, smooth: true, showSymbol: false, lineStyle: { width: 1.5, color: '#2976ff' } },
-        { name: 'MA60', type: 'line', data: ma60, smooth: true, showSymbol: false, lineStyle: { width: 1.5, color: '#9b51e0' } },
+        { name: 'MA5', type: 'line', data: ma5, smooth: true, showSymbol: false, lineStyle: { width: 1.5, color: '#f97316' } },
+        { name: 'MA20', type: 'line', data: ma20, smooth: true, showSymbol: false, lineStyle: { width: 1.5, color: '#3b82f6' } },
+        { name: 'MA60', type: 'line', data: ma60, smooth: true, showSymbol: false, lineStyle: { width: 1.5, color: '#a855f7' } },
+        { name: 'MA120', type: 'line', data: ma120, smooth: true, showSymbol: false, lineStyle: { width: 1.5, color: '#06b6d4' } },
+        { name: 'MA250', type: 'line', data: ma250, smooth: true, showSymbol: false, lineStyle: { width: 1.5, color: '#eab308' } },
         { name: '成交股数', type: 'bar', xAxisIndex: 1, yAxisIndex: 1, data: d.bars.map(b => ({ value: b.volume, itemStyle: { color: b.close >= b.open ? green : red } })) }
       ]
     });

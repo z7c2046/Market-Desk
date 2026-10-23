@@ -23,7 +23,7 @@ export function createMarketWorkspace({ fetchImpl = fetch, now = () => new Date(
   }
   async function chart(params) {
     const symbol = ticker(params.symbol); const range = params.range || '3mo';
-    const ranges = { '1d': '5m', '1mo': '1d', '3mo': '1d', '6mo': '1d', '1y': '1d' };
+    const ranges = { '1d': '5m', '1mo': '1d', '3mo': '1d', '6mo': '1d', '1y': '1d', '2y': '1d' };
     if (!ranges[range]) throw Object.assign(new Error('不支持该图表周期。'), { status: 400 });
     const data = await quote(symbol, range, ranges[range]);
     return { ...data, range };
