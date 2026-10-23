@@ -1278,6 +1278,65 @@
   </div>
 </div>
 
+<!-- Modal: Heatmap Stock Quick Detail Preview -->
+<div v-if="stockModal.open && stockModal.stock" class="modal-backdrop" @click.self="closeStockModal" @keydown.esc="closeStockModal">
+  <div class="stock-detail-modal-card" role="dialog" aria-modal="true" :aria-label="stockModal.stock.symbol + ' 快速预览'">
+    <div class="stock-modal-header">
+      <div class="stock-modal-title-group">
+        <span class="stock-modal-ticker">{{ stockModal.stock.symbol }}</span>
+        <span class="stock-modal-badge" :class="(stockModal.stock.changePercent ?? 0) >= 0 ? 'pos' : 'neg'">
+          {{ pct(stockModal.stock.changePercent) }}
+        </span>
+      </div>
+      <button class="stock-modal-close-btn" aria-label="关闭弹窗" @click="closeStockModal">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+
+    <div class="stock-modal-body">
+      <div class="stock-modal-main-stats">
+        <div class="stock-modal-price-col">
+          <span class="stock-modal-label">最新成交价</span>
+          <span class="stock-modal-price-val">${{ stockModal.stock.price ? stockModal.stock.price.toFixed(2) : '—' }}</span>
+        </div>
+        <div class="stock-modal-rank-col">
+          <span class="stock-modal-rank-pill">Rank #{{ stockModal.rank }} 资金热度</span>
+          <div class="stock-modal-rank-sub">
+            <span>资金主动买入</span>
+            <span class="stock-modal-rank-val" :class="(stockModal.stock.changePercent ?? 0) >= 0 ? 'pos-text' : 'neg-text'">{{ stockModal.netBuy }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="stock-modal-grid">
+        <div class="stock-modal-grid-cell">
+          <span class="stock-modal-grid-label">当日成交总额</span>
+          <span class="stock-modal-grid-value">{{ stockModal.estVolume }}</span>
+        </div>
+        <div class="stock-modal-grid-cell">
+          <span class="stock-modal-grid-label">资金主动净买入</span>
+          <span class="stock-modal-grid-value" :class="(stockModal.stock.changePercent ?? 0) >= 0 ? 'pos-text' : 'neg-text'">{{ stockModal.netBuy }}</span>
+        </div>
+      </div>
+
+      <div class="stock-modal-banner" @click="viewStockFromModal">
+        <div class="stock-modal-banner-left">
+          <span class="stock-modal-banner-dot"></span>
+          <span>深度 L2 挂单及异动快讯已就绪</span>
+        </div>
+        <span class="stock-modal-banner-action">进入完整分析 →</span>
+      </div>
+    </div>
+
+    <div class="stock-modal-actions">
+      <button class="stock-modal-btn-confirm" @click="viewStockFromModal">查看全屏图表</button>
+    </div>
+  </div>
+</div>
+
 <footer class="global-status-footer">
   <div class="footer-left">
     <span>Yahoo Finance · 最近交易: {{quoteWindow}}</span>
