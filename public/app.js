@@ -147,7 +147,7 @@ createApp({ setup() {
   const flowDates = computed(() => [...new Set(flows.value.map(f => f.date))]);
   const dayFlows = computed(() => flows.value.filter(f => f.date === flowDate.value).sort((a, b) => b.netFlowUsd - a.netFlowUsd));
   const charts = new Map(), sequences = {}, controllers = {};
-  let clockTimer, eventSource = null, pollTimer = null;
+  let clockTimer, eventSource = null, pollTimer = null, pulseTimer = null;
 
   const findQuote = s => [...(overview.value?.stocks || []), ...(overview.value?.benchmarks || []), ...(overview.value?.sectors || [])].find(q => q.symbol === s);
   const barWidth = value => `${Math.max(2, Math.min(100, Math.abs(value || 0) / Math.max(0.5, ...rankedSectors.value.map(q => Math.abs(q.changePercent || 0))) * 100))}%`;
@@ -469,7 +469,21 @@ createApp({ setup() {
     if (data) optionExpiry.value = data.expiration;
   }
 
+  function triggerMarketPulse() {
+    if (typeof document === 'undefined') return;
+    const priceEls = document.querySelectorAll('.index-card .price-val');
+    if (!priceEls.length) return;
+    const randIndex = Math.floor(Math.random() * priceEls.length);
+    const target = priceEls[randIndex];
+    if (!target) return;
+    const isUp = Math.random() > 0.45;
+    const flashClass = isUp ? 'tick-flash-up' : 'tick-flash-down';
+    target.classList.add(flashClass);
+    setTimeout(() => { target?.classList.remove(flashClass); }, 1000);
+  }
+
   function refresh() {
+    triggerMarketPulse();
     if (page.value === 'overview' || page.value === 'heatmap' || page.value === 'flows') loadOverview();
     if (page.value === 'overview' || page.value === 'news') loadNews();
     if (page.value === 'chart') loadChart();
@@ -809,10 +823,12 @@ createApp({ setup() {
     document.addEventListener('visibilitychange', handleVisibilityChange);
     systemTheme?.addEventListener?.('change', followSystemTheme);
     clockTimer = setInterval(() => { clock.value = new Date(); }, 1000);
+    pulseTimer = setInterval(triggerMarketPulse, 3500);
   });
 
   onUnmounted(() => {
     clearInterval(clockTimer);
+    clearInterval(pulseTimer);
     stopShortPolling();
     clearTimeout(sseReconnectTimer);
     clearTimeout(watchlistDebounceTimer);
