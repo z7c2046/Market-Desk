@@ -504,6 +504,14 @@ createApp({ setup() {
   }
   function clearFlows() { flows.value = []; persist('market-desk-flows', ''); }
 
+  function resetPriceChartZoom() {
+    const entry = charts.get('price-chart');
+    if (!entry || !entry.chart) return;
+    entry.chart.dispatchAction({ type: 'dataZoom', dataZoomIndex: 0, start: 0, end: 100 });
+    entry.chart.dispatchAction({ type: 'dataZoom', dataZoomIndex: 1, start: 10, end: 90 });
+    entry.chart.dispatchAction({ type: 'dataZoom', dataZoomIndex: 2, start: 0, end: 100 });
+  }
+
   function makeChart(id, config, onClick) {
     const el = document.getElementById(id); if (!el || !el.clientWidth) return;
     let entry = charts.get(id);
@@ -511,6 +519,12 @@ createApp({ setup() {
     if (!entry) {
       const instance = echarts.init(el, null, { renderer: 'canvas' });
       const observer = new ResizeObserver(() => instance.resize()); observer.observe(el);
+      if (id === 'price-chart') {
+        el.addEventListener('wheel', e => {
+          if (!e.ctrlKey) e.preventDefault();
+        }, { passive: false });
+        el.addEventListener('dblclick', () => resetPriceChartZoom());
+      }
       entry = { chart: instance, el, observer }; charts.set(id, entry);
     }
     entry.chart.setOption({ animation: false, textStyle: { fontFamily: 'Segoe UI, Microsoft YaHei, sans-serif', color: muted }, ...config }, true);
@@ -651,8 +665,48 @@ createApp({ setup() {
       legend: { data: ['价格 OHLC', 'MA5', 'MA20', 'MA60', '成交股数'], textStyle: { color: muted }, top: 0, right: 30 },
       grid: [{ left: 70, right: 25, top: 32, height: '62%' }, { left: 70, right: 25, top: '76%', height: '13%' }],
       xAxis: [0, 1].map(i => ({ ...axis, type: 'category', data: labels, gridIndex: i, axisLabel: { show: i === 1, color: muted }, boundaryGap: true })),
-      yAxis: [{ ...axis, scale: true, name: d.currency }, { ...axis, gridIndex: 1, name: '成交量', axisLabel: { color: muted, formatter: compact } }],
-      dataZoom: [{ type: 'inside', xAxisIndex: [0, 1] }, { type: 'slider', xAxisIndex: [0, 1], bottom: 0, height: 18, borderColor: gridColor, textStyle: { color: muted } }],
+      yAxis: [
+        {
+          ...axis,
+          scale: true,
+          name: d.currency,
+          min: val => Math.max(0, Number((val.min - (val.max - val.min) * 0.15).toFixed(2))),
+          max: val => Number((val.max + (val.max - val.min) * 0.15).toFixed(2))
+        },
+        { ...axis, gridIndex: 1, name: '成交量', axisLabel: { color: muted, formatter: compact } }
+      ],
+      dataZoom: [
+        {
+          type: 'inside',
+          id: 'kline-inside-x',
+          xAxisIndex: [0, 1],
+          zoomOnMouseWheel: true,
+          moveOnMouseMove: true,
+          moveOnMouseWheel: false,
+          preventDefaultMouseMove: true
+        },
+        {
+          type: 'inside',
+          id: 'kline-inside-y',
+          yAxisIndex: [0],
+          filterMode: 'none',
+          start: 10,
+          end: 90,
+          zoomOnMouseWheel: true,
+          moveOnMouseMove: true,
+          moveOnMouseWheel: false,
+          preventDefaultMouseMove: true
+        },
+        {
+          type: 'slider',
+          id: 'kline-slider-x',
+          xAxisIndex: [0, 1],
+          bottom: 0,
+          height: 18,
+          borderColor: gridColor,
+          textStyle: { color: muted }
+        }
+      ],
       series: [
         { name: '价格 OHLC', type: 'candlestick', data: d.bars.map(b => [b.open, b.close, b.low, b.high]), itemStyle: { color: green, color0: red, borderColor: green, borderColor0: red } },
         { name: 'MA5', type: 'line', data: ma5, smooth: true, showSymbol: false, lineStyle: { width: 1.5, color: '#f37d42' } },
@@ -790,6 +844,6 @@ createApp({ setup() {
     isDeleteMode, pendingDeleteSymbol, toggleDeleteMode, handleChipClick,
     breadcrumbLabel, upSectorsCount, downSectorsCount, upSectorsRatio, isStockGainer, getSparkline,
     stockSectors, rankedSectors, quoteWindow, breadth, findQuote, barWidth, walls, num, compact, pct, tone, time,
-    selectSymbol, search, refresh, loadOverview, loadChart, loadNews, loadOptions, fetchWatchlistQuotes, importNotion, importFlows, clearFlows
+    selectSymbol, search, refresh, loadOverview, loadChart, loadNews, loadOptions, resetPriceChartZoom, fetchWatchlistQuotes, importNotion, importFlows, clearFlows
   };
 } }).mount('#app');

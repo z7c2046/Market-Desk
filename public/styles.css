@@ -505,6 +505,22 @@ main { min-width: 0; }
 .chips button { padding: 5px 9px; font-size: 11px; background: var(--card-bg); color: var(--text-secondary); border-radius: 6px; }
 .chips button.selected { color: #fff; border-color: var(--apple-blue); background: var(--apple-blue); }
 .heatmap-chart { height: 420px; margin: 0 18px 12px; }
+.price-chart {
+  height: 520px;
+  margin: 0 18px 12px;
+  position: relative;
+  touch-action: none;
+  user-select: none;
+  cursor: grab;
+}
+.price-chart:active {
+  cursor: grabbing;
+}
+.wide-chart {
+  height: 480px;
+  margin: 0 18px 12px;
+  position: relative;
+}
 .heatmap-footer {
   padding: 12px 20px;
   display: flex;
