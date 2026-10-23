@@ -30,6 +30,8 @@ export function createServer({ workspace = createMarketWorkspace(), watchlist = 
       const routes = {
         '/api/health': () => ({ ok: true, product: 'Market Desk', version: '1.0.0' }),
         '/api/market/overview': () => workspace.overview(), '/api/market/chart': () => workspace.chart(params),
+        '/api/macro': () => (workspace.macro ? workspace.macro() : { items: [] }),
+        '/api/crypto': () => (workspace.crypto ? workspace.crypto() : { items: [] }),
         '/api/news': () => workspace.news(params), '/api/options': () => workspace.options(params),
         '/api/watchlist': () => watchlist({ force: params.force === '1' }),
       };

@@ -19,6 +19,65 @@ export const STOCKS = [
   ['CAT', 'Caterpillar', '工业'], ['NEE', 'NextEra Energy', '公用事业'],
 ].map(([symbol, name, sector]) => ({ symbol, name, sector }));
 
+export const MACRO_INDICATORS = [
+  { symbol: '^VIX', displaySymbol: 'VIX', name: '波动率指数', category: 'volatility', icon: '🇺🇸', defaultPrice: 19.22, defaultChange: 1.05 },
+  { symbol: '^TNX', displaySymbol: 'US10Y', name: '10年期美债收益率', category: 'rates', icon: '🇺🇸', defaultPrice: 4.990, defaultChange: 0.58 },
+  { symbol: 'US20Y', displaySymbol: 'US20Y', name: '20年期美债收益率', category: 'rates', icon: '🇺🇸', defaultPrice: 5.360, defaultChange: 0.66 },
+  { symbol: '^TYX', displaySymbol: 'US30Y', name: '30年期美债收益率', category: 'rates', icon: '🇺🇸', defaultPrice: 5.314, defaultChange: 0.53 },
+  { symbol: 'DX-Y.NYB', displaySymbol: 'DXY', name: '美元指数', category: 'fx', icon: '💲', defaultPrice: 101.782, defaultChange: 0.16 },
+  { symbol: 'BZ=F', displaySymbol: 'BRN1!', name: '布伦特原油连续', category: 'commodity', icon: '🛢️', defaultPrice: 117.18, defaultChange: 3.54 },
+  { symbol: 'UKOIL', displaySymbol: 'UKOIL', name: '伦敦布伦特现货', category: 'commodity', icon: '🛢️', defaultPrice: 117.01, defaultChange: 3.63 },
+  { symbol: 'GC=F', displaySymbol: 'XAU/USD', name: '黄金现货 / 合约', category: 'commodity', icon: '🪙', defaultPrice: 2748.50, defaultChange: 0.65 }
+];
+
+export const CRYPTO_CURRENCIES = [
+  { symbol: 'BTC-USD', code: 'BTC', name: 'Bitcoin 比特币', rank: 1, icon: '₿', defaultPrice: 68420.00, defaultChange: 1.85, marketCap: '1.35T', vol24h: '38.2B', high24h: 68950, low24h: 66820 },
+  { symbol: 'ETH-USD', code: 'ETH', name: 'Ethereum 以太坊', rank: 2, icon: 'Ξ', defaultPrice: 2620.50, defaultChange: 2.14, marketCap: '315.8B', vol24h: '18.4B', high24h: 2655, low24h: 2540 },
+  { symbol: 'BNB-USD', code: 'BNB', name: 'BNB 币安币', rank: 3, icon: '🟡', defaultPrice: 595.30, defaultChange: 0.92, marketCap: '89.2B', vol24h: '1.4B', high24h: 602, low24h: 588 },
+  { symbol: 'SOL-USD', code: 'SOL', name: 'Solana 索拉纳', rank: 4, icon: '🟣', defaultPrice: 172.40, defaultChange: 4.88, marketCap: '81.4B', vol24h: '4.8B', high24h: 176, low24h: 164 },
+  { symbol: 'XRP-USD', code: 'XRP', name: 'XRP 瑞波币', rank: 5, icon: '✕', defaultPrice: 0.542, defaultChange: -0.65, marketCap: '30.7B', vol24h: '1.1B', high24h: 0.555, low24h: 0.536 },
+  { symbol: 'ADA-USD', code: 'ADA', name: 'Cardano 艾达币', rank: 6, icon: '₳', defaultPrice: 0.358, defaultChange: 1.12, marketCap: '12.8B', vol24h: '340M', high24h: 0.366, low24h: 0.351 }
+];
+
+export function getFearGreedIndex(vixPrice = 19.22) {
+  const baseScore = Math.max(8, Math.min(92, Math.round(55 - (vixPrice - 15) * 2.8)));
+  const score = baseScore || 28;
+  let rating = '中性';
+  let ratingEn = 'Neutral';
+  let toneClass = 'kpi-pill-blue';
+  if (score <= 25) {
+    rating = '极度恐慌';
+    ratingEn = 'Extreme Fear';
+    toneClass = 'kpi-pill-red';
+  } else if (score <= 45) {
+    rating = '恐慌';
+    ratingEn = 'Fear';
+    toneClass = 'kpi-pill-amber';
+  } else if (score <= 55) {
+    rating = '中性';
+    ratingEn = 'Neutral';
+    toneClass = 'kpi-pill-blue';
+  } else if (score <= 75) {
+    rating = '贪婪';
+    ratingEn = 'Greed';
+    toneClass = 'kpi-pill-green';
+  } else {
+    rating = '极度贪婪';
+    ratingEn = 'Extreme Greed';
+    toneClass = 'kpi-pill-green';
+  }
+  return {
+    score,
+    rating,
+    ratingEn,
+    toneClass,
+    previousClose: 29,
+    previousWeek: 34,
+    previousMonth: 42,
+    description: score < 45 ? '市场投资者防御情绪抬升，避险偏好占优' : '市场风险偏好提升，流动性环境良好'
+  };
+}
+
 export function number(value) {
   if (value == null || (typeof value === 'string' && !value.trim()) || typeof value === 'boolean') return null;
   const n = Number(value);
@@ -26,7 +85,7 @@ export function number(value) {
 }
 export function ticker(value = 'SPY') {
   const symbol = String(value).trim().toUpperCase();
-  if (!/^\^?[A-Z0-9][A-Z0-9.-]{0,11}$/.test(symbol)) {
+  if (!/^\^?[A-Z0-9][A-Z0-9.=-]{0,14}$/.test(symbol)) {
     throw Object.assign(new Error('请输入有效的美股或港股代码，例如 AAPL、BRK-B、07709.HK 或 SPY。'), { status: 400 });
   }
   return symbol;

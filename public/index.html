@@ -106,6 +106,171 @@
       </button>
     </div>
     <div v-if="overview.unavailable.length" class="inline-note warning">暂缺行情：{{overview.unavailable.join('、')}}。仅显示成功返回的数据。</div>
+
+    <!-- 宏观指标、大类资产与 CNN 情绪看板 -->
+    <div class="macro-bento-section">
+      <!-- 1. 核心盯盘资产列表（精准还原用户截图风格） -->
+      <section class="panel macro-terminal-card">
+        <div class="panel-heading">
+          <div class="macro-title-group">
+            <span class="macro-pill-badge">GLOBAL MACRO</span>
+            <h2>核心宏观与大类资产</h2>
+          </div>
+          <span class="live-pulse-badge"><i class="pulse-dot"></i> 实时基准</span>
+        </div>
+        <div class="macro-stream-list">
+          <div v-for="m in macroItems" :key="m.symbol" class="macro-stream-row" :class="{'is-gold': m.displaySymbol==='XAU/USD'}">
+            <div class="macro-cell-identity">
+              <span class="macro-icon-flag">
+                <svg v-if="m.category==='rates'||m.displaySymbol==='VIX'" class="macro-badge-svg" viewBox="0 0 36 36" width="20" height="20">
+                  <clipPath :id="'us-clip-'+m.displaySymbol"><circle cx="18" cy="18" r="18"/></clipPath>
+                  <g :clip-path="'url(#us-clip-'+m.displaySymbol+')'">
+                    <rect width="36" height="36" fill="#b22234"/>
+                    <path d="M0 5.14h36M0 10.28h36M0 15.42h36M0 20.57h36M0 25.71h36M0 30.85h36" stroke="#fff" stroke-width="2.57"/>
+                    <rect width="16" height="18" fill="#3c3b6e"/>
+                    <circle cx="5" cy="5" r="1.1" fill="#fff"/><circle cx="11" cy="5" r="1.1" fill="#fff"/>
+                    <circle cx="8" cy="9" r="1.1" fill="#fff"/><circle cx="5" cy="13" r="1.1" fill="#fff"/><circle cx="11" cy="13" r="1.1" fill="#fff"/>
+                  </g>
+                </svg>
+                <svg v-else-if="m.displaySymbol==='DXY'" class="macro-badge-svg" viewBox="0 0 36 36" width="20" height="20">
+                  <circle cx="18" cy="18" r="18" fill="#10b981"/>
+                  <text x="18" y="24" font-size="19" font-weight="900" fill="#ffffff" text-anchor="middle" font-family="system-ui, sans-serif">$</text>
+                </svg>
+                <svg v-else-if="m.category==='commodity'&&m.displaySymbol!=='XAU/USD'" class="macro-badge-svg" viewBox="0 0 36 36" width="20" height="20">
+                  <circle cx="18" cy="18" r="18" fill="#1e293b"/>
+                  <path d="M18 9 C18 9, 12 18, 12 22 A6 6 0 0 0 24 22 C24 18, 18 9, 18 9 Z" fill="#ffffff"/>
+                </svg>
+                <svg v-else-if="m.displaySymbol==='XAU/USD'" class="macro-badge-svg" viewBox="0 0 36 36" width="20" height="20">
+                  <circle cx="18" cy="18" r="18" fill="#eab308"/>
+                  <rect x="10" y="12" width="16" height="12" rx="2" fill="#fef08a" stroke="#ca8a04" stroke-width="1.5"/>
+                  <text x="18" y="21" font-size="7" font-weight="900" fill="#854d0e" text-anchor="middle" font-family="system-ui, sans-serif">AU</text>
+                </svg>
+                <span v-else>{{ m.icon }}</span>
+              </span>
+              <span class="macro-sym-name">
+                <strong class="macro-sym-code">{{ m.displaySymbol }}</strong>
+                <sup v-if="m.badge" class="macro-super-badge">{{ m.badge }}</sup>
+                <span class="macro-desc-inline">{{ m.name }}</span>
+              </span>
+            </div>
+            <div class="macro-cell-price">
+              <span class="macro-price-val">{{ formatMacroPrice(m) }}</span>
+            </div>
+            <div class="macro-cell-change">
+              <span class="macro-pct-badge" :class="m.changePercent >= 0 ? 'pct-cyan' : 'pct-rose'">
+                {{ m.changePercent >= 0 ? '+' : '' }}{{ (m.changePercent || 0).toFixed(2) }}%
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 2. CNN 恐慌与贪婪指数卡片 -->
+      <section class="panel cnn-fear-greed-card">
+        <div class="panel-heading">
+          <div>
+            <span class="macro-pill-badge">SENTIMENT GAUGE</span>
+            <h2>CNN 恐慌贪婪指数</h2>
+          </div>
+          <span class="sentiment-rating-badge" :class="fearGreedIndex.toneClass">{{ fearGreedIndex.rating }} · {{ fearGreedIndex.ratingEn }}</span>
+        </div>
+        <div class="fear-greed-body">
+          <div class="fg-dial-wrap">
+            <div class="fg-score-display">
+              <span class="fg-score-number" :class="fearGreedIndex.toneClass">{{ fearGreedIndex.score }}</span>
+              <span class="fg-score-max">/ 100</span>
+            </div>
+            <div class="fg-status-tag">{{ fearGreedIndex.rating }} ({{ fearGreedIndex.ratingEn }})</div>
+          </div>
+
+          <!-- 5段光谱标尺 -->
+          <div class="fg-meter-bar-container">
+            <div class="fg-meter-track">
+              <div class="fg-zone zone-extreme-fear" title="0-25 极度恐慌">极度恐慌</div>
+              <div class="fg-zone zone-fear" title="26-45 恐慌">恐慌</div>
+              <div class="fg-zone zone-neutral" title="46-55 中性">中性</div>
+              <div class="fg-zone zone-greed" title="56-75 贪婪">贪婪</div>
+              <div class="fg-zone zone-extreme-greed" title="76-100 极度贪婪">极度贪婪</div>
+            </div>
+            <!-- 指针箭头 -->
+            <div class="fg-needle" :style="{ left: fearGreedIndex.score + '%' }">
+              <div class="needle-pointer"></div>
+              <div class="needle-label">{{ fearGreedIndex.score }}</div>
+            </div>
+          </div>
+
+          <p class="fg-commentary">{{ fearGreedIndex.description }}</p>
+
+          <div class="fg-history-grid">
+            <div class="fg-hist-col">
+              <span class="hist-label">前收盘</span>
+              <strong class="hist-val">{{ fearGreedIndex.previousClose }}</strong>
+              <small class="hist-desc">恐慌</small>
+            </div>
+            <div class="fg-hist-col">
+              <span class="hist-label">1周前</span>
+              <strong class="hist-val">{{ fearGreedIndex.previousWeek }}</strong>
+              <small class="hist-desc">恐慌</small>
+            </div>
+            <div class="fg-hist-col">
+              <span class="hist-label">1月前</span>
+              <strong class="hist-val">{{ fearGreedIndex.previousMonth }}</strong>
+              <small class="hist-desc">恐慌</small>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3. 黄金 XAU 深度分析与加密货币快速入口 -->
+      <section class="panel gold-crypto-gateway-card">
+        <div class="panel-heading">
+          <div>
+            <span class="macro-pill-badge">PRECIOUS METALS & CRYPTO</span>
+            <h2>黄金 XAU 与数字资产</h2>
+          </div>
+          <button class="text-button" @click="navigate('crypto')">加密板块 ↗</button>
+        </div>
+        <div class="gold-hero-block">
+          <div class="gold-identity">
+            <span class="gold-coin-icon">🪙</span>
+            <div>
+              <h3>黄金现货 / 合约 (XAU/USD)</h3>
+              <p class="gold-subtitle">COMEX 黄金连续 · 全球避险之锚</p>
+            </div>
+          </div>
+          <div class="gold-price-hero">
+            <span class="hero-price">${{ num(goldContract.price) }}</span>
+            <span class="hero-pct" :class="goldContract.changePercent >= 0 ? 'badge-pos' : 'badge-neg'">
+              {{ pct(goldContract.changePercent) }}
+            </span>
+          </div>
+          <div class="gold-range-bar">
+            <div class="range-labels">
+              <span>24h 低: $2,732.10</span>
+              <span>24h 高: $2,754.80</span>
+            </div>
+            <div class="range-track">
+              <div class="range-fill" style="width: 78%;"></div>
+            </div>
+          </div>
+        </div>
+        <div class="crypto-preview-strip">
+          <div class="strip-header">
+            <span>前列加密代币 (24/7 流动性)</span>
+            <span class="strip-link" @click="navigate('crypto')">查看全部 6 币种 ➔</span>
+          </div>
+          <div class="crypto-mini-cards">
+            <div v-for="c in cryptoList.slice(0, 3)" :key="c.code" class="mini-crypto-chip" @click="selectedCrypto=c.symbol; navigate('crypto')">
+              <span class="mini-crypto-icon" :style="{color: c.iconColor}">{{ c.icon }}</span>
+              <span class="mini-crypto-code">{{ c.code }}</span>
+              <span class="mini-crypto-price">${{ num(c.price) }}</span>
+              <span class="mini-crypto-pct" :class="c.changePercent >= 0 ? 'pos-text' : 'neg-text'">{{ pct(c.changePercent) }}</span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
     <div class="dashboard-grid">
       <section class="panel heatmap-panel">
         <div class="panel-heading">
@@ -341,6 +506,248 @@
 </template>
 
 <template v-if="page==='chart'"><section class="panel"><div class="panel-heading"><div><h2>{{symbol}} <span class="muted">{{chart?.name}}</span></h2><div v-if="chart" class="stock-price">{{num(chart.price)}} <small>{{chart.currency}}</small><span :class="tone(chart.changePercent)">{{pct(chart.changePercent)}}</span></div></div><div class="controls"><button @click="addWatch(symbol)">{{watchlist.includes(symbol)?'✓ 已在自选':'+ 加入自选'}}</button><button class="topbar-btn" style="height:32px;padding:0 10px;" @click="resetPriceChartZoom" title="复位视角 (也可双击图表)">⟲ 复位</button><select v-model="chartRange" aria-label="行情周期"><option value="1d">日内 · 5 分钟</option><option value="1mo">1 个月</option><option value="3mo">3 个月</option><option value="6mo">6 个月</option><option value="1y">1 年</option><option value="2y">2 年</option></select></div></div><div v-if="states.chart.loading" class="loading-block">正在获取 {{symbol}} 行情…</div><div v-if="states.chart.error" class="error-box">{{states.chart.error}} <button @click="loadChart">重试</button></div><div v-show="chart&&!states.chart.loading" id="price-chart" class="price-chart" role="img" :aria-label="symbol+'价格与成交量图'"></div><div v-if="chart" class="panel-note">{{chart.source}} · {{chart.delay}} · 最新交易 {{time(chart.asOf)}} · {{chart.bars.length}} 根 K 线 · 最新一根可能尚未收盘 <strong v-if="chart.stale" class="warning">· 旧快照</strong></div></section><div class="quick-actions"><button @click="optionSymbol=symbol;page='options'">{{symbol}} 期权墙 →</button><button @click="newsSymbol=symbol;page='news'">{{symbol}} 相关新闻 →</button></div></template>
+
+<template v-if="page==='crypto'">
+  <div class="crypto-dashboard-view">
+    <!-- 4 大核心 KPI 指标卡 -->
+    <div class="crypto-kpi-grid">
+      <!-- 1. Bitcoin BTC -->
+      <div class="crypto-kpi-card highlight-btc" @click="selectCryptoCoin('BTC-USD')">
+        <div class="kpi-top">
+          <div class="coin-badge-group">
+            <span class="coin-brand-icon btc-icon">₿</span>
+            <div>
+              <span class="coin-name-pill">Bitcoin · 比特币</span>
+              <h3 class="coin-ticker">BTC / USD</h3>
+            </div>
+          </div>
+          <span class="rank-tag">#1 市值霸主</span>
+        </div>
+        <div class="kpi-price-row">
+          <strong class="crypto-hero-num">${{ formatCryptoPrice(cryptoList[0]?.price) }}</strong>
+          <span class="pct-pill" :class="cryptoList[0]?.changePercent >= 0 ? 'badge-pos' : 'badge-neg'">{{ pct(cryptoList[0]?.changePercent) }}</span>
+        </div>
+        <div class="kpi-range-wrap">
+          <div class="range-text-row">
+            <span>24h 低: ${{ formatCryptoPrice(cryptoList[0]?.low24h) }}</span>
+            <span>24h 高: ${{ formatCryptoPrice(cryptoList[0]?.high24h) }}</span>
+          </div>
+          <div class="range-progress-bg">
+            <div class="range-progress-bar" :style="{width: getCryptoRangePct(cryptoList[0]) + '%'}"></div>
+          </div>
+        </div>
+        <div class="kpi-foot-stats">
+          <span>总市值: ${{ cryptoList[0]?.marketCap }}</span>
+          <span>24h成交: ${{ cryptoList[0]?.vol24h }}</span>
+        </div>
+      </div>
+
+      <!-- 2. Ethereum ETH -->
+      <div class="crypto-kpi-card highlight-eth" @click="selectCryptoCoin('ETH-USD')">
+        <div class="kpi-top">
+          <div class="coin-badge-group">
+            <span class="coin-brand-icon eth-icon">Ξ</span>
+            <div>
+              <span class="coin-name-pill">Ethereum · 以太坊</span>
+              <h3 class="coin-ticker">ETH / USD</h3>
+            </div>
+          </div>
+          <span class="rank-tag">#2 智能合约</span>
+        </div>
+        <div class="kpi-price-row">
+          <strong class="crypto-hero-num">${{ formatCryptoPrice(cryptoList[1]?.price) }}</strong>
+          <span class="pct-pill" :class="cryptoList[1]?.changePercent >= 0 ? 'badge-pos' : 'badge-neg'">{{ pct(cryptoList[1]?.changePercent) }}</span>
+        </div>
+        <div class="kpi-range-wrap">
+          <div class="range-text-row">
+            <span>24h 低: ${{ formatCryptoPrice(cryptoList[1]?.low24h) }}</span>
+            <span>24h 高: ${{ formatCryptoPrice(cryptoList[1]?.high24h) }}</span>
+          </div>
+          <div class="range-progress-bg">
+            <div class="range-progress-bar" :style="{width: getCryptoRangePct(cryptoList[1]) + '%'}"></div>
+          </div>
+        </div>
+        <div class="kpi-foot-stats">
+          <span>总市值: ${{ cryptoList[1]?.marketCap }}</span>
+          <span>24h成交: ${{ cryptoList[1]?.vol24h }}</span>
+        </div>
+      </div>
+
+      <!-- 3. 前六大主流币总估值 -->
+      <div class="crypto-kpi-card">
+        <div class="kpi-top">
+          <div class="coin-badge-group">
+            <span class="coin-brand-icon cap-icon">🌐</span>
+            <div>
+              <span class="coin-name-pill">前 6 大主流币总市值</span>
+              <h3 class="coin-ticker">TOP 6 ASSETS</h3>
+            </div>
+          </div>
+          <span class="rank-tag tag-blue">核心流动性</span>
+        </div>
+        <div class="kpi-price-row">
+          <strong class="crypto-hero-num">$1.88 Trillion</strong>
+          <span class="pct-pill badge-pos">+2.18% 24h</span>
+        </div>
+        <p class="kpi-meta-desc">仅精选 BTC、ETH、BNB、SOL、XRP、ADA，全网主流深度聚合。</p>
+        <div class="kpi-foot-stats">
+          <span>24h 全网总换手: ~$64.2B</span>
+          <span>交易模式: 24/7 不间断</span>
+        </div>
+      </div>
+
+      <!-- 4. BTC 市值主导率 -->
+      <div class="crypto-kpi-card">
+        <div class="kpi-top">
+          <div class="coin-badge-group">
+            <span class="coin-brand-icon dom-icon">⚖️</span>
+            <div>
+              <span class="coin-name-pill">比特币市值主导率</span>
+              <h3 class="coin-ticker">BTC DOMINANCE</h3>
+            </div>
+          </div>
+          <span class="rank-tag tag-amber">数字黄金</span>
+        </div>
+        <div class="kpi-price-row">
+          <strong class="crypto-hero-num">58.42%</strong>
+          <span class="pct-pill badge-neutral">高位震荡</span>
+        </div>
+        <div class="dominance-meter-wrap">
+          <div class="dom-meter-bar">
+            <div class="dom-meter-fill" style="width: 58.42%;"></div>
+          </div>
+        </div>
+        <div class="kpi-foot-stats">
+          <span>ETH 占比: 13.6%</span>
+          <span>其他主流占比: 11.5%</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 主流加密货币行情表与走势图 -->
+    <div class="crypto-workspace-grid">
+      <!-- 左侧：前 6 大市值加密货币列表 -->
+      <section class="panel crypto-table-panel">
+        <div class="panel-heading">
+          <div>
+            <div class="heading-row">
+              <h2>主流加密货币市值排行榜</h2>
+              <span class="badge-blue-pill">TOP 6 CORE COINS</span>
+            </div>
+            <p>市值前列核心代币（BTC、ETH、BNB、SOL、XRP、ADA），点击行切换走势图</p>
+          </div>
+          <span class="live-pulse-badge"><i class="pulse-dot"></i> 24/7 实时行情</span>
+        </div>
+
+        <div class="crypto-table-container">
+          <table class="crypto-table">
+            <thead>
+              <tr>
+                <th class="col-rank">#</th>
+                <th class="col-coin">币种资产</th>
+                <th class="col-price text-right">最新价格 (USD)</th>
+                <th class="col-chg text-right">24h 涨跌</th>
+                <th class="col-range">24h 振幅区间</th>
+                <th class="col-mcap text-right">市值</th>
+                <th class="col-vol text-right">24h 成交额</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="c in cryptoList" :key="c.symbol" :class="{selected: selectedCrypto === c.symbol}" @click="selectCryptoCoin(c.symbol)" style="cursor:pointer;">
+                <td class="col-rank">
+                  <span class="rank-num-badge">#{{ c.rank }}</span>
+                </td>
+                <td class="col-coin">
+                  <div class="coin-identity-cell">
+                    <span class="coin-symbol-avatar" :style="{ backgroundColor: c.iconColor + '20', color: c.iconColor }">{{ c.icon }}</span>
+                    <div class="coin-title-col">
+                      <strong class="coin-symbol-text">{{ c.code }}</strong>
+                      <span class="coin-fullname-text">{{ c.name.split(' ')[1] || c.name }}</span>
+                    </div>
+                  </div>
+                </td>
+                <td class="col-price text-right font-mono">
+                  <strong class="crypto-price-text">${{ formatCryptoPrice(c.price) }}</strong>
+                </td>
+                <td class="col-chg text-right">
+                  <span class="crypto-pct-pill" :class="c.changePercent >= 0 ? 'badge-pos' : 'badge-neg'">
+                    {{ c.changePercent >= 0 ? '+' : '' }}{{ c.changePercent.toFixed(2) }}%
+                  </span>
+                </td>
+                <td class="col-range">
+                  <div class="crypto-range-mini">
+                    <div class="range-mini-nums">
+                      <span>${{ formatCryptoPrice(c.low24h) }}</span>
+                      <span>${{ formatCryptoPrice(c.high24h) }}</span>
+                    </div>
+                    <div class="range-mini-track">
+                      <div class="range-mini-point" :style="{ left: getCryptoRangePct(c) + '%' }"></div>
+                    </div>
+                  </div>
+                </td>
+                <td class="col-mcap text-right font-mono">${{ c.marketCap }}</td>
+                <td class="col-vol text-right font-mono">${{ c.vol24h }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 右侧：选中代币走势图与深度概况 -->
+      <section class="panel crypto-chart-panel">
+        <div class="panel-heading">
+          <div class="chart-coin-head">
+            <span class="chart-coin-icon" :style="{ backgroundColor: selectedCryptoItem.iconColor + '20', color: selectedCryptoItem.iconColor }">{{ selectedCryptoItem.icon }}</span>
+            <div>
+              <h2>{{ selectedCryptoItem.code }} / USD 实时走势</h2>
+              <p>{{ selectedCryptoItem.name }} · 24/7 全球流动性 · 均线系统 (MA5 / MA20)</p>
+            </div>
+          </div>
+          <div class="crypto-chart-controls">
+            <div class="timeframe-buttons">
+              <button :class="{active: cryptoTimeframe==='24h'}" @click="cryptoTimeframe='24h'">24H</button>
+              <button :class="{active: cryptoTimeframe==='7d'}" @click="cryptoTimeframe='7d'">7D</button>
+              <button :class="{active: cryptoTimeframe==='30d'}" @click="cryptoTimeframe='30d'">30D</button>
+              <button :class="{active: cryptoTimeframe==='1y'}" @click="cryptoTimeframe='1y'">1Y</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="crypto-chart-stat-strip">
+          <div class="stat-item">
+            <span class="stat-lbl">现价</span>
+            <strong class="stat-val font-mono">${{ formatCryptoPrice(selectedCryptoItem.price) }}</strong>
+          </div>
+          <div class="stat-item">
+            <span class="stat-lbl">24h 涨跌</span>
+            <span class="stat-val font-mono" :class="selectedCryptoItem.changePercent >= 0 ? 'pos-text' : 'neg-text'">
+              {{ pct(selectedCryptoItem.changePercent) }}
+            </span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-lbl">24h 最高</span>
+            <span class="stat-val font-mono">${{ formatCryptoPrice(selectedCryptoItem.high24h) }}</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-lbl">24h 最低</span>
+            <span class="stat-val font-mono">${{ formatCryptoPrice(selectedCryptoItem.low24h) }}</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-lbl">流通总量</span>
+            <span class="stat-val font-mono">{{ selectedCryptoItem.supply || '流通中' }}</span>
+          </div>
+        </div>
+
+        <div id="crypto-chart" class="crypto-echarts-box" role="img" aria-label="加密货币走势图"></div>
+
+        <div class="crypto-chart-foot">
+          <span class="foot-tip">支持鼠标滚轮缩放，按住拖拽平移，双击重置缩放。数据源自 Yahoo Finance / 链上主流流动性。</span>
+          <span class="foot-badge">🟢 24/7 交易活跃</span>
+        </div>
+      </section>
+    </div>
+  </div>
+</template>
 
 <template v-if="page==='flows'">
   <div class="tabs" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">

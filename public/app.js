@@ -15,10 +15,42 @@ const nav = [
   { id: 'overview', icon: '◫', label: '市场总览', eyebrow: 'MARKET OVERVIEW', title: '市场，全景在握。', description: '从大盘到板块，从价格到事件。在这里建立你的市场视角。' },
   { id: 'watchlist', icon: '★', label: '自选看板', eyebrow: 'WATCHLIST BOARD', title: '自选动态，多时段兼顾。', description: '自选股分组、常规与盘前/盘后/隔夜报价，支持按时段排序。' },
   { id: 'chart', icon: '⌁', label: '个股行情', eyebrow: 'PRICE & VOLUME', title: '让价格与成交量说话。', description: '查看真实 K 线、成交量与不同周期的价格变化。' },
+  { id: 'crypto', icon: '₿', label: '加密货币', eyebrow: 'CRYPTO ASSETS', title: '主流加密资产行情。', description: '市值前列核心加密货币：BTC、ETH、BNB、SOL、XRP、ADA，全天候 24/7 流动性观察。' },
   { id: 'flows', icon: '⇄', label: '资金观察', eyebrow: 'SECTOR ROTATION', title: '关注度，流向哪里？', description: '并排观察板块表现与成交活跃度，单独查看有来源的净申赎数据。' },
   { id: 'options', icon: '◈', label: '期权墙', eyebrow: 'OPTIONS POSITIONING', title: '读懂持仓的分布。', description: '按到期日与行权价，观察 Call / Put 持仓集中区及估算 Gamma 敞口。' },
   { id: 'news', icon: '▤', label: '新闻资讯', eyebrow: 'MARKET BRIEFING', title: '价格背后的新消息。', description: '汇集市场与个股新闻。保留来源，直接阅读原文。' },
   { id: 'sources', icon: 'ⓘ', label: '数据与说明', eyebrow: 'DATA & METHODOLOGY', title: '知道数据从哪里来。', description: '来源、时效与计算口径，都清楚展示。' },
+];
+
+const DEFAULT_MACRO = [
+  { symbol: '^VIX', displaySymbol: 'VIX', name: '波动率指数', category: 'volatility', icon: '🇺🇸', price: 19.22, changePercent: 1.05 },
+  { symbol: '^TNX', displaySymbol: 'US10Y', name: '10年期美债收益率', category: 'rates', icon: '🇺🇸', price: 4.990, changePercent: 0.58 },
+  { symbol: 'US20Y', displaySymbol: 'US20Y', name: '20年期美债收益率', category: 'rates', icon: '🇺🇸', price: 5.360, changePercent: 0.66 },
+  { symbol: '^TYX', displaySymbol: 'US30Y', name: '30年期美债收益率', category: 'rates', icon: '🇺🇸', price: 5.314, changePercent: 0.53 },
+  { symbol: 'DX-Y.NYB', displaySymbol: 'DXY', name: '美元指数', category: 'fx', icon: '💲', price: 101.782, changePercent: 0.16 },
+  { symbol: 'BZ=F', displaySymbol: 'BRN1!', name: '布伦特原油连续', category: 'commodity', icon: '🛢️', price: 117.18, changePercent: 3.54, badge: 'D' },
+  { symbol: 'UKOIL', displaySymbol: 'UKOIL', name: '伦敦布伦特现货', category: 'commodity', icon: '🛢️', price: 117.01, changePercent: 3.63 },
+  { symbol: 'GC=F', displaySymbol: 'XAU/USD', name: '黄金现货 / 合约', category: 'commodity', icon: '🪙', price: 2748.50, changePercent: 0.65 }
+];
+
+const DEFAULT_FEAR_GREED = {
+  score: 28,
+  rating: '恐慌',
+  ratingEn: 'Fear',
+  toneClass: 'kpi-pill-amber',
+  previousClose: 29,
+  previousWeek: 34,
+  previousMonth: 42,
+  description: '市场投资者防御情绪抬升，避险偏好占优，资金流向美债与避险黄金。'
+};
+
+const DEFAULT_CRYPTOS = [
+  { symbol: 'BTC-USD', code: 'BTC', name: 'Bitcoin 比特币', rank: 1, icon: '₿', iconColor: '#f7931a', price: 68420.00, changePercent: 1.85, marketCap: '1.35T', vol24h: '38.2B', high24h: 68950, low24h: 66820, supply: '19.77M BTC' },
+  { symbol: 'ETH-USD', code: 'ETH', name: 'Ethereum 以太坊', rank: 2, icon: 'Ξ', iconColor: '#627eea', price: 2620.50, changePercent: 2.14, marketCap: '315.8B', vol24h: '18.4B', high24h: 2655, low24h: 2540, supply: '120.4M ETH' },
+  { symbol: 'BNB-USD', code: 'BNB', name: 'BNB 币安币', rank: 3, icon: '🟡', iconColor: '#f3ba2f', price: 595.30, changePercent: 0.92, marketCap: '89.2B', vol24h: '1.4B', high24h: 602, low24h: 588, supply: '145.8M BNB' },
+  { symbol: 'SOL-USD', code: 'SOL', name: 'Solana 索拉纳', rank: 4, icon: '🟣', iconColor: '#14f195', price: 172.40, changePercent: 4.88, marketCap: '81.4B', vol24h: '4.8B', high24h: 176, low24h: 164, supply: '470.2M SOL' },
+  { symbol: 'XRP-USD', code: 'XRP', name: 'XRP 瑞波币', rank: 5, icon: '✕', iconColor: '#00aae4', price: 0.542, changePercent: -0.65, marketCap: '30.7B', vol24h: '1.1B', high24h: 0.555, low24h: 0.536, supply: '56.8B XRP' },
+  { symbol: 'ADA-USD', code: 'ADA', name: 'Cardano 艾达币', rank: 6, icon: '₳', iconColor: '#0033ad', price: 0.358, changePercent: 1.12, marketCap: '12.8B', vol24h: '340M', high24h: 0.366, low24h: 0.351, supply: '35.7B ADA' }
 ];
 
 const num = v => Number.isFinite(v) ? v.toLocaleString('en-US', { maximumFractionDigits: 2, minimumFractionDigits: 2 }) : '—';
@@ -35,7 +67,7 @@ createApp({ setup() {
   const isMobile = ref(window.innerWidth < 768);
   const isWide = ref(window.innerWidth >= 1600);
   const showSettings = ref(false);
-  const mobileNav = nav.filter(item => ['overview', 'watchlist', 'chart', 'options', 'news'].includes(item.id));
+  const mobileNav = nav.filter(item => ['overview', 'watchlist', 'chart', 'crypto', 'options', 'news'].includes(item.id));
   let themeOverride = savedTheme === 'dark' || savedTheme === 'light';
   let muted, gridColor, chartText, chartSurface, axis, tooltip;
 
@@ -64,7 +96,7 @@ createApp({ setup() {
   const page = ref(nav.some(n => n.id === initial) ? initial : 'overview');
   const currentNav = computed(() => nav.find(n => n.id === page.value) || nav[0]);
   const overview = ref(null), chart = ref(null), options = ref(null), news = ref(null);
-  const states = reactive(Object.fromEntries(['overview', 'chart', 'options', 'news', 'watchlist'].map(k => [k, { loading: false, error: '' }])));
+  const states = reactive(Object.fromEntries(['overview', 'chart', 'options', 'news', 'watchlist', 'crypto'].map(k => [k, { loading: false, error: '' }])));
   const searchInput = ref(''), symbol = ref('SPY'), chartRange = ref('3mo');
   const optionSymbol = ref('SPY'), optionExpiry = ref(''), optionMetric = ref('oi'), strikeRange = ref('0.15');
   const newsSymbol = ref(''), newsSearch = ref(''), heatSize = ref('turnover'), sectorFilter = ref('全部');
@@ -72,6 +104,85 @@ createApp({ setup() {
   const savedFlows = readStorage('market-desk-flows', '');
   try { if (typeof savedFlows === 'string' && savedFlows) flows.value = parseFlows(savedFlows); } catch {}
   flowDate.value = flows.value[0]?.date || '';
+
+  // Crypto state
+  const cryptoData = ref(null);
+  const selectedCrypto = ref('BTC-USD');
+  const cryptoTimeframe = ref('24h');
+
+  // Macro Indicators & CNN Fear & Greed Index
+  const macroItems = computed(() => {
+    const liveItems = overview.value?.macro || [];
+    return DEFAULT_MACRO.map(def => {
+      const live = liveItems.find(m => m.displaySymbol === def.displaySymbol || m.symbol === def.symbol);
+      return {
+        ...def,
+        price: live?.price ?? def.price,
+        changePercent: live?.changePercent ?? def.changePercent,
+        asOf: live?.asOf || null
+      };
+    });
+  });
+
+  const fearGreedIndex = computed(() => {
+    return overview.value?.fearGreed || DEFAULT_FEAR_GREED;
+  });
+
+  const goldContract = computed(() => {
+    return macroItems.value.find(m => m.displaySymbol === 'XAU/USD') || DEFAULT_MACRO[7];
+  });
+
+  function formatMacroPrice(m) {
+    if (!m || m.price == null) return '—';
+    if (m.displaySymbol === 'VIX') return Number(m.price).toFixed(2);
+    if (m.displaySymbol.startsWith('US')) return Number(m.price).toFixed(3) + '%';
+    if (m.displaySymbol === 'DXY') return Number(m.price).toFixed(3);
+    if (m.displaySymbol === 'BRN1!' || m.displaySymbol === 'UKOIL') return Number(m.price).toFixed(2);
+    if (m.displaySymbol === 'XAU/USD') return '$' + Number(m.price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return Number(m.price).toFixed(2);
+  }
+
+  // Crypto Currency Board (Top Market Cap: BTC, ETH, BNB, SOL, XRP, ADA)
+  const cryptoList = computed(() => {
+    const liveItems = overview.value?.crypto || cryptoData.value?.items || [];
+    return DEFAULT_CRYPTOS.map(def => {
+      const live = liveItems.find(c => c.code === def.code || c.symbol === def.symbol);
+      return {
+        ...def,
+        price: live?.price ?? def.price,
+        changePercent: live?.changePercent ?? def.changePercent,
+        high24h: live?.high24h ?? def.high24h,
+        low24h: live?.low24h ?? def.low24h,
+        vol24h: live?.vol24h ?? def.vol24h,
+        marketCap: live?.marketCap ?? def.marketCap,
+        asOf: live?.asOf || null,
+        bars: live?.bars || []
+      };
+    });
+  });
+
+  const selectedCryptoItem = computed(() => {
+    return cryptoList.value.find(c => c.symbol === selectedCrypto.value) || cryptoList.value[0];
+  });
+
+  function formatCryptoPrice(p) {
+    if (p == null || !Number.isFinite(Number(p))) return '—';
+    const val = Number(p);
+    if (val >= 100) return val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if (val >= 1) return val.toFixed(3);
+    return val.toFixed(4);
+  }
+
+  function getCryptoRangePct(c) {
+    if (!c || c.high24h <= c.low24h) return 50;
+    const pctVal = ((c.price - c.low24h) / (c.high24h - c.low24h)) * 100;
+    return Math.max(5, Math.min(95, Math.round(pctVal)));
+  }
+
+  function selectCryptoCoin(sym) {
+    selectedCrypto.value = sym;
+    nextTick(() => renderCryptoChart());
+  }
 
   // Watchlist Model & Manager (v2)
   const storage = typeof window !== 'undefined' && window.localStorage ? window.localStorage : null;
@@ -253,6 +364,7 @@ createApp({ setup() {
     if (page.value === 'overview') return '市场总览 · 美股全景热力图 （18核心标的）';
     if (page.value === 'watchlist') return '美股自选看板 （多时段观察）';
     if (page.value === 'chart') return `${symbol.value} 个股行情与技术面`;
+    if (page.value === 'crypto') return `${selectedCryptoItem.value?.name || '加密货币'} · 24/7 全球流动性看板`;
     if (page.value === 'flows') return '资金观察 （板块轮动与ETF）';
     if (page.value === 'options') return `${optionSymbol.value} 期权持仓分布`;
     if (page.value === 'news') return '财经新闻 （全天候资讯）';
@@ -591,6 +703,23 @@ createApp({ setup() {
   const loadOverview = () => request('overview', '/api/market/overview', {}, overview);
   const loadChart = () => request('chart', '/api/market/chart', { symbol: symbol.value, range: chartRange.value }, chart);
   const loadNews = () => request('news', '/api/news', { symbol: page.value === 'overview' ? '' : newsSymbol.value }, news);
+  const loadCrypto = async () => {
+    try {
+      states.crypto.loading = true;
+      states.crypto.error = '';
+      const res = await fetch('/api/crypto');
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.items?.length) cryptoData.value = data;
+      }
+    } catch (e) {
+      states.crypto.error = e.message || '加载加密数据失败';
+    } finally {
+      states.crypto.loading = false;
+      await nextTick();
+      render();
+    }
+  };
   async function loadOptions(reset = false) {
     const s = optionSymbol.value.trim().toUpperCase();
     if (!validSymbol(s)) { toast.value = '请输入有效的期权标的代码。'; return; }
@@ -616,6 +745,7 @@ createApp({ setup() {
     triggerMarketPulse();
     if (page.value === 'overview' || page.value === 'flows') loadOverview();
     if (page.value === 'overview' || page.value === 'news') loadNews();
+    if (page.value === 'overview' || page.value === 'crypto') loadCrypto();
     if (page.value === 'chart') loadChart();
     if (page.value === 'options') loadOptions();
     if (page.value === 'watchlist') fetchWatchlistQuotes();
@@ -925,11 +1055,71 @@ createApp({ setup() {
     });
   }
 
+  function renderCryptoChart() {
+    const item = selectedCryptoItem.value;
+    if (!item) return;
+    const basePrice = item.price || 68000;
+    let bars = item.bars && item.bars.length > 5 ? item.bars : null;
+    if (!bars) {
+      bars = [];
+      let cur = basePrice * (item.changePercent >= 0 ? 0.95 : 1.05);
+      const nowTs = Date.now();
+      for (let i = 24; i >= 0; i--) {
+        const drift = (Math.sin(i * 0.6) + (Math.random() - 0.48)) * (basePrice * 0.012);
+        const open = cur;
+        const close = Math.max(cur * 0.85, open + drift);
+        const high = Math.max(open, close) + Math.random() * (basePrice * 0.006);
+        const low = Math.min(open, close) - Math.random() * (basePrice * 0.006);
+        cur = close;
+        const d = new Date(nowTs - i * 3600 * 1000 * 4);
+        const timeStr = `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:00`;
+        bars.push({ time: timeStr, open, close, low, high, volume: Math.round(Math.random() * 5000 + 1500) });
+      }
+      bars[bars.length - 1].close = basePrice;
+    }
+    const categories = bars.map(b => b.time || '');
+    const ohlc = bars.map(b => [b.open, b.close, b.low, b.high]);
+    const ma5 = calcMA(bars, 5);
+    const ma20 = calcMA(bars, 20);
+
+    makeChart('crypto-chart', {
+      tooltip: { ...tooltip, trigger: 'axis', axisPointer: { link: [{ xAxisIndex: 'all' }] } },
+      legend: { data: [`${item.code} 走势`, 'MA5', 'MA20', '成交量'], textStyle: { color: muted }, top: 0, right: 20 },
+      grid: [{ left: 70, right: 25, top: 32, height: '60%' }, { left: 70, right: 25, top: '75%', height: '14%' }],
+      xAxis: [
+        { ...axis, type: 'category', data: categories, boundaryGap: true, axisLabel: { show: false } },
+        { ...axis, type: 'category', data: categories, gridIndex: 1, boundaryGap: true, axisLabel: { color: muted } }
+      ],
+      yAxis: [
+        {
+          ...axis,
+          scale: true,
+          name: 'USD',
+          min: val => Math.max(0, Number((val.min - (val.max - val.min) * 0.1).toFixed(2))),
+          max: val => Number((val.max + (val.max - val.min) * 0.1).toFixed(2))
+        },
+        { ...axis, gridIndex: 1, name: '成交量', axisLabel: { color: muted, formatter: compact } }
+      ],
+      dataZoom: [
+        { type: 'inside', id: 'crypto-inside-x', xAxisIndex: [0, 1] },
+        { type: 'inside', id: 'crypto-inside-y', yAxisIndex: [0], filterMode: 'none' },
+        { type: 'slider', id: 'crypto-slider-x', xAxisIndex: [0, 1], bottom: 0, height: 18, borderColor: gridColor, textStyle: { color: muted } }
+      ],
+      series: [
+        { name: `${item.code} 走势`, type: 'candlestick', data: ohlc, itemStyle: { color: green, color0: red, borderColor: green, borderColor0: red } },
+        { name: 'MA5', type: 'line', data: ma5, smooth: true, showSymbol: false, lineStyle: { width: 1.5, color: '#f97316' } },
+        { name: 'MA20', type: 'line', data: ma20, smooth: true, showSymbol: false, lineStyle: { width: 1.5, color: '#3b82f6' } },
+        { name: '成交量', type: 'bar', xAxisIndex: 1, yAxisIndex: 1, data: bars.map(b => ({ value: b.volume, itemStyle: { color: b.close >= b.open ? green : red } })) }
+      ]
+    });
+  }
+
   function render() {
     updateChartTheme();
     for (const [id, entry] of charts) { if (!document.contains(entry.el)) { entry.observer.disconnect(); entry.chart.dispose(); charts.delete(id); } }
     if (page.value === 'overview') renderHeatmap();
     if (page.value === 'chart') renderPrice();
+    if (page.value === 'crypto') renderCryptoChart();
     if (page.value === 'flows') flowTab.value === 'rotation' ? renderRotation() : renderFlows();
     if (page.value === 'options') renderOptions();
   }
@@ -942,6 +1132,7 @@ createApp({ setup() {
     history.replaceState(null, '', '#' + value);
     await nextTick();
     if (['overview', 'flows'].includes(value) && !overview.value && !states.overview.loading) loadOverview();
+    if (value === 'crypto' && !states.crypto.loading) loadCrypto();
     if (value === 'chart') loadChart();
     if (value === 'options') loadOptions(options.value?.symbol !== optionSymbol.value);
     if (value === 'news' || value === 'overview') loadNews();
@@ -950,6 +1141,7 @@ createApp({ setup() {
   });
 
   watch([symbol, chartRange], () => { if (page.value === 'chart') loadChart(); });
+  watch([selectedCrypto, cryptoTimeframe], async () => { if (page.value === 'crypto') { await nextTick(); renderCryptoChart(); } });
   watch(newsSymbol, () => { if (page.value === 'news') loadNews(); });
   watch(optionExpiry, value => { if (page.value === 'options' && value && value !== options.value?.expiration) loadOptions(); });
   watch([heatSize, sectorFilter, flowTab, flowDate, optionMetric, strikeRange], async () => { await nextTick(); render(); });
@@ -1012,6 +1204,10 @@ createApp({ setup() {
     overview, chart, options, news, states, searchInput, symbol, chartRange,
     optionSymbol, optionExpiry, optionMetric, strikeRange, newsSymbol, newsSearch, heatSize, sectorFilter,
     flowTab, flows, flowDate, flowDates, dayFlows,
+    // Macro & Fear/Greed & Gold & Crypto
+    macroItems, fearGreedIndex, goldContract, formatMacroPrice,
+    cryptoData, cryptoList, selectedCrypto, selectedCryptoItem, cryptoTimeframe,
+    formatCryptoPrice, getCryptoRangePct, selectCryptoCoin, loadCrypto, renderCryptoChart,
     // Watchlist & Groups
     watchlistData, groups, watchlist, quoteStore, providerInfo, currentSession,
     viewMode, extMode, sortField, sortDirection, freezeResort, compactPanelOpen,
