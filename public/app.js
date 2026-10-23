@@ -14,7 +14,6 @@ const green = '#38ab70', red = '#df4f46', blue = '#2976ff';
 const nav = [
   { id: 'overview', icon: '◫', label: '市场总览', eyebrow: 'MARKET OVERVIEW', title: '市场，全景在握。', description: '从大盘到板块，从价格到事件。在这里建立你的市场视角。' },
   { id: 'watchlist', icon: '★', label: '自选看板', eyebrow: 'WATCHLIST BOARD', title: '自选动态，多时段兼顾。', description: '自选股分组、常规与盘前/盘后/隔夜报价，支持按时段排序。' },
-  { id: 'heatmap', icon: '▦', label: '市场热力图', eyebrow: 'MARKET MAP', title: '看见市场的温度。', description: '观察精选美股的涨跌与成交活跃度，点击方块深入了解。' },
   { id: 'chart', icon: '⌁', label: '个股行情', eyebrow: 'PRICE & VOLUME', title: '让价格与成交量说话。', description: '查看真实 K 线、成交量与不同周期的价格变化。' },
   { id: 'flows', icon: '⇄', label: '资金观察', eyebrow: 'SECTOR ROTATION', title: '关注度，流向哪里？', description: '并排观察板块表现与成交活跃度，单独查看有来源的净申赎数据。' },
   { id: 'options', icon: '◈', label: '期权墙', eyebrow: 'OPTIONS POSITIONING', title: '读懂持仓的分布。', description: '按到期日与行权价，观察 Call / Put 持仓集中区及估算 Gamma 敞口。' },
@@ -120,7 +119,7 @@ createApp({ setup() {
     return total > 0 ? Math.round((upSectorsCount.value / total) * 100) : 50;
   });
   const breadcrumbLabel = computed(() => {
-    if (page.value === 'overview' || page.value === 'heatmap') return '美股全景热力图 （18核心标的）';
+    if (page.value === 'overview') return '市场总览 · 美股全景热力图 （18核心标的）';
     if (page.value === 'watchlist') return '美股自选看板 （多时段观察）';
     if (page.value === 'chart') return `${symbol.value} 个股行情与技术面`;
     if (page.value === 'flows') return '资金观察 （板块轮动与ETF）';
@@ -484,7 +483,7 @@ createApp({ setup() {
 
   function refresh() {
     triggerMarketPulse();
-    if (page.value === 'overview' || page.value === 'heatmap' || page.value === 'flows') loadOverview();
+    if (page.value === 'overview' || page.value === 'flows') loadOverview();
     if (page.value === 'overview' || page.value === 'news') loadNews();
     if (page.value === 'chart') loadChart();
     if (page.value === 'options') loadOptions();
@@ -768,7 +767,7 @@ createApp({ setup() {
   function render() {
     updateChartTheme();
     for (const [id, entry] of charts) { if (!document.contains(entry.el)) { entry.observer.disconnect(); entry.chart.dispose(); charts.delete(id); } }
-    if (page.value === 'overview' || page.value === 'heatmap') renderHeatmap();
+    if (page.value === 'overview') renderHeatmap();
     if (page.value === 'chart') renderPrice();
     if (page.value === 'flows') flowTab.value === 'rotation' ? renderRotation() : renderFlows();
     if (page.value === 'options') renderOptions();
@@ -781,7 +780,7 @@ createApp({ setup() {
   watch(page, async value => {
     history.replaceState(null, '', '#' + value);
     await nextTick();
-    if (['overview', 'heatmap', 'flows'].includes(value) && !overview.value && !states.overview.loading) loadOverview();
+    if (['overview', 'flows'].includes(value) && !overview.value && !states.overview.loading) loadOverview();
     if (value === 'chart') loadChart();
     if (value === 'options') loadOptions(options.value?.symbol !== optionSymbol.value);
     if (value === 'news' || value === 'overview') loadNews();

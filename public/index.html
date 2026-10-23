@@ -81,7 +81,7 @@
 <transition name="page" @after-enter="onPageEntered">
 <div :key="page" class="page-container">
 
-<template v-if="page==='overview'||page==='heatmap'">
+<template v-if="page==='overview'">
   <div v-if="states.overview.loading&&!overview" class="loading-block">正在汇集指数、板块与精选美股行情…</div>
   <div v-if="states.overview.error" class="error-box" role="alert">{{states.overview.error}} <button @click="loadOverview">重试</button></div>
   <template v-if="overview">
@@ -106,7 +106,7 @@
       </button>
     </div>
     <div v-if="overview.unavailable.length" class="inline-note warning">暂缺行情：{{overview.unavailable.join('、')}}。仅显示成功返回的数据。</div>
-    <div class="dashboard-grid" :class="{'heatmap-full':page==='heatmap'}">
+    <div class="dashboard-grid">
       <section class="panel heatmap-panel">
         <div class="panel-heading">
           <div class="heatmap-title-group">
