@@ -6,6 +6,15 @@ import { getCurrentSession, calcChangePercent, resolveExtReferenceClose, SESSION
 
 const yahooCache = new Map(); // symbol -> { quote, expiresAt }
 
+export function normalizeYahooSymbol(sym) {
+  if (sym.endsWith('.HK')) {
+    const rawNum = sym.slice(0, -3).replace(/^0+/, '');
+    const padded = rawNum.length < 4 ? rawNum.padStart(4, '0') : rawNum;
+    return `${padded}.HK`;
+  }
+  return sym.replace(/-/g, '.');
+}
+
 export async function fetchYahooQuote(rawSymbol) {
   const sym = String(rawSymbol).trim().toUpperCase();
   const cached = yahooCache.get(sym);
@@ -14,9 +23,7 @@ export async function fetchYahooQuote(rawSymbol) {
   }
 
   try {
-    const yahooSymbol = sym.endsWith('.HK')
-      ? sym.replace(/^0+/, '')
-      : sym.replace(/-/g, '.');
+    const yahooSymbol = normalizeYahooSymbol(sym);
 
     const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=1d&range=1d&includePrePost=true`;
     const res = await fetch(url, {
@@ -82,6 +89,7 @@ export class WatchlistQuoteService {
       this.provider.onQuoteUpdate(event => this.handlePushUpdate(event));
     }
 
+    this.isRefreshingFallback = false;
     this.startHeartbeat();
   }
 
@@ -90,26 +98,36 @@ export class WatchlistQuoteService {
       this.broadcast({ type: 'heartbeat', ts: Date.now() });
 
       // If provider is unconfigured, periodically refresh active symbols for connected clients
-      if (!this.provider.isConfigured() && this.sseClients.size > 0) {
-        const clientSymbols = new Set();
-        for (const c of this.sseClients) {
-          for (const s of c.symbols || []) clientSymbols.add(s);
-        }
-        for (const sym of clientSymbols) {
-          const updated = await fetchYahooQuote(sym);
-          if (updated) {
-            this.quotes.set(sym, updated);
-            const current = getCurrentSession();
-            this.queueUpdate(sym, {
-              symbol: sym,
-              session: current.session,
-              price: updated[current.session]?.price ?? updated.regular?.price,
-              changePercent: updated[current.session]?.changePercent ?? updated.regular?.changePercent,
-              volume: updated.regular?.volume,
-              sourceTime: updated.regular?.sourceTime,
-              updatedAt: new Date().toISOString()
-            });
+      if (!this.provider.isConfigured() && this.sseClients.size > 0 && !this.isRefreshingFallback) {
+        this.isRefreshingFallback = true;
+        try {
+          const clientSymbols = new Set();
+          for (const c of this.sseClients) {
+            for (const s of c.symbols || []) clientSymbols.add(s);
           }
+          const symList = Array.from(clientSymbols);
+          const chunkSize = 6;
+          for (let i = 0; i < symList.length; i += chunkSize) {
+            const chunk = symList.slice(i, i + chunkSize);
+            await Promise.allSettled(chunk.map(async sym => {
+              const updated = await fetchYahooQuote(sym);
+              if (updated) {
+                this.quotes.set(sym, updated);
+                const current = getCurrentSession();
+                this.queueUpdate(sym, {
+                  symbol: sym,
+                  session: current.session,
+                  price: updated[current.session]?.price ?? updated.regular?.price,
+                  changePercent: updated[current.session]?.changePercent ?? updated.regular?.changePercent,
+                  volume: updated.regular?.volume,
+                  sourceTime: updated.regular?.sourceTime,
+                  updatedAt: new Date().toISOString()
+                });
+              }
+            }));
+          }
+        } finally {
+          this.isRefreshingFallback = false;
         }
       }
     }, 15000);

@@ -220,12 +220,14 @@ createApp({ setup() {
     }
   }
 
-  // Setup SSE stream
+  // Setup SSE stream with auto-reconnection and smart fallback
+  let sseReconnectTimer = null;
   function setupEventSource() {
     if (eventSource) {
       eventSource.close();
       eventSource = null;
     }
+    clearTimeout(sseReconnectTimer);
     const symbols = watchlist.value;
     if (!symbols.length || typeof EventSource === 'undefined') {
       startShortPolling();
@@ -236,7 +238,12 @@ createApp({ setup() {
       const url = `/api/watchlist/stream?symbols=${encodeURIComponent(symbols.join(','))}`;
       eventSource = new EventSource(url);
 
+      eventSource.onopen = () => {
+        stopShortPolling();
+      };
+
       eventSource.onmessage = event => {
+        stopShortPolling();
         try {
           const msg = JSON.parse(event.data);
           if (msg.type === 'quotes' && Array.isArray(msg.data)) {
@@ -257,9 +264,17 @@ createApp({ setup() {
       };
 
       eventSource.onerror = () => {
-        eventSource?.close();
-        eventSource = null;
-        startShortPolling();
+        if (eventSource?.readyState === EventSource.CLOSED) {
+          eventSource?.close();
+          eventSource = null;
+          startShortPolling();
+          clearTimeout(sseReconnectTimer);
+          sseReconnectTimer = setTimeout(() => {
+            if (typeof document !== 'undefined' && !document.hidden) setupEventSource();
+          }, 5000);
+        } else {
+          startShortPolling();
+        }
       };
     } catch {
       startShortPolling();
@@ -269,17 +284,29 @@ createApp({ setup() {
   function startShortPolling() {
     if (pollTimer) return;
     pollTimer = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
       if (page.value === 'watchlist' || compactPanelOpen.value) {
         fetchWatchlistQuotes();
       }
     }, 10000);
   }
 
-  watch(watchlist, (newList, oldList) => {
+  function stopShortPolling() {
+    if (pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+  }
+
+  let watchlistDebounceTimer = null;
+  watch(watchlist, (newList) => {
     watchlistData.value = { ...watchlistMgr.data };
     persist('market-desk-watchlist', newList);
-    fetchWatchlistQuotes();
-    setupEventSource();
+    clearTimeout(watchlistDebounceTimer);
+    watchlistDebounceTimer = setTimeout(() => {
+      fetchWatchlistQuotes();
+      setupEventSource();
+    }, 300);
   }, { deep: true });
 
   // Watchlist Actions
@@ -476,10 +503,38 @@ createApp({ setup() {
     makeChart('heatmap-chart', { tooltip: { ...tooltip, formatter: p => { const q = p.data.quote; return q ? `${q.symbol} · ${q.name}\n${num(q.price)} USD   ${pct(q.changePercent)}\n估算成交额 ${compact(q.turnover)}\n${time(q.asOf)}${q.stale ? '\n旧快照' : ''}` : ''; } }, series: [{ type: 'treemap', data, roam: false, nodeClick: false, breadcrumb: { show: false }, left: 0, right: 0, top: 0, bottom: 0, itemStyle: { borderColor: chartSurface, borderWidth: 2, gapWidth: 3, borderRadius: 5 }, label: { show: true, color: '#ffffff', fontSize: 13, formatter: p => `${p.name}\n${pct(p.data.quote?.changePercent)}`, lineHeight: 23 }, emphasis: { itemStyle: { borderColor: blue, borderWidth: 2 } } }] }, p => { if (p.data.quote) selectSymbol(p.data.quote.symbol); });
   }
 
+  function calcMA(bars, period) {
+    return bars.map((b, i) => {
+      if (i < period - 1) return '-';
+      let sum = 0;
+      for (let j = 0; j < period; j++) sum += bars[i - j].close;
+      return Number((sum / period).toFixed(2));
+    });
+  }
+
   function renderPrice() {
     const d = chart.value; if (!d || states.chart.loading) return;
     const labels = d.bars.map(b => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', month: '2-digit', day: '2-digit', ...(d.range === '1d' ? { hour: '2-digit', minute: '2-digit', hour12: false } : {}) }).format(new Date(b.time * 1000)));
-    makeChart('price-chart', { tooltip: { ...tooltip, trigger: 'axis' }, axisPointer: { link: [{ xAxisIndex: 'all' }] }, grid: [{ left: 70, right: 25, top: 30, height: '62%' }, { left: 70, right: 25, top: '76%', height: '13%' }], xAxis: [0, 1].map(i => ({ ...axis, type: 'category', data: labels, gridIndex: i, axisLabel: { show: i === 1, color: muted }, boundaryGap: true })), yAxis: [{ ...axis, scale: true, name: d.currency }, { ...axis, gridIndex: 1, name: '成交量', axisLabel: { color: muted, formatter: compact } }], dataZoom: [{ type: 'inside', xAxisIndex: [0, 1] }, { type: 'slider', xAxisIndex: [0, 1], bottom: 0, height: 18, borderColor: gridColor, textStyle: { color: muted } }], series: [{ name: '价格 OHLC', type: 'candlestick', data: d.bars.map(b => [b.open, b.close, b.low, b.high]), itemStyle: { color: green, color0: red, borderColor: green, borderColor0: red } }, { name: '成交股数', type: 'bar', xAxisIndex: 1, yAxisIndex: 1, data: d.bars.map(b => ({ value: b.volume, itemStyle: { color: b.close >= b.open ? green : red } })) }] });
+    const ma5 = calcMA(d.bars, 5);
+    const ma20 = calcMA(d.bars, 20);
+    const ma60 = calcMA(d.bars, 60);
+
+    makeChart('price-chart', {
+      tooltip: { ...tooltip, trigger: 'axis' },
+      axisPointer: { link: [{ xAxisIndex: 'all' }] },
+      legend: { data: ['价格 OHLC', 'MA5', 'MA20', 'MA60', '成交股数'], textStyle: { color: muted }, top: 0, right: 30 },
+      grid: [{ left: 70, right: 25, top: 32, height: '62%' }, { left: 70, right: 25, top: '76%', height: '13%' }],
+      xAxis: [0, 1].map(i => ({ ...axis, type: 'category', data: labels, gridIndex: i, axisLabel: { show: i === 1, color: muted }, boundaryGap: true })),
+      yAxis: [{ ...axis, scale: true, name: d.currency }, { ...axis, gridIndex: 1, name: '成交量', axisLabel: { color: muted, formatter: compact } }],
+      dataZoom: [{ type: 'inside', xAxisIndex: [0, 1] }, { type: 'slider', xAxisIndex: [0, 1], bottom: 0, height: 18, borderColor: gridColor, textStyle: { color: muted } }],
+      series: [
+        { name: '价格 OHLC', type: 'candlestick', data: d.bars.map(b => [b.open, b.close, b.low, b.high]), itemStyle: { color: green, color0: red, borderColor: green, borderColor0: red } },
+        { name: 'MA5', type: 'line', data: ma5, smooth: true, showSymbol: false, lineStyle: { width: 1.5, color: '#f37d42' } },
+        { name: 'MA20', type: 'line', data: ma20, smooth: true, showSymbol: false, lineStyle: { width: 1.5, color: '#2976ff' } },
+        { name: 'MA60', type: 'line', data: ma60, smooth: true, showSymbol: false, lineStyle: { width: 1.5, color: '#9b51e0' } },
+        { name: '成交股数', type: 'bar', xAxisIndex: 1, yAxisIndex: 1, data: d.bars.map(b => ({ value: b.volume, itemStyle: { color: b.close >= b.open ? green : red } })) }
+      ]
+    });
   }
 
   function renderRotation() {
@@ -496,8 +551,20 @@ createApp({ setup() {
     const d = options.value; if (!d || states.options.loading) return;
     const rows = d.rows.filter(r => strikeRange.value === 'all' || Math.abs(r.strike / d.spot - 1) <= Number(strikeRange.value));
     const gex = optionMetric.value === 'gex';
-    const missing = d.missingOi || (gex && d.missingGamma);
-    makeChart('options-chart', { title: missing ? { text: '数据不完整，暂不展示该汇总图', left: 'center', top: 'center', textStyle: { color: muted, fontSize: 14 } } : undefined, tooltip: { ...tooltip, trigger: 'axis' }, legend: { data: ['Call', 'Put'], textStyle: { color: muted }, top: 8 }, grid: { left: 80, right: 35, top: 50, bottom: 65 }, xAxis: { ...axis, type: 'category', name: '行权价', data: rows.map(r => String(r.strike)) }, yAxis: { ...axis, type: 'value', name: gex ? 'USD / 1% 波动' : '持仓量（合约）', axisLabel: { color: muted, formatter: compact } }, dataZoom: [{ type: 'inside' }, { type: 'slider', bottom: 5, height: 20, borderColor: gridColor, textStyle: { color: muted } }], series: missing ? [] : [{ type: 'bar', name: 'Call', itemStyle: { color: green }, data: rows.map(r => gex ? r.callGex : r.callOi) }, { type: 'bar', name: 'Put', itemStyle: { color: red }, data: rows.map(r => gex ? r.putGex : r.putOi) }] });
+    const noData = !rows.length;
+    makeChart('options-chart', {
+      title: noData ? { text: '所选范围内无期权数据', left: 'center', top: 'center', textStyle: { color: muted, fontSize: 14 } } : undefined,
+      tooltip: { ...tooltip, trigger: 'axis' },
+      legend: { data: ['Call', 'Put'], textStyle: { color: muted }, top: 8 },
+      grid: { left: 80, right: 35, top: 50, bottom: 65 },
+      xAxis: { ...axis, type: 'category', name: '行权价', data: rows.map(r => String(r.strike)) },
+      yAxis: { ...axis, type: 'value', name: gex ? 'USD / 1% 波动' : '持仓量（合约）', axisLabel: { color: muted, formatter: compact } },
+      dataZoom: [{ type: 'inside' }, { type: 'slider', bottom: 5, height: 20, borderColor: gridColor, textStyle: { color: muted } }],
+      series: noData ? [] : [
+        { type: 'bar', name: 'Call', itemStyle: { color: green }, data: rows.map(r => gex ? (r.callGex ?? 0) : (r.callOi ?? 0)) },
+        { type: 'bar', name: 'Put', itemStyle: { color: red }, data: rows.map(r => gex ? (r.putGex ?? 0) : (r.putOi ?? 0)) }
+      ]
+    });
   }
 
   function render() {
@@ -531,20 +598,48 @@ createApp({ setup() {
   watch(isDark, async value => { document.documentElement.classList.toggle('dark', value); await nextTick(); render(); });
   watch(showSettings, value => { document.body.classList.toggle('drawer-open', value && isMobile.value); });
 
+  function handleVisibilityChange() {
+    if (document.hidden) {
+      stopShortPolling();
+    } else {
+      if (page.value === 'watchlist' || compactPanelOpen.value) {
+        fetchWatchlistQuotes();
+      }
+      if (!eventSource || eventSource.readyState === 2) { // 2 = EventSource.CLOSED
+        setupEventSource();
+      }
+    }
+  }
+
+  function handleGlobalKeyDown(e) {
+    if (e.key === '/' && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') {
+      e.preventDefault();
+      const input = document.querySelector('.control-stack input');
+      input?.focus();
+      input?.select();
+    }
+  }
+
   onMounted(() => {
     refresh();
     fetchWatchlistQuotes();
     setupEventSource();
     window.addEventListener('resize', resizeLayout);
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     systemTheme?.addEventListener?.('change', followSystemTheme);
     clockTimer = setInterval(() => { clock.value = new Date(); }, 30000);
   });
 
   onUnmounted(() => {
     clearInterval(clockTimer);
-    clearInterval(pollTimer);
+    stopShortPolling();
+    clearTimeout(sseReconnectTimer);
+    clearTimeout(watchlistDebounceTimer);
     eventSource?.close();
     window.removeEventListener('resize', resizeLayout);
+    window.removeEventListener('keydown', handleGlobalKeyDown);
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
     systemTheme?.removeEventListener?.('change', followSystemTheme);
     document.body.classList.remove('drawer-open');
     Object.values(controllers).forEach(c => c.abort());
