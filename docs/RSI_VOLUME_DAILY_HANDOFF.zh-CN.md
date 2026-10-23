@@ -1,6 +1,6 @@
-**Inflection Hunter：日线 RSI + 成交量拐点改进说明 / Antigravity 执行交接**
+**Market Desk：日线 RSI + 成交量拐点改进说明 / Antigravity 执行交接**
 
-编写日期：2026-10-18。核对对象：当前本地目录 `D:\YUXIANZHAO\Code\inflection-hunter-main`。
+编写日期：2026-10-18。核对对象：当前本地目录 `D:\YUXIANZHAO\Code\Market-Desk`（Market Desk）。
 
 本轮只分析代码、解释截图并编写实施规格，没有修改应用代码。本文提出的参数是待验证的 V1 基线，不是已优化参数；没有对截图中的 SNDK 行情执行新策略回测，也没有核实线上部署是否与本地代码一致。当前目录不含 `.git`，无法给出本次代码对应的提交号。
 

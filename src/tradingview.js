@@ -17,7 +17,7 @@ function httpsJson(url, timeoutMs = 10000) {
   return new Promise((resolve, reject) => {
     const req = https.get(url, {
       headers: {
-        "User-Agent": "Mozilla/5.0 InflectionHunter/0.1",
+        "User-Agent": "Mozilla/5.0 MarketDesk/1.0",
         "Accept": "application/json,text/plain,*/*",
         "Origin": "https://www.tradingview.com",
         "Referer": "https://www.tradingview.com/"
@@ -274,7 +274,7 @@ export async function fetchTradingViewBars({ symbol, tf = "1d", limit = 600, tim
         `Sec-WebSocket-Key: ${key}`,
         "Sec-WebSocket-Version: 13",
         "Origin: https://www.tradingview.com",
-        "User-Agent: Mozilla/5.0 InflectionHunter/0.1",
+        "User-Agent: Mozilla/5.0 MarketDesk/1.0",
         "",
         ""
       ].join("\r\n");

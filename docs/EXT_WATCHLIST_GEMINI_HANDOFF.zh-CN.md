@@ -1,6 +1,6 @@
 # Gemini 实施指令：分组自选、EXT / 隔夜排序与页面动效
 
-核对日期：2026-10-22。项目：`D:\YUXIANZHAO\Code\inflection-hunter-main`。
+核对日期：2026-10-22。项目：`D:\YUXIANZHAO\Code\Market-Desk`（Market Desk）。
 
 本文是待实施的工程任务书。本轮仅检查现有代码、核查公开数据文档并编写此文件，尚未实现以下功能，也未使用任何账户验证实时数据。
 
