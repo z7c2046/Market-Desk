@@ -941,6 +941,420 @@ td { color: var(--text-primary); }
 .compact-row:hover { background: var(--surface-hover); }
 .compact-row .sym { font-weight: 600; color: var(--text-primary); }
 .compact-row .num { font-variant-numeric: tabular-nums; text-align: right; font-weight: 500; }
+/* Stitch Redesign: Institutional KPI Cards & Grids */
+.kpi-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.kpi-grid-5 {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.kpi-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 13px 15px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: var(--shadow-sm);
+  transition: transform .18s var(--ease), box-shadow .18s var(--ease), border-color .18s var(--ease);
+}
+.kpi-card:hover {
+  transform: translateY(-1.5px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--border-strong);
+}
+.kpi-card-call {
+  border-left: 4px solid var(--apple-green);
+}
+.kpi-card-put {
+  border-left: 4px solid var(--apple-red);
+}
+.kpi-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.kpi-pill {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+.kpi-pill-green { background: rgba(16, 185, 129, 0.12); color: var(--apple-green); }
+.kpi-pill-red { background: rgba(244, 63, 94, 0.12); color: var(--apple-red); }
+.kpi-pill-amber { background: rgba(245, 158, 11, 0.12); color: #d97706; }
+.kpi-pill-blue { background: rgba(37, 99, 235, 0.12); color: var(--apple-blue); }
+.kpi-pill-muted { background: var(--surface-hover); color: var(--text-secondary); }
+
+.kpi-body {
+  margin-top: 6px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.kpi-body .kpi-val {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.3px;
+}
+.kpi-body .kpi-subval {
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.kpi-foot {
+  margin-top: 5px;
+  font-size: 10.5px;
+  color: var(--text-tertiary);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Four Quadrants info strip for Capital Flows */
+.quadrant-legend-strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+}
+.quadrant-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+}
+.quadrant-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* 11 Sector Detail Table */
+.sector-breakdown-card {
+  margin-top: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  box-shadow: var(--shadow-sm);
+}
+.sector-breakdown-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.sector-breakdown-head h3 {
+  font-size: 13.5px;
+  font-weight: 700;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sector-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.sector-table th {
+  padding: 8px 12px;
+  color: var(--text-secondary);
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+.sector-table td {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+.sector-table tr:hover td {
+  background: var(--surface-hover);
+}
+
+/* News Bento Card Layout */
+.news-filter-stack {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.news-cat-tabs {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.news-cat-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.news-cat-chip {
+  padding: 5px 12px;
+  font-size: 11.5px;
+  font-weight: 600;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: var(--surface-hover);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all .15s ease;
+}
+.news-cat-chip.active {
+  background: var(--apple-blue);
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
+}
+.news-cat-chip:hover:not(.active) {
+  background: var(--border);
+  color: var(--text-primary);
+}
+.news-layout-split {
+  display: grid;
+  grid-template-columns: 1fr 310px;
+  gap: 16px;
+}
+.news-bento-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.news-card-bento {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 15px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: var(--shadow-sm);
+  transition: transform .18s var(--ease), box-shadow .18s var(--ease), border-color .18s var(--ease);
+  text-decoration: none;
+  color: inherit;
+}
+.news-card-bento:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: rgba(37, 99, 235, 0.35);
+}
+.news-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.news-source-tag {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--apple-blue);
+  background: rgba(37, 99, 235, 0.08);
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-family: inherit;
+}
+.news-sentiment-tag {
+  font-size: 9.5px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+.news-card-bento h3 {
+  font-size: 13.5px;
+  font-weight: 700;
+  line-height: 1.45;
+  color: var(--text-primary);
+  margin: 0 0 6px;
+  transition: color .15s ease;
+}
+.news-card-bento:hover h3 {
+  color: var(--apple-blue);
+}
+.news-tickers-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 8px 0;
+}
+.news-ticker-pill {
+  font-size: 10px;
+  font-weight: 700;
+  font-family: monospace;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+}
+.news-card-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 10.5px;
+  color: var(--text-tertiary);
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+  margin-top: 6px;
+}
+
+/* Right Rail Widgets (Macro Calendar, Trending, Direct Feeds) */
+.right-rail-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.rail-widget {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  box-shadow: var(--shadow-sm);
+}
+.rail-widget-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.rail-widget-head h4 {
+  font-size: 12px;
+  font-weight: 700;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.calendar-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+}
+.calendar-item:last-child { border-bottom: 0; }
+.calendar-top {
+  display: flex;
+  justify-content: space-between;
+  font-weight: 600;
+}
+.calendar-sub {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  display: flex;
+  justify-content: space-between;
+}
+.trending-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.trending-tag {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all .15s ease;
+}
+.trending-tag:hover {
+  background: var(--accent-bg);
+  border-color: var(--apple-blue);
+  color: var(--apple-blue);
+}
+.source-status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  padding: 4px 0;
+  color: var(--text-secondary);
+}
+.source-status-ok {
+  color: var(--apple-green);
+  font-family: monospace;
+  font-weight: 700;
+  font-size: 10.5px;
+}
+
+/* Watchlist Day Range Mini Bar */
+.day-range-mini {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+  min-width: 130px;
+  max-width: 170px;
+  margin: 0 auto;
+}
+.day-range-mini .range-val {
+  font-size: 10px;
+  font-family: inherit;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.day-range-mini .range-track {
+  flex: 1;
+  height: 5px;
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+  position: relative;
+}
+.day-range-mini .range-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #10b981, #059669);
+  transition: width .25s ease;
+}
+
+@media (max-width: 1200px) {
+  .kpi-grid-4, .kpi-grid-5 { grid-template-columns: repeat(2, 1fr); }
+  .news-layout-split { grid-template-columns: 1fr; }
+  .news-bento-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 768px) {
+  .kpi-grid-4, .kpi-grid-5 { grid-template-columns: 1fr; }
+  .quadrant-legend-strip { grid-template-columns: 1fr 1fr; }
+}
+
 @media (max-width:370px) {
   .market-clock { display: none; }
   .color-scale i { width: 70px; }

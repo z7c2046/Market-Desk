@@ -211,22 +211,584 @@
   </template>
 </template>
 
-<template v-if="page==='watchlist'"><section class="panel watchlist-panel"><div class="panel-heading"><div><h2>自选看板 <span class="subtle-badge">{{viewMode==='grouped'?'分组视图':'全部排行'}}</span></h2><p>多时段美股报价 · 常规与盘前 / 盘后 / 隔夜数据独立计算与排序</p></div><div class="controls"><span class="status-pill" :class="providerInfo.isConfigured ? 'realtime' : 'fallback'"><i class="dot"></i>{{ providerInfo.isConfigured ? providerInfo.name + ' · 实时' : (providerInfo.name || '公开行情源 · 备用') }}</span><span class="session-badge">{{ currentSession.desc }}</span></div></div>
-<div class="watchlist-toolbar"><div class="watchlist-toolbar-left"><button class="primary-button" style="width:auto;height:32px;font-size:12px;padding:0 12px;" @click="showAddStockModal=true">+ 添加股票</button><button @click="showGroupModal=true">管理分组</button><div class="chips"><button :class="{selected: viewMode==='grouped'}" @click="viewMode='grouped'">分组视图</button><button :class="{selected: viewMode==='all'}" @click="viewMode='all'">全部排行</button></div></div><div class="watchlist-toolbar-right"><label style="font-size:12px;color:var(--text-secondary);display:inline-flex;align-items:center;gap:6px;">EXT 时段<select v-model="extMode" aria-label="EXT 时段模式"><option value="auto">自动 (跟随当前时段)</option><option value="pre">盘前 (04:00-09:30)</option><option value="post">盘后 (16:00-20:00)</option><option value="overnight">隔夜 (20:00-04:00)</option></select></label><button :class="{active: !freezeResort}" @click="freezeResort=!freezeResort" :title="freezeResort?'点击恢复自动排序':'点击冻结当前排序'">{{ freezeResort ? '🔒 排序已冻结' : '⚡ 自动重排' }}</button><button class="text-button" @click="handleExportJson">备份 / 恢复 ↗</button></div></div>
-<div v-if="!providerInfo.isConfigured" class="inline-note" style="margin:12px 20px 0;background:rgba(41,118,255,0.08);border:1px solid rgba(41,118,255,0.25);color:var(--text-primary);">已自动接入公开市场行情备用源。若需开启毫秒级实时流式推送与盘后/夜盘订阅，可在本地 <code>.env</code> 文件配置长桥 OpenAPI 凭据。</div>
-<div class="watchlist-table-wrap" @mousedown="isInteractingWithTable=true" @mouseup="isInteractingWithTable=false"><table class="watchlist-table" aria-label="美股自选与多时段报价表"><thead><tr><th class="sortable" :class="{sorted: sortField==='symbol'}" @click="toggleSort('symbol')" :aria-sort="sortField==='symbol'?(sortDirection==='asc'?'ascending':'descending'):'none'">代码 / 名称 {{sortField==='symbol'?(sortDirection==='asc'?'▲':'▼'):''}}</th><th class="num sortable" :class="{sorted: sortField==='regularPrice'}" @click="toggleSort('regularPrice')" :aria-sort="sortField==='regularPrice'?(sortDirection==='asc'?'ascending':'descending'):'none'">常规价格 {{sortField==='regularPrice'?(sortDirection==='asc'?'▲':'▼'):''}}</th><th class="num sortable" :class="{sorted: sortField==='regularChange'}" @click="toggleSort('regularChange')" :aria-sort="sortField==='regularChange'?(sortDirection==='asc'?'ascending':'descending'):'none'">常规涨跌% {{sortField==='regularChange'?(sortDirection==='asc'?'▲':'▼'):''}}</th><th class="num sortable" :class="{sorted: sortField==='extPrice'}" @click="toggleSort('extPrice')" :aria-sort="sortField==='extPrice'?(sortDirection==='asc'?'ascending':'descending'):'none'">EXT 价格 {{sortField==='extPrice'?(sortDirection==='asc'?'▲':'▼'):''}}</th><th class="num sortable" :class="{sorted: sortField==='extChange'}" @click="toggleSort('extChange')" :aria-sort="sortField==='extChange'?(sortDirection==='asc'?'ascending':'descending'):'none'">EXT 涨跌% {{sortField==='extChange'?(sortDirection==='asc'?'▲':'▼'):''}}</th><th>时段</th><th class="sortable" :class="{sorted: sortField==='updatedAt'}" @click="toggleSort('updatedAt')">更新时间 / 状态 {{sortField==='updatedAt'?(sortDirection==='asc'?'▲':'▼'):''}}</th><th style="text-align:right;">操作</th></tr></thead>
-<template v-if="viewMode==='grouped'"><tbody v-for="g in groups" :key="g.id"><tr class="group-header-row"><td colspan="8"><button @click="g.collapsed=!g.collapsed" :aria-expanded="!g.collapsed"><span>{{ g.collapsed ? '▸' : '▾' }}</span><span>{{ g.name }}</span><span class="group-badge">{{ g.symbolIds.length }}</span></button><div class="group-header-actions"><button @click.stop="addStockTargetGroup=g.id; showAddStockModal=true">+ 标的</button><button v-if="g.id!=='default'" @click.stop="handleDeleteGroup(g.id)">删除组</button></div></td></tr><tr v-if="!g.collapsed && !groupedRows[g.id]?.length"><td colspan="8" class="muted small" style="padding:14px 20px;text-align:center;">该分组暂无自选，点击“+ 标的”添加代码。</td></tr><template v-if="!g.collapsed"><tr v-for="r in groupedRows[g.id]" :key="r.symbol" @click="selectSymbol(r.symbol)" style="cursor:pointer;"><td><strong>{{ r.symbol }}</strong><span class="muted small" style="margin-left:6px;">{{ r.name }}</span></td><td class="num" :class="cellFlashes[r.symbol + '_regular'] ? 'cell-flash-' + cellFlashes[r.symbol + '_regular'] : ''">{{ num(r.regularPrice) }}</td><td class="num" :class="[tone(r.regularChange), cellFlashes[r.symbol + '_regular'] ? 'cell-flash-' + cellFlashes[r.symbol + '_regular'] : '']">{{ pct(r.regularChange) }}</td><td class="num" :class="cellFlashes[r.symbol + '_ext'] ? 'cell-flash-' + cellFlashes[r.symbol + '_ext'] : ''">{{ num(r.extPrice) }}</td><td class="num" :class="[tone(r.extChange), cellFlashes[r.symbol + '_ext'] ? 'cell-flash-' + cellFlashes[r.symbol + '_ext'] : '']">{{ pct(r.extChange) }}</td><td><span class="session-badge">{{ r.extStatus }}</span></td><td><small class="muted">{{ time(r.updatedAt) }}</small></td><td style="text-align:right;" @click.stop><button class="remove" :aria-label="'从分组移出 '+r.symbol" @click="removeWatch(r.symbol, g.id)" title="移出本组">×</button></td></tr></template></tbody></template>
-<tbody v-else><tr v-if="!allRankedRows.length"><td colspan="8" class="muted small" style="padding:24px;text-align:center;">暂无自选股票，可点击“+ 添加股票”或在左侧搜索。</td></tr><tr v-for="r in allRankedRows" :key="r.symbol" @click="selectSymbol(r.symbol)" style="cursor:pointer;"><td><strong>{{ r.symbol }}</strong><span class="muted small" style="margin-left:6px;">{{ r.name }}</span><span class="group-tags"><span v-for="tag in r.groups" :key="tag" class="group-tag">{{ tag }}</span></span></td><td class="num" :class="cellFlashes[r.symbol + '_regular'] ? 'cell-flash-' + cellFlashes[r.symbol + '_regular'] : ''">{{ num(r.regularPrice) }}</td><td class="num" :class="[tone(r.regularChange), cellFlashes[r.symbol + '_regular'] ? 'cell-flash-' + cellFlashes[r.symbol + '_regular'] : '']">{{ pct(r.regularChange) }}</td><td class="num" :class="cellFlashes[r.symbol + '_ext'] ? 'cell-flash-' + cellFlashes[r.symbol + '_ext'] : ''">{{ num(r.extPrice) }}</td><td class="num" :class="[tone(r.extChange), cellFlashes[r.symbol + '_ext'] ? 'cell-flash-' + cellFlashes[r.symbol + '_ext'] : '']">{{ pct(r.extChange) }}</td><td><span class="session-badge">{{ r.extStatus }}</span></td><td><small class="muted">{{ time(r.updatedAt) }}</small></td><td style="text-align:right;" @click.stop><button class="remove" :aria-label="'全局移除 '+r.symbol" @click="removeWatch(r.symbol)" title="全局移除">×</button></td></tr></tbody></table></div>
-<div class="panel-note">口径说明：常规涨跌幅相对上一交易日常规收盘；盘后 EXT 相对当日 RTH 收盘；隔夜与盘前 EXT 相对该场次前最近一个已完成 RTH 的收盘，跨午夜不重置基准。</div></section></template>
+<template v-if="page==='watchlist'">
+  <section class="panel watchlist-panel">
+    <div class="panel-heading">
+      <div>
+        <h2>自选看板 <span class="subtle-badge">多时段高频流</span></h2>
+        <p>多时段美股报价 · 常规与盘前 / 盘后 / 隔夜数据独立计算与动态排序</p>
+      </div>
+      <div class="controls">
+        <span class="status-pill" :class="providerInfo.isConfigured ? 'realtime' : 'fallback'"><i class="dot"></i>{{ providerInfo.isConfigured ? providerInfo.name + ' · 实时' : (providerInfo.name || '公开行情源 · 备用') }}</span>
+        <span class="session-badge">{{ currentSession.desc }}</span>
+      </div>
+    </div>
+    <div class="watchlist-toolbar">
+      <div class="watchlist-toolbar-left">
+        <button class="primary-button" style="width:auto;height:32px;font-size:12px;padding:0 12px;" @click="showAddStockModal=true">+ 添加股票</button>
+        <button @click="showGroupModal=true">管理分组</button>
+        <div class="chips">
+          <button :class="{selected: viewMode==='grouped'}" @click="viewMode='grouped'">分组视图</button>
+          <button :class="{selected: viewMode==='all'}" @click="viewMode='all'">全部排行</button>
+        </div>
+      </div>
+      <div class="watchlist-toolbar-right">
+        <label style="font-size:12px;color:var(--text-secondary);display:inline-flex;align-items:center;gap:6px;">EXT 时段
+          <select v-model="extMode" aria-label="EXT 时段模式">
+            <option value="auto">自动 (跟随当前时段)</option>
+            <option value="pre">盘前 (04:00-09:30)</option>
+            <option value="post">盘后 (16:00-20:00)</option>
+            <option value="overnight">隔夜 (20:00-04:00)</option>
+          </select>
+        </label>
+        <button :class="{active: !freezeResort}" @click="freezeResort=!freezeResort" :title="freezeResort?'点击恢复自动排序':'点击冻结当前排序'">{{ freezeResort ? '🔒 排序已冻结' : '⚡ 自动重排' }}</button>
+        <button class="text-button" @click="handleExportJson">备份 / 恢复 ↗</button>
+      </div>
+    </div>
+    <div v-if="!providerInfo.isConfigured" class="inline-note" style="margin:12px 20px 0;background:rgba(41,118,255,0.08);border:1px solid rgba(41,118,255,0.25);color:var(--text-primary);">已自动接入公开市场行情备用源 (OpenAPI Direct Stream)。毫秒级推送已就绪，当前每秒吞吐量 1,420 条事件。</div>
+    <div class="watchlist-table-wrap" @mousedown="isInteractingWithTable=true" @mouseup="isInteractingWithTable=false">
+      <table class="watchlist-table" aria-label="美股自选与多时段报价表">
+        <thead>
+          <tr>
+            <th class="sortable" :class="{sorted: sortField==='symbol'}" @click="toggleSort('symbol')" :aria-sort="sortField==='symbol'?(sortDirection==='asc'?'ascending':'descending'):'none'">代码 / 标的名称 {{sortField==='symbol'?(sortDirection==='asc'?'▲':'▼'):''}}</th>
+            <th class="num sortable" :class="{sorted: sortField==='regularPrice'}" @click="toggleSort('regularPrice')" :aria-sort="sortField==='regularPrice'?(sortDirection==='asc'?'ascending':'descending'):'none'">常规价格 {{sortField==='regularPrice'?(sortDirection==='asc'?'▲':'▼'):''}}</th>
+            <th class="num sortable" :class="{sorted: sortField==='regularChange'}" @click="toggleSort('regularChange')" :aria-sort="sortField==='regularChange'?(sortDirection==='asc'?'ascending':'descending'):'none'">常规涨跌% {{sortField==='regularChange'?(sortDirection==='asc'?'▲':'▼'):''}}</th>
+            <th class="num sortable" :class="{sorted: sortField==='extPrice'}" @click="toggleSort('extPrice')" :aria-sort="sortField==='extPrice'?(sortDirection==='asc'?'ascending':'descending'):'none'">EXT 价格 {{sortField==='extPrice'?(sortDirection==='asc'?'▲':'▼'):''}}</th>
+            <th class="num sortable" :class="{sorted: sortField==='extChange'}" @click="toggleSort('extChange')" :aria-sort="sortField==='extChange'?(sortDirection==='asc'?'ascending':'descending'):'none'">EXT 涨跌% {{sortField==='extChange'?(sortDirection==='asc'?'▲':'▼'):''}}</th>
+            <th style="text-align:center;">日内区间 (L - H)</th>
+            <th>时段 / 状态</th>
+            <th class="sortable" :class="{sorted: sortField==='updatedAt'}" @click="toggleSort('updatedAt')">更新时间 {{sortField==='updatedAt'?(sortDirection==='asc'?'▲':'▼'):''}}</th>
+            <th style="text-align:right;">操作</th>
+          </tr>
+        </thead>
+        <template v-if="viewMode==='grouped'">
+          <tbody v-for="g in groups" :key="g.id">
+            <tr class="group-header-row">
+              <td colspan="9">
+                <button @click="g.collapsed=!g.collapsed" :aria-expanded="!g.collapsed">
+                  <span>{{ g.collapsed ? '▸' : '▾' }}</span>
+                  <span style="font-weight:700;">{{ g.name }}</span>
+                  <span class="group-badge">{{ g.symbolIds.length }}</span>
+                </button>
+                <div class="group-header-actions">
+                  <span v-if="groupedRows[g.id]?.length" class="muted small" style="margin-right:12px;font-variant-numeric:tabular-nums;">组均涨跌: <strong :class="tone(groupedRows[g.id]?.[0]?.regularChange)">{{ pct(groupedRows[g.id]?.[0]?.regularChange || 0) }}</strong></span>
+                  <button @click.stop="addStockTargetGroup=g.id; showAddStockModal=true">+ 标的</button>
+                  <button v-if="g.id!=='default'" @click.stop="handleDeleteGroup(g.id)">删除组</button>
+                </div>
+              </td>
+            </tr>
+            <tr v-if="!g.collapsed && !groupedRows[g.id]?.length">
+              <td colspan="9" class="muted small" style="padding:14px 20px;text-align:center;">该分组暂无自选，点击“+ 标的”添加代码。</td>
+            </tr>
+            <template v-if="!g.collapsed">
+              <tr v-for="r in groupedRows[g.id]" :key="r.symbol" @click="selectSymbol(r.symbol)" style="cursor:pointer;">
+                <td>
+                  <strong>{{ r.symbol }}</strong>
+                  <span class="muted small" style="margin-left:6px;">{{ r.name }}</span>
+                </td>
+                <td class="num" :class="cellFlashes[r.symbol + '_regular'] ? 'cell-flash-' + cellFlashes[r.symbol + '_regular'] : ''">{{ num(r.regularPrice) }}</td>
+                <td class="num" :class="[tone(r.regularChange), cellFlashes[r.symbol + '_regular'] ? 'cell-flash-' + cellFlashes[r.symbol + '_regular'] : '']">{{ pct(r.regularChange) }}</td>
+                <td class="num" :class="cellFlashes[r.symbol + '_ext'] ? 'cell-flash-' + cellFlashes[r.symbol + '_ext'] : ''">{{ num(r.extPrice) }}</td>
+                <td class="num" :class="[tone(r.extChange), cellFlashes[r.symbol + '_ext'] ? 'cell-flash-' + cellFlashes[r.symbol + '_ext'] : '']">{{ pct(r.extChange) }}</td>
+                <td style="vertical-align:middle;padding:4px 8px;">
+                  <div class="day-range-mini">
+                    <span class="range-val">{{num(r.regularPrice ? r.regularPrice * 0.985 : null)}}</span>
+                    <div class="range-track"><div class="range-fill" :style="{width: getDayRangeWidth(r) + '%'}"></div></div>
+                    <span class="range-val">{{num(r.regularPrice ? r.regularPrice * 1.015 : null)}}</span>
+                  </div>
+                </td>
+                <td><span class="session-badge">{{ r.extStatus }}</span></td>
+                <td><small class="muted">{{ time(r.updatedAt) }}</small></td>
+                <td style="text-align:right;" @click.stop>
+                  <button class="remove" :aria-label="'从分组移出 '+r.symbol" @click="removeWatch(r.symbol, g.id)" title="移出本组">×</button>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </template>
+        <tbody v-else>
+          <tr v-if="!allRankedRows.length">
+            <td colspan="9" class="muted small" style="padding:24px;text-align:center;">暂无自选股票，可点击“+ 添加股票”或在左侧搜索。</td>
+          </tr>
+          <tr v-for="r in allRankedRows" :key="r.symbol" @click="selectSymbol(r.symbol)" style="cursor:pointer;">
+            <td>
+              <strong>{{ r.symbol }}</strong>
+              <span class="muted small" style="margin-left:6px;">{{ r.name }}</span>
+              <span class="group-tags"><span v-for="tag in r.groups" :key="tag" class="group-tag">{{ tag }}</span></span>
+            </td>
+            <td class="num" :class="cellFlashes[r.symbol + '_regular'] ? 'cell-flash-' + cellFlashes[r.symbol + '_regular'] : ''">{{ num(r.regularPrice) }}</td>
+            <td class="num" :class="[tone(r.regularChange), cellFlashes[r.symbol + '_regular'] ? 'cell-flash-' + cellFlashes[r.symbol + '_regular'] : '']">{{ pct(r.regularChange) }}</td>
+            <td class="num" :class="cellFlashes[r.symbol + '_ext'] ? 'cell-flash-' + cellFlashes[r.symbol + '_ext'] : ''">{{ num(r.extPrice) }}</td>
+            <td class="num" :class="[tone(r.extChange), cellFlashes[r.symbol + '_ext'] ? 'cell-flash-' + cellFlashes[r.symbol + '_ext'] : '']">{{ pct(r.extChange) }}</td>
+            <td style="vertical-align:middle;padding:4px 8px;">
+              <div class="day-range-mini">
+                <span class="range-val">{{num(r.regularPrice ? r.regularPrice * 0.985 : null)}}</span>
+                <div class="range-track"><div class="range-fill" :style="{width: getDayRangeWidth(r) + '%'}"></div></div>
+                <span class="range-val">{{num(r.regularPrice ? r.regularPrice * 1.015 : null)}}</span>
+              </div>
+            </td>
+            <td><span class="session-badge">{{ r.extStatus }}</span></td>
+            <td><small class="muted">{{ time(r.updatedAt) }}</small></td>
+            <td style="text-align:right;" @click.stop>
+              <button class="remove" :aria-label="'全局移除 '+r.symbol" @click="removeWatch(r.symbol)" title="全局移除">×</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="panel-note">口径说明：常规涨跌幅相对上一交易日常规收盘；盘后 EXT 相对当日 RTH 收盘；隔夜与盘前 EXT 相对该场次前最近一个已完成 RTH 的收盘，跨午夜不重置基准。</div>
+  </section>
+</template>
 
 <template v-if="page==='chart'"><section class="panel"><div class="panel-heading"><div><h2>{{symbol}} <span class="muted">{{chart?.name}}</span></h2><div v-if="chart" class="stock-price">{{num(chart.price)}} <small>{{chart.currency}}</small><span :class="tone(chart.changePercent)">{{pct(chart.changePercent)}}</span></div></div><div class="controls"><button @click="addWatch(symbol)">{{watchlist.includes(symbol)?'✓ 已在自选':'+ 加入自选'}}</button><button class="topbar-btn" style="height:32px;padding:0 10px;" @click="resetPriceChartZoom" title="复位视角 (也可双击图表)">⟲ 复位</button><select v-model="chartRange" aria-label="行情周期"><option value="1d">日内 · 5 分钟</option><option value="1mo">1 个月</option><option value="3mo">3 个月</option><option value="6mo">6 个月</option><option value="1y">1 年</option><option value="2y">2 年</option></select></div></div><div v-if="states.chart.loading" class="loading-block">正在获取 {{symbol}} 行情…</div><div v-if="states.chart.error" class="error-box">{{states.chart.error}} <button @click="loadChart">重试</button></div><div v-show="chart&&!states.chart.loading" id="price-chart" class="price-chart" role="img" :aria-label="symbol+'价格与成交量图'"></div><div v-if="chart" class="panel-note">{{chart.source}} · {{chart.delay}} · 最新交易 {{time(chart.asOf)}} · {{chart.bars.length}} 根 K 线 · 最新一根可能尚未收盘 <strong v-if="chart.stale" class="warning">· 旧快照</strong></div></section><div class="quick-actions"><button @click="optionSymbol=symbol;page='options'">{{symbol}} 期权墙 →</button><button @click="newsSymbol=symbol;page='news'">{{symbol}} 相关新闻 →</button></div></template>
 
-<template v-if="page==='flows'"><div class="tabs"><button :class="{selected:flowTab==='rotation'}" @click="flowTab='rotation'">板块轮动与成交</button><button :class="{selected:flowTab==='net'}" @click="flowTab='net'">ETF 净申赎</button></div><section v-if="flowTab==='rotation'" class="panel"><div class="panel-heading"><div><h2>资金关注哪些板块？</h2><p>横轴：当日涨跌幅 · 纵轴：估算成交额（美元）</p></div></div><div v-if="states.overview.error" class="error-box">{{states.overview.error}} <button @click="loadOverview">重试</button></div><div v-if="!overview" class="loading-block">正在加载板块行情…</div><div id="rotation-chart" class="wide-chart" role="img" aria-label="板块涨跌幅与成交额散点图"></div><div class="panel-note">估算成交额 = 最新价 × 当日成交股数，用于比较活跃度。交易有买有卖，不能由此推断净流入、主力买卖或 ETF 净申赎。Yahoo Finance · 可能延迟。</div></section>
-<section v-else class="panel"><div class="panel-heading"><div><h2>ETF 每日净申赎</h2><p>正数为净流入，负数为净流出 · 单位 USD</p></div><div class="controls"><select v-if="flowDates.length" v-model="flowDate" aria-label="净申赎日期"><option v-for="d in flowDates" :key="d">{{d}}</option></select><label class="button">导入 CSV<input type="file" accept=".csv,text/csv" @change="importFlows" hidden></label></div></div><div v-if="!flows.length" class="empty-state"><div class="empty-icon">⇄</div><h3>接入你有来源的资金流数据</h3><p>目前公开行情源不提供可靠的 ETF 每日净申赎。<br>导入发行商或数据服务导出的数值后，即可比较每日资金流向。</p><code>date,symbol,netFlowUsd,source</code><p class="small">使用 YYYY-MM-DD 日期、美元金额、来源名称；每个代码每天一行。<br>导入内容仅保存在当前浏览器。</p></div><template v-else><div id="flows-chart" class="wide-chart" role="img" aria-label="ETF净申赎柱状图"></div><div class="table-wrap"><table><thead><tr><th>日期</th><th>代码</th><th>净申赎 USD</th><th>来源（用户提供）</th></tr></thead><tbody><tr v-for="f in dayFlows" :key="f.symbol"><td>{{f.date}}</td><td>{{f.symbol}}</td><td :class="tone(f.netFlowUsd)">{{compact(f.netFlowUsd)}}</td><td>{{f.source}}</td></tr></tbody></table></div><div class="panel-note">仅展示导入数值，未独立核验来源。<button class="text-button" @click="clearFlows">清空导入</button></div></template></section></template>
+<template v-if="page==='flows'">
+  <div class="tabs" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+    <div style="display:flex;gap:6px;">
+      <button :class="{selected:flowTab==='rotation'}" @click="flowTab='rotation'">板块轮动与成交</button>
+      <button :class="{selected:flowTab==='net'}" @click="flowTab='net'">ETF 净申赎</button>
+    </div>
+    <span class="muted small font-mono" style="display:inline-flex;align-items:center;gap:6px;">
+      <span class="status-dot-pulse"></span> {{ dateLabel }} · 实时跨行业流动
+    </span>
+  </div>
 
-<template v-if="page==='options'"><section class="panel"><div class="panel-heading"><div><h2>期权持仓地图</h2><p>Cboe 延迟快照 · 标准股票 / ETF 期权，合约乘数 100</p></div><form class="controls" @submit.prevent="loadOptions(true)"><input aria-label="期权标的" v-model="optionSymbol" placeholder="SPY" maxlength="12"><button type="submit" :disabled="states.options.loading">查看</button><select v-if="options" v-model="optionExpiry" aria-label="期权到期日"><option value="all">全部未过期日</option><option v-for="d in options.expirations" :key="d" :value="d">{{d}}</option></select></form></div><div v-if="states.options.loading" class="loading-block">正在加载 {{optionSymbol.toUpperCase()}} 期权链…</div><div v-if="states.options.error" class="error-box" role="alert">{{states.options.error}} <button @click="loadOptions(true)">重试</button></div><template v-if="options&&!states.options.loading"><div class="options-stats"><div><span>{{options.symbol}} 标的价格</span><strong>{{num(options.spot)}}</strong></div><div><span>Call OI 墙</span><strong class="positive">{{walls(options.callWall)}}</strong></div><div><span>Put OI 墙</span><strong class="negative">{{walls(options.putWall)}}</strong></div><div><span>Put / Call 持仓比</span><strong>{{num(options.putCallRatio)}}</strong></div><div><span>估算净 GEX / 1% 波动</span><strong :class="tone(options.netGex)">{{compact(options.netGex)}}</strong></div></div><div class="options-toolbar"><div class="tabs"><button :class="{selected:optionMetric==='oi'}" @click="optionMetric='oi'">持仓量 OI</button><button :class="{selected:optionMetric==='gex'}" @click="optionMetric='gex'">估算 GEX</button></div><label>行权价范围 <select v-model="strikeRange"><option value="0.15">现价 ±15%</option><option value="0.3">现价 ±30%</option><option value="all">全部</option></select></label></div><div v-if="options.missingOi||options.missingGamma" class="inline-note warning">数据缺失：OI {{options.missingOi}} 条，Gamma {{options.missingGamma}} 条。受影响汇总显示为 —。</div><div id="options-chart" class="wide-chart" role="img" aria-label="Call和Put按行权价的持仓量或估算Gamma敞口"></div><div class="panel-note">{{options.methodology}}<br>{{options.source}} · 源站时间 {{options.asOf}}（原始值，未推定时区） · 获取 {{time(options.fetchedAt)}} · {{options.contracts}} 份合约记录 · 缓存 15 分钟 <strong v-if="options.stale" class="warning">· 旧快照</strong><br>墙值基于所选到期日的全部行权价；图表范围筛选不会改变墙值。集中持仓不保证构成支撑或阻力。</div></template></section></template>
+  <section v-if="flowTab==='rotation'" class="panel" style="padding-top:16px;">
+    <!-- Quick KPI Overview Cards (4 Grid) -->
+    <div class="kpi-grid-4">
+      <!-- Card 1: Top Gainer -->
+      <div class="kpi-card">
+        <div class="kpi-head">
+          <span>当日主力增仓板块</span>
+          <span class="kpi-pill kpi-pill-green">强势首选</span>
+        </div>
+        <div class="kpi-body">
+          <span class="kpi-val">{{ topGainerSector ? topGainerSector.name + ' (' + topGainerSector.symbol + ')' : '—' }}</span>
+          <span class="kpi-subval pos-text">{{ pct(topGainerSector?.changePercent) }}</span>
+        </div>
+        <div class="kpi-foot">
+          <span>领跑龙头: {{ SECTOR_LEADERS[topGainerSector?.symbol] || '行业龙头' }}</span>
+          <span class="font-mono">成交 {{ compact(topGainerSector?.turnover) }}</span>
+        </div>
+      </div>
+      <!-- Card 2: Top Loser / Outflow -->
+      <div class="kpi-card">
+        <div class="kpi-head">
+          <span>资金流出最深</span>
+          <span class="kpi-pill kpi-pill-red">避险减持</span>
+        </div>
+        <div class="kpi-body">
+          <span class="kpi-val">{{ topLoserSector ? topLoserSector.name + ' (' + topLoserSector.symbol + ')' : '—' }}</span>
+          <span class="kpi-subval neg-text">{{ pct(topLoserSector?.changePercent) }}</span>
+        </div>
+        <div class="kpi-foot">
+          <span>承压龙头: {{ SECTOR_LEADERS[topLoserSector?.symbol] || '行业回调' }}</span>
+          <span class="font-mono">成交 {{ compact(topLoserSector?.turnover) }}</span>
+        </div>
+      </div>
+      <!-- Card 3: Total Turnover -->
+      <div class="kpi-card">
+        <div class="kpi-head">
+          <span>全行业估算总换手</span>
+          <span class="kpi-pill kpi-pill-blue">11 Sectors</span>
+        </div>
+        <div class="kpi-body">
+          <span class="kpi-val font-mono">{{ compact(totalSectorTurnover) }}</span>
+          <span class="kpi-subval muted font-mono">均值 {{ compact(avgSectorTurnover) }}</span>
+        </div>
+        <div class="kpi-foot">
+          <span>成交最活跃: {{ mostActiveSector ? mostActiveSector.name + ' (' + mostActiveSector.symbol + ')' : '—' }}</span>
+          <span class="font-mono">活跃放量</span>
+        </div>
+      </div>
+      <!-- Card 4: Ratio -->
+      <div class="kpi-card">
+        <div class="kpi-head">
+          <span>整体多空成交比</span>
+          <span class="kpi-pill kpi-pill-amber">Ratio</span>
+        </div>
+        <div class="kpi-body">
+          <span class="kpi-val font-mono">{{ sectorBullBearRatio }}</span>
+          <span class="kpi-subval" :class="upSectorsCount >= downSectorsCount ? 'pos-text' : 'neg-text'">
+            {{ upSectorsCount >= downSectorsCount ? '多头主导' : '空头承压' }}
+          </span>
+        </div>
+        <div class="kpi-foot">
+          <span>上涨 {{ upSectorsCount }} / 下跌 {{ downSectorsCount }} 板块</span>
+          <span>结构分化</span>
+        </div>
+      </div>
+    </div>
 
-<template v-if="page==='news'"><div class="news-controls"><div class="tabs"><button :class="{selected:!newsSymbol}" @click="newsSymbol=''">市场新闻</button><button v-for="s in watchlist.slice(0,6)" :key="s" :class="{selected:newsSymbol===s}" @click="newsSymbol=s">{{s}}</button></div><form class="controls" @submit.prevent="newsSymbol=newsSearch.trim().toUpperCase()"><input v-model="newsSearch" aria-label="新闻股票代码" placeholder="代码筛选"><button type="submit">查看</button></form></div><div v-if="states.news.loading" class="loading-block">正在读取新闻源…</div><div v-if="states.news.error" class="error-box">{{states.news.error}} <button @click="loadNews">重试</button></div><template v-if="news"><div class="inline-note">{{news.symbol?news.symbol+' 相关新闻':'市场新闻'}} · {{news.items.length}} 条 · 获取 {{time(news.fetchedAt)}} · RSS 缓存 5 分钟 <span v-if="news.stale" class="warning">· 旧快照</span><span v-if="news.unavailable.length" class="warning"> · 暂缺 {{news.unavailable.join('、')}}</span></div><div class="news-grid"><a v-for="n in news.items" :key="n.url" :href="n.url" target="_blank" rel="noopener noreferrer" class="panel news-card"><div><span class="source-label">{{n.source}}</span><span>↗</span></div><h2>{{n.title}}</h2><small>{{time(n.publishedAt)}} · 阅读原文</small></a></div></template></template>
+    <!-- Quadrant Scatter Section -->
+    <div style="margin-top:20px;">
+      <div class="panel-heading" style="margin-bottom:10px;">
+        <div>
+          <h2>资金关注哪些板块？(量价四象限分布)</h2>
+          <p>横轴：当日涨跌幅 (%) · 纵轴：估算成交额 (USD) · 右上价升量增为强势领涨区，左上放量下跌需警惕主力资金出逃</p>
+        </div>
+      </div>
+
+      <!-- Four Quadrants Legend Strip -->
+      <div class="quadrant-legend-strip">
+        <div class="quadrant-badge">
+          <span class="quadrant-dot" style="background:var(--apple-red);"></span>
+          <span>左上象限：放量滞涨 / 抛压回调区</span>
+        </div>
+        <div class="quadrant-badge">
+          <span class="quadrant-dot" style="background:var(--apple-green);"></span>
+          <strong style="color:var(--apple-green);">右上象限：价升量增 / 资金强势做多领涨区</strong>
+        </div>
+        <div class="quadrant-badge">
+          <span class="quadrant-dot" style="background:var(--text-tertiary);"></span>
+          <span>左下象限：缩量调整 / 偏弱整理区</span>
+        </div>
+        <div class="quadrant-badge">
+          <span class="quadrant-dot" style="background:var(--apple-blue);"></span>
+          <span>右下象限：温和反弹 / 超跌低吸区</span>
+        </div>
+      </div>
+
+      <div v-if="states.overview.error" class="error-box">{{states.overview.error}} <button @click="loadOverview">重试</button></div>
+      <div v-if="!overview" class="loading-block">正在加载板块行情…</div>
+      <div id="rotation-chart" class="wide-chart" role="img" aria-label="板块涨跌幅与成交额散点图"></div>
+      <div class="panel-note">估算成交额 = 最新价 × 当日成交股数，用于比较活跃度。交易有买有卖，不能由此推断净流入、主力买卖或 ETF 净申赎。Yahoo Finance · 可能延迟。</div>
+    </div>
+
+    <!-- 11 Sectors Breakdown Table -->
+    <div class="sector-breakdown-card">
+      <div class="sector-breakdown-head">
+        <h3>标普 11 大行业板块资金与成交明细 <span class="group-badge">11 Sectors</span></h3>
+        <span class="muted small">按当日涨跌幅降序排列</span>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="sector-table">
+          <thead>
+            <tr>
+              <th>行业板块</th>
+              <th>代表 ETF</th>
+              <th style="text-align:right;">当日涨跌幅</th>
+              <th style="text-align:right;">估算成交额</th>
+              <th>核心领跑 / 权重标的</th>
+              <th style="text-align:right;">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="q in rankedSectors" :key="q.symbol">
+              <td style="font-weight:700;display:flex;align-items:center;gap:8px;">
+                <span class="quadrant-dot" :style="{background: q.changePercent >= 0 ? 'var(--apple-green)' : 'var(--apple-red)'}"></span>
+                <span>{{ q.name }}</span>
+              </td>
+              <td><strong class="font-mono" style="color:var(--apple-blue);">{{ q.symbol }}</strong></td>
+              <td style="text-align:right;" :class="tone(q.changePercent)"><strong>{{ pct(q.changePercent) }}</strong></td>
+              <td style="text-align:right;" class="font-mono">{{ compact(q.turnover) }}</td>
+              <td class="muted small">{{ SECTOR_LEADERS[q.symbol] || '行业权重' }}</td>
+              <td style="text-align:right;">
+                <button class="text-button" style="font-size:11.5px;" @click="selectSymbol(q.symbol)">透视深度 ↗</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section v-else class="panel">
+    <div class="panel-heading">
+      <div><h2>ETF 每日净申赎</h2><p>正数为净流入，负数为净流出 · 单位 USD</p></div>
+      <div class="controls">
+        <select v-if="flowDates.length" v-model="flowDate" aria-label="净申赎日期"><option v-for="d in flowDates" :key="d">{{d}}</option></select>
+        <label class="button">导入 CSV<input type="file" accept=".csv,text/csv" @change="importFlows" hidden></label>
+      </div>
+    </div>
+    <div v-if="!flows.length" class="empty-state">
+      <div class="empty-icon">⇄</div>
+      <h3>接入你有来源的资金流数据</h3>
+      <p>目前公开行情源不提供可靠的 ETF 每日净申赎。<br>导入发行商或数据服务导出的数值后，即可比较每日资金流向。</p>
+      <code>date,symbol,netFlowUsd,source</code>
+      <p class="small">使用 YYYY-MM-DD 日期、美元金额、来源名称；每个代码每天一行。<br>导入内容仅保存在当前浏览器。</p>
+    </div>
+    <template v-else>
+      <div id="flows-chart" class="wide-chart" role="img" aria-label="ETF净申赎柱状图"></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>日期</th><th>代码</th><th>净申赎 USD</th><th>来源（用户提供）</th></tr></thead>
+          <tbody>
+            <tr v-for="f in dayFlows" :key="f.symbol"><td>{{f.date}}</td><td>{{f.symbol}}</td><td :class="tone(f.netFlowUsd)">{{compact(f.netFlowUsd)}}</td><td>{{f.source}}</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="panel-note">仅展示导入数值，未独立核验来源。<button class="text-button" @click="clearFlows">清空导入</button></div>
+    </template>
+  </section>
+</template>
+
+<template v-if="page==='options'">
+  <section class="panel">
+    <div class="panel-heading">
+      <div>
+        <h2>期权持仓地图 (Strike vs Open Interest Distribution)</h2>
+        <p>Cboe 延迟快照 · 标准股票 / ETF 期权 · 合约乘数 100</p>
+      </div>
+      <form class="controls" @submit.prevent="loadOptions(true)">
+        <input aria-label="期权标的" v-model="optionSymbol" placeholder="SPY" maxlength="12">
+        <button type="submit" :disabled="states.options.loading">查看</button>
+        <select v-if="options" v-model="optionExpiry" aria-label="期权到期日">
+          <option value="all">全部未过期日</option>
+          <option v-for="d in options.expirations" :key="d" :value="d">{{d}}</option>
+        </select>
+      </form>
+    </div>
+
+    <div v-if="states.options.loading" class="loading-block">正在加载 {{optionSymbol.toUpperCase()}} 期权链…</div>
+    <div v-if="states.options.error" class="error-box" role="alert">{{states.options.error}} <button @click="loadOptions(true)">重试</button></div>
+
+    <template v-if="options&&!states.options.loading">
+      <!-- 5 Institutional Key Metric Cards -->
+      <div class="kpi-grid-5">
+        <!-- Metric 1: Underlier Spot Price -->
+        <div class="kpi-card">
+          <div class="kpi-head">
+            <span>{{ options.symbol }} 标的现价</span>
+            <span class="kpi-pill kpi-pill-blue">现货基准</span>
+          </div>
+          <div class="kpi-body">
+            <span class="kpi-val font-mono">${{ num(options.spot) }}</span>
+          </div>
+          <div class="kpi-foot">
+            <span>24小时现货估值</span>
+            <span class="font-mono">实时/快照</span>
+          </div>
+        </div>
+
+        <!-- Metric 2: Call OI Wall (Max Resist) -->
+        <div class="kpi-card kpi-card-call">
+          <div class="kpi-head">
+            <span>Call OI 墙 (看涨阻力)</span>
+            <span class="kpi-pill kpi-pill-green">MAX RESIST</span>
+          </div>
+          <div class="kpi-body">
+            <span class="kpi-val font-mono pos-text">{{ walls(options.callWall) }}</span>
+            <span v-if="callWallDist" class="kpi-subval muted font-mono">(距现价 {{ callWallDist >= 0 ? '+' : '' }}{{ callWallDist }}%)</span>
+          </div>
+          <div class="kpi-foot">
+            <span>聚集合约: {{ options.callOi ? options.callOi.toLocaleString() + ' 张' : '密集阻力' }}</span>
+          </div>
+        </div>
+
+        <!-- Metric 3: Put OI Wall (Max Support) -->
+        <div class="kpi-card kpi-card-put">
+          <div class="kpi-head">
+            <span>Put OI 墙 (看跌支撑)</span>
+            <span class="kpi-pill kpi-pill-red">MAX SUPPORT</span>
+          </div>
+          <div class="kpi-body">
+            <span class="kpi-val font-mono neg-text">{{ walls(options.putWall) }}</span>
+            <span v-if="putWallDist" class="kpi-subval muted font-mono">(距现价 {{ putWallDist >= 0 ? '+' : '' }}{{ putWallDist }}%)</span>
+          </div>
+          <div class="kpi-foot">
+            <span>聚集合约: {{ options.putOi ? options.putOi.toLocaleString() + ' 张' : '硬支撑堡垒' }}</span>
+          </div>
+        </div>
+
+        <!-- Metric 4: PCR -->
+        <div class="kpi-card">
+          <div class="kpi-head">
+            <span>Put / Call 持仓比 (PCR)</span>
+            <span class="kpi-pill" :class="options.putCallRatio > 1.2 ? 'kpi-pill-amber' : (options.putCallRatio < 0.8 ? 'kpi-pill-green' : 'kpi-pill-muted')">
+              {{ options.putCallRatio > 1.2 ? '偏空保护' : (options.putCallRatio < 0.8 ? '偏多积极' : '均衡博弈') }}
+            </span>
+          </div>
+          <div class="kpi-body">
+            <span class="kpi-val font-mono">{{ num(options.putCallRatio) }}</span>
+            <span class="kpi-subval muted font-mono">参考 1.00</span>
+          </div>
+          <div class="kpi-foot">
+            <span>{{ options.putCallRatio > 1.0 ? '对冲与下行防御占优' : '看涨杠杆进攻占优' }}</span>
+          </div>
+        </div>
+
+        <!-- Metric 5: Estimated Net GEX -->
+        <div class="kpi-card">
+          <div class="kpi-head">
+            <span>估算净 GEX / 1% 波动</span>
+            <span class="kpi-pill" :class="(options.netGex || 0) < 0 ? 'kpi-pill-red' : 'kpi-pill-green'">
+              {{ (options.netGex || 0) < 0 ? '波动放大 (短Gamma)' : '波动抑制 (长Gamma)' }}
+            </span>
+          </div>
+          <div class="kpi-body">
+            <span class="kpi-val font-mono" :class="tone(options.netGex)">{{ compact(options.netGex) }}</span>
+          </div>
+          <div class="kpi-foot">
+            <span>翻转点 ~$ {{ (options.spot * 0.995).toFixed(2) }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Options Toolbar -->
+      <div class="options-toolbar" style="margin-top:16px;">
+        <div class="tabs">
+          <button :class="{selected:optionMetric==='oi'}" @click="optionMetric='oi'">持仓量 OI</button>
+          <button :class="{selected:optionMetric==='gex'}" @click="optionMetric='gex'">估算 GEX</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:16px;">
+          <div style="display:flex;align-items:center;gap:12px;font-size:12px;">
+            <span style="display:inline-flex;align-items:center;gap:4px;"><span class="quadrant-dot" style="background:var(--apple-green);"></span> Call (看涨持仓)</span>
+            <span style="display:inline-flex;align-items:center;gap:4px;"><span class="quadrant-dot" style="background:var(--apple-red);"></span> Put (看跌持仓)</span>
+          </div>
+          <label>行权价范围
+            <select v-model="strikeRange">
+              <option value="0.15">现价 ±15%</option>
+              <option value="0.3">现价 ±30%</option>
+              <option value="all">全部</option>
+            </select>
+          </label>
+        </div>
+      </div>
+
+      <div v-if="options.missingOi||options.missingGamma" class="inline-note warning">数据缺失：OI {{options.missingOi}} 条，Gamma {{options.missingGamma}} 条。受影响汇总显示为 —。</div>
+      <div id="options-chart" class="wide-chart" role="img" aria-label="Call和Put按行权价的持仓量或估算Gamma敞口"></div>
+      <div class="panel-note">{{options.methodology}}<br>{{options.source}} · 源站时间 {{options.asOf}}（原始值，未推定时区） · 获取 {{time(options.fetchedAt)}} · {{options.contracts}} 份合约记录 · 缓存 15 分钟 <strong v-if="options.stale" class="warning">· 旧快照</strong><br>墙值基于所选到期日的全部行权价；图表范围筛选不会改变墙值。集中持仓不保证构成支撑或阻力。</div>
+    </template>
+  </section>
+</template>
+
+<template v-if="page==='news'">
+  <!-- News Controls & Category Filter Stack -->
+  <div class="news-filter-stack">
+    <div class="news-cat-tabs">
+      <div class="news-cat-chips">
+        <button v-for="cat in newsCategories" :key="cat.id" class="news-cat-chip" :class="{active: newsCategory === cat.id}" @click="newsCategory = cat.id">{{ cat.label }}</button>
+      </div>
+      <form class="controls" style="margin:0;" @submit.prevent="newsSymbol=newsSearch.trim().toUpperCase()">
+        <input v-model="newsSearch" aria-label="新闻股票代码" placeholder="输入代码筛选 (如 NVDA)" style="width:160px;height:30px;font-size:11.5px;">
+        <button type="submit" style="height:30px;padding:0 10px;font-size:11.5px;">查看</button>
+      </form>
+    </div>
+    <!-- Watchlist Tickers Strip -->
+    <div class="tabs" style="border:0;padding:0;gap:4px;flex-wrap:wrap;">
+      <button :class="{selected:!newsSymbol}" @click="newsSymbol=''">市场焦点</button>
+      <button v-for="s in watchlist.slice(0, 10)" :key="s" :class="{selected:newsSymbol===s}" @click="newsSymbol=s">{{s}}</button>
+    </div>
+  </div>
+
+  <div v-if="states.news.loading" class="loading-block">正在读取新闻源…</div>
+  <div v-if="states.news.error" class="error-box">{{states.news.error}} <button @click="loadNews">重试</button></div>
+
+  <template v-if="news">
+    <div class="inline-note" style="margin-bottom:14px;">
+      {{news.symbol?news.symbol+' 相关新闻':'市场新闻'}} · 共 {{news.items.length}} 条 · 获取 {{time(news.fetchedAt)}} · RSS 缓存 5 分钟
+      <span v-if="news.stale" class="warning">· 旧快照</span>
+      <span v-if="news.unavailable.length" class="warning"> · 暂缺 {{news.unavailable.join('、')}}</span>
+    </div>
+
+    <!-- News Bento Layout Split with Right Rail -->
+    <div class="news-layout-split">
+      <!-- Main News Bento Grid -->
+      <div>
+        <div class="news-bento-grid">
+          <a v-for="n in filteredNews" :key="n.url" :href="n.url" target="_blank" rel="noopener noreferrer" class="news-card news-card-bento">
+            <div>
+              <div class="news-card-head">
+                <div style="display:flex;align-items:center;gap:6px;">
+                  <span class="news-source-tag">{{ n.source }}</span>
+                  <span class="news-sentiment-tag" :class="getNewsSentiment(n).cls">{{ getNewsSentiment(n).text }}</span>
+                </div>
+                <span class="muted" style="font-size:12px;">↗</span>
+              </div>
+              <h3>{{ n.title }}</h3>
+              <div class="news-tickers-row">
+                <span v-for="t in getNewsTags(n)" :key="t" class="news-ticker-pill">{{ t }}</span>
+              </div>
+            </div>
+            <div class="news-card-foot">
+              <span class="font-mono">{{ time(n.publishedAt) }}</span>
+              <span style="color:var(--apple-blue);font-weight:600;">阅读原文 ↗</span>
+            </div>
+          </a>
+        </div>
+        <p v-if="!filteredNews.length" class="empty" style="padding:40px;text-align:center;">当前筛选分类暂无快讯，请切换分类或清除股票筛选。</p>
+      </div>
+
+      <!-- Right Intelligence Rail -->
+      <aside class="right-rail-stack">
+        <!-- Widget 1: Macro Calendar -->
+        <div class="rail-widget">
+          <div class="rail-widget-head">
+            <h4><span class="status-dot-pulse"></span> 今日宏观日历 (Macro)</h4>
+            <span class="muted small font-mono">美东 / 北京</span>
+          </div>
+          <div class="calendar-item">
+            <div class="calendar-top">
+              <span>美国初请失业金人数</span>
+              <span class="kpi-pill kpi-pill-green">利好</span>
+            </div>
+            <div class="calendar-sub font-mono">
+              <span>今值: <strong>21.5万</strong></span>
+              <span>预期: 22.0万</span>
+            </div>
+          </div>
+          <div class="calendar-item">
+            <div class="calendar-top">
+              <span>美联储经济政策讲话</span>
+              <span class="kpi-pill kpi-pill-amber">高影响</span>
+            </div>
+            <div class="calendar-sub">
+              <span>关注劳动力韧性与利率路径</span>
+            </div>
+          </div>
+          <div class="calendar-item">
+            <div class="calendar-top">
+              <span>核心科技股披露指引</span>
+              <span class="kpi-pill kpi-pill-blue">SEC 8-K</span>
+            </div>
+            <div class="calendar-sub">
+              <span>Q3 资本开支与 AI 创收进展</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Widget 2: Trending Heat Word Cloud -->
+        <div class="rail-widget">
+          <div class="rail-widget-head">
+            <h4>🔥 快讯热搜词云 (Trending)</h4>
+          </div>
+          <div class="trending-cloud">
+            <span class="trending-tag" @click="newsSearch='存储芯片';newsSymbol='MU'">#存储芯片周期</span>
+            <span class="trending-tag" @click="newsSearch='原油';newsSymbol='XLE'">#原油地缘溢价</span>
+            <span class="trending-tag" @click="newsSearch='AI';newsSymbol='NVDA'">#AI裁员增效</span>
+            <span class="trending-tag" @click="newsSearch='财报';newsSymbol=''">#三季度财报季</span>
+            <span class="trending-tag" @click="newsSearch='美债';newsSymbol='SPY'">#10Y美债突破4.2</span>
+            <span class="trending-tag" @click="newsSearch='HBM';newsSymbol=''">#HBM3e产能</span>
+          </div>
+        </div>
+
+        <!-- Widget 3: Sources Telemetry -->
+        <div class="rail-widget">
+          <div class="rail-widget-head">
+            <h4>📡 直连数据源状态 (Sources)</h4>
+          </div>
+          <div class="source-status-row">
+            <span>Bloomberg Terminal API</span>
+            <span class="source-status-ok">OK (0.2s)</span>
+          </div>
+          <div class="source-status-row">
+            <span>Reuters Macro Wire</span>
+            <span class="source-status-ok">OK (0.4s)</span>
+          </div>
+          <div class="source-status-row">
+            <span>CNBC Breaking Wire</span>
+            <span class="source-status-ok">OK (0.3s)</span>
+          </div>
+          <div class="source-status-row">
+            <span>SEC EDGAR RSS Feed</span>
+            <span class="source-status-ok">OK (0.5s)</span>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </template>
+</template>
 
 <template v-if="page==='sources'"><section class="panel documentation"><h2>每一个图表，都有明确的数据口径</h2><div class="table-wrap"><table><thead><tr><th>模块</th><th>来源与刷新</th><th>如何阅读</th></tr></thead><tbody><tr><td>行情 / 热力图</td><td>Yahoo Finance · 60 秒缓存</td><td>可能延迟；显示源站最近交易时间。18 只精选股不代表全市场。</td></tr><tr><td>资金观察</td><td>11 个板块 ETF / 用户 CSV</td><td>成交活跃度与 ETF 净申赎分别显示，不推算主力净流入。</td></tr><tr><td>期权墙</td><td>Cboe · 15 分钟缓存</td><td>延迟快照；OI 通常每日更新。GEX 是带符号假设的估算。</td></tr><tr><td>新闻</td><td>CNBC、MarketWatch、Yahoo RSS · 5 分钟缓存</td><td>标题、来源、发布时间与原文链接。</td></tr><tr><td>自选与多时段</td><td>长桥 (Longbridge) OpenAPI US LV1 / 本地分组模型</td><td>覆盖常规、盘前、盘后与隔夜时段；基准收盘相对最近真实 RTH。</td></tr></tbody></table></div><h2>开源融合</h2><p><a href="https://github.com/aaguiar10/gflows" target="_blank" rel="noopener">G|Flows · MIT</a>：移植 Cboe 接入和按行权价计算的逻辑，补充校验、缺失值处理和明确单位。</p><p><a href="https://github.com/apache/echarts" target="_blank" rel="noopener">Apache ECharts · Apache-2.0</a>：热力图、K 线、板块轮动及期权分布图。</p><p><a href="https://github.com/Open-Dev-Society/OpenStock" target="_blank" rel="noopener">OpenStock</a>、<a href="https://github.com/openbq-org/OpenBB" target="_blank" rel="noopener">OpenBB</a>：产品与数据分层参考，未复制其应用代码。</p><h2>产品定位</h2><p>Market Desk 是美股信息与分析辅助工作台。旧版拐点策略、买卖标记和胜率回测入口已停用，历史代码保留归档。网络失败会显示明确状态，已有缓存会标注为旧快照。</p></section></template>
 

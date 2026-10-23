@@ -118,6 +118,137 @@ createApp({ setup() {
     const total = upSectorsCount.value + downSectorsCount.value;
     return total > 0 ? Math.round((upSectorsCount.value / total) * 100) : 50;
   });
+
+  // 11 Sectors Leader Tickers Map & Computed Metrics for Flows
+  const SECTOR_LEADERS = {
+    XLK: 'NVDA, MSFT, AAPL',
+    XLC: 'META, GOOGL, NFLX',
+    XLY: 'AMZN, TSLA, HD',
+    XLP: 'PG, COST, WMT',
+    XLE: 'XOM, CVX, COP',
+    XLF: 'JPM, BRK.B, BAC',
+    XLV: 'LLY, UNH, JNJ',
+    XLI: 'GE, CAT, UNP',
+    XLB: 'LIN, SHW, APD',
+    XLRE: 'PLD, AMT, EQIX',
+    XLU: 'NEE, SO, DUK'
+  };
+  const topGainerSector = computed(() => rankedSectors.value[0] || null);
+  const topLoserSector = computed(() => rankedSectors.value[rankedSectors.value.length - 1] || null);
+  const mostActiveSector = computed(() => {
+    const list = [...rankedSectors.value].filter(s => s.turnover !== null);
+    list.sort((a, b) => (b.turnover || 0) - (a.turnover || 0));
+    return list[0] || null;
+  });
+  const totalSectorTurnover = computed(() => {
+    return rankedSectors.value.reduce((acc, s) => acc + (s.turnover || 0), 0);
+  });
+  const avgSectorTurnover = computed(() => {
+    const count = rankedSectors.value.filter(s => s.turnover !== null).length;
+    return count > 0 ? totalSectorTurnover.value / count : 0;
+  });
+  const sectorBullBearRatio = computed(() => {
+    const up = upSectorsCount.value;
+    const down = Math.max(1, downSectorsCount.value);
+    return (up / down).toFixed(2);
+  });
+
+  // Options Computed Metrics
+  const callWallDist = computed(() => {
+    if (!options.value?.spot || !options.value?.callWall?.[0]) return null;
+    const dist = ((options.value.callWall[0] / options.value.spot) - 1) * 100;
+    return dist.toFixed(2);
+  });
+  const putWallDist = computed(() => {
+    if (!options.value?.spot || !options.value?.putWall?.[0]) return null;
+    const dist = ((options.value.putWall[0] / options.value.spot) - 1) * 100;
+    return dist.toFixed(2);
+  });
+
+  // News Category Filters & Enrichment Helpers
+  const newsCategory = ref('all');
+  const newsCategories = [
+    { id: 'all', label: '全部快讯' },
+    { id: 'macro', label: '市场宏观' },
+    { id: 'movers', label: '个股异动' },
+    { id: 'earnings', label: '重磅财报' },
+    { id: 'fed', label: '美联储与利率' },
+    { id: 'tech', label: '产业与AI' }
+  ];
+
+  function getNewsSentiment(item) {
+    const title = (item.title || '').toLowerCase();
+    if (title.includes('surge') || title.includes('jump') || title.includes('high') || title.includes('gain') || title.includes('rally') || title.includes('beat')) {
+      return { text: '偏多上攻', cls: 'kpi-pill-green' };
+    }
+    if (title.includes('plunge') || title.includes('slump') || title.includes('drop') || title.includes('cut') || title.includes('fall') || title.includes('loss') || title.includes('down')) {
+      return { text: '承压走低', cls: 'kpi-pill-red' };
+    }
+    if (title.includes('fed') || title.includes('rate') || title.includes('inflation') || title.includes('senate') || title.includes('policy')) {
+      return { text: '政策焦点', cls: 'kpi-pill-amber' };
+    }
+    return { text: '焦点快讯', cls: 'kpi-pill-blue' };
+  }
+
+  function getNewsTags(item) {
+    const title = (item.title || '').toUpperCase();
+    const tags = [];
+    const candidates = ['SPY', 'QQQ', 'NVDA', 'AAPL', 'MSFT', 'TSLA', 'AMZN', 'GOOGL', 'META', 'AXP', 'MU', 'XLE', 'USO', 'BRENT'];
+    for (const sym of candidates) {
+      if (title.includes(sym)) tags.push(sym);
+    }
+    if (!tags.length) {
+      if (title.includes('OIL') || title.includes('CRUDE')) tags.push('BRENT', 'XLE');
+      else if (title.includes('TECH') || title.includes('AI')) tags.push('XLK', 'NVDA');
+      else tags.push('SPY', 'MACRO');
+    }
+    return tags.slice(0, 3);
+  }
+
+  function cleanHtmlEntities(str) {
+    if (!str) return '';
+    return str
+      .replace(/&amp;/g, '&')
+      .replace(/&apos;|&#39;/g, "'")
+      .replace(/&quot;/g, '"')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>');
+  }
+
+  const filteredNews = computed(() => {
+    const rawList = news.value?.items || [];
+    const list = rawList.map(item => ({
+      ...item,
+      title: cleanHtmlEntities(item.title)
+    }));
+    if (newsCategory.value === 'all') return list;
+    if (newsCategory.value === 'macro') {
+      return list.filter(n => /(economy|gdp|inflation|market|treasury|bond|brent|oil)/i.test(n.title));
+    }
+    if (newsCategory.value === 'movers') {
+      return list.filter(n => /(plunge|surge|jump|tumble|slump|spike|rally|record)/i.test(n.title));
+    }
+    if (newsCategory.value === 'earnings') {
+      return list.filter(n => /(earning|revenue|profit|guidance|q3|q4|capex|forecast)/i.test(n.title));
+    }
+    if (newsCategory.value === 'fed') {
+      return list.filter(n => /(fed|powell|rate|cut|hike|fomc|central bank)/i.test(n.title));
+    }
+    if (newsCategory.value === 'tech') {
+      return list.filter(n => /(tech|ai|chip|cloud|semi|nvidia|apple|microsoft|google)/i.test(n.title));
+    }
+    return list;
+  });
+
+  function getDayRangeWidth(r) {
+    const price = r.regularPrice || 100;
+    const low = r.regularLow || (price * 0.985);
+    const high = r.regularHigh || (price * 1.015);
+    if (high <= low) return 50;
+    const pctVal = ((price - low) / (high - low)) * 100;
+    return Math.max(5, Math.min(95, Math.round(pctVal)));
+  }
+
   const breadcrumbLabel = computed(() => {
     if (page.value === 'overview') return '市场总览 · 美股全景热力图 （18核心标的）';
     if (page.value === 'watchlist') return '美股自选看板 （多时段观察）';
@@ -736,7 +867,37 @@ createApp({ setup() {
 
   function renderRotation() {
     if (!overview.value) return;
-    makeChart('rotation-chart', { tooltip: { ...tooltip, formatter: p => `${p.data.name} · ${p.data.symbol}\n涨跌 ${pct(p.value[0])}\n估算成交额 ${compact(p.value[1])}` }, grid: { left: 75, right: 55, top: 35, bottom: 50 }, xAxis: { ...axis, type: 'value', name: '涨跌 %', axisLabel: { color: muted, formatter: '{value}%' } }, yAxis: { ...axis, type: 'value', name: '估算成交额 USD', axisLabel: { color: muted, formatter: compact } }, series: [{ type: 'scatter', symbolSize: 22, label: { show: true, formatter: p => p.data.name, position: 'top', color: chartText, fontSize: 11 }, data: overview.value.sectors.filter(q => Number.isFinite(q.changePercent) && q.turnover !== null).map(q => ({ value: [q.changePercent, q.turnover], name: q.name, symbol: q.symbol, itemStyle: { color: q.changePercent >= 0 ? green : red } })), markLine: { silent: true, symbol: 'none', label: { show: false }, lineStyle: { color: muted }, data: [{ xAxis: 0 }] } }] }, p => selectSymbol(p.data.symbol));
+    const avgTurn = avgSectorTurnover.value || 300000000;
+    makeChart('rotation-chart', {
+      tooltip: { ...tooltip, formatter: p => `${p.data.name} · ${p.data.symbol}\n涨跌 ${pct(p.value[0])}\n估算成交额 ${compact(p.value[1])}` },
+      grid: { left: 75, right: 55, top: 40, bottom: 50 },
+      xAxis: { ...axis, type: 'value', name: '涨跌 %', axisLabel: { color: muted, formatter: '{value}%' } },
+      yAxis: { ...axis, type: 'value', name: '估算成交额 USD', axisLabel: { color: muted, formatter: compact } },
+      series: [{
+        type: 'scatter',
+        symbolSize: p => Math.max(22, Math.min(48, Math.round(Math.sqrt((p[1] || 0) / 1000000) * 1.8))),
+        label: { show: true, formatter: p => p.data.name, position: 'top', color: chartText, fontSize: 11, fontWeight: 'bold' },
+        data: overview.value.sectors.filter(q => Number.isFinite(q.changePercent) && q.turnover !== null).map(q => ({
+          value: [q.changePercent, q.turnover],
+          name: q.name,
+          symbol: q.symbol,
+          itemStyle: {
+            color: q.changePercent >= 0 ? green : red,
+            shadowBlur: 8,
+            shadowColor: q.changePercent >= 0 ? 'rgba(16,185,129,0.35)' : 'rgba(244,63,94,0.35)'
+          }
+        })),
+        markLine: {
+          silent: true,
+          symbol: 'none',
+          lineStyle: { color: muted, type: 'dashed' },
+          data: [
+            { xAxis: 0, label: { show: true, formatter: '涨跌均衡 0%', position: 'end', color: muted, fontSize: 10 } },
+            { yAxis: avgTurn, label: { show: true, formatter: `平均成交 ${compact(avgTurn)}`, position: 'end', color: muted, fontSize: 10 } }
+          ]
+        }
+      }]
+    }, p => selectSymbol(p.data.symbol));
   }
 
   function renderFlows() {
@@ -863,6 +1024,9 @@ createApp({ setup() {
     isDeleteMode, pendingDeleteSymbol, toggleDeleteMode, handleChipClick,
     breadcrumbLabel, upSectorsCount, downSectorsCount, upSectorsRatio, isStockGainer, getSparkline,
     stockSectors, rankedSectors, quoteWindow, breadth, findQuote, barWidth, walls, num, compact, pct, tone, time,
+    SECTOR_LEADERS, topGainerSector, topLoserSector, mostActiveSector, totalSectorTurnover, avgSectorTurnover, sectorBullBearRatio,
+    callWallDist, putWallDist,
+    newsCategory, newsCategories, filteredNews, getNewsSentiment, getNewsTags, getDayRangeWidth,
     selectSymbol, search, refresh, loadOverview, loadChart, loadNews, loadOptions, resetPriceChartZoom, fetchWatchlistQuotes, importNotion, importFlows, clearFlows
   };
 } }).mount('#app');
