@@ -1212,7 +1212,7 @@ createApp({ setup() {
   function handleGlobalKeyDown(e) {
     if ((e.key === '/' || ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k')) && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') {
       e.preventDefault();
-      const input = document.querySelector('.topbar-search-form input') || document.querySelector('.control-stack input');
+      const input = document.querySelector('.sidebar-search-form input') || document.querySelector('.topbar-search-form input') || document.querySelector('.control-stack input');
       input?.focus();
       input?.select();
     }
