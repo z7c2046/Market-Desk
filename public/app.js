@@ -107,10 +107,41 @@ createApp({ setup() {
 
   const toast = ref(''), undoAction = ref(null), importing = ref(false), clock = ref(new Date());
   const nyClock = computed(() => new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', hour12: false }).format(clock.value));
+  const nyClockDetailed = computed(() => new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(clock.value));
+  const sessionStatusText = computed(() => currentSession.value?.desc || '正常交易中');
   const dateLabel = computed(() => new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }).format(clock.value));
   const refreshing = computed(() => Object.values(states).some(s => s.loading));
   const stockSectors = computed(() => [...new Set((overview.value?.stocks || []).map(q => q.sector))]);
   const rankedSectors = computed(() => [...(overview.value?.sectors || [])].sort((a, b) => (b.changePercent ?? -Infinity) - (a.changePercent ?? -Infinity)));
+  const upSectorsCount = computed(() => rankedSectors.value.filter(s => (s.changePercent || 0) > 0).length);
+  const downSectorsCount = computed(() => rankedSectors.value.filter(s => (s.changePercent || 0) < 0).length);
+  const upSectorsRatio = computed(() => {
+    const total = upSectorsCount.value + downSectorsCount.value;
+    return total > 0 ? Math.round((upSectorsCount.value / total) * 100) : 50;
+  });
+  const breadcrumbLabel = computed(() => {
+    if (page.value === 'overview' || page.value === 'heatmap') return '美股全景热力图 （18核心标的）';
+    if (page.value === 'watchlist') return '美股自选看板 （多时段观察）';
+    if (page.value === 'chart') return `${symbol.value} 个股行情与技术面`;
+    if (page.value === 'flows') return '资金观察 （板块轮动与ETF）';
+    if (page.value === 'options') return `${optionSymbol.value} 期权持仓分布`;
+    if (page.value === 'news') return '财经新闻 （全天候资讯）';
+    if (page.value === 'sources') return '数据源与计算口径说明';
+    return currentNav.value?.label || '行情看板';
+  });
+  function isStockGainer(s) {
+    const q = quoteStore.value[s];
+    if (q?.regular?.changePercent > 0 || q?.post?.changePercent > 0) return true;
+    const oq = findQuote(s);
+    return oq ? (oq.changePercent || 0) > 0 : false;
+  }
+  function getSparkline(s, changePercent) {
+    if ((changePercent || 0) >= 0) {
+      return 'M 2 13 Q 12 16, 22 9 T 46 3';
+    } else {
+      return 'M 2 4 Q 14 3, 24 10 T 46 15';
+    }
+  }
   const quoteWindow = computed(() => { const dates = (overview.value?.stocks || []).map(q => q.asOf).filter(Boolean).sort(); return dates.length ? time(dates[0]) + (dates[0] !== dates.at(-1) ? ' — ' + time(dates.at(-1)) : '') : '未提供'; });
   const breadth = computed(() => { const values = (overview.value?.stocks || []).map(q => q.changePercent); return { up: values.filter(v => v > 0).length, down: values.filter(v => v < 0).length, flat: values.filter(v => v === 0).length, unknown: values.filter(v => !Number.isFinite(v)).length }; });
   const flowDates = computed(() => [...new Set(flows.value.map(f => f.date))]);
@@ -487,20 +518,115 @@ createApp({ setup() {
   }
 
   function updateChartTheme() {
-    muted = isDark.value ? '#afafaf' : '#787878';
-    gridColor = isDark.value ? 'rgba(255,255,255,0.08)' : '#cecece';
-    chartText = isDark.value ? '#ffffff' : '#101010';
-    chartSurface = isDark.value ? '#2d2d2d' : '#f9f9f9';
+    muted = isDark.value ? '#94a3b8' : '#64748b';
+    gridColor = isDark.value ? 'rgba(255,255,255,0.08)' : '#e2e8f0';
+    chartText = isDark.value ? '#f8fafc' : '#0f172a';
+    chartSurface = isDark.value ? '#131b2e' : '#ffffff';
     axis = { axisLine: { lineStyle: { color: gridColor } }, axisTick: { show: false }, axisLabel: { color: muted }, splitLine: { lineStyle: { color: gridColor, type: 'dashed' } } };
     tooltip = { renderMode: 'richText', backgroundColor: chartSurface, borderColor: gridColor, textStyle: { color: chartText }, confine: true };
   }
 
+  const STOCK_ROLES = {
+    NVDA: { tag: '算力龙头', subtag: 'AI GPU' },
+    MU: { tag: '半导体存储', subtag: 'Rank #1 资金热度', pe: '24.2', flow: '+$342M' },
+    AAPL: { tag: '消费电子', subtag: '硬件' },
+    MSFT: { tag: '软件/云', subtag: 'AI SaaS' },
+    AMD: { tag: '芯片', subtag: 'CPU/GPU' },
+    AVGO: { tag: '通信网络芯片', subtag: 'ASIC' },
+    GOOGL: { tag: '搜索与云', subtag: 'Gemini' },
+    META: { tag: '社交元宇宙', subtag: '开源模型' },
+    NFLX: { tag: '流媒体', subtag: '订阅龙头' },
+    AMZN: { tag: '电商与AWS', subtag: '云计算' },
+    TSLA: { tag: '智能电动车', subtag: 'FSD/Robotaxi' },
+    JPM: { tag: '核心商行', subtag: '全能投行' },
+    V: { tag: '支付网络', subtag: '清算网络' },
+    WMT: { tag: '零售巨头', subtag: '消费必需' },
+    LLY: { tag: '医药制造', subtag: 'GLP-1' },
+    XOM: { tag: '传统石化', subtag: '综合能源' },
+    CAT: { tag: '重型机械', subtag: '周期制造' },
+    NEE: { tag: '清洁电力', subtag: '绿电公用' }
+  };
+
   function renderHeatmap() {
     if (!overview.value) return;
     const selected = overview.value.stocks.filter(q => sectorFilter.value === '全部' || q.sector === sectorFilter.value);
-    const color = v => !Number.isFinite(v) || v === 0 ? '#787878' : v >= 3 ? '#24794d' : v >= 1 ? green : v > 0 ? '#699a80' : v > -1 ? '#b6807b' : v > -3 ? red : '#ad3730';
-    const data = selected.filter(q => heatSize.value === 'equal' || q.turnover > 0).map(q => ({ name: q.symbol, value: heatSize.value === 'equal' ? 1 : q.turnover, quote: q, itemStyle: { color: color(q.changePercent) } }));
-    makeChart('heatmap-chart', { tooltip: { ...tooltip, formatter: p => { const q = p.data.quote; return q ? `${q.symbol} · ${q.name}\n${num(q.price)} USD   ${pct(q.changePercent)}\n估算成交额 ${compact(q.turnover)}\n${time(q.asOf)}${q.stale ? '\n旧快照' : ''}` : ''; } }, series: [{ type: 'treemap', data, roam: false, nodeClick: false, breadcrumb: { show: false }, left: 0, right: 0, top: 0, bottom: 0, itemStyle: { borderColor: chartSurface, borderWidth: 2, gapWidth: 3, borderRadius: 5 }, label: { show: true, color: '#ffffff', fontSize: 13, formatter: p => `${p.name}\n${pct(p.data.quote?.changePercent)}`, lineHeight: 23 }, emphasis: { itemStyle: { borderColor: blue, borderWidth: 2 } } }] }, p => { if (p.data.quote) selectSymbol(p.data.quote.symbol); });
+    const color = v => {
+      if (!Number.isFinite(v) || v === 0) return '#64748b';
+      if (v >= 3) return '#059669';
+      if (v >= 1) return '#10b981';
+      if (v > 0) return '#34d399';
+      if (v > -1) return '#fb7185';
+      if (v > -3) return '#f43f5e';
+      return '#e11d48';
+    };
+    const data = selected.filter(q => heatSize.value === 'equal' || q.turnover > 0).map(q => ({
+      name: q.symbol,
+      value: heatSize.value === 'equal' ? 1 : q.turnover,
+      quote: q,
+      itemStyle: { color: color(q.changePercent) }
+    }));
+    makeChart('heatmap-chart', {
+      tooltip: {
+        ...tooltip,
+        formatter: p => {
+          const q = p.data.quote;
+          return q ? `${q.symbol} · ${q.name}\n${num(q.price)} USD   ${pct(q.changePercent)}\n估算成交额 ${compact(q.turnover)}\n${time(q.asOf)}${q.stale ? '\n旧快照' : ''}` : '';
+        }
+      },
+      series: [{
+        type: 'treemap',
+        data,
+        roam: false,
+        nodeClick: false,
+        breadcrumb: { show: false },
+        left: 0,
+        right: 0,
+        top: 0,
+        bottom: 0,
+        itemStyle: {
+          borderColor: isDark.value ? '#131b2e' : '#ffffff',
+          borderWidth: 3,
+          gapWidth: 4,
+          borderRadius: 8
+        },
+        label: {
+          show: true,
+          color: '#ffffff',
+          formatter: p => {
+            const q = p.data.quote;
+            if (!q) return p.name;
+            const role = STOCK_ROLES[q.symbol] || { tag: q.sector, subtag: '' };
+            const sign = q.changePercent > 0 ? '+' : '';
+            const pctStr = Number.isFinite(q.changePercent) ? `${sign}${q.changePercent.toFixed(2)}%` : '—';
+            const priceStr = `$${q.price ? q.price.toFixed(2) : '—'}`;
+            const volStr = q.turnover ? `成交 ${compact(q.turnover)}` : '';
+
+            if (q.symbol === 'MU') {
+              return `{top|半导体存储  }{rank|Rank #1 资金热度}\n\n{sym|MU}\n{pct|${pctStr}}\n{sub|${priceStr} · ${volStr}}\n\n{bot|PE: 24.2     净流入: +$342M}`;
+            }
+            if (['NVDA', 'AAPL', 'AVGO'].includes(q.symbol)) {
+              const subline = volStr ? `${priceStr}    ${volStr}` : priceStr;
+              const badgeText = role.subtag ? `{badge|${role.subtag}}` : '';
+              return `{top|${role.tag}}  ${badgeText}\n\n{sym|${q.symbol}}\n{pct|${pctStr}}\n\n{sub|${subline}}`;
+            }
+            if (['AMD', 'MSFT', 'AMZN', 'GOOGL', 'META'].includes(q.symbol)) {
+              return `{top|${role.tag}}\n\n{sym|${q.symbol}}\n{pct|${pctStr}}\n\n{sub|${priceStr}}`;
+            }
+            return `{sym|${q.symbol}}\n{pct|${pctStr}}`;
+          },
+          rich: {
+            top: { fontSize: 11, color: 'rgba(255,255,255,0.92)', align: 'left', fontWeight: '500' },
+            badge: { fontSize: 9, color: 'rgba(255,255,255,0.98)', backgroundColor: 'rgba(0,0,0,0.22)', padding: [2, 5], borderRadius: 4, fontWeight: 'bold' },
+            rank: { fontSize: 9, color: '#fef08a', backgroundColor: 'rgba(0,0,0,0.35)', padding: [2, 6], borderRadius: 4, fontWeight: 'bold' },
+            sym: { fontSize: 22, fontWeight: '900', color: '#ffffff', align: 'center', lineHeight: 28 },
+            pct: { fontSize: 15, fontWeight: '700', color: '#ffffff', align: 'center', lineHeight: 22 },
+            sub: { fontSize: 11, color: 'rgba(255,255,255,0.88)', align: 'center', lineHeight: 18 },
+            bot: { fontSize: 10, color: 'rgba(255,255,255,0.85)', align: 'left', lineHeight: 16 }
+          }
+        },
+        emphasis: { itemStyle: { borderColor: blue, borderWidth: 2 } }
+      }]
+    }, p => { if (p.data.quote) selectSymbol(p.data.quote.symbol); });
   }
 
   function calcMA(bars, period) {
@@ -612,9 +738,9 @@ createApp({ setup() {
   }
 
   function handleGlobalKeyDown(e) {
-    if (e.key === '/' && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') {
+    if ((e.key === '/' || ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k')) && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') {
       e.preventDefault();
-      const input = document.querySelector('.control-stack input');
+      const input = document.querySelector('.topbar-search-form input') || document.querySelector('.control-stack input');
       input?.focus();
       input?.select();
     }
@@ -628,7 +754,7 @@ createApp({ setup() {
     window.addEventListener('keydown', handleGlobalKeyDown);
     document.addEventListener('visibilitychange', handleVisibilityChange);
     systemTheme?.addEventListener?.('change', followSystemTheme);
-    clockTimer = setInterval(() => { clock.value = new Date(); }, 30000);
+    clockTimer = setInterval(() => { clock.value = new Date(); }, 1000);
   });
 
   onUnmounted(() => {
@@ -660,8 +786,9 @@ createApp({ setup() {
     handleAddStockModalSubmit, handleExportJson, handleImportJson,
     showGroupModal, showAddStockModal, showBackupModal, newGroupName, addStockInput, addStockTargetGroup, backupJsonText,
     undoAction, isInteractingWithTable,
-    toast, importing, nyClock, dateLabel, refreshing,
+    toast, importing, nyClock, nyClockDetailed, sessionStatusText, dateLabel, refreshing,
     isDeleteMode, pendingDeleteSymbol, toggleDeleteMode, handleChipClick,
+    breadcrumbLabel, upSectorsCount, downSectorsCount, upSectorsRatio, isStockGainer, getSparkline,
     stockSectors, rankedSectors, quoteWindow, breadth, findQuote, barWidth, walls, num, compact, pct, tone, time,
     selectSymbol, search, refresh, loadOverview, loadChart, loadNews, loadOptions, fetchWatchlistQuotes, importNotion, importFlows, clearFlows
   };

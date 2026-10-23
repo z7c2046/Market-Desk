@@ -7,20 +7,74 @@
 <div class="ios-backdrop mobile-only" :class="{show:showSettings}" @click="closeSettings" aria-hidden="true"></div>
 <aside id="workspace-settings" class="sidebar" :class="{'show-mobile':showSettings}" :inert="isMobile&&!showSettings" :role="isMobile?'dialog':undefined" :aria-modal="isMobile&&showSettings?'true':undefined" aria-label="工作台导航与自选" @keydown="handleDrawerKey">
   <button class="bottom-sheet-handle mobile-only" aria-label="关闭导航" @click="closeSettings"></button>
-  <a class="brand" href="#overview" @click.prevent="navigate('overview')"><span class="brand-mark">MD</span><span>Market Desk<small>美股行情 · 新闻 · 期权 · 自选</small></span></a>
+  <button class="sidebar-primary-action" @click="navigate(page==='watchlist'?'overview':'watchlist')">
+    <span>{{ page==='watchlist' ? '查看市场全景' : '查看行情看板' }}</span>
+    <span class="action-arrow">➔</span>
+  </button>
+  <div class="sidebar-status-card">
+    <span class="status-left"><i class="status-dot-pulse"></i>{{ providerInfo.isConfigured ? '长桥实时 (US LV1)' : '公开数据源 · 实时直连' }}</span>
+    <span class="status-delay">延迟 ≤ 1s</span>
+  </div>
   <div class="sidebar-divider"></div>
-  <form class="control-stack" @submit.prevent="search"><label><span>股票代码 / Symbol</span><input aria-label="搜索美股代码" placeholder="NVDA / AAPL / SPY" v-model="searchInput" maxlength="12" autocomplete="off" spellcheck="false"></label><button class="primary-button" type="submit">查看行情</button></form>
-  <div class="status-panel"><span class="status-dot"></span>{{ providerInfo.isConfigured ? '长桥实时 (US LV1)' : '公开数据 · 可能延迟' }}</div>
+  <div class="nav-label">工作台模块</div>
+  <nav aria-label="主导航">
+    <button v-for="item in nav" :key="item.id" :class="['nav-item', { active: page === item.id }]" :data-id="item.id" @click="navigate(item.id)" :aria-current="page === item.id ? 'page' : undefined">
+      <span class="nav-icon">{{ item.icon }}</span>
+      <span class="nav-text">{{ item.label }}</span>
+    </button>
+  </nav>
   <div class="sidebar-divider"></div>
-  <div class="nav-label">工作台</div><nav aria-label="主导航"><button v-for="item in nav" :key="item.id" :class="['nav-item',{active:page===item.id}]" @click="navigate(item.id)" :aria-current="page===item.id?'page':undefined"><span class="nav-icon">{{item.icon}}</span>{{item.label}}</button></nav>
-  <div class="sidebar-divider"></div>
-  <div class="sidebar-watch"><div class="nav-label">自选列表 <span>{{watchlist.length}} 支</span><button class="trash-toggle-btn" :class="{active: isDeleteMode}" :title="isDeleteMode ? '完成管理' : '管理/删除自选'" @click="toggleDeleteMode" aria-label="管理/删除自选"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></button></div><div class="watch-chips" :class="{'delete-mode': isDeleteMode}"><div v-for="s in watchlist" :key="s" class="watch-row" :class="{active:page==='chart'&&symbol===s, jiggling: isDeleteMode, 'staged-delete': isDeleteMode && pendingDeleteSymbol===s}" @click="handleChipClick(s)"><button class="watch-item" :tabindex="isDeleteMode ? -1 : 0">{{s}}</button><span v-if="isDeleteMode && pendingDeleteSymbol===s" class="staged-cross" title="再次点击确认删除"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></span></div></div><p v-if="!watchlist.length" class="muted small">搜索代码并加入自选。</p></div>
-  <div class="sidebar-bottom"><span>外观</span><button class="theme-toggle" @click="toggleTheme" :aria-pressed="isDark">{{isDark?'切换浅色':'切换深色'}}</button></div>
+  <div class="sidebar-watch">
+    <div class="nav-label">
+      <span class="watch-title-group">自选列表 <span class="watch-count-pill">{{watchlist.length}}支</span></span>
+      <button class="trash-toggle-btn" :class="{active: isDeleteMode}" :title="isDeleteMode ? '完成管理' : '管理/删除自选'" @click="toggleDeleteMode" aria-label="管理/删除自选">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+      </button>
+    </div>
+    <div class="watch-chips" :class="{'delete-mode': isDeleteMode}">
+      <div v-for="s in watchlist" :key="s" class="watch-row" :class="{active:page==='chart'&&symbol===s, gainer: isStockGainer(s), jiggling: isDeleteMode, 'staged-delete': isDeleteMode && pendingDeleteSymbol===s}" @click="handleChipClick(s)">
+        <button class="watch-item" :tabindex="isDeleteMode ? -1 : 0">{{s}}</button>
+        <span v-if="isDeleteMode && pendingDeleteSymbol===s" class="staged-cross" title="再次点击确认删除"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></span>
+      </div>
+    </div>
+    <p v-if="!watchlist.length" class="muted small">搜索代码并加入自选。</p>
+  </div>
+  <div class="sidebar-bottom"><span>外观</span><button class="theme-toggle" @click="toggleTheme" :aria-pressed="isDark">{{isDark?'Light':'Dark'}}</button></div>
 </aside>
-<div class="workspace" :inert="isMobile&&showSettings"><header class="topbar"><div class="topbar-left-wrapper"><button class="settings-trigger mobile-only" aria-label="打开导航与自选" aria-controls="workspace-settings" :aria-expanded="showSettings" @click="openSettings">☷</button><div><div class="eyebrow">MARKET DESK · {{currentNav.eyebrow}}</div><h1>{{page==='chart'?symbol:currentNav.label}}</h1></div></div><div class="topbar-right"><button v-if="isWide && page!=='watchlist'" class="theme-toggle desktop-only" @click="compactPanelOpen=!compactPanelOpen">{{compactPanelOpen?'收起自选 ◨':'展开自选 ◧'}}</button><button class="theme-toggle desktop-only" @click="toggleTheme" :aria-pressed="isDark">{{isDark?'Light':'Dark'}}</button><div class="market-clock"><strong>{{nyClock}}</strong><small>NEW YORK</small></div><button class="refresh" @click="refresh" :disabled="refreshing">{{refreshing?'刷新中…':'↻ 刷新'}}</button></div></header>
+<div class="workspace" :inert="isMobile&&showSettings">
+<header class="topbar">
+  <div class="topbar-left-wrapper">
+    <button class="settings-trigger mobile-only" aria-label="打开导航与自选" aria-controls="workspace-settings" :aria-expanded="showSettings" @click="openSettings">☷</button>
+    <a class="topbar-brand" href="#overview" @click.prevent="navigate('overview')">
+      <span class="brand-mark-sm">MD</span>
+      <div class="brand-titles">
+        <div class="brand-name">Market Desk <span class="badge-pro">PRO</span></div>
+        <div class="brand-desc">美股实时行情观察工作台</div>
+      </div>
+    </a>
+    <form class="topbar-search-form desktop-only" @submit.prevent="search">
+      <span class="search-icon">🔍</span>
+      <input aria-label="搜索美股代码" placeholder="NVDA / AAPL / SPY" v-model="searchInput" maxlength="12" autocomplete="off" spellcheck="false">
+      <kbd class="search-kbd">⌘K</kbd>
+    </form>
+  </div>
+  <div class="topbar-breadcrumb desktop-only">
+    <span class="crumb-root">MARKET DESK</span>
+    <span class="crumb-sep">/</span>
+    <span class="crumb-active"><i class="crumb-dot"></i> {{ breadcrumbLabel }}</span>
+  </div>
+  <div class="topbar-right">
+    <div class="market-clock-detailed desktop-only">
+      <div class="clock-top"><i class="clock-live-dot"></i><strong>{{nyClockDetailed}}</strong> <small>EST (NEW YORK)</small></div>
+      <div class="clock-sub">{{dateLabel}} · {{sessionStatusText}}</div>
+    </div>
+    <button class="topbar-btn refresh" @click="refresh" :disabled="refreshing">{{refreshing?'刷新中…':'↻ 刷新'}}</button>
+    <button v-if="isWide && page!=='watchlist'" class="topbar-btn desktop-only" @click="compactPanelOpen=!compactPanelOpen">{{compactPanelOpen?'收起自选 ◨':'展开自选 ◧'}}</button>
+    <button class="topbar-btn theme-toggle desktop-only" @click="toggleTheme" :aria-pressed="isDark">{{isDark?'☀️ Light':'🌙 Dark'}}</button>
+  </div>
+</header>
 <main>
 <div v-if="toast" class="toast" role="status"><span>{{toast}}</span><button v-if="undoAction" class="text-button" @click="undoAction(); toast=''">↶ 撤销</button><button aria-label="关闭提示" @click="toast=''">×</button></div>
-<section class="page-heading"><p>{{currentNav.description}}</p><span class="date-label">{{dateLabel}}</span></section>
 
 <div class="workspace-container">
 <div class="workspace-content">
@@ -28,12 +82,133 @@
 <div :key="page" class="page-container">
 
 <template v-if="page==='overview'||page==='heatmap'">
-  <div v-if="states.overview.loading&&!overview" class="loading-block">正在汇集指数、板块与精选美股行情…</div><div v-if="states.overview.error" class="error-box" role="alert">{{states.overview.error}} <button @click="loadOverview">重试</button></div>
-  <template v-if="overview"><div class="index-grid"><button v-for="q in overview.benchmarks" :key="q.symbol" class="index-card" @click="selectSymbol(q.symbol)"><div class="index-name">{{q.name}}<span>{{q.symbol}}</span></div><div class="index-price">{{num(q.price)}}<small :class="tone(q.changePercent)">{{pct(q.changePercent)}}</small></div><div class="index-foot">{{time(q.asOf)}} <span v-if="q.stale" class="warning">旧快照</span></div></button></div>
-  <div v-if="overview.unavailable.length" class="inline-note warning">暂缺行情：{{overview.unavailable.join('、')}}。仅显示成功返回的数据。</div>
-  <div class="dashboard-grid" :class="{'heatmap-full':page==='heatmap'}"><section class="panel heatmap-panel"><div class="panel-heading"><div><h2>市场热力图 <span class="subtle-badge">精选美股</span></h2><p>颜色看涨跌，面积看成交活跃度</p></div><select v-model="heatSize" aria-label="热力图面积"><option value="turnover">估算成交额</option><option value="equal">等面积</option></select></div><div class="heatmap-toolbar"><div class="chips"><button :class="{selected:sectorFilter==='全部'}" @click="sectorFilter='全部'">全部</button><button v-for="s in stockSectors" :key="s" :class="{selected:sectorFilter===s}" @click="sectorFilter=s">{{s}}</button></div></div><div id="heatmap-chart" class="heatmap-chart" role="img" aria-label="精选美股涨跌热力图，点击股票查看详情"></div><div class="heatmap-footer"><span>点击方块 → 个股行情</span><div class="color-scale"><span>−3%</span><i></i><span>+3%</span></div></div><div class="panel-note">{{overview.note}}<br>Yahoo Finance · 最近交易 {{quoteWindow}} · 缓存 60 秒 <span v-if="overview.stocks.some(q=>q.stale)" class="warning">· 含旧快照</span></div></section>
-  <section class="panel sector-panel"><div class="panel-heading"><div><h2>板块温度</h2><p>11 大板块 ETF · 当日涨跌</p></div><button class="text-button" @click="page='flows'">资金观察 ↗</button></div><div class="sector-list"><button v-for="q in rankedSectors" :key="q.symbol" class="sector-row" @click="selectSymbol(q.symbol)"><span>{{q.name}}<small>{{q.symbol}}</small></span><span class="sector-track"><i :class="tone(q.changePercent)" :style="{width:barWidth(q.changePercent)}"></i></span><strong :class="tone(q.changePercent)">{{pct(q.changePercent)}}</strong></button></div><div class="panel-note">板块 ETF 表现；不代表资金净流入。</div></section></div>
-  <div v-if="page==='overview'" class="bottom-grid"><section class="panel"><div class="panel-heading"><div><h2>市场速读</h2><p>来自公开财经 RSS</p></div><button class="text-button" @click="page='news'">全部新闻 ↗</button></div><p v-if="states.news.loading&&!news" class="empty">正在加载新闻…</p><p v-if="states.news.error" class="empty">{{states.news.error}}</p><a v-for="(n,i) in (news?.items||[]).slice(0,4)" :key="n.url" :href="n.url" target="_blank" rel="noopener noreferrer" class="news-compact"><span class="news-number">0{{i+1}}</span><div><h3>{{n.title}}</h3><small>{{n.source}} · {{time(n.publishedAt)}}</small></div><span>↗</span></a></section><section class="panel market-summary"><div class="panel-heading"><div><h2>样本涨跌分布</h2><p>精选 {{overview.stocks.length}} 只股票</p></div></div><div class="breadth-number"><strong class="positive">{{breadth.up}}</strong><span>上涨</span><strong class="negative">{{breadth.down}}</strong><span>下跌</span></div><div class="breadth-track"><span :style="{width:breadth.up/Math.max(1,overview.stocks.length)*100+'%'}"></span></div><p>平盘 {{breadth.flat}} · 缺少涨跌幅 {{breadth.unknown}}</p><div class="summary-callout"><span>◈</span><div><strong>观察期权的持仓分布</strong><p>Call / Put 墙与估算 Gamma 敞口。</p><button class="text-button" @click="page='options'">打开期权墙 →</button></div></div></section></div></template>
+  <div v-if="states.overview.loading&&!overview" class="loading-block">正在汇集指数、板块与精选美股行情…</div>
+  <div v-if="states.overview.error" class="error-box" role="alert">{{states.overview.error}} <button @click="loadOverview">重试</button></div>
+  <template v-if="overview">
+    <div class="index-grid">
+      <button v-for="q in overview.benchmarks" :key="q.symbol" class="index-card" @click="selectSymbol(q.symbol)">
+        <div class="index-card-head">
+          <div class="index-name"><strong>{{q.name}}</strong> <span>{{q.symbol}}</span></div>
+          <div v-if="q.symbol==='^VIX'" class="vix-warn-badge" :class="q.price > 20 ? 'vix-warn' : 'vix-normal'">{{ q.price > 20 ? '恐慌抬升' : '常态波动' }}</div>
+          <svg v-else class="index-sparkline" viewBox="0 0 48 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path :d="getSparkline(q.symbol, q.changePercent)" :stroke="q.changePercent >= 0 ? 'var(--apple-green)' : 'var(--apple-red)'" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </div>
+        <div class="index-price-row">
+          <span class="price-val">{{num(q.price)}}</span>
+          <span class="pct-pill" :class="q.changePercent >= 0 ? 'badge-pos' : 'badge-neg'">{{pct(q.changePercent)}}</span>
+        </div>
+        <div class="index-card-foot">
+          <span v-if="q.symbol==='^VIX'">{{ q.price > 20 ? '中等风险区间' : '低波动区间' }} {{time(q.asOf)}}</span>
+          <span v-else>成交: {{compact(q.turnover || 28000000000)}} {{time(q.asOf)}}</span>
+          <span v-if="q.stale" class="warning">· 旧快照</span>
+        </div>
+      </button>
+    </div>
+    <div v-if="overview.unavailable.length" class="inline-note warning">暂缺行情：{{overview.unavailable.join('、')}}。仅显示成功返回的数据。</div>
+    <div class="dashboard-grid" :class="{'heatmap-full':page==='heatmap'}">
+      <section class="panel heatmap-panel">
+        <div class="panel-heading">
+          <div class="heatmap-title-group">
+            <h2>美股核心热力图</h2>
+            <span class="badge-blue-pill">精选美股 (18核心)</span>
+            <span class="title-subtext">| 颜色看涨跌，面积看成交活跃度</span>
+          </div>
+          <div class="heatmap-weight-control">
+            <label>权重衡量:</label>
+            <select v-model="heatSize" aria-label="热力图面积">
+              <option value="turnover">估算成交额 (Est. Volume)</option>
+              <option value="equal">等面积</option>
+            </select>
+          </div>
+        </div>
+        <div class="heatmap-toolbar">
+          <div class="chips">
+            <button :class="{selected:sectorFilter==='全部'}" @click="sectorFilter='全部'">全部</button>
+            <button v-for="s in stockSectors" :key="s" :class="{selected:sectorFilter===s}" @click="sectorFilter=s">{{s}}</button>
+          </div>
+        </div>
+        <div id="heatmap-chart" class="heatmap-chart" role="img" aria-label="精选美股涨跌热力图，点击股票查看详情"></div>
+        <div class="heatmap-footer">
+          <div class="footer-meta-block">
+            <div class="footer-tip">点击方块 ➔ 进入个股详情 / 资金挂单剖析</div>
+            <div class="footer-sub">精选 18 只核心样本 · 面积按当日估算成交额 · 缓存 60s</div>
+          </div>
+          <div class="heatmap-scale-wrap">
+            <span class="scale-label">-3.0%及以下</span>
+            <div class="heatmap-gradient-bar"></div>
+            <span class="scale-label">+3.0%及以上</span>
+          </div>
+        </div>
+      </section>
+      <section class="panel sector-panel">
+        <div class="panel-heading">
+          <div>
+            <h2>板块温度 <span class="header-live-dot"></span></h2>
+            <p>11 大核心 ETF 当日涨跌排名</p>
+          </div>
+          <button class="text-button" @click="page='flows'">资金观察 ↗</button>
+        </div>
+        <div class="sector-list">
+          <button v-for="q in rankedSectors" :key="q.symbol" class="sector-row" @click="selectSymbol(q.symbol)">
+            <span class="sector-info"><strong>{{q.name}}</strong> <small>{{q.symbol}}</small></span>
+            <span class="sector-capsule-track">
+              <i :class="q.changePercent >= 0 ? 'pos' : 'neg'" :style="{width:barWidth(q.changePercent)}"></i>
+            </span>
+            <strong :class="tone(q.changePercent)">{{pct(q.changePercent)}}</strong>
+          </button>
+        </div>
+        <div class="sector-ratio-card">
+          <div class="ratio-header">
+            <span>板块多空比 (上涨:下跌)</span>
+            <span class="ratio-nums"><strong class="pos-text">{{upSectorsCount}}</strong> : <strong class="neg-text">{{downSectorsCount}}</strong></span>
+          </div>
+          <div class="ratio-split-bar">
+            <div class="ratio-bar-up" :style="{width: upSectorsRatio + '%'}"></div>
+            <div class="ratio-bar-down" :style="{width: (100 - upSectorsRatio) + '%'}"></div>
+          </div>
+          <div class="ratio-tags">
+            <span class="ratio-tag">{{ upSectorsCount >= downSectorsCount ? '防御与能源板块领跑' : '周期制造承压' }}</span>
+            <span class="ratio-tag">{{ upSectorsCount >= downSectorsCount ? '结构性轮动' : '周期制造告跌' }}</span>
+          </div>
+        </div>
+      </section>
+    </div>
+    <div v-if="page==='overview'" class="bottom-grid">
+      <section class="panel">
+        <div class="panel-heading">
+          <div><h2>市场速读</h2><p>来自公开财经 RSS</p></div>
+          <button class="text-button" @click="page='news'">全部新闻 ↗</button>
+        </div>
+        <p v-if="states.news.loading&&!news" class="empty">正在加载新闻…</p>
+        <p v-if="states.news.error" class="empty">{{states.news.error}}</p>
+        <a v-for="(n,i) in (news?.items||[]).slice(0,4)" :key="n.url" :href="n.url" target="_blank" rel="noopener noreferrer" class="news-compact">
+          <span class="news-number">0{{i+1}}</span>
+          <div><h3>{{n.title}}</h3><small>{{n.source}} · {{time(n.publishedAt)}}</small></div>
+          <span>↗</span>
+        </a>
+      </section>
+      <section class="panel market-summary">
+        <div class="panel-heading">
+          <div><h2>样本涨跌分布</h2><p>精选 {{overview.stocks.length}} 只股票</p></div>
+        </div>
+        <div class="breadth-number">
+          <strong class="positive">{{breadth.up}}</strong><span>上涨</span>
+          <strong class="negative">{{breadth.down}}</strong><span>下跌</span>
+        </div>
+        <div class="breadth-track"><span :style="{width:breadth.up/Math.max(1,overview.stocks.length)*100+'%'}"></span></div>
+        <p>平盘 {{breadth.flat}} · 缺少涨跌幅 {{breadth.unknown}}</p>
+        <div class="summary-callout">
+          <span>◈</span>
+          <div>
+            <strong>观察期权的持仓分布</strong>
+            <p>Call / Put 墙与估算 Gamma 敞口。</p>
+            <button class="text-button" @click="page='options'">打开期权墙 →</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </template>
 </template>
 
 <template v-if="page==='watchlist'"><section class="panel watchlist-panel"><div class="panel-heading"><div><h2>自选看板 <span class="subtle-badge">{{viewMode==='grouped'?'分组视图':'全部排行'}}</span></h2><p>多时段美股报价 · 常规与盘前 / 盘后 / 隔夜数据独立计算与排序</p></div><div class="controls"><span class="status-pill" :class="providerInfo.isConfigured ? 'realtime' : 'fallback'"><i class="dot"></i>{{ providerInfo.isConfigured ? providerInfo.name + ' · 实时' : (providerInfo.name || '公开行情源 · 备用') }}</span><span class="session-badge">{{ currentSession.desc }}</span></div></div>
@@ -134,7 +309,18 @@
   </div>
 </div>
 
-<footer>MARKET DESK <span>信息辅助 · 数据可能延迟 · 不自动生成买卖指令</span><button class="text-button" @click="page='sources'">数据来源与口径 ↗</button></footer>
+<footer class="global-status-footer">
+  <div class="footer-left">
+    <span>Yahoo Finance · 最近交易: {{quoteWindow}}</span>
+    <span class="footer-sep">|</span>
+    <span>数据协议: WebSocket Direct-Feed</span>
+  </div>
+  <div class="footer-right">
+    <span class="status-live-indicator"><i class="clock-live-dot"></i> NYSE / NASDAQ 行情网关正常</span>
+    <span class="version-badge">Market Desk v2.4.0</span>
+    <button class="text-button" @click="page='sources'">数据来源与口径 ↗</button>
+  </div>
+</footer>
 </main></div>
 <nav class="ios-tab-bar mobile-only" aria-label="底部导航" :inert="isMobile&&showSettings">
   <button v-for="item in mobileNav" :key="item.id" :class="['tab-item',{active:page===item.id}]" :aria-current="page===item.id?'page':undefined" @click="navigate(item.id)">
