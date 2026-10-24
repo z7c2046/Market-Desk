@@ -1,8 +1,12 @@
 <!doctype html><html lang="zh-CN"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Market Desk · 美股观察工作台</title><meta name="description" content="集中观察美股行情、板块热力图、财经新闻、期权持仓分布及多时段自选看板。">
-<link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/styles.css">
-<script defer src="/vendor/vue.js"></script><script defer src="/vendor/echarts.js"></script><script type="module" src="/app.js"></script>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css?v=2.6.0">
+<script defer src="/vendor/vue.js"></script><script defer src="/vendor/echarts.js"></script><script type="module" src="/app.js?v=2.6.0"></script>
 </head><body><div id="app" v-cloak>
 <div class="ios-backdrop mobile-only" :class="{show:showSettings}" @click="closeSettings" aria-hidden="true"></div>
 <aside id="workspace-settings" class="sidebar" :class="{'show-mobile':showSettings}" :inert="isMobile&&!showSettings" :role="isMobile?'dialog':undefined" :aria-modal="isMobile&&showSettings?'true':undefined" aria-label="工作台导航与自选" @keydown="handleDrawerKey">
@@ -30,8 +34,8 @@
       <span class="action-arrow">➔</span>
     </button>
     <div class="sidebar-status-card">
-      <span class="status-left"><i class="status-dot-pulse"></i>{{ providerInfo.isConfigured ? '长桥实时 (US LV1)' : '公开数据源 · 实时直连' }}</span>
-      <span class="status-delay">延迟 ≤ 1s</span>
+      <span class="status-left"><i class="status-dot-pulse"></i>{{ providerInfo?.isConfigured ? '长桥实时 (US LV1)' : '公开行情数据源' }}</span>
+      <span class="status-delay">{{ providerInfo?.isConfigured ? '实时' : '延迟行情' }}</span>
     </div>
     <div class="sidebar-divider"></div>
     <div class="nav-label">工作台模块</div>
@@ -43,19 +47,211 @@
     </nav>
     <div class="sidebar-divider"></div>
     <div class="sidebar-watch">
-      <div class="nav-label">
-        <span class="watch-title-group">自选列表 <span class="watch-count-pill">{{watchlist.length}}支</span></span>
-        <button class="trash-toggle-btn" :class="{active: isDeleteMode}" :title="isDeleteMode ? '完成管理' : '管理/删除自选'" @click="toggleDeleteMode" aria-label="管理/删除自选">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-        </button>
-      </div>
-      <div class="watch-chips" :class="{'delete-mode': isDeleteMode}">
-        <div v-for="s in watchlist" :key="s" class="watch-row" :class="{active:page==='chart'&&symbol===s, gainer: isStockGainer(s), jiggling: isDeleteMode, 'staged-delete': isDeleteMode && pendingDeleteSymbol===s}" @click="handleChipClick(s)">
-          <button class="watch-item" :tabindex="isDeleteMode ? -1 : 0">{{s}}</button>
-          <span v-if="isDeleteMode && pendingDeleteSymbol===s" class="staged-cross" title="再次点击确认删除"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></span>
+      <div class="sidebar-watch-header">
+        <div class="watch-title-group">
+          <span class="watch-title">自选列表</span>
+          <span class="watch-count-pill">{{watchlist.length}}支</span>
+        </div>
+        <div class="sidebar-watch-actions">
+          <span class="sidebar-session-pill" :class="'sess-' + currentSession.session" :title="'美股当前交易时段：' + currentSession.desc">
+            <span v-if="currentSession.session === 'overnight'">🌙 隔夜</span>
+            <span v-else-if="currentSession.session === 'pre'">🌅 盘前</span>
+            <span v-else-if="currentSession.session === 'post'">🌇 盘后</span>
+            <span v-else>☀️ 常规</span>
+          </span>
+          <button class="watch-action-icon-btn" :class="{active: areAllGroupsCollapsed}" @click="toggleAllGroupsCollapse" :title="areAllGroupsCollapsed ? '全部展开分组' : '全部收起分组'" aria-label="收起或展开分组">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="8" y1="12" x2="16" y2="12"></line>
+              <line v-if="areAllGroupsCollapsed" x1="12" y1="8" x2="12" y2="16"></line>
+            </svg>
+          </button>
+          <button class="watch-add-btn" @click="showAddStockModal=true" title="添加自选股票" aria-label="添加自选股票">+</button>
+          <button class="trash-toggle-btn" :class="{active: isDeleteMode}" :title="isDeleteMode ? '完成管理' : '管理/删除自选'" @click="toggleDeleteMode" aria-label="管理/删除自选">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+          </button>
         </div>
       </div>
-      <p v-if="!watchlist.length" class="muted small">搜索代码并加入自选。</p>
+
+      <!-- Sort Controls Bar & Mode / EXT Selector -->
+      <div class="sidebar-sort-bar">
+        <div class="sort-pills-wrap">
+          <button class="sort-pill-btn" :class="{active: sidebarSortField === 'regularPrice'}" @click="setSidebarSort('regularPrice')" title="按常规收盘价排序">
+            价格 <span class="sort-arr" v-if="sidebarSortField === 'regularPrice'">{{ sidebarSortDirection === 'desc' ? '▼' : '▲' }}</span>
+          </button>
+          <button class="sort-pill-btn" :class="{active: sidebarSortField === 'extPrice'}" @click="setSidebarSort('extPrice')" title="按延长时段价格 (EXT) 排序">
+            EXT价 <span class="sort-arr" v-if="sidebarSortField === 'extPrice'">{{ sidebarSortDirection === 'desc' ? '▼' : '▲' }}</span>
+          </button>
+          <button class="sort-pill-btn" :class="{active: sidebarSortField === 'regularChange'}" @click="setSidebarSort('regularChange')" title="按常规涨跌幅排序">
+            常规% <span class="sort-arr" v-if="sidebarSortField === 'regularChange'">{{ sidebarSortDirection === 'desc' ? '▼' : '▲' }}</span>
+          </button>
+          <button class="sort-pill-btn" :class="{active: sidebarSortField === 'extChange'}" @click="setSidebarSort('extChange')" title="按延长时段涨跌幅排序">
+            EXT% <span class="sort-arr" v-if="sidebarSortField === 'extChange'">{{ sidebarSortDirection === 'desc' ? '▼' : '▲' }}</span>
+          </button>
+          <button class="sort-pill-btn" :class="{active: sidebarSortField === 'symbol'}" @click="setSidebarSort('symbol')" title="按股票代码 A-Z 排序">
+            代码 <span class="sort-arr" v-if="sidebarSortField === 'symbol'">{{ sidebarSortDirection === 'desc' ? '▼' : '▲' }}</span>
+          </button>
+        </div>
+        <div class="sidebar-mode-controls">
+          <button class="sidebar-viewmode-btn" :class="{active: sidebarViewMode === 'flat'}" @click="toggleSidebarViewMode" :title="sidebarViewMode === 'grouped' ? '切换为全体平铺排序' : '切换为垂直分组排列'">
+            {{ sidebarViewMode === 'grouped' ? '分组 ☰' : '平铺 ☵' }}
+          </button>
+          <select v-model="extMode" class="sidebar-ext-select" title="EXT时段观察维度" aria-label="EXT时段过滤模式">
+            <option value="auto">EXT: 自动</option>
+            <option value="overnight">🌙 隔夜</option>
+            <option value="pre">🌅 盘前</option>
+            <option value="post">🌇 盘后</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- TradingView Style Watchlist Content -->
+      <!-- 1. Vertical Grouped Sections (几行几行是一个组，可收起展开，组内排序) -->
+      <div v-if="sidebarViewMode === 'grouped'" class="tv-watchlist-wrap" :class="{'delete-mode': isDeleteMode}">
+        <div v-for="sec in sidebarGroupSections" :key="sec.id" class="tv-group-section">
+          <!-- Group Header Row -->
+          <div class="tv-group-header" @click="toggleGroupCollapse(sec.id)" :title="sec.collapsed ? '点击展开 ' + sec.name : '点击收起 ' + sec.name">
+            <div class="tv-group-header-left">
+              <span class="tv-group-chevron" :class="{ collapsed: sec.collapsed }">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </span>
+              <span class="tv-group-title">{{ sec.name }}</span>
+              <span class="tv-group-count">{{ sec.count }}</span>
+            </div>
+            <div class="tv-group-header-right">
+              <span v-if="sec.avgChange !== null" class="tv-group-avg" :class="tone(sec.avgChange)">{{ pct(sec.avgChange) }}</span>
+              <button class="tv-group-add-btn" @click.stop="openAddStockToGroup(sec.id)" title="为此分组添加股票" aria-label="为此分组添加股票">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Group Rows (几行几行是一个组) -->
+          <div v-show="!sec.collapsed" class="tv-group-body">
+            <div v-if="sec.rows.length" class="sidebar-stock-cards">
+              <div v-for="r in sec.rows" :key="r.symbol" 
+                   class="sidebar-card" 
+                   :class="{
+                     active: page==='chart' && symbol===r.symbol, 
+                     gainer: (r.regularChange || 0) > 0, 
+                     jiggling: isDeleteMode, 
+                     'staged-delete': isDeleteMode && pendingDeleteSymbol===r.symbol
+                   }" 
+                   @click="handleChipClick(r.symbol)">
+                <!-- Top Row: Ticker & Name | Regular Price & Change% -->
+                <div class="card-head">
+                  <div class="card-left">
+                    <strong class="card-sym">{{ r.symbol }}</strong>
+                    <span class="card-name" :title="r.name">{{ r.name }}</span>
+                  </div>
+                  <div class="card-quote">
+                    <span class="card-price" :class="cellFlashes[r.symbol + '_regular'] ? 'cell-flash-' + cellFlashes[r.symbol + '_regular'] : ''">{{ num(r.regularPrice) }}</span>
+                    <span class="card-pct" :class="tone(r.regularChange)">{{ pct(r.regularChange) }}</span>
+                  </div>
+                </div>
+                <!-- Bottom Row: Session Moon/Sunrise Icon & EXT Price & Change% -->
+                <div class="card-foot">
+                  <div class="card-sess-meta">
+                    <span v-if="(r.extSession || currentSession?.session) === 'overnight'" class="sess-tag overnight" title="隔夜交易时段 (20:00-04:00 EST)">
+                      <span class="sess-icon">🌙</span> <span class="sess-txt">隔夜</span>
+                    </span>
+                    <span v-else-if="(r.extSession || currentSession?.session) === 'pre'" class="sess-tag pre" title="盘前交易时段 (04:00-09:30 EST)">
+                      <span class="sess-icon">🌅</span> <span class="sess-txt">盘前</span>
+                    </span>
+                    <span v-else-if="(r.extSession || currentSession?.session) === 'post'" class="sess-tag post" title="盘后交易时段 (16:00-20:00 EST)">
+                      <span class="sess-icon">🌇</span> <span class="sess-txt">盘后</span>
+                    </span>
+                    <span v-else class="sess-tag regular" title="常规交易时段">
+                      <span class="sess-icon">☀️</span> <span class="sess-txt">常规</span>
+                    </span>
+                    <span v-if="r.extPrice == null" class="sess-sub-status">{{ r.extStatus || '无成交' }}</span>
+                  </div>
+                  <!-- EXT Price & Change% -->
+                  <div v-if="r.extPrice != null" class="card-ext-quote" :class="cellFlashes[r.symbol + '_ext'] ? 'cell-flash-' + cellFlashes[r.symbol + '_ext'] : ''">
+                    <span class="ext-lbl">EXT:</span>
+                    <span class="ext-val">{{ num(r.extPrice) }}</span>
+                    <span class="ext-pct" :class="tone(r.extChange)">{{ pct(r.extChange) }}</span>
+                  </div>
+                  <div v-else class="card-ext-quote muted-dash">
+                    <span class="ext-lbl">EXT:</span>
+                    <span class="ext-val">—</span>
+                  </div>
+                </div>
+                <!-- Delete Confirmation Cross Overlay -->
+                <span v-if="isDeleteMode && pendingDeleteSymbol===r.symbol" class="staged-cross" title="再次点击确认删除">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </span>
+              </div>
+            </div>
+            <div v-else class="tv-empty-group-notice">
+              <span>该组暂无自选标的</span>
+              <button class="tv-empty-add-btn" @click.stop="openAddStockToGroup(sec.id)">+ 添加</button>
+            </div>
+          </div>
+        </div>
+        <p v-if="!sidebarGroupSections.length" class="muted small" style="text-align:center;padding:12px;">暂无分组数据。</p>
+      </div>
+
+      <!-- 2. Flat Overall Watchlist (总体平铺排序) -->
+      <div v-else class="tv-watchlist-wrap" :class="{'delete-mode': isDeleteMode}">
+        <div v-if="sidebarFlatRows.length" class="sidebar-stock-cards">
+          <div v-for="r in sidebarFlatRows" :key="r.symbol" 
+               class="sidebar-card" 
+               :class="{
+                 active: page==='chart' && symbol===r.symbol, 
+                 gainer: (r.regularChange || 0) > 0, 
+                 jiggling: isDeleteMode, 
+                 'staged-delete': isDeleteMode && pendingDeleteSymbol===r.symbol
+               }" 
+               @click="handleChipClick(r.symbol)">
+            <div class="card-head">
+              <div class="card-left">
+                <strong class="card-sym">{{ r.symbol }}</strong>
+                <span class="card-name" :title="r.name">{{ r.name }}</span>
+              </div>
+              <div class="card-quote">
+                <span class="card-price" :class="cellFlashes[r.symbol + '_regular'] ? 'cell-flash-' + cellFlashes[r.symbol + '_regular'] : ''">{{ num(r.regularPrice) }}</span>
+                <span class="card-pct" :class="tone(r.regularChange)">{{ pct(r.regularChange) }}</span>
+              </div>
+            </div>
+            <div class="card-foot">
+              <div class="card-sess-meta">
+                <span v-if="(r.extSession || currentSession?.session) === 'overnight'" class="sess-tag overnight" title="隔夜交易时段 (20:00-04:00 EST)">
+                  <span class="sess-icon">🌙</span> <span class="sess-txt">隔夜</span>
+                </span>
+                <span v-else-if="(r.extSession || currentSession?.session) === 'pre'" class="sess-tag pre" title="盘前交易时段 (04:00-09:30 EST)">
+                  <span class="sess-icon">🌅</span> <span class="sess-txt">盘前</span>
+                </span>
+                <span v-else-if="(r.extSession || currentSession?.session) === 'post'" class="sess-tag post" title="盘后交易时段 (16:00-20:00 EST)">
+                  <span class="sess-icon">🌇</span> <span class="sess-txt">盘后</span>
+                </span>
+                <span v-else class="sess-tag regular" title="常规交易时段">
+                  <span class="sess-icon">☀️</span> <span class="sess-txt">常规</span>
+                </span>
+                <span v-if="r.extPrice == null" class="sess-sub-status">{{ r.extStatus || '无成交' }}</span>
+              </div>
+              <div v-if="r.extPrice != null" class="card-ext-quote" :class="cellFlashes[r.symbol + '_ext'] ? 'cell-flash-' + cellFlashes[r.symbol + '_ext'] : ''">
+                <span class="ext-lbl">EXT:</span>
+                <span class="ext-val">{{ num(r.extPrice) }}</span>
+                <span class="ext-pct" :class="tone(r.extChange)">{{ pct(r.extChange) }}</span>
+              </div>
+              <div v-else class="card-ext-quote muted-dash">
+                <span class="ext-lbl">EXT:</span>
+                <span class="ext-val">—</span>
+              </div>
+            </div>
+            <span v-if="isDeleteMode && pendingDeleteSymbol===r.symbol" class="staged-cross" title="再次点击确认删除">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </span>
+          </div>
+        </div>
+        <p v-if="!sidebarFlatRows.length" class="muted small" style="text-align:center;padding:12px;">该分组暂无自选标的。</p>
+      </div>
     </div>
     <div class="sidebar-bottom"><span>外观</span><button class="theme-toggle" @click="toggleTheme" :aria-pressed="isDark">{{isDark?'Light':'Dark'}}</button></div>
   </div>
@@ -79,8 +275,8 @@
   </div>
   <div class="topbar-right">
     <div class="market-clock-detailed desktop-only">
-      <div class="clock-top"><i class="clock-live-dot"></i><strong>{{nyClockDetailed}}</strong> <small>EST (NEW YORK)</small></div>
-      <div class="clock-sub">{{dateLabel}} · {{sessionStatusText}}</div>
+      <div class="clock-top"><i class="clock-live-dot"></i><strong>{{nyClockInfo.nyTime}}</strong> <small>{{nyClockInfo.nyTz}} ({{nyClockInfo.nyDate}})</small></div>
+      <div class="clock-sub">{{nyClockInfo.bjTime}} · {{sessionStatusText}}</div>
     </div>
     <button class="topbar-btn refresh" @click="refresh" :disabled="refreshing">{{refreshing?'刷新中…':'↻ 刷新'}}</button>
     <button v-if="isWide && page!=='watchlist'" class="topbar-btn desktop-only" @click="compactPanelOpen=!compactPanelOpen">{{compactPanelOpen?'收起自选 ◨':'展开自选 ◧'}}</button>
@@ -113,176 +309,128 @@
           <span class="pct-pill" :class="q.changePercent >= 0 ? 'badge-pos' : 'badge-neg'">{{pct(q.changePercent)}}</span>
         </div>
         <div class="index-card-foot">
-          <span v-if="q.symbol==='^VIX'">{{ q.price > 20 ? '中等风险区间' : '低波动区间' }} {{time(q.asOf)}}</span>
-          <span v-else>成交: {{compact(q.turnover || 28000000000)}} {{time(q.asOf)}}</span>
+          <span v-if="q.symbol==='^VIX'">{{ q.price > 20 ? '中等风险区间' : '低波动区间' }} · {{time(q.asOf)}}</span>
+          <span v-else-if="q.turnover">成交: ${{compact(q.turnover)}} · {{time(q.asOf)}}</span>
+          <span v-else>指数点位 · {{time(q.asOf)}}</span>
           <span v-if="q.stale" class="warning">· 旧快照</span>
         </div>
       </button>
     </div>
     <div v-if="overview.unavailable.length" class="inline-note warning">暂缺行情：{{overview.unavailable.join('、')}}。仅显示成功返回的数据。</div>
 
-    <!-- 宏观指标、大类资产与 CNN 情绪看板 -->
-    <div class="macro-bento-section">
-      <!-- 1. 核心盯盘资产列表（精准还原用户截图风格） -->
-      <section class="panel macro-terminal-card">
-        <div class="panel-heading">
-          <div class="macro-title-group">
-            <span class="macro-pill-badge">GLOBAL MACRO</span>
-            <h2>核心宏观与大类资产</h2>
+    <!-- 核心宏观指标与大类资产 (紧凑规格，与上方基准卡片尺寸和交互保持一致) -->
+    <div class="index-grid macro-index-grid">
+      <!-- 1. CNN 恐慌与贪婪情绪 (点击打开 CNN 原版仪表盘) -->
+      <button class="index-card macro-compact-card clickable" @click="openFearGreedModal" aria-label="查看 CNN 恐慌与贪婪情绪原版仪表盘">
+        <div class="index-card-head">
+          <div class="index-name">
+            <strong>CNN 恐慌贪婪</strong>
+            <span class="macro-badge-tag">情绪指数</span>
           </div>
-          <span class="live-pulse-badge"><i class="pulse-dot"></i> 实时基准</span>
-        </div>
-        <div class="macro-stream-list">
-          <div v-for="m in macroItems" :key="m.symbol" class="macro-stream-row" :class="{'is-gold': m.displaySymbol==='XAU/USD'}">
-            <div class="macro-cell-identity">
-              <span class="macro-icon-flag">
-                <svg v-if="m.category==='rates'||m.displaySymbol==='VIX'" class="macro-badge-svg" viewBox="0 0 36 36" width="20" height="20">
-                  <clipPath :id="'us-clip-'+m.displaySymbol"><circle cx="18" cy="18" r="18"/></clipPath>
-                  <g :clip-path="'url(#us-clip-'+m.displaySymbol+')'">
-                    <rect width="36" height="36" fill="#b22234"/>
-                    <path d="M0 5.14h36M0 10.28h36M0 15.42h36M0 20.57h36M0 25.71h36M0 30.85h36" stroke="#fff" stroke-width="2.57"/>
-                    <rect width="16" height="18" fill="#3c3b6e"/>
-                    <circle cx="5" cy="5" r="1.1" fill="#fff"/><circle cx="11" cy="5" r="1.1" fill="#fff"/>
-                    <circle cx="8" cy="9" r="1.1" fill="#fff"/><circle cx="5" cy="13" r="1.1" fill="#fff"/><circle cx="11" cy="13" r="1.1" fill="#fff"/>
-                  </g>
-                </svg>
-                <svg v-else-if="m.displaySymbol==='DXY'" class="macro-badge-svg" viewBox="0 0 36 36" width="20" height="20">
-                  <circle cx="18" cy="18" r="18" fill="#10b981"/>
-                  <text x="18" y="24" font-size="19" font-weight="900" fill="#ffffff" text-anchor="middle" font-family="system-ui, sans-serif">$</text>
-                </svg>
-                <svg v-else-if="m.category==='commodity'&&m.displaySymbol!=='XAU/USD'" class="macro-badge-svg" viewBox="0 0 36 36" width="20" height="20">
-                  <circle cx="18" cy="18" r="18" fill="#1e293b"/>
-                  <path d="M18 9 C18 9, 12 18, 12 22 A6 6 0 0 0 24 22 C24 18, 18 9, 18 9 Z" fill="#ffffff"/>
-                </svg>
-                <svg v-else-if="m.displaySymbol==='XAU/USD'" class="macro-badge-svg" viewBox="0 0 36 36" width="20" height="20">
-                  <circle cx="18" cy="18" r="18" fill="#eab308"/>
-                  <rect x="10" y="12" width="16" height="12" rx="2" fill="#fef08a" stroke="#ca8a04" stroke-width="1.5"/>
-                  <text x="18" y="21" font-size="7" font-weight="900" fill="#854d0e" text-anchor="middle" font-family="system-ui, sans-serif">AU</text>
-                </svg>
-                <span v-else>{{ m.icon }}</span>
-              </span>
-              <span class="macro-sym-name">
-                <strong class="macro-sym-code">{{ m.displaySymbol }}</strong>
-                <sup v-if="m.badge" class="macro-super-badge">{{ m.badge }}</sup>
-                <span class="macro-desc-inline">{{ m.name }}</span>
-              </span>
-            </div>
-            <div class="macro-cell-price">
-              <span class="macro-price-val">{{ formatMacroPrice(m) }}</span>
-            </div>
-            <div class="macro-cell-change">
-              <span class="macro-pct-badge" :class="m.changePercent >= 0 ? 'pct-cyan' : 'pct-rose'">
-                {{ m.changePercent >= 0 ? '+' : '' }}{{ (m.changePercent || 0).toFixed(2) }}%
-              </span>
-            </div>
+          <div class="vix-warn-badge" :class="fearGreedIndex.score <= 45 ? 'vix-warn' : 'vix-normal'">
+            {{ fearGreedIndex.rating }} ({{ fearGreedIndex.ratingEn }})
           </div>
         </div>
-      </section>
+        <div class="index-price-row">
+          <div class="macro-compact-val">
+            <span class="price-val" :class="fearGreedIndex.toneClass">{{ fearGreedIndex.score }}</span>
+            <span class="price-val-unit">/ 100</span>
+          </div>
+          <div class="fg-mini-track-inline" :title="'恐慌贪婪评分: ' + fearGreedIndex.score">
+            <div class="fg-mini-needle" :style="{ left: Math.max(3, Math.min(97, fearGreedIndex.score)) + '%' }"></div>
+          </div>
+        </div>
+        <div class="index-card-foot">
+          <span>前收: {{ fearGreedIndex.previousClose }} · 1周: {{ fearGreedIndex.previousWeek }} · 1月: {{ fearGreedIndex.previousMonth }}</span>
+          <span class="macro-open-hint">原版仪表盘 ↗</span>
+        </div>
+      </button>
 
-      <!-- 2. CNN 恐慌与贪婪指数卡片 -->
-      <section class="panel cnn-fear-greed-card">
-        <div class="panel-heading">
-          <div>
-            <span class="macro-pill-badge">SENTIMENT GAUGE</span>
-            <h2>CNN 恐慌贪婪指数</h2>
+      <!-- 2. 黄金现货/合约 XAU/USD -->
+      <button class="index-card macro-compact-card" @click="selectSymbol('GC=F')">
+        <div class="index-card-head">
+          <div class="index-name">
+            <strong>黄金连续</strong>
+            <span>XAU/USD</span>
           </div>
-          <span class="sentiment-rating-badge" :class="fearGreedIndex.toneClass">{{ fearGreedIndex.rating }} · {{ fearGreedIndex.ratingEn }}</span>
+          <span class="macro-asset-tag gold-tag">避险锚</span>
         </div>
-        <div class="fear-greed-body">
-          <div class="fg-dial-wrap">
-            <div class="fg-score-display">
-              <span class="fg-score-number" :class="fearGreedIndex.toneClass">{{ fearGreedIndex.score }}</span>
-              <span class="fg-score-max">/ 100</span>
-            </div>
-            <div class="fg-status-tag">{{ fearGreedIndex.rating }} ({{ fearGreedIndex.ratingEn }})</div>
-          </div>
+        <div class="index-price-row">
+          <span class="price-val">${{ num(goldContract.price) }}</span>
+          <span class="pct-pill" :class="goldContract.changePercent >= 0 ? 'badge-pos' : 'badge-neg'">
+            {{ pct(goldContract.changePercent) }}
+          </span>
+        </div>
+        <div class="index-card-foot">
+          <span>COMEX 黄金连续 · 24h 避险中枢</span>
+        </div>
+      </button>
 
-          <!-- 5段光谱标尺 -->
-          <div class="fg-meter-bar-container">
-            <div class="fg-meter-track">
-              <div class="fg-zone zone-extreme-fear" title="0-25 极度恐慌">极度恐慌</div>
-              <div class="fg-zone zone-fear" title="26-45 恐慌">恐慌</div>
-              <div class="fg-zone zone-neutral" title="46-55 中性">中性</div>
-              <div class="fg-zone zone-greed" title="56-75 贪婪">贪婪</div>
-              <div class="fg-zone zone-extreme-greed" title="76-100 极度贪婪">极度贪婪</div>
-            </div>
-            <!-- 指针箭头 -->
-            <div class="fg-needle" :style="{ left: fearGreedIndex.score + '%' }">
-              <div class="needle-pointer"></div>
-              <div class="needle-label">{{ fearGreedIndex.score }}</div>
-            </div>
+      <!-- 3. 美债收益率 10Y/20Y/30Y (点击展开全景) -->
+      <button class="index-card macro-compact-card clickable" @click="openTreasuryModal" aria-label="查看 10年、20年、30年美债收益率全景">
+        <div class="index-card-head">
+          <div class="index-name">
+            <strong>美债收益率</strong>
+            <span class="macro-badge-tag">10Y/20Y/30Y</span>
           </div>
+          <span class="macro-asset-tag rates-tag">曲线全景 ↗</span>
+        </div>
+        <div class="index-price-row">
+          <div class="macro-compact-val">
+            <span class="price-val">{{ formatMacroPrice(macroMap.US10Y) }}</span>
+            <span class="price-val-unit">10Y基准</span>
+          </div>
+          <span class="pct-pill" :class="(macroMap.US10Y?.changePercent || 0) >= 0 ? 'badge-pos' : 'badge-neg'">
+            {{ pct(macroMap.US10Y?.changePercent) }}
+          </span>
+        </div>
+        <div class="index-card-foot">
+          <span>20Y: {{ formatMacroPrice(macroMap.US20Y) }} · 30Y: {{ formatMacroPrice(macroMap.US30Y) }}</span>
+          <span class="macro-open-hint">点开展开 ↗</span>
+        </div>
+      </button>
 
-          <p class="fg-commentary">{{ fearGreedIndex.description }}</p>
+      <!-- 4. 美元指数 DXY 与布伦特原油 -->
+      <button class="index-card macro-compact-card" @click="selectSymbol('DX-Y.NYB')">
+        <div class="index-card-head">
+          <div class="index-name">
+            <strong>美元指数</strong>
+            <span>DXY</span>
+          </div>
+          <svg class="macro-sparkline" viewBox="0 0 48 18" fill="none">
+            <path d="M2 12 L12 10 L24 14 L36 9 L46 5" :stroke="(macroMap.DXY?.changePercent || 0) >= 0 ? 'var(--apple-green)' : 'var(--apple-red)'" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </div>
+        <div class="index-price-row">
+          <span class="price-val">{{ formatMacroPrice(macroMap.DXY) }}</span>
+          <span class="pct-pill" :class="(macroMap.DXY?.changePercent || 0) >= 0 ? 'badge-pos' : 'badge-neg'">
+            {{ pct(macroMap.DXY?.changePercent) }}
+          </span>
+        </div>
+        <div class="index-card-foot">
+          <span>原油布伦特: ${{ formatMacroPrice(macroMap['BRN1!']) }} ({{ pct(macroMap['BRN1!']?.changePercent) }})</span>
+        </div>
+      </button>
 
-          <div class="fg-history-grid">
-            <div class="fg-hist-col">
-              <span class="hist-label">前收盘</span>
-              <strong class="hist-val">{{ fearGreedIndex.previousClose }}</strong>
-              <small class="hist-desc">恐慌</small>
-            </div>
-            <div class="fg-hist-col">
-              <span class="hist-label">1周前</span>
-              <strong class="hist-val">{{ fearGreedIndex.previousWeek }}</strong>
-              <small class="hist-desc">恐慌</small>
-            </div>
-            <div class="fg-hist-col">
-              <span class="hist-label">1月前</span>
-              <strong class="hist-val">{{ fearGreedIndex.previousMonth }}</strong>
-              <small class="hist-desc">恐慌</small>
-            </div>
+      <!-- 5. 比特币 BTC/USD (24/7 流动性) -->
+      <button class="index-card macro-compact-card" @click="navigate('crypto')">
+        <div class="index-card-head">
+          <div class="index-name">
+            <strong>比特币龙头</strong>
+            <span>BTC/USD</span>
           </div>
+          <span class="macro-asset-tag crypto-tag">24/7 加密 ↗</span>
         </div>
-      </section>
-
-      <!-- 3. 黄金 XAU 深度分析与加密货币快速入口 -->
-      <section class="panel gold-crypto-gateway-card">
-        <div class="panel-heading">
-          <div>
-            <span class="macro-pill-badge">PRECIOUS METALS & CRYPTO</span>
-            <h2>黄金 XAU 与数字资产</h2>
-          </div>
-          <button class="text-button" @click="navigate('crypto')">加密板块 ↗</button>
+        <div class="index-price-row">
+          <span class="price-val">${{ formatCryptoPrice(cryptoList[0]?.price) }}</span>
+          <span class="pct-pill" :class="(cryptoList[0]?.changePercent || 0) >= 0 ? 'badge-pos' : 'badge-neg'">
+            {{ pct(cryptoList[0]?.changePercent) }}
+          </span>
         </div>
-        <div class="gold-hero-block">
-          <div class="gold-identity">
-            <span class="gold-coin-icon">🪙</span>
-            <div>
-              <h3>黄金现货 / 合约 (XAU/USD)</h3>
-              <p class="gold-subtitle">COMEX 黄金连续 · 全球避险之锚</p>
-            </div>
-          </div>
-          <div class="gold-price-hero">
-            <span class="hero-price">${{ num(goldContract.price) }}</span>
-            <span class="hero-pct" :class="goldContract.changePercent >= 0 ? 'badge-pos' : 'badge-neg'">
-              {{ pct(goldContract.changePercent) }}
-            </span>
-          </div>
-          <div class="gold-range-bar">
-            <div class="range-labels">
-              <span>24h 低: $2,732.10</span>
-              <span>24h 高: $2,754.80</span>
-            </div>
-            <div class="range-track">
-              <div class="range-fill" style="width: 78%;"></div>
-            </div>
-          </div>
+        <div class="index-card-foot">
+          <span>市值: ${{ cryptoList[0]?.marketCap }} · 前6大主流币 ➔</span>
         </div>
-        <div class="crypto-preview-strip">
-          <div class="strip-header">
-            <span>前列加密代币 (24/7 流动性)</span>
-            <span class="strip-link" @click="navigate('crypto')">查看全部 6 币种 ➔</span>
-          </div>
-          <div class="crypto-mini-cards">
-            <div v-for="c in cryptoList.slice(0, 3)" :key="c.code" class="mini-crypto-chip" @click="selectedCrypto=c.symbol; navigate('crypto')">
-              <span class="mini-crypto-icon" :style="{color: c.iconColor}">{{ c.icon }}</span>
-              <span class="mini-crypto-code">{{ c.code }}</span>
-              <span class="mini-crypto-price">${{ num(c.price) }}</span>
-              <span class="mini-crypto-pct" :class="c.changePercent >= 0 ? 'pos-text' : 'neg-text'">{{ pct(c.changePercent) }}</span>
-            </div>
-          </div>
-        </div>
-      </section>
+      </button>
     </div>
 
     <div class="dashboard-grid">
@@ -290,28 +438,51 @@
         <div class="panel-heading">
           <div class="heatmap-title-group">
             <h2>美股核心热力图</h2>
-            <span class="badge-blue-pill">精选美股 (18核心)</span>
+            <span class="badge-blue-pill">
+              {{ heatmapScope === 'watchlist' ? '★ 我的自选 (' + (activeHeatmapStocks?.length || 0) + '支 · 已剔除杠杆ETF)' :
+                 heatmapScope === 'nasdaq100' ? '🚀 纳指 100 核心 (' + (activeHeatmapStocks?.length || 0) + '支)' :
+                 heatmapScope === 'sp500' ? '🏛️ 标普 500 核心 (' + (activeHeatmapStocks?.length || 0) + '支)' :
+                 '💎 精选样本 (18核心)' }}
+            </span>
             <span class="title-subtext">| 颜色看涨跌，面积看成交活跃度</span>
           </div>
-          <div class="heatmap-weight-control">
-            <label>权重衡量:</label>
-            <select v-model="heatSize" aria-label="热力图面积">
-              <option value="turnover">估算成交额 (Est. Volume)</option>
-              <option value="equal">等面积</option>
-            </select>
+          <div class="heatmap-controls-row">
+            <div class="heatmap-scope-control">
+              <label>热力池:</label>
+              <select v-model="heatmapScope" @change="onHeatmapScopeChange" aria-label="热力图数据范围">
+                <option value="watchlist">★ 我的自选 (已剔除杠杆ETF · {{ nonLeveragedWatchlist?.length || 0 }} 支)</option>
+                <option value="nasdaq100">🚀 纳斯达克 100 (Nasdaq 100 核心)</option>
+                <option value="sp500">🏛️ 标普 500 (S&P 500 核心蓝筹)</option>
+                <option value="core">💎 精选样本 (18 核心)</option>
+              </select>
+            </div>
+            <div class="heatmap-weight-control">
+              <label>权重衡量:</label>
+              <select v-model="heatSize" aria-label="热力图面积">
+                <option value="turnover">估算成交额 (Est. Volume)</option>
+                <option value="equal">等面积</option>
+              </select>
+            </div>
           </div>
         </div>
         <div class="heatmap-toolbar">
           <div class="chips">
-            <button :class="{selected:sectorFilter==='全部'}" @click="sectorFilter='全部'">全部</button>
-            <button v-for="s in stockSectors" :key="s" :class="{selected:sectorFilter===s}" @click="sectorFilter=s">{{s}}</button>
+            <button :class="{selected:sectorFilter==='全部'}" @click="sectorFilter='全部'">全部 ({{ activeHeatmapStocks?.length || 0 }})</button>
+            <button v-for="s in stockSectors" :key="s" :class="{selected:sectorFilter===s}" @click="sectorFilter=s">
+              {{ s }} ({{ (activeHeatmapStocks || []).filter(q => q.sector === s).length }})
+            </button>
           </div>
         </div>
         <div id="heatmap-chart" class="heatmap-chart" role="img" aria-label="精选美股涨跌热力图，点击股票查看详情"></div>
         <div class="heatmap-footer">
           <div class="footer-meta-block">
             <div class="footer-tip">点击方块 ➔ 进入个股详情 / 资金挂单剖析</div>
-            <div class="footer-sub">精选 18 只核心样本 · 面积按当日估算成交额 · 缓存 60s</div>
+            <div class="footer-sub">
+              当前展示：{{ heatmapScope === 'watchlist' ? '我的自选列表 · 共 ' + (activeHeatmapStocks?.length || 0) + ' 只正股标的 (已自动剔除杠杆ETF) · 动态映射板块' :
+                          heatmapScope === 'nasdaq100' ? '纳斯达克 100 核心成分股 · 共 ' + (activeHeatmapStocks?.length || 0) + ' 只标的' :
+                          heatmapScope === 'sp500' ? '标普 500 核心成分股 · 共 ' + (activeHeatmapStocks?.length || 0) + ' 只标的' :
+                          '精选 18 只核心样本' }} · 面积按当日估算成交额 · 缓存 60s
+            </div>
           </div>
           <div class="heatmap-scale-wrap">
             <span class="scale-label">-3.0%及以下</span>
@@ -353,40 +524,7 @@
         </div>
       </section>
     </div>
-    <div v-if="page==='overview'" class="bottom-grid">
-      <section class="panel">
-        <div class="panel-heading">
-          <div><h2>市场速读</h2><p>来自公开财经 RSS</p></div>
-          <button class="text-button" @click="page='news'">全部新闻 ↗</button>
-        </div>
-        <p v-if="states.news.loading&&!news" class="empty">正在加载新闻…</p>
-        <p v-if="states.news.error" class="empty">{{states.news.error}}</p>
-        <a v-for="(n,i) in (news?.items||[]).slice(0,4)" :key="n.url" :href="n.url" target="_blank" rel="noopener noreferrer" class="news-compact">
-          <span class="news-number">0{{i+1}}</span>
-          <div><h3>{{n.title}}</h3><small>{{n.source}} · {{time(n.publishedAt)}}</small></div>
-          <span>↗</span>
-        </a>
-      </section>
-      <section class="panel market-summary">
-        <div class="panel-heading">
-          <div><h2>样本涨跌分布</h2><p>精选 {{overview.stocks.length}} 只股票</p></div>
-        </div>
-        <div class="breadth-number">
-          <strong class="positive">{{breadth.up}}</strong><span>上涨</span>
-          <strong class="negative">{{breadth.down}}</strong><span>下跌</span>
-        </div>
-        <div class="breadth-track"><span :style="{width:breadth.up/Math.max(1,overview.stocks.length)*100+'%'}"></span></div>
-        <p>平盘 {{breadth.flat}} · 缺少涨跌幅 {{breadth.unknown}}</p>
-        <div class="summary-callout">
-          <span>◈</span>
-          <div>
-            <strong>观察期权的持仓分布</strong>
-            <p>Call / Put 墙与估算 Gamma 敞口。</p>
-            <button class="text-button" @click="page='options'">打开期权墙 →</button>
-          </div>
-        </div>
-      </section>
-    </div>
+
   </template>
 </template>
 
@@ -398,7 +536,7 @@
         <p>多时段美股报价 · 常规与盘前 / 盘后 / 隔夜数据独立计算与动态排序</p>
       </div>
       <div class="controls">
-        <span class="status-pill" :class="providerInfo.isConfigured ? 'realtime' : 'fallback'"><i class="dot"></i>{{ providerInfo.isConfigured ? providerInfo.name + ' · 实时' : (providerInfo.name || '公开行情源 · 备用') }}</span>
+        <span class="status-pill" :class="providerInfo?.isConfigured ? 'realtime' : 'fallback'"><i class="dot"></i>{{ providerInfo?.isConfigured ? providerInfo.name + ' · 实时' : (providerInfo?.name || '公开行情源 · 备用') }}</span>
         <span class="session-badge">{{ currentSession.desc }}</span>
       </div>
     </div>
@@ -424,7 +562,6 @@
         <button class="text-button" @click="handleExportJson">备份 / 恢复 ↗</button>
       </div>
     </div>
-    <div v-if="!providerInfo.isConfigured" class="inline-note" style="margin:12px 20px 0;background:rgba(41,118,255,0.08);border:1px solid rgba(41,118,255,0.25);color:var(--text-primary);">已自动接入公开市场行情备用源 (OpenAPI Direct Stream)。毫秒级推送已就绪，当前每秒吞吐量 1,420 条事件。</div>
     <div class="watchlist-table-wrap" @mousedown="isInteractingWithTable=true" @mouseup="isInteractingWithTable=false">
       <table class="watchlist-table" aria-label="美股自选与多时段报价表">
         <thead>
@@ -446,11 +583,11 @@
               <td colspan="9">
                 <button @click="g.collapsed=!g.collapsed" :aria-expanded="!g.collapsed">
                   <span>{{ g.collapsed ? '▸' : '▾' }}</span>
-                  <span style="font-weight:700;">{{ g.name }}</span>
+                  <span style="font-weight:600;">{{ g.name }}</span>
                   <span class="group-badge">{{ g.symbolIds.length }}</span>
                 </button>
                 <div class="group-header-actions">
-                  <span v-if="groupedRows[g.id]?.length" class="muted small" style="margin-right:12px;font-variant-numeric:tabular-nums;">组均涨跌: <strong :class="tone(groupedRows[g.id]?.[0]?.regularChange)">{{ pct(groupedRows[g.id]?.[0]?.regularChange || 0) }}</strong></span>
+                  <span v-if="groupedRows[g.id]?.length" class="muted small" style="margin-right:12px;font-variant-numeric:tabular-nums;">组均涨跌: <strong :class="tone(groupAverages[g.id]?.avg)">{{ groupAverages[g.id]?.label || '—' }}</strong></span>
                   <button @click.stop="addStockTargetGroup=g.id; showAddStockModal=true">+ 标的</button>
                   <button v-if="g.id!=='default'" @click.stop="handleDeleteGroup(g.id)">删除组</button>
                 </div>
@@ -470,11 +607,12 @@
                 <td class="num" :class="cellFlashes[r.symbol + '_ext'] ? 'cell-flash-' + cellFlashes[r.symbol + '_ext'] : ''">{{ num(r.extPrice) }}</td>
                 <td class="num" :class="[tone(r.extChange), cellFlashes[r.symbol + '_ext'] ? 'cell-flash-' + cellFlashes[r.symbol + '_ext'] : '']">{{ pct(r.extChange) }}</td>
                 <td style="vertical-align:middle;padding:4px 8px;">
-                  <div class="day-range-mini">
-                    <span class="range-val">{{num(r.regularPrice ? r.regularPrice * 0.985 : null)}}</span>
-                    <div class="range-track"><div class="range-fill" :style="{width: getDayRangeWidth(r) + '%'}"></div></div>
-                    <span class="range-val">{{num(r.regularPrice ? r.regularPrice * 1.015 : null)}}</span>
+                  <div v-if="getDayRange(r)" class="day-range-mini">
+                    <span class="range-val">{{num(getDayRange(r).low)}}</span>
+                    <div class="range-track"><div class="range-fill" :style="{width: getDayRange(r).pct + '%'}"></div></div>
+                    <span class="range-val">{{num(getDayRange(r).high)}}</span>
                   </div>
+                  <span v-else class="muted small" style="display:block;text-align:center;">—</span>
                 </td>
                 <td><span class="session-badge">{{ r.extStatus }}</span></td>
                 <td><small class="muted">{{ time(r.updatedAt) }}</small></td>
@@ -500,11 +638,12 @@
             <td class="num" :class="cellFlashes[r.symbol + '_ext'] ? 'cell-flash-' + cellFlashes[r.symbol + '_ext'] : ''">{{ num(r.extPrice) }}</td>
             <td class="num" :class="[tone(r.extChange), cellFlashes[r.symbol + '_ext'] ? 'cell-flash-' + cellFlashes[r.symbol + '_ext'] : '']">{{ pct(r.extChange) }}</td>
             <td style="vertical-align:middle;padding:4px 8px;">
-              <div class="day-range-mini">
-                <span class="range-val">{{num(r.regularPrice ? r.regularPrice * 0.985 : null)}}</span>
-                <div class="range-track"><div class="range-fill" :style="{width: getDayRangeWidth(r) + '%'}"></div></div>
-                <span class="range-val">{{num(r.regularPrice ? r.regularPrice * 1.015 : null)}}</span>
+              <div v-if="getDayRange(r)" class="day-range-mini">
+                <span class="range-val">{{num(getDayRange(r).low)}}</span>
+                <div class="range-track"><div class="range-fill" :style="{width: getDayRange(r).pct + '%'}"></div></div>
+                <span class="range-val">{{num(getDayRange(r).high)}}</span>
               </div>
+              <span v-else class="muted small" style="display:block;text-align:center;">—</span>
             </td>
             <td><span class="session-badge">{{ r.extStatus }}</span></td>
             <td><small class="muted">{{ time(r.updatedAt) }}</small></td>
@@ -845,8 +984,8 @@
     <div style="margin-top:20px;">
       <div class="panel-heading" style="margin-bottom:10px;">
         <div>
-          <h2>资金关注哪些板块？(量价四象限分布)</h2>
-          <p>横轴：当日涨跌幅 (%) · 纵轴：估算成交额 (USD) · 右上价升量增为强势领涨区，左上放量下跌需警惕主力资金出逃</p>
+          <h2>板块涨跌与成交活跃度 (四象限分布)</h2>
+          <p>横轴：当日涨跌幅 (%) · 纵轴：估算成交额 (USD) · 基于样本成交额分布观察活跃度，不作资金净流入依据</p>
         </div>
       </div>
 
@@ -854,19 +993,19 @@
       <div class="quadrant-legend-strip">
         <div class="quadrant-badge">
           <span class="quadrant-dot" style="background:var(--apple-red);"></span>
-          <span>左上象限：放量滞涨 / 抛压回调区</span>
+          <span>左上象限：下跌 × 成交额偏高</span>
         </div>
         <div class="quadrant-badge">
           <span class="quadrant-dot" style="background:var(--apple-green);"></span>
-          <strong style="color:var(--apple-green);">右上象限：价升量增 / 资金强势做多领涨区</strong>
+          <span>右上象限：上涨 × 成交额偏高</span>
         </div>
         <div class="quadrant-badge">
           <span class="quadrant-dot" style="background:var(--text-tertiary);"></span>
-          <span>左下象限：缩量调整 / 偏弱整理区</span>
+          <span>左下象限：下跌 × 成交额偏低</span>
         </div>
         <div class="quadrant-badge">
           <span class="quadrant-dot" style="background:var(--apple-blue);"></span>
-          <span>右下象限：温和反弹 / 超跌低吸区</span>
+          <span>右下象限：上涨 × 成交额偏低</span>
         </div>
       </div>
 
@@ -982,33 +1121,33 @@
           </div>
         </div>
 
-        <!-- Metric 2: Call OI Wall (Max Resist) -->
+        <!-- Metric 2: Call OI Concentration Strike -->
         <div class="kpi-card kpi-card-call">
           <div class="kpi-head">
-            <span>Call OI 墙 (看涨阻力)</span>
-            <span class="kpi-pill kpi-pill-green">MAX RESIST</span>
+            <span>Call 持仓集中行权价</span>
+            <span class="kpi-pill kpi-pill-green">MAX CALL OI</span>
           </div>
           <div class="kpi-body">
             <span class="kpi-val font-mono pos-text">{{ walls(options.callWall) }}</span>
             <span v-if="callWallDist" class="kpi-subval muted font-mono">(距现价 {{ callWallDist >= 0 ? '+' : '' }}{{ callWallDist }}%)</span>
           </div>
           <div class="kpi-foot">
-            <span>聚集合约: {{ options.callOi ? options.callOi.toLocaleString() + ' 张' : '密集阻力' }}</span>
+            <span>聚集合约: {{ options.callOi ? options.callOi.toLocaleString() + ' 张' : '持仓集中' }}</span>
           </div>
         </div>
 
-        <!-- Metric 3: Put OI Wall (Max Support) -->
+        <!-- Metric 3: Put OI Concentration Strike -->
         <div class="kpi-card kpi-card-put">
           <div class="kpi-head">
-            <span>Put OI 墙 (看跌支撑)</span>
-            <span class="kpi-pill kpi-pill-red">MAX SUPPORT</span>
+            <span>Put 持仓集中行权价</span>
+            <span class="kpi-pill kpi-pill-red">MAX PUT OI</span>
           </div>
           <div class="kpi-body">
             <span class="kpi-val font-mono neg-text">{{ walls(options.putWall) }}</span>
             <span v-if="putWallDist" class="kpi-subval muted font-mono">(距现价 {{ putWallDist >= 0 ? '+' : '' }}{{ putWallDist }}%)</span>
           </div>
           <div class="kpi-foot">
-            <span>聚集合约: {{ options.putOi ? options.putOi.toLocaleString() + ' 张' : '硬支撑堡垒' }}</span>
+            <span>聚集合约: {{ options.putOi ? options.putOi.toLocaleString() + ' 张' : '持仓集中' }}</span>
           </div>
         </div>
 
@@ -1016,8 +1155,8 @@
         <div class="kpi-card">
           <div class="kpi-head">
             <span>Put / Call 持仓比 (PCR)</span>
-            <span class="kpi-pill" :class="options.putCallRatio > 1.2 ? 'kpi-pill-amber' : (options.putCallRatio < 0.8 ? 'kpi-pill-green' : 'kpi-pill-muted')">
-              {{ options.putCallRatio > 1.2 ? '偏空保护' : (options.putCallRatio < 0.8 ? '偏多积极' : '均衡博弈') }}
+            <span class="kpi-pill" :class="options.putCallRatio > 1.2 ? 'kpi-pill-amber' : (options.putCallRatio < 0.8 ? 'kpi-pill-blue' : 'kpi-pill-muted')">
+              {{ options.putCallRatio != null ? (options.putCallRatio > 1.2 ? 'Put 持仓偏多' : (options.putCallRatio < 0.8 ? 'Call 持仓偏多' : '持仓均衡')) : '—' }}
             </span>
           </div>
           <div class="kpi-body">
@@ -1025,7 +1164,7 @@
             <span class="kpi-subval muted font-mono">参考 1.00</span>
           </div>
           <div class="kpi-foot">
-            <span>{{ options.putCallRatio > 1.0 ? '对冲与下行防御占优' : '看涨杠杆进攻占优' }}</span>
+            <span>{{ options.putCallRatio != null ? (options.putCallRatio > 1.0 ? 'Put 持仓量高于 Call' : 'Call 持仓量高于 Put') : '—' }}</span>
           </div>
         </div>
 
@@ -1033,15 +1172,16 @@
         <div class="kpi-card">
           <div class="kpi-head">
             <span>估算净 GEX / 1% 波动</span>
-            <span class="kpi-pill" :class="(options.netGex || 0) < 0 ? 'kpi-pill-red' : 'kpi-pill-green'">
-              {{ (options.netGex || 0) < 0 ? '波动放大 (短Gamma)' : '波动抑制 (长Gamma)' }}
+            <span v-if="options.netGex != null" class="kpi-pill" :class="options.netGex < 0 ? 'kpi-pill-red' : 'kpi-pill-green'">
+              {{ options.netGex < 0 ? '净负 Gamma' : '净正 Gamma' }}
             </span>
+            <span v-else class="kpi-pill kpi-pill-muted">未计算</span>
           </div>
           <div class="kpi-body">
-            <span class="kpi-val font-mono" :class="tone(options.netGex)">{{ compact(options.netGex) }}</span>
+            <span class="kpi-val font-mono" :class="tone(options.netGex)">{{ options.netGex != null ? compact(options.netGex) : '—' }}</span>
           </div>
           <div class="kpi-foot">
-            <span>翻转点 ~$ {{ (options.spot * 0.995).toFixed(2) }}</span>
+            <span>翻转点: 未计算 (需完整行权价模型)</span>
           </div>
         </div>
       </div>
@@ -1075,140 +1215,373 @@
 </template>
 
 <template v-if="page==='news'">
-  <!-- News Controls & Category Filter Stack -->
-  <div class="news-filter-stack">
-    <div class="news-cat-tabs">
-      <div class="news-cat-chips">
-        <button v-for="cat in newsCategories" :key="cat.id" class="news-cat-chip" :class="{active: newsCategory === cat.id}" @click="newsCategory = cat.id">{{ cat.label }}</button>
-      </div>
-      <form class="controls" style="margin:0;" @submit.prevent="newsSymbol=newsSearch.trim().toUpperCase()">
-        <input v-model="newsSearch" aria-label="新闻股票代码" placeholder="输入代码筛选 (如 NVDA)" style="width:160px;height:30px;font-size:11.5px;">
-        <button type="submit" style="height:30px;padding:0 10px;font-size:11.5px;">查看</button>
-      </form>
+  <!-- Top Navigation & View Switcher Bar for News Module -->
+  <div class="news-main-switch-bar">
+    <div class="news-view-tabs">
+      <button class="news-view-btn" :class="{ active: newsSubView === 'earnings' }" @click="newsSubView = 'earnings'">
+        <span class="btn-icon">📅</span> 科技与 AI 财报周历
+        <span class="badge-fire-pill">Earnings Whispers 原版</span>
+      </button>
+      <button class="news-view-btn" :class="{ active: newsSubView === 'stream' }" @click="newsSubView = 'stream'">
+        <span class="btn-icon">📰</span> 市场全天候快讯流
+      </button>
+      <button class="news-view-btn" :class="{ active: newsSubView === 'macro' }" @click="newsSubView = 'macro'">
+        <span class="btn-icon">📊</span> 宏观重磅经济日历 (CPI / PPI)
+      </button>
     </div>
-    <!-- Watchlist Tickers Strip -->
-    <div class="tabs" style="border:0;padding:0;gap:4px;flex-wrap:wrap;">
-      <button :class="{selected:!newsSymbol}" @click="newsSymbol=''">市场焦点</button>
-      <button v-for="s in watchlist.slice(0, 10)" :key="s" :class="{selected:newsSymbol===s}" @click="newsSymbol=s">{{s}}</button>
+
+    <!-- Quick Telemetry & Stats -->
+    <div v-if="newsSubView === 'earnings'" class="earnings-header-stats">
+      <span class="stat-pill">📅 2026 Q3/Q4 核心披露周 · 10月26日 - 10月30日</span>
+      <span class="stat-pill stat-accent">覆盖 29 家核心科技与 AI 链标的</span>
     </div>
   </div>
 
-  <div v-if="states.news.loading" class="loading-block">正在读取新闻源…</div>
-  <div v-if="states.news.error" class="error-box">{{states.news.error}} <button @click="loadNews">重试</button></div>
-
-  <template v-if="news">
-    <div class="inline-note" style="margin-bottom:14px;">
-      {{news.symbol?news.symbol+' 相关新闻':'市场新闻'}} · 共 {{news.items.length}} 条 · 获取 {{time(news.fetchedAt)}} · RSS 缓存 5 分钟
-      <span v-if="news.stale" class="warning">· 旧快照</span>
-      <span v-if="news.unavailable.length" class="warning"> · 暂缺 {{news.unavailable.join('、')}}</span>
-    </div>
-
-    <!-- News Bento Layout Split with Right Rail -->
-    <div class="news-layout-split">
-      <!-- Main News Bento Grid -->
-      <div>
-        <div class="news-bento-grid">
-          <a v-for="n in filteredNews" :key="n.url" :href="n.url" target="_blank" rel="noopener noreferrer" class="news-card news-card-bento">
-            <div>
-              <div class="news-card-head">
-                <div style="display:flex;align-items:center;gap:6px;">
-                  <span class="news-source-tag">{{ n.source }}</span>
-                  <span class="news-sentiment-tag" :class="getNewsSentiment(n).cls">{{ getNewsSentiment(n).text }}</span>
-                </div>
-                <span class="muted" style="font-size:12px;">↗</span>
-              </div>
-              <h3>{{ n.title }}</h3>
-              <div class="news-tickers-row">
-                <span v-for="t in getNewsTags(n)" :key="t" class="news-ticker-pill">{{ t }}</span>
-              </div>
-            </div>
-            <div class="news-card-foot">
-              <span class="font-mono">{{ time(n.publishedAt) }}</span>
-              <span style="color:var(--apple-blue);font-weight:600;">阅读原文 ↗</span>
-            </div>
-          </a>
-        </div>
-        <p v-if="!filteredNews.length" class="empty" style="padding:40px;text-align:center;">当前筛选分类暂无快讯，请切换分类或清除股票筛选。</p>
+  <!-- ================= SUBVIEW 1: TECH & AI EARNINGS CALENDAR (Earnings Whispers Style) ================= -->
+  <section v-if="newsSubView === 'earnings'" class="earnings-calendar-section">
+    <!-- Filter Bar: AI Sectors, Timing, and Search -->
+    <div class="earnings-filter-bar">
+      <!-- Sector Chips -->
+      <div class="earnings-sector-chips">
+        <button v-for="sec in AI_SECTOR_FILTERS" :key="sec.id"
+                class="earnings-filter-chip"
+                :class="{ active: earningsSectorFilter === sec.id }"
+                @click="earningsSectorFilter = sec.id">
+          {{ sec.label }}
+        </button>
       </div>
 
-      <!-- Right Intelligence Rail -->
-      <aside class="right-rail-stack">
-        <!-- Widget 1: Macro Calendar -->
-        <div class="rail-widget">
-          <div class="rail-widget-head">
-            <h4><span class="status-dot-pulse"></span> 今日宏观日历 (Macro)</h4>
-            <span class="muted small font-mono">美东 / 北京</span>
-          </div>
-          <div class="calendar-item">
-            <div class="calendar-top">
-              <span>美国初请失业金人数</span>
-              <span class="kpi-pill kpi-pill-green">利好</span>
-            </div>
-            <div class="calendar-sub font-mono">
-              <span>今值: <strong>21.5万</strong></span>
-              <span>预期: 22.0万</span>
-            </div>
-          </div>
-          <div class="calendar-item">
-            <div class="calendar-top">
-              <span>美联储经济政策讲话</span>
-              <span class="kpi-pill kpi-pill-amber">高影响</span>
-            </div>
-            <div class="calendar-sub">
-              <span>关注劳动力韧性与利率路径</span>
-            </div>
-          </div>
-          <div class="calendar-item">
-            <div class="calendar-top">
-              <span>核心科技股披露指引</span>
-              <span class="kpi-pill kpi-pill-blue">SEC 8-K</span>
-            </div>
-            <div class="calendar-sub">
-              <span>Q3 资本开支与 AI 创收进展</span>
-            </div>
-          </div>
+      <!-- Controls Right: Timing, AI Toggle, Search -->
+      <div class="earnings-controls-right">
+        <!-- Timing Filter -->
+        <div class="segmented-control-mini">
+          <button :class="{ active: earningsTimingFilter === 'all' }" @click="earningsTimingFilter = 'all'">全部时段</button>
+          <button :class="{ active: earningsTimingFilter === 'BMO' }" @click="earningsTimingFilter = 'BMO'">☀️ 盘前 (BMO)</button>
+          <button :class="{ active: earningsTimingFilter === 'AMC' }" @click="earningsTimingFilter = 'AMC'">🌙 盘后 (AMC)</button>
         </div>
 
-        <!-- Widget 2: Trending Heat Word Cloud -->
-        <div class="rail-widget">
-          <div class="rail-widget-head">
-            <h4>🔥 快讯热搜词云 (Trending)</h4>
-          </div>
-          <div class="trending-cloud">
-            <span class="trending-tag" @click="newsSearch='存储芯片';newsSymbol='MU'">#存储芯片周期</span>
-            <span class="trending-tag" @click="newsSearch='原油';newsSymbol='XLE'">#原油地缘溢价</span>
-            <span class="trending-tag" @click="newsSearch='AI';newsSymbol='NVDA'">#AI裁员增效</span>
-            <span class="trending-tag" @click="newsSearch='财报';newsSymbol=''">#三季度财报季</span>
-            <span class="trending-tag" @click="newsSearch='美债';newsSymbol='SPY'">#10Y美债突破4.2</span>
-            <span class="trending-tag" @click="newsSearch='HBM';newsSymbol=''">#HBM3e产能</span>
-          </div>
-        </div>
+        <!-- AI Supply Chain Only Toggle -->
+        <label class="earnings-ai-toggle" title="仅展示 AI 核心供应链公司">
+          <input type="checkbox" v-model="earningsAiOnly">
+          <span class="toggle-text">⚡ 仅 AI 链核心</span>
+        </label>
 
-        <!-- Widget 3: Sources Telemetry -->
-        <div class="rail-widget">
-          <div class="rail-widget-head">
-            <h4>📡 直连数据源状态 (Sources)</h4>
-          </div>
-          <div class="source-status-row">
-            <span>Bloomberg Terminal API</span>
-            <span class="source-status-ok">OK (0.2s)</span>
-          </div>
-          <div class="source-status-row">
-            <span>Reuters Macro Wire</span>
-            <span class="source-status-ok">OK (0.4s)</span>
-          </div>
-          <div class="source-status-row">
-            <span>CNBC Breaking Wire</span>
-            <span class="source-status-ok">OK (0.3s)</span>
-          </div>
-          <div class="source-status-row">
-            <span>SEC EDGAR RSS Feed</span>
-            <span class="source-status-ok">OK (0.5s)</span>
-          </div>
+        <!-- Search -->
+        <div class="earnings-search-box">
+          <span class="search-ico">🔍</span>
+          <input v-model="earningsSearch" placeholder="筛选公司/代码 (如 VRT)" aria-label="搜索财报公司">
+          <button v-if="earningsSearch" class="clear-btn" @click="earningsSearch=''">✕</button>
         </div>
-      </aside>
+      </div>
     </div>
-  </template>
+
+    <!-- 5-Day Weekly Calendar Wall (Earnings Whispers 5 Columns) -->
+    <div class="earnings-calendar-wall">
+      <div v-for="d in EARNINGS_DAYS" :key="d.id"
+           class="earnings-day-col"
+           :class="{ 'key-day-col': d.isKeyDay }">
+        <!-- Day Column Header -->
+        <div class="earnings-day-header">
+          <div class="day-titles">
+            <span class="day-name">{{ d.label }}</span>
+            <span class="day-date">{{ d.dateStr }}</span>
+          </div>
+          <span v-if="d.highlight" class="day-highlight-tag">{{ d.highlight }}</span>
+        </div>
+
+        <!-- BMO (盘前 Before Market Open) -->
+        <div class="earnings-timing-block bmo-block">
+          <div class="timing-badge-header">
+            <span class="timing-icon">☀️</span>
+            <span class="timing-title">盘前 (Before Open · BMO)</span>
+            <span class="timing-count-badge">{{ getDayEarnings(d.id, 'BMO').length }}</span>
+          </div>
+          <div class="earnings-cards-list">
+            <div v-for="item in getDayEarnings(d.id, 'BMO')" :key="item.symbol"
+                 class="earnings-company-card"
+                 :class="{ 'ai-core-card': item.isAiSupplyChain }"
+                 @click="openEarningsModal(item)">
+              <!-- Corporate Official Logo -->
+              <div class="card-logo-container" v-html="getCompanyLogoSvg(item.symbol)"></div>
+
+              <!-- Ticker Symbol & Full Name -->
+              <div class="card-identity-row">
+                <strong class="card-symbol-badge">{{ item.symbol }}</strong>
+                <span class="card-company-name">{{ item.name }}</span>
+              </div>
+
+              <!-- Sector Pill Tag -->
+              <div class="card-tags-row">
+                <span class="card-sector-pill" :class="'sec-' + item.sectorId">{{ item.aiTag }}</span>
+              </div>
+
+              <!-- Financial Consensus: EPS & Revenue -->
+              <div class="card-financials-row">
+                <span class="fin-item">预期EPS <strong>{{ item.epsConsensus }}</strong></span>
+                <span class="fin-item">营收 <strong>{{ item.revConsensus }}</strong></span>
+              </div>
+
+              <!-- AI Catalyst Focus -->
+              <div class="card-catalyst-box">
+                <span class="catalyst-tag">AI 焦点:</span>
+                <p class="catalyst-desc">{{ item.aiCatalyst }}</p>
+              </div>
+            </div>
+            <div v-if="!getDayEarnings(d.id, 'BMO').length" class="earnings-empty-slot">
+              <span>无符合条件披露</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- AMC (盘后 After Market Close) -->
+        <div class="earnings-timing-block amc-block">
+          <div class="timing-badge-header">
+            <span class="timing-icon">🌙</span>
+            <span class="timing-title">盘后 (After Close · AMC)</span>
+            <span class="timing-count-badge">{{ getDayEarnings(d.id, 'AMC').length }}</span>
+          </div>
+          <div class="earnings-cards-list">
+            <div v-for="item in getDayEarnings(d.id, 'AMC')" :key="item.symbol"
+                 class="earnings-company-card"
+                 :class="{ 'ai-core-card': item.isAiSupplyChain }"
+                 @click="openEarningsModal(item)">
+              <!-- Corporate Official Logo -->
+              <div class="card-logo-container" v-html="getCompanyLogoSvg(item.symbol)"></div>
+
+              <!-- Ticker Symbol & Full Name -->
+              <div class="card-identity-row">
+                <strong class="card-symbol-badge">{{ item.symbol }}</strong>
+                <span class="card-company-name">{{ item.name }}</span>
+              </div>
+
+              <!-- Sector Pill Tag -->
+              <div class="card-tags-row">
+                <span class="card-sector-pill" :class="'sec-' + item.sectorId">{{ item.aiTag }}</span>
+              </div>
+
+              <!-- Financial Consensus: EPS & Revenue -->
+              <div class="card-financials-row">
+                <span class="fin-item">预期EPS <strong>{{ item.epsConsensus }}</strong></span>
+                <span class="fin-item">营收 <strong>{{ item.revConsensus }}</strong></span>
+              </div>
+
+              <!-- AI Catalyst Focus -->
+              <div class="card-catalyst-box">
+                <span class="catalyst-tag">AI 焦点:</span>
+                <p class="catalyst-desc">{{ item.aiCatalyst }}</p>
+              </div>
+            </div>
+            <div v-if="!getDayEarnings(d.id, 'AMC').length" class="earnings-empty-slot">
+              <span>无符合条件披露</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= SUBVIEW 2: LIVE STREAM (NEWS WIRE + RIGHT RAIL) ================= -->
+  <section v-else-if="newsSubView === 'stream'">
+    <!-- News Controls & Category Filter Stack -->
+    <div class="news-filter-stack">
+      <div class="news-cat-tabs">
+        <div class="news-cat-chips">
+          <button v-for="cat in newsCategories" :key="cat.id" class="news-cat-chip" :class="{active: newsCategory === cat.id}" @click="newsCategory = cat.id">{{ cat.label }}</button>
+        </div>
+        <form class="controls" style="margin:0;" @submit.prevent="newsSymbol=newsSearch.trim().toUpperCase()">
+          <input v-model="newsSearch" aria-label="新闻股票代码" placeholder="输入代码筛选 (如 NVDA)" style="width:160px;height:30px;font-size:11.5px;">
+          <button type="submit" style="height:30px;padding:0 10px;font-size:11.5px;">查看</button>
+        </form>
+      </div>
+      <!-- Watchlist Tickers Strip -->
+      <div class="tabs" style="border:0;padding:0;gap:4px;flex-wrap:wrap;">
+        <button :class="{selected:!newsSymbol}" @click="newsSymbol=''">市场焦点</button>
+        <button v-for="s in watchlist.slice(0, 10)" :key="s" :class="{selected:newsSymbol===s}" @click="newsSymbol=s">{{s}}</button>
+      </div>
+    </div>
+
+    <div v-if="states.news.loading" class="loading-block">正在读取新闻源…</div>
+    <div v-if="states.news.error" class="error-box">{{states.news.error}} <button @click="loadNews">重试</button></div>
+
+    <template v-if="news">
+      <div class="inline-note" style="margin-bottom:14px;">
+        {{news.symbol?news.symbol+' 相关新闻':'市场新闻'}} · 共 {{news.items.length}} 条 · 获取 {{time(news.fetchedAt)}} · RSS 缓存 5 分钟
+        <span v-if="news.stale" class="warning">· 旧快照</span>
+        <span v-if="news.unavailable.length" class="warning"> · 暂缺 {{news.unavailable.join('、')}}</span>
+      </div>
+
+      <!-- News Bento Layout Split with Right Rail -->
+      <div class="news-layout-split">
+        <!-- Main News Bento Grid -->
+        <div>
+          <div class="news-bento-grid">
+            <a v-for="n in filteredNews" :key="n.url" :href="n.url" target="_blank" rel="noopener noreferrer" class="news-card news-card-bento">
+              <div>
+                <div class="news-card-head">
+                  <div style="display:flex;align-items:center;gap:6px;">
+                    <span class="news-source-tag">{{ n.source }}</span>
+                    <span class="news-sentiment-tag" :class="getNewsSentiment(n).cls">{{ getNewsSentiment(n).text }}</span>
+                  </div>
+                  <span class="muted" style="font-size:12px;">↗</span>
+                </div>
+                <h3>{{ n.title }}</h3>
+                <div class="news-tickers-row">
+                  <span v-for="t in getNewsTags(n)" :key="t" class="news-ticker-pill">{{ t }}</span>
+                </div>
+              </div>
+              <div class="news-card-foot">
+                <span class="font-mono">{{ time(n.publishedAt) }}</span>
+                <span style="color:var(--apple-blue);font-weight:600;">阅读原文 ↗</span>
+              </div>
+            </a>
+          </div>
+          <p v-if="!filteredNews.length" class="empty" style="padding:40px;text-align:center;">当前筛选分类暂无快讯，请切换分类或清除股票筛选。</p>
+        </div>
+
+        <!-- Right Intelligence Rail -->
+        <aside class="right-rail-stack">
+          <!-- Widget 1: Macro Calendar (CPI / PPI / 失业金) -->
+          <div class="rail-widget">
+            <div class="rail-widget-head">
+              <h4><span class="status-dot-pulse"></span> 宏观要闻速览 (Macro)</h4>
+              <button class="rail-widget-more-btn" @click="newsSubView = 'macro'">完整宏观日历 ↗</button>
+            </div>
+            <div class="calendar-item">
+              <div class="calendar-top">
+                <span>美国 9 月最终需求 PPI 月率</span>
+                <span class="kpi-pill kpi-pill-green">利好 (0.0%)</span>
+              </div>
+              <div class="calendar-sub font-mono">
+                <span>出厂端通胀停滞，传导压力减轻</span>
+              </div>
+            </div>
+            <div class="calendar-item">
+              <div class="calendar-top">
+                <span>美国 9 月核心 CPI 年率</span>
+                <span class="kpi-pill kpi-pill-red">偏空 (3.3%)</span>
+              </div>
+              <div class="calendar-sub font-mono">
+                <span>核心服务业粘性推升 10Y 美债</span>
+              </div>
+            </div>
+            <div class="calendar-item">
+              <div class="calendar-top">
+                <span>初请失业金人数 (当周)</span>
+                <span class="kpi-pill kpi-pill-green">利好 (22.7万)</span>
+              </div>
+              <div class="calendar-sub font-mono">
+                <span>劳动力韧性强，软着陆概率大</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Widget 2: Tech Earnings Teaser Wall (Jump to Earnings Whispers) -->
+          <div class="rail-widget earnings-teaser-widget" @click="newsSubView = 'earnings'">
+            <div class="rail-widget-head">
+              <h4>🔥 本周科技重磅财报 (Earnings)</h4>
+              <span class="more-link">完整周历 ➔</span>
+            </div>
+            <p class="teaser-sub">微软 · 谷歌 · Meta · 苹果 · 亚马逊 · 维谛Vertiv</p>
+            <div class="teaser-logos-grid">
+              <span class="teaser-logo-chip" v-html="getCompanyLogoSvg('MSFT')"></span>
+              <span class="teaser-logo-chip" v-html="getCompanyLogoSvg('GOOGL')"></span>
+              <span class="teaser-logo-chip" v-html="getCompanyLogoSvg('VRT')"></span>
+              <span class="teaser-logo-chip" v-html="getCompanyLogoSvg('AMZN')"></span>
+              <span class="teaser-logo-chip" v-html="getCompanyLogoSvg('AAPL')"></span>
+              <span class="teaser-logo-chip" v-html="getCompanyLogoSvg('GEV')"></span>
+            </div>
+            <button class="teaser-jump-btn" @click.stop="newsSubView = 'earnings'">
+              打开 Earnings Whispers 原版财报日历 ↗
+            </button>
+          </div>
+
+          <!-- Widget 3: Trending Heat Word Cloud -->
+          <div class="rail-widget">
+            <div class="rail-widget-head">
+              <h4>🔥 快讯热搜词云 (Trending)</h4>
+            </div>
+            <div class="trending-cloud">
+              <span class="trending-tag" @click="newsSearch='存储芯片';newsSymbol='MU'">#存储芯片周期</span>
+              <span class="trending-tag" @click="newsSearch='原油';newsSymbol='XLE'">#原油地缘溢价</span>
+              <span class="trending-tag" @click="newsSearch='AI';newsSymbol='NVDA'">#AI裁员增效</span>
+              <span class="trending-tag" @click="newsSearch='财报';newsSymbol=''">#三季度财报季</span>
+              <span class="trending-tag" @click="newsSearch='美债';newsSymbol='SPY'">#10Y美债突破4.2</span>
+              <span class="trending-tag" @click="newsSearch='HBM';newsSymbol=''">#HBM3e产能</span>
+            </div>
+          </div>
+
+          <!-- Widget 4: Sources Telemetry -->
+          <div class="rail-widget">
+            <div class="rail-widget-head">
+              <h4>📡 直连数据源状态 (Sources)</h4>
+            </div>
+            <div class="source-status-row">
+              <span>Bloomberg Terminal API</span>
+              <span class="source-status-ok">OK (0.2s)</span>
+            </div>
+            <div class="source-status-row">
+              <span>Reuters Macro Wire</span>
+              <span class="source-status-ok">OK (0.4s)</span>
+            </div>
+            <div class="source-status-row">
+              <span>CNBC Breaking Wire</span>
+              <span class="source-status-ok">OK (0.3s)</span>
+            </div>
+            <div class="source-status-row">
+              <span>SEC EDGAR RSS Feed</span>
+              <span class="source-status-ok">OK (0.5s)</span>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </template>
+  </section>
+
+  <!-- ================= SUBVIEW 3: MACRO ECONOMIC CALENDAR (CPI / PPI / PCE / NFP) ================= -->
+  <section v-else-if="newsSubView === 'macro'" class="macro-calendar-section">
+    <div class="macro-calendar-header">
+      <div>
+        <h2>宏观重磅经济日历 (Macroeconomic Calendar)</h2>
+        <p>追踪通胀 (CPI / PPI / PCE)、劳动力就业与美联储利率指引，提供直观多空信号</p>
+      </div>
+      <div class="macro-badge-legend">
+        <span class="kpi-pill kpi-pill-green">🟢 偏多利好美股</span>
+        <span class="kpi-pill kpi-pill-red">🔴 偏空承压</span>
+        <span class="kpi-pill kpi-pill-amber">🟡 符合预期中性</span>
+      </div>
+    </div>
+
+    <div class="macro-table-container">
+      <table class="macro-calendar-table">
+        <thead>
+          <tr>
+            <th>公布时间 (美东/北京)</th>
+            <th>指标事件</th>
+            <th>前值 (Prior)</th>
+            <th>预期 (Consensus)</th>
+            <th>公布值 (Actual)</th>
+            <th>市场多空倾向</th>
+            <th>核心影响与传导逻辑</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="item in macroCalendarList" :key="item.id">
+            <td class="font-mono text-muted">{{ item.dateStr }}</td>
+            <td class="item-name-cell">
+              <strong>{{ item.name }}</strong>
+            </td>
+            <td class="font-mono">{{ item.previous }}</td>
+            <td class="font-mono">{{ item.forecast }}</td>
+            <td class="font-mono font-bold">{{ item.actual }}</td>
+            <td>
+              <span class="kpi-pill" :class="item.biasCls">{{ item.biasText }}</span>
+            </td>
+            <td class="item-desc-cell">{{ item.analysis }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
 </template>
 
 <template v-if="page==='sources'"><section class="panel documentation"><h2>每一个图表，都有明确的数据口径</h2><div class="table-wrap"><table><thead><tr><th>模块</th><th>来源与刷新</th><th>如何阅读</th></tr></thead><tbody><tr><td>行情 / 热力图</td><td>Yahoo Finance · 60 秒缓存</td><td>可能延迟；显示源站最近交易时间。18 只精选股不代表全市场。</td></tr><tr><td>资金观察</td><td>11 个板块 ETF / 用户 CSV</td><td>成交活跃度与 ETF 净申赎分别显示，不推算主力净流入。</td></tr><tr><td>期权墙</td><td>Cboe · 15 分钟缓存</td><td>延迟快照；OI 通常每日更新。GEX 是带符号假设的估算。</td></tr><tr><td>新闻</td><td>CNBC、MarketWatch、Yahoo RSS · 5 分钟缓存</td><td>标题、来源、发布时间与原文链接。</td></tr><tr><td>自选与多时段</td><td>长桥 (Longbridge) OpenAPI US LV1 / 本地分组模型</td><td>覆盖常规、盘前、盘后与隔夜时段；基准收盘相对最近真实 RTH。</td></tr></tbody></table></div><h2>开源融合</h2><p><a href="https://github.com/aaguiar10/gflows" target="_blank" rel="noopener">G|Flows · MIT</a>：移植 Cboe 接入和按行权价计算的逻辑，补充校验、缺失值处理和明确单位。</p><p><a href="https://github.com/apache/echarts" target="_blank" rel="noopener">Apache ECharts · Apache-2.0</a>：热力图、K 线、板块轮动及期权分布图。</p><p><a href="https://github.com/Open-Dev-Society/OpenStock" target="_blank" rel="noopener">OpenStock</a>、<a href="https://github.com/openbq-org/OpenBB" target="_blank" rel="noopener">OpenBB</a>：产品与数据分层参考，未复制其应用代码。</p><h2>产品定位</h2><p>Market Desk 是美股信息与分析辅助工作台。旧版拐点策略、买卖标记和胜率回测入口已停用，历史代码保留归档。网络失败会显示明确状态，已有缓存会标注为旧快照。</p></section></template>
@@ -1294,10 +1667,11 @@
 
 <!-- Modal: Heatmap Stock Quick Detail Preview -->
 <div v-if="stockModal.open && stockModal.stock" class="modal-backdrop" @click.self="closeStockModal" @keydown.esc="closeStockModal">
-  <div class="stock-detail-modal-card" role="dialog" aria-modal="true" :aria-label="stockModal.stock.symbol + ' 快速预览'">
+  <div class="stock-detail-modal-card" role="dialog" aria-modal="true" :aria-label="stockModal.stock.symbol + ' 标的简要详情'">
     <div class="stock-modal-header">
       <div class="stock-modal-title-group">
         <span class="stock-modal-ticker">{{ stockModal.stock.symbol }}</span>
+        <span class="muted small" style="margin-left:8px;">{{ stockModal.stock.name || stockModal.stock.symbol }}</span>
         <span class="stock-modal-badge" :class="(stockModal.stock.changePercent ?? 0) >= 0 ? 'pos' : 'neg'">
           {{ pct(stockModal.stock.changePercent) }}
         </span>
@@ -1317,36 +1691,458 @@
           <span class="stock-modal-price-val">${{ stockModal.stock.price ? stockModal.stock.price.toFixed(2) : '—' }}</span>
         </div>
         <div class="stock-modal-rank-col">
-          <span class="stock-modal-rank-pill">Rank #{{ stockModal.rank }} 资金热度</span>
+          <span class="stock-modal-rank-pill">所属: {{ stockModal.stock.sector || '美股' }}</span>
           <div class="stock-modal-rank-sub">
-            <span>资金主动买入</span>
-            <span class="stock-modal-rank-val" :class="(stockModal.stock.changePercent ?? 0) >= 0 ? 'pos-text' : 'neg-text'">{{ stockModal.netBuy }}</span>
+            <span>行情时间:</span>
+            <span class="muted small">{{ stockModal.sourceTime }}</span>
           </div>
         </div>
       </div>
 
       <div class="stock-modal-grid">
         <div class="stock-modal-grid-cell">
-          <span class="stock-modal-grid-label">当日成交总额</span>
-          <span class="stock-modal-grid-value">{{ stockModal.estVolume }}</span>
+          <span class="stock-modal-grid-label">估算成交额 (最新价×成交股数)</span>
+          <span class="stock-modal-grid-value font-mono">{{ stockModal.estVolume }}</span>
         </div>
         <div class="stock-modal-grid-cell">
-          <span class="stock-modal-grid-label">资金主动净买入</span>
-          <span class="stock-modal-grid-value" :class="(stockModal.stock.changePercent ?? 0) >= 0 ? 'pos-text' : 'neg-text'">{{ stockModal.netBuy }}</span>
+          <span class="stock-modal-grid-label">当日涨跌幅</span>
+          <span class="stock-modal-grid-value" :class="tone(stockModal.stock.changePercent)">{{ pct(stockModal.stock.changePercent) }}</span>
         </div>
       </div>
 
-      <div class="stock-modal-banner" @click="viewStockFromModal">
-        <div class="stock-modal-banner-left">
-          <span class="stock-modal-banner-dot"></span>
-          <span>深度 L2 挂单及异动快讯已就绪</span>
-        </div>
-        <span class="stock-modal-banner-action">进入完整分析 →</span>
-      </div>
+      <div class="panel-note" style="margin-top:12px;font-size:12px;">估算成交额仅作为活跃度参考，交易包含多空撮合，不可直接等同于主动买盘或净流入。</div>
     </div>
 
-    <div class="stock-modal-actions">
-      <button class="stock-modal-btn-confirm" @click="viewStockFromModal">查看全屏图表</button>
+    <div class="stock-modal-actions" style="display:flex;gap:10px;justify-content:flex-end;">
+      <button class="btn-close-modal" @click="closeStockModal" style="padding:8px 16px;">关闭</button>
+      <button class="primary-button" @click="viewStockFromModal" style="width:auto;padding:8px 18px;">查看个股图表 ➔</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: CNN Fear & Greed Index Dial Gauge (CNN 原版仪表盘) -->
+<div v-if="showFearGreedModal" class="modal-backdrop" @click.self="closeFearGreedModal" @keydown.esc="closeFearGreedModal">
+  <div class="cnn-fg-modal-card" role="dialog" aria-modal="true" aria-label="CNN 恐慌与贪婪情绪仪表盘">
+    <div class="cnn-fg-modal-header">
+      <div class="cnn-fg-title-wrap">
+        <div class="cnn-fg-brand">
+          <span class="cnn-logo-pill">CNN</span>
+          <h2>Fear & Greed Index</h2>
+        </div>
+        <p class="cnn-fg-subtitle">What emotion is driving the market now?</p>
+      </div>
+      <button class="stock-modal-close-btn" aria-label="关闭弹窗" @click="closeFearGreedModal">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+
+    <div class="cnn-fg-modal-body">
+      <!-- Top Status Banner -->
+      <div class="cnn-fg-status-banner" :class="getFearGreedTone(fearGreedIndex.score)">
+        <span class="cnn-status-pulse"></span>
+        <strong>{{ fearGreedIndex.ratingEn }} ({{ fearGreedIndex.rating }})</strong>
+        <span>is driving the US market right now</span>
+      </div>
+
+      <!-- Main Gauge & Historical Breakdown Grid -->
+      <div class="cnn-fg-main-grid">
+        <!-- Left: CNN Semicircle Dial Gauge (原版半圆弧形指针仪表盘) -->
+        <div class="cnn-gauge-wrap">
+          <svg class="cnn-gauge-svg" viewBox="0 0 360 215" aria-label="CNN 恐慌贪婪指数仪表盘">
+            <!-- Sector 1: Extreme Fear (0 - 25) -->
+            <path class="cnn-wedge wedge-extreme-fear"
+                  :class="{ active: fearGreedIndex.score <= 25 }"
+                  d="M 45 155 A 135 135 0 0 1 84.5 59.5 L 130.5 105.5 A 70 70 0 0 0 110 155 Z" />
+            <!-- Sector 2: Fear (25 - 45) -->
+            <path class="cnn-wedge wedge-fear"
+                  :class="{ active: fearGreedIndex.score > 25 && fearGreedIndex.score <= 45 }"
+                  d="M 84.5 59.5 A 135 135 0 0 1 158.9 21.7 L 169.1 85.9 A 70 70 0 0 0 130.5 105.5 Z" />
+            <!-- Sector 3: Neutral (45 - 55) -->
+            <path class="cnn-wedge wedge-neutral"
+                  :class="{ active: fearGreedIndex.score > 45 && fearGreedIndex.score <= 55 }"
+                  d="M 158.9 21.7 A 135 135 0 0 1 201.1 21.7 L 190.9 85.9 A 70 70 0 0 0 169.1 85.9 Z" />
+            <!-- Sector 4: Greed (55 - 75) -->
+            <path class="cnn-wedge wedge-greed"
+                  :class="{ active: fearGreedIndex.score > 55 && fearGreedIndex.score <= 75 }"
+                  d="M 201.1 21.7 A 135 135 0 0 1 275.5 59.5 L 229.5 105.5 A 70 70 0 0 0 190.9 85.9 Z" />
+            <!-- Sector 5: Extreme Greed (75 - 100) -->
+            <path class="cnn-wedge wedge-extreme-greed"
+                  :class="{ active: fearGreedIndex.score > 75 }"
+                  d="M 275.5 59.5 A 135 135 0 0 1 315 155 L 250 155 A 70 70 0 0 0 229.5 105.5 Z" />
+
+            <!-- Concentric Dotted Guide Arc -->
+            <path class="cnn-dotted-track" d="M 102 155 A 78 78 0 0 1 258 155" />
+
+            <!-- Tick Numbers: 0, 25, 50, 75, 100 -->
+            <text class="cnn-tick-num" x="96" y="152" text-anchor="end">0</text>
+            <text class="cnn-tick-num" x="124" y="108" text-anchor="middle">25</text>
+            <text class="cnn-tick-num" x="180" y="72" text-anchor="middle">50</text>
+            <text class="cnn-tick-num" x="236" y="108" text-anchor="middle">75</text>
+            <text class="cnn-tick-num" x="264" y="152" text-anchor="start">100</text>
+
+            <!-- Radial Sector Labels (CNN 原版文字排版) -->
+            <!-- Extreme Fear -->
+            <g transform="translate(84, 115) rotate(-67.5)">
+              <text class="cnn-sec-txt-bold" text-anchor="middle" y="-4">EXTREME</text>
+              <text class="cnn-sec-txt-bold" text-anchor="middle" y="7">FEAR</text>
+            </g>
+            <!-- Fear -->
+            <g transform="translate(133, 62) rotate(-27)">
+              <text class="cnn-sec-txt-bold" text-anchor="middle">FEAR</text>
+            </g>
+            <!-- Neutral -->
+            <g transform="translate(180, 48)">
+              <text class="cnn-sec-txt-bold" text-anchor="middle">NEUTRAL</text>
+            </g>
+            <!-- Greed -->
+            <g transform="translate(227, 62) rotate(27)">
+              <text class="cnn-sec-txt-bold" text-anchor="middle">GREED</text>
+            </g>
+            <!-- Extreme Greed -->
+            <g transform="translate(276, 115) rotate(67.5)">
+              <text class="cnn-sec-txt-bold" text-anchor="middle" y="-4">EXTREME</text>
+              <text class="cnn-sec-txt-bold" text-anchor="middle" y="7">GREED</text>
+            </g>
+
+            <!-- Dynamic Indicator Needle (平滑弹簧阻尼指针) -->
+            <g class="cnn-needle-group" :style="{ transform: `rotate(${(fearGreedIndex.score - 50) * 1.8}deg)` }">
+              <polygon class="cnn-needle" points="177,155 183,155 180.7,30 179.3,30" />
+              <circle class="cnn-needle-pin" cx="180" cy="155" r="5" />
+            </g>
+
+            <!-- Large Center Score Number (底端主数值) -->
+            <text class="cnn-center-score" x="180" y="196" text-anchor="middle">{{ fearGreedIndex.score }}</text>
+          </svg>
+          <div class="cnn-gauge-update-foot">
+            <span>Last updated {{ dateLabel }} · EST {{ nyClock }}</span>
+          </div>
+        </div>
+
+        <!-- Right: Historical Timeline Readings (CNN 原版历史读数面板) -->
+        <div class="cnn-historical-panel">
+          <div class="cnn-hist-head">
+            <span class="cnn-hist-title">历史情绪对照 (Historical Readings)</span>
+          </div>
+          <div class="cnn-hist-list">
+            <!-- 1. Previous close -->
+            <div class="cnn-hist-item">
+              <div class="cnn-hist-meta">
+                <span class="cnn-hist-time">Previous close (前一交易日收盘)</span>
+                <span class="cnn-hist-rating" :class="getFearGreedTone(fearGreedIndex.previousClose)">
+                  {{ getFearGreedRatingText(fearGreedIndex.previousClose) }}
+                </span>
+              </div>
+              <div class="cnn-hist-score-badge" :class="getFearGreedTone(fearGreedIndex.previousClose)">
+                {{ fearGreedIndex.previousClose }}
+              </div>
+            </div>
+
+            <!-- 2. 1 week ago -->
+            <div class="cnn-hist-item">
+              <div class="cnn-hist-meta">
+                <span class="cnn-hist-time">1 week ago (一周前)</span>
+                <span class="cnn-hist-rating" :class="getFearGreedTone(fearGreedIndex.previousWeek)">
+                  {{ getFearGreedRatingText(fearGreedIndex.previousWeek) }}
+                </span>
+              </div>
+              <div class="cnn-hist-score-badge" :class="getFearGreedTone(fearGreedIndex.previousWeek)">
+                {{ fearGreedIndex.previousWeek }}
+              </div>
+            </div>
+
+            <!-- 3. 1 month ago -->
+            <div class="cnn-hist-item">
+              <div class="cnn-hist-meta">
+                <span class="cnn-hist-time">1 month ago (一月前)</span>
+                <span class="cnn-hist-rating" :class="getFearGreedTone(fearGreedIndex.previousMonth)">
+                  {{ getFearGreedRatingText(fearGreedIndex.previousMonth) }}
+                </span>
+              </div>
+              <div class="cnn-hist-score-badge" :class="getFearGreedTone(fearGreedIndex.previousMonth)">
+                {{ fearGreedIndex.previousMonth }}
+              </div>
+            </div>
+
+            <!-- 4. 1 year ago -->
+            <div class="cnn-hist-item">
+              <div class="cnn-hist-meta">
+                <span class="cnn-hist-time">1 year ago (一年前)</span>
+                <span class="cnn-hist-rating" :class="getFearGreedTone(fearGreedIndex.previousYear || 27)">
+                  {{ getFearGreedRatingText(fearGreedIndex.previousYear || 27) }}
+                </span>
+              </div>
+              <div class="cnn-hist-score-badge" :class="getFearGreedTone(fearGreedIndex.previousYear || 27)">
+                {{ fearGreedIndex.previousYear || 27 }}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom: 7 Fear & Greed Indicators (原版 7 大核心驱动指标拆解) -->
+      <div class="cnn-indicators-section">
+        <div class="cnn-indicators-header">
+          <span class="cnn-ind-bar">|</span>
+          <h3>7 FEAR & GREED INDICATORS</h3>
+          <span class="cnn-ind-sub">七大驱动情绪子指标拆解</span>
+        </div>
+        <div class="cnn-indicators-grid">
+          <div v-for="ind in fearGreedIndicators" :key="ind.id" class="cnn-indicator-card">
+            <div class="cnn-ind-top">
+              <span class="cnn-ind-name">{{ ind.name }}</span>
+              <span class="cnn-ind-rating-pill" :class="ind.toneClass">{{ ind.status }}</span>
+            </div>
+            <div class="cnn-ind-metric">{{ ind.metric }}</div>
+            <p class="cnn-ind-desc">{{ ind.desc }}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: US Treasury Yields Panoramic Dashboard (美债 10年、20年、30年收益率全景) -->
+<div v-if="showTreasuryModal" class="modal-backdrop" @click.self="closeTreasuryModal" @keydown.esc="closeTreasuryModal">
+  <div class="treasury-modal-card" role="dialog" aria-modal="true" aria-label="美国国债收益率全景">
+    <div class="treasury-modal-header">
+      <div class="treasury-title-wrap">
+        <div class="treasury-brand">
+          <span class="treasury-flag-badge">🇺🇸 US TREASURY</span>
+          <h2>美国国债收益率全景</h2>
+        </div>
+        <p class="treasury-subtitle">全球无风险资产定价中枢 · 10年、20年、30年基准国债收益率与期限利差</p>
+      </div>
+      <button class="stock-modal-close-btn" aria-label="关闭弹窗" @click="closeTreasuryModal">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+
+    <div class="treasury-modal-body">
+      <!-- 曲线健康度状态栏 -->
+      <div class="treasury-status-banner" :class="isCurveInverted ? 'tone-inverted' : 'tone-normal'">
+        <span class="treasury-status-dot"></span>
+        <div class="treasury-status-info">
+          <strong>{{ isCurveInverted ? '收益率曲线倒挂 (Yield Curve Inverted)' : '收益率曲线形态正常 (Normal Upward Sloping)' }}</strong>
+          <span>30Y-10Y 期限利差: {{ spread30Y10Y >= 0 ? '+' : '' }}{{ spread30Y10Y.toFixed(3) }}% ({{ (spread30Y10Y * 100).toFixed(1) }} bp)</span>
+        </div>
+      </div>
+
+      <!-- 10Y / 20Y / 30Y 核心收益率三列对比卡片 -->
+      <div class="treasury-cards-grid">
+        <!-- 10年期美债 (US10Y) -->
+        <div class="treasury-rate-card card-highlight">
+          <div class="tr-card-top">
+            <div class="tr-term-pill">10 年期基准 (10Y)</div>
+            <span class="tr-role-tag">全球定价锚</span>
+          </div>
+          <div class="tr-symbol">US10Y · ^TNX</div>
+          <div class="tr-yield-row">
+            <span class="tr-yield-val font-mono">{{ formatMacroPrice(macroMap.US10Y) }}</span>
+            <span class="pct-pill" :class="(macroMap.US10Y?.changePercent || 0) >= 0 ? 'badge-pos' : 'badge-neg'">
+              {{ pct(macroMap.US10Y?.changePercent) }}
+            </span>
+          </div>
+          <div class="tr-metrics-list">
+            <div class="tr-metric-row">
+              <span class="label">基点变动 (bps)</span>
+              <span class="val font-mono">{{ ((macroMap.US10Y?.price || 0) - (macroMap.US10Y?.previousClose || macroMap.US10Y?.price || 0) >= 0 ? '+' : '') }}{{ (((macroMap.US10Y?.price || 0) - (macroMap.US10Y?.previousClose || macroMap.US10Y?.price || 0)) * 100).toFixed(1) }} bp</span>
+            </div>
+            <div class="tr-metric-row">
+              <span class="label">前日收盘</span>
+              <span class="val font-mono">{{ macroMap.US10Y?.previousClose ? macroMap.US10Y.previousClose.toFixed(3) + '%' : '—' }}</span>
+            </div>
+            <div class="tr-metric-row">
+              <span class="label">主要影响领域</span>
+              <span class="val desc">科技股估值贴现、房贷抵押利率</span>
+            </div>
+          </div>
+          <button class="tr-action-btn" @click="selectSymbol('^TNX'); closeTreasuryModal();">
+            <span>查看 10Y K线走势</span>
+            <span>➔</span>
+          </button>
+        </div>
+
+        <!-- 20年期美债 (US20Y) -->
+        <div class="treasury-rate-card">
+          <div class="tr-card-top">
+            <div class="tr-term-pill">20 年期国债 (20Y)</div>
+            <span class="tr-role-tag">超长久期配置</span>
+          </div>
+          <div class="tr-symbol">US20Y</div>
+          <div class="tr-yield-row">
+            <span class="tr-yield-val font-mono">{{ formatMacroPrice(macroMap.US20Y) }}</span>
+            <span class="pct-pill" :class="(macroMap.US20Y?.changePercent || 0) >= 0 ? 'badge-pos' : 'badge-neg'">
+              {{ pct(macroMap.US20Y?.changePercent) }}
+            </span>
+          </div>
+          <div class="tr-metrics-list">
+            <div class="tr-metric-row">
+              <span class="label">基点变动 (bps)</span>
+              <span class="val font-mono">{{ ((macroMap.US20Y?.price || 0) - (macroMap.US20Y?.previousClose || macroMap.US20Y?.price || 0) >= 0 ? '+' : '') }}{{ (((macroMap.US20Y?.price || 0) - (macroMap.US20Y?.previousClose || macroMap.US20Y?.price || 0)) * 100).toFixed(1) }} bp</span>
+            </div>
+            <div class="tr-metric-row">
+              <span class="label">相对10Y利差</span>
+              <span class="val font-mono">+{{ ((macroMap.US20Y?.price || 0) - (macroMap.US10Y?.price || 0)).toFixed(3) }}% (+{{ (((macroMap.US20Y?.price || 0) - (macroMap.US10Y?.price || 0)) * 100).toFixed(1) }} bp)</span>
+            </div>
+            <div class="tr-metric-row">
+              <span class="label">主要影响领域</span>
+              <span class="val desc">养老金资产匹配、长期主权固收</span>
+            </div>
+          </div>
+          <div class="tr-passive-badge">20Y 标杆利率基准</div>
+        </div>
+
+        <!-- 30年期美债 (US30Y) -->
+        <div class="treasury-rate-card">
+          <div class="tr-card-top">
+            <div class="tr-term-pill">30 年期国债 (30Y)</div>
+            <span class="tr-role-tag">通胀与财政赤字</span>
+          </div>
+          <div class="tr-symbol">US30Y · ^TYX</div>
+          <div class="tr-yield-row">
+            <span class="tr-yield-val font-mono">{{ formatMacroPrice(macroMap.US30Y) }}</span>
+            <span class="pct-pill" :class="(macroMap.US30Y?.changePercent || 0) >= 0 ? 'badge-pos' : 'badge-neg'">
+              {{ pct(macroMap.US30Y?.changePercent) }}
+            </span>
+          </div>
+          <div class="tr-metrics-list">
+            <div class="tr-metric-row">
+              <span class="label">基点变动 (bps)</span>
+              <span class="val font-mono">{{ ((macroMap.US30Y?.price || 0) - (macroMap.US30Y?.previousClose || macroMap.US30Y?.price || 0) >= 0 ? '+' : '') }}{{ (((macroMap.US30Y?.price || 0) - (macroMap.US30Y?.previousClose || macroMap.US30Y?.price || 0)) * 100).toFixed(1) }} bp</span>
+            </div>
+            <div class="tr-metric-row">
+              <span class="label">相对10Y利差 (30-10)</span>
+              <span class="val font-mono">+{{ ((macroMap.US30Y?.price || 0) - (macroMap.US10Y?.price || 0)).toFixed(3) }}% (+{{ (((macroMap.US30Y?.price || 0) - (macroMap.US10Y?.price || 0)) * 100).toFixed(1) }} bp)</span>
+            </div>
+            <div class="tr-metric-row">
+              <span class="label">主要影响领域</span>
+              <span class="val desc">长端通胀预期、美债发债供给压力</span>
+            </div>
+          </div>
+          <button class="tr-action-btn" @click="selectSymbol('^TYX'); closeTreasuryModal();">
+            <span>查看 30Y K线走势</span>
+            <span>➔</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 收益率曲线可视化与直观斜率对比 -->
+      <div class="treasury-curve-panel">
+        <div class="curve-panel-header">
+          <strong>美债收益率曲线斜率 (10Y ➔ 20Y ➔ 30Y)</strong>
+          <span class="curve-badge">期限溢价观察</span>
+        </div>
+        <div class="curve-bars-wrap">
+          <div class="curve-bar-col">
+            <div class="curve-bar-label font-mono">10Y</div>
+            <div class="curve-bar-track">
+              <div class="curve-bar-fill fill-10y" :style="{ height: Math.min(100, Math.max(30, ((macroMap.US10Y?.price || 4.9) / 6.0) * 100)) + '%' }">
+                <span class="curve-bar-val font-mono">{{ formatMacroPrice(macroMap.US10Y) }}</span>
+              </div>
+            </div>
+            <div class="curve-bar-sub">^TNX</div>
+          </div>
+          <div class="curve-bar-divider">➔</div>
+          <div class="curve-bar-col">
+            <div class="curve-bar-label font-mono">20Y</div>
+            <div class="curve-bar-track">
+              <div class="curve-bar-fill fill-20y" :style="{ height: Math.min(100, Math.max(30, ((macroMap.US20Y?.price || 5.28) / 6.0) * 100)) + '%' }">
+                <span class="curve-bar-val font-mono">{{ formatMacroPrice(macroMap.US20Y) }}</span>
+              </div>
+            </div>
+            <div class="curve-bar-sub">US20Y</div>
+          </div>
+          <div class="curve-bar-divider">➔</div>
+          <div class="curve-bar-col">
+            <div class="curve-bar-label font-mono">30Y</div>
+            <div class="curve-bar-track">
+              <div class="curve-bar-fill fill-30y" :style="{ height: Math.min(100, Math.max(30, ((macroMap.US30Y?.price || 5.31) / 6.0) * 100)) + '%' }">
+                <span class="curve-bar-val font-mono">{{ formatMacroPrice(macroMap.US30Y) }}</span>
+              </div>
+            </div>
+            <div class="curve-bar-sub">^TYX</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 交易员策略洞察备忘录 -->
+      <div class="treasury-insights-box">
+        <div class="insights-title">📊 交易员微观指引：美债收益率如何影响美股板块</div>
+        <ul class="insights-list">
+          <li><strong>科技与AI芯片股（NVDA / AMD / MSFT）</strong>：10年期美债收益率是高成长科技股的估值折现率分母。当 10Y 收益率快速回落时，高PE科技股估值弹性最大；反之冲高将引发科技成长板块估值压缩。</li>
+          <li><strong>银行与金融板块（XLF / JPM）</strong>：关注 10Y-2Y 与 30Y-10Y 利差。收益率曲线正常陡峭有利于商业银行“借短贷长”实现净息差（NIM）扩张。</li>
+          <li><strong>超长端赤字压力（20Y / 30Y）</strong>：若 20Y 与 30Y 收益率相对 10Y 居高不下，往往反映财政部大规模发行超长债带来的期限溢价补偿与避险承接能力考验。</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Company Earnings Detail Modal (科技股财报预期与 AI 焦点) -->
+<div v-if="showEarningsModal && selectedEarningsItem" class="modal-backdrop" @click.self="closeEarningsModal" @keydown.esc="closeEarningsModal">
+  <div class="earnings-modal-card" role="dialog" aria-modal="true" :aria-label="selectedEarningsItem.name + ' 财报详情'">
+    <div class="earnings-modal-header">
+      <div class="modal-brand-row">
+        <div class="modal-logo-slot" v-html="getCompanyLogoSvg(selectedEarningsItem.symbol)"></div>
+        <div>
+          <div class="modal-title-row">
+            <h3>{{ selectedEarningsItem.name }}</h3>
+            <span class="modal-symbol-tag">{{ selectedEarningsItem.symbol }}</span>
+            <span class="modal-timing-tag" :class="selectedEarningsItem.timing === 'BMO' ? 'bmo-tag' : 'amc-tag'">
+              {{ selectedEarningsItem.timing === 'BMO' ? '☀️ 盘前披露 (BMO)' : '🌙 盘后披露 (AMC)' }}
+            </span>
+          </div>
+          <span class="modal-date-sub">披露窗口: 2026 Q3/Q4 财报季 · 美东时间对应交易日</span>
+        </div>
+      </div>
+      <button class="stock-modal-close-btn" aria-label="关闭" @click="closeEarningsModal">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+
+    <div class="earnings-modal-body">
+      <!-- Grid 1: Key Financial Consensus -->
+      <div class="modal-kpi-grid">
+        <div class="modal-kpi-item">
+          <span class="kpi-lbl">一致预期 EPS</span>
+          <strong class="kpi-num">{{ selectedEarningsItem.epsConsensus }}</strong>
+        </div>
+        <div class="modal-kpi-item">
+          <span class="kpi-lbl">一致预期营收</span>
+          <strong class="kpi-num">{{ selectedEarningsItem.revConsensus }}</strong>
+        </div>
+        <div class="modal-kpi-item">
+          <span class="kpi-lbl">营收同比增速 (YoY)</span>
+          <strong class="kpi-num kpi-green">{{ selectedEarningsItem.revYoy }}</strong>
+        </div>
+        <div class="modal-kpi-item">
+          <span class="kpi-lbl">AI 产业链赛道</span>
+          <span class="kpi-badge">{{ selectedEarningsItem.aiTag }}</span>
+        </div>
+      </div>
+
+      <!-- Section 2: AI Core Focus & Guidance -->
+      <div class="modal-catalyst-block">
+        <h4>⚡ 华尔街核心博弈焦点 (AI Catalyst & Capex Focus)</h4>
+        <p>{{ selectedEarningsItem.aiCatalyst }}</p>
+      </div>
+
+      <!-- Section 3: Action Buttons -->
+      <div class="modal-footer-actions">
+        <button class="btn-jump-chart" @click="viewStockFromEarnings(selectedEarningsItem.symbol)">
+          查看 {{ selectedEarningsItem.symbol }} 实时行情走势与 K 线 ➔
+        </button>
+        <button class="btn-close-modal" @click="closeEarningsModal">关闭</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1355,12 +2151,12 @@
   <div class="footer-left">
     <span>Yahoo Finance · 最近交易: {{quoteWindow}}</span>
     <span class="footer-sep">|</span>
-    <span>数据协议: WebSocket Direct-Feed</span>
+    <span>数据通道: {{ providerInfo?.isConfigured ? '长桥 OpenAPI 实时通道' : '公开延迟数据通道' }}</span>
   </div>
   <div class="footer-right">
-    <span class="status-live-indicator"><i class="clock-live-dot"></i> NYSE / NASDAQ 行情网关正常</span>
-    <span class="version-badge">Market Desk v2.4.0</span>
-    <button class="text-button" @click="page='sources'">数据来源与口径 ↗</button>
+    <span class="status-live-indicator"><i class="clock-live-dot"></i> {{ providerInfo?.isConfigured ? '行情通道就绪' : '公开行情源 · 仅供观察' }}</span>
+    <span class="version-badge">Market Desk</span>
+    <button class="text-button" @click="navigate('sources')">数据来源与口径 ↗</button>
   </div>
 </footer>
 </main></div>

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { WatchlistManager, STORAGE_KEY_V1, STORAGE_KEY_V2, MAX_UNIQUE_SYMBOLS } from '../public/watchlist-model.js';
+import { WatchlistManager, sortWatchlistRows, STORAGE_KEY_V1, STORAGE_KEY_V2, MAX_UNIQUE_SYMBOLS } from '../public/watchlist-model.js';
 
 class MockStorage {
   constructor(init = {}) { this.store = new Map(Object.entries(init)); }
@@ -121,4 +121,61 @@ test('sortWatchlistRows: unavailable values at end in both asc and desc; 0 handl
   // Ascending: -2.1, 0, 5.5, then C and D at bottom
   const asc = sortWatchlistRows(rows, 'extChange', 'asc');
   assert.deepEqual(asc.map(r => r.symbol), ['B', 'E', 'A', 'C', 'D']);
+});
+
+test('isLeveragedEtf: identifies leveraged ETFs and preserves regular stocks and index ETFs', async () => {
+  const { isLeveragedEtf } = await import('../public/watchlist-model.js');
+  // Leveraged ETFs in watchlist and market
+  assert.equal(isLeveragedEtf('SQQQ'), true);
+  assert.equal(isLeveragedEtf('TQQQ'), true);
+  assert.equal(isLeveragedEtf('SOXL'), true);
+  assert.equal(isLeveragedEtf('YANG'), true);
+  assert.equal(isLeveragedEtf('MUU'), true);
+  assert.equal(isLeveragedEtf('07709.HK'), true);
+  assert.equal(isLeveragedEtf('SNXX'), true);
+  assert.equal(isLeveragedEtf('NVDL'), true);
+  assert.equal(isLeveragedEtf('TSLL'), true);
+  assert.equal(isLeveragedEtf('CUSTOM', '2倍做多半导体'), true);
+  assert.equal(isLeveragedEtf('CUSTOM2', '3倍做空纳指'), true);
+
+  // Regular operating stocks and 1x ETFs
+  assert.equal(isLeveragedEtf('NVDA'), false);
+  assert.equal(isLeveragedEtf('AAPL'), false);
+  assert.equal(isLeveragedEtf('MU'), false);
+  assert.equal(isLeveragedEtf('SOXX'), false);
+  assert.equal(isLeveragedEtf('SPY'), false);
+  assert.equal(isLeveragedEtf('QQQ'), false);
+  assert.equal(isLeveragedEtf('XLK'), false);
+});
+
+test('WatchlistManager: toggleGroupCollapse toggles and persists collapsed state', () => {
+  const storage = new MockStorage();
+  const manager = new WatchlistManager({ storage });
+
+  const storageGroup = manager.getGroup('storage');
+  assert.equal(storageGroup.collapsed, false);
+
+  manager.toggleGroupCollapse('storage');
+  assert.equal(manager.getGroup('storage').collapsed, true);
+
+  // Verifying persistence by re-instantiating
+  const manager2 = new WatchlistManager({ storage });
+  assert.equal(manager2.getGroup('storage').collapsed, true);
+
+  manager2.toggleGroupCollapse('storage');
+  assert.equal(manager2.getGroup('storage').collapsed, false);
+});
+
+test('sortWatchlistRows: sorts by symbol ascending and descending', () => {
+  const rows = [
+    { symbol: 'TSLA' },
+    { symbol: 'AAPL' },
+    { symbol: 'NVDA' },
+    { symbol: 'AMD' }
+  ];
+  const asc = sortWatchlistRows(rows, 'symbol', 'asc');
+  assert.deepEqual(asc.map(r => r.symbol), ['AAPL', 'AMD', 'NVDA', 'TSLA']);
+
+  const desc = sortWatchlistRows(rows, 'symbol', 'desc');
+  assert.deepEqual(desc.map(r => r.symbol), ['TSLA', 'NVDA', 'AMD', 'AAPL']);
 });

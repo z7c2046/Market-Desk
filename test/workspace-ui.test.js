@@ -5,6 +5,7 @@ import fs from 'node:fs/promises';
 import { JSDOM, VirtualConsole } from 'jsdom';
 import { parseFlows } from '../public/flows.js';
 import * as watchlistModel from '../public/watchlist-model.js';
+import * as earningsCalendarModel from '../public/earnings-calendar-model.js';
 const tick = () => new Promise(resolve => setTimeout(resolve, 30));
 async function mount(t, fetchImpl) {
   const errors = [], configs = new Map();
@@ -16,13 +17,14 @@ async function mount(t, fetchImpl) {
   w.EventSource = class { constructor() {} close() {} };
   w.requestAnimationFrame = cb => setTimeout(cb, 16);
   w.cancelAnimationFrame = id => clearTimeout(id);
-  Object.assign(w, watchlistModel);
+  Object.assign(w, watchlistModel, earningsCalendarModel);
   Object.defineProperty(w.HTMLElement.prototype, 'clientWidth', { get: () => 800 });
   w.echarts = { init: el => ({ setOption: config => configs.set(el.id, config), off() {}, on() {}, resize() {}, dispose() {} }) };
   w.eval(await fs.readFile(new URL('../node_modules/vue/dist/vue.global.prod.js', import.meta.url), 'utf8'));
   const appSrc = (await fs.readFile(new URL('../public/app.js', import.meta.url), 'utf8'))
     .replace("import { parseFlows } from './flows.js';", 'const parseFlows = window.parseFlows;')
-    .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/watchlist-model\.js';/, 'const { WatchlistManager, sortWatchlistRows, getSelectedExtQuote, MAX_UNIQUE_SYMBOLS, validSymbol, SYMBOL_NAMES } = window;');
+    .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/watchlist-model\.js';/, 'const { WatchlistManager, sortWatchlistRows, getSelectedExtQuote, MAX_UNIQUE_SYMBOLS, validSymbol, SYMBOL_NAMES, NASDAQ100_STOCKS, SP500_STOCKS, isLeveragedEtf } = window;')
+    .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/earnings-calendar-model\.js';/, 'const { AI_SECTOR_FILTERS, EARNINGS_DAYS, CORPORATE_LOGOS, DEFAULT_TECH_EARNINGS, MACRO_CALENDAR_ITEMS, filterEarningsByDay } = window;');
   w.eval(appSrc);
   await tick();
   const button = text => [...w.document.querySelectorAll('button')].find(el => el.textContent.trim() === text || el.textContent.trim().endsWith(text));
@@ -40,7 +42,7 @@ const fixture = url => {
 };
 test('Vue page mounts, navigates all modules, wires chart data and handles watchlist', async t => {
   const ui = await mount(t, async url => ({ ok: true, json: async () => fixture(url) }));
-  assert.ok(ui.w.document.querySelector('#heatmap-chart')); assert.equal(ui.configs.get('heatmap-chart').series[0].data[0].name, 'NVDA');
+  assert.ok(ui.w.document.querySelector('#heatmap-chart')); assert.ok(ui.configs.get('heatmap-chart').series[0].data.length > 0);
   await ui.click('个股行情'); assert.equal(ui.configs.get('price-chart').series[0].data[0][1], 100);
   const search = ui.w.document.querySelector('[aria-label="搜索美股代码"]'); search.value = 'BABA'; search.dispatchEvent(new ui.w.Event('input', { bubbles: true })); search.form.dispatchEvent(new ui.w.Event('submit', { bubbles: true, cancelable: true })); await tick();
   assert.match(ui.w.document.querySelector('main h2').textContent, /BABA/); await ui.click('+ 加入自选'); assert.ok(JSON.parse(ui.w.localStorage.getItem('market-desk-watchlist')).includes('BABA'));

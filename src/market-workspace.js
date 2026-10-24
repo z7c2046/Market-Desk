@@ -15,7 +15,21 @@ export function createMarketWorkspace({ fetchImpl = fetch, now = () => new Date(
     const items = await Promise.all(MACRO_INDICATORS.map(async m => {
       try {
         if (m.symbol === 'US20Y') {
-          return { ...m, price: m.defaultPrice, changePercent: m.defaultChange, asOf: now().toISOString() };
+          const tnx = await quote('^TNX').catch(() => null);
+          const tyx = await quote('^TYX').catch(() => null);
+          const price = (tnx?.price && tyx?.price)
+            ? Number(((tnx.price * 0.45 + tyx.price * 0.55) + 0.04).toFixed(3))
+            : m.defaultPrice;
+          const changePercent = (tnx?.changePercent !== undefined && tyx?.changePercent !== undefined)
+            ? Number(((tnx.changePercent * 0.5 + tyx.changePercent * 0.5)).toFixed(2))
+            : m.defaultChange;
+          return {
+            ...m,
+            price,
+            changePercent,
+            previousClose: Number((price / (1 + changePercent / 100)).toFixed(3)),
+            asOf: tnx?.asOf || tyx?.asOf || now().toISOString()
+          };
         }
         if (m.symbol === 'UKOIL') {
           const bz = await quote('BZ=F').catch(() => null);

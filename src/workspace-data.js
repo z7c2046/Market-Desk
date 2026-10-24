@@ -1,8 +1,8 @@
 import { XMLParser } from 'fast-xml-parser';
 
 export const BENCHMARKS = [
-  ['SPY', '标普 500 ETF'], ['QQQ', '纳斯达克 100 ETF'], ['DIA', '道琼斯 ETF'],
-  ['IWM', '罗素 2000 ETF'], ['^VIX', '波动率 VIX'],
+  ['^GSPC', '标普 500 指数'], ['^NDX', '纳斯达克 100 指数'], ['^DJI', '道琼斯工业指数'],
+  ['^RUT', '罗素 2000 指数'], ['^VIX', '波动率 VIX'],
 ].map(([symbol, name]) => ({ symbol, name }));
 export const SECTORS = [
   ['XLK', '科技'], ['XLC', '通信服务'], ['XLY', '可选消费'], ['XLP', '必需消费'],
@@ -74,6 +74,7 @@ export function getFearGreedIndex(vixPrice = 19.22) {
     previousClose: 29,
     previousWeek: 34,
     previousMonth: 42,
+    previousYear: 27,
     description: score < 45 ? '市场投资者防御情绪抬升，避险偏好占优' : '市场风险偏好提升，流动性环境良好'
   };
 }
