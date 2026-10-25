@@ -71,12 +71,69 @@ export function getFearGreedIndex(vixPrice = 19.22) {
     rating,
     ratingEn,
     toneClass,
-    previousClose: 29,
-    previousWeek: 34,
-    previousMonth: 42,
-    previousYear: 27,
+    previousClose: 20,
+    previousWeek: 22,
+    previousMonth: 33,
+    previousYear: 28,
     description: score < 45 ? '市场投资者防御情绪抬升，避险偏好占优' : '市场风险偏好提升，流动性环境良好'
   };
+}
+
+export async function fetchCnnFearGreed({ fetchImpl = fetch } = {}) {
+  try {
+    const res = await fetchImpl('https://production.dataviz.cnn.io/index/fearandgreed/graphdata', {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json'
+      },
+      signal: AbortSignal.timeout(4000)
+    });
+    if (!res.ok) throw new Error('CNN API status ' + res.status);
+    const data = await res.json();
+    const fg = data?.fear_and_greed;
+    if (fg && typeof fg.score === 'number') {
+      const score = Math.round(fg.score);
+      let rating = '中性';
+      let ratingEn = 'Neutral';
+      let toneClass = 'kpi-pill-blue';
+      if (score <= 25) {
+        rating = '极度恐慌';
+        ratingEn = 'Extreme Fear';
+        toneClass = 'kpi-pill-red';
+      } else if (score <= 45) {
+        rating = '恐慌';
+        ratingEn = 'Fear';
+        toneClass = 'kpi-pill-amber';
+      } else if (score <= 55) {
+        rating = '中性';
+        ratingEn = 'Neutral';
+        toneClass = 'kpi-pill-blue';
+      } else if (score <= 75) {
+        rating = '贪婪';
+        ratingEn = 'Greed';
+        toneClass = 'kpi-pill-green';
+      } else {
+        rating = '极度贪婪';
+        ratingEn = 'Extreme Greed';
+        toneClass = 'kpi-pill-green';
+      }
+      return {
+        score,
+        rating,
+        ratingEn,
+        toneClass,
+        previousClose: Math.round(fg.previous_close ?? 20),
+        previousWeek: Math.round(fg.previous_1_week ?? 22),
+        previousMonth: Math.round(fg.previous_1_month ?? 33),
+        previousYear: Math.round(fg.previous_1_year ?? 28),
+        timestamp: fg.timestamp,
+        source: 'CNN Official API',
+        description: score <= 25 ? '市场处于极度恐慌状态，投资者避险情绪到达极值' : (score <= 45 ? '市场投资者防御情绪抬升，避险偏好占优' : '市场风险偏好提升，流动性环境良好')
+      };
+    }
+  } catch {
+    return null;
+  }
 }
 
 export function number(value) {
@@ -153,6 +210,7 @@ export function parseYahoo(payload, symbol) {
     symbol, name: meta.longName || meta.shortName || symbol, price, previousClose,
     changePercent: price !== null && previousClose > 0 ? (price / previousClose - 1) * 100 : null,
     volume, turnover: price !== null && volume !== null ? price * volume : null,
+    dayHigh: number(meta.regularMarketDayHigh), dayLow: number(meta.regularMarketDayLow),
     currency: meta.currency || 'USD', asOf: meta.regularMarketTime ? new Date(meta.regularMarketTime * 1000).toISOString() : null,
     source: 'Yahoo Finance', delay: '可能延迟', bars,
   };

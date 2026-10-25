@@ -11,8 +11,9 @@ const config = { symbol: 'SPY', now: new Date('2026-10-22T14:00:00Z') };
 test('missing values and zero are distinct', () => { assert.equal(number(null), null); assert.equal(number(''), null); assert.equal(number(false), null); assert.equal(number(0), 0); });
 test('reject invalid symbols before provider calls', () => { assert.equal(ticker('brk-b'), 'BRK-B'); assert.throws(() => ticker('../secret')); assert.throws(() => ticker('AAPL?x')); });
 test('daily change uses previous trading day, not range starting close', () => {
-  const d = parseYahoo({ chart: { result: [{ meta: { regularMarketPrice: 110, chartPreviousClose: 50, regularMarketTime: Date.parse('2026-10-22T19:00Z') / 1000 }, timestamp: [Date.parse('2026-10-21T13:30Z') / 1000, Date.parse('2026-10-22T13:30Z') / 1000], indicators: { quote: [{ open: [99, 101], high: [102, 111], low: [98, 100], close: [100, 110], volume: [10, null] }] } }] } }, 'SPY');
+  const d = parseYahoo({ chart: { result: [{ meta: { regularMarketPrice: 110, chartPreviousClose: 50, regularMarketDayHigh: 112, regularMarketDayLow: 97, regularMarketTime: Date.parse('2026-10-22T19:00Z') / 1000 }, timestamp: [Date.parse('2026-10-21T13:30Z') / 1000, Date.parse('2026-10-22T13:30Z') / 1000], indicators: { quote: [{ open: [99, 101], high: [102, 111], low: [98, 100], close: [100, 110], volume: [10, null] }] } }] } }, 'SPY');
   assert.equal(d.previousClose, 100); assert.ok(Math.abs(d.changePercent - 10) < 1e-8); assert.equal(d.volume, null); assert.equal(d.turnover, null); assert.equal(d.bars[1].volume, null);
+  assert.equal(d.dayHigh, 112); assert.equal(d.dayLow, 97);
 });
 test('OI wall sums contracts across expiries without substituting volume; gamma scaling', () => {
   const d = buildOptionsWall(payload([contract('P', 95, 60), contract('C', 105, 40), contract('C', 105, 60, .02, '261030'), contract('C', 100, 70)]), { ...config, expiration: 'all' });
@@ -48,3 +49,26 @@ test('flow imports preserve negative/zero and reject missing, duplicate or impos
   const data = parseFlows(head + '2026-10-21,SPY,-120000,Issuer\n2026-10-21,QQQ,0,Issuer'); assert.equal(data.find(x => x.symbol === 'SPY').netFlowUsd, -120000);
   for (const rows of ['2026-02-30,SPY,2,Issuer', '2026-10-21,SPY,,Issuer', '2026-10-21,SPY,2,Issuer\n2026-10-21,SPY,3,Issuer']) assert.throws(() => parseFlows(head + rows));
 });
+
+test('crypto workspace fetches multi-bar history and maps 24h ranges', async () => {
+  const mockFetch = async () => new Response(JSON.stringify({
+    chart: {
+      result: [{
+        meta: { regularMarketPrice: 80000, regularMarketDayHigh: 82000, regularMarketDayLow: 78000, regularMarketTime: 1729800000 },
+        timestamp: [1729600000, 1729700000, 1729800000],
+        indicators: { quote: [{ open: [77000, 78000, 79000], high: [78500, 79500, 82000], low: [76000, 77500, 78000], close: [78000, 79000, 80000], volume: [100, 200, 300] }] }
+      }]
+    }
+  }));
+  const { createMarketWorkspace } = await import('../src/market-workspace.js');
+  const ws = createMarketWorkspace({ fetchImpl: mockFetch });
+  const res = await ws.crypto();
+  assert.ok(res.items.length >= 6);
+  const btc = res.items.find(i => i.code === 'BTC');
+  assert.ok(btc);
+  assert.equal(btc.price, 80000);
+  assert.equal(btc.high24h, 82000);
+  assert.equal(btc.low24h, 78000);
+  assert.equal(btc.bars.length, 3);
+});
+

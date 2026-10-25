@@ -5,17 +5,32 @@ const { ref, nextTick } = Vue;
 const THEMES = {
   light: {
     bg:         { type: "solid", color: "#FFFFFF" },
-    text:       "#787878",
-    grid:       "rgba(206,206,206,0.25)",
-    border:     "#cecece"
+    text:       "#64748b",
+    grid:       "rgba(0,0,0,0.07)",
+    border:     "#e2e8f0"
   },
   dark: {
-    bg:         { type: "solid", color: "#2d2d2d" },
-    text:       "#afafaf",
-    grid:       "rgba(255,255,255,0.05)",
-    border:     "rgba(255,255,255,0.08)"
+    bg:         { type: "solid", color: "#000000" },
+    text:       "#94a3b8",
+    grid:       "rgba(255,255,255,0.08)",
+    border:     "rgba(255,255,255,0.10)"
   }
 };
+
+const KLINE_PALETTES = {
+  classic:   { up: "#10b981", down: "#f43f5e" },
+  neon:      { up: "#7ce138", down: "#ff4d82" },
+  cyberpunk: { up: "#00d2ff", down: "#ff3377" }
+};
+
+function getActivePalette() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('market-desk-kline-scheme'));
+    return KLINE_PALETTES[saved] || KLINE_PALETTES.classic;
+  } catch {
+    return KLINE_PALETTES.classic;
+  }
+}
 
 export function useChart(chartHostRef) {
   const chart        = ref(null);
@@ -61,6 +76,12 @@ export function useChart(chartHostRef) {
       grid:   { vertLines: { color: t.grid }, horzLines: { color: t.grid } },
       rightPriceScale: { borderColor: t.border },
       timeScale:       { borderColor: t.border }
+    });
+    const pal = getActivePalette();
+    candleSeries.value?.applyOptions({
+      upColor: pal.up, downColor: pal.down,
+      borderUpColor: pal.up, borderDownColor: pal.down,
+      wickUpColor: pal.up, wickDownColor: pal.down
     });
   }
 
@@ -140,10 +161,11 @@ export function useChart(chartHostRef) {
     });
 
     const provider    = _autoscale();
+    const pal         = getActivePalette();
     candleSeries.value = chart.value.addCandlestickSeries({
-      upColor:        "#38ab70", downColor:        "#df4f46",
-      borderUpColor:  "#38ab70", borderDownColor:  "#df4f46",
-      wickUpColor:    "#38ab70", wickDownColor:    "#df4f46",
+      upColor:        pal.up, downColor:        pal.down,
+      borderUpColor:  pal.up, borderDownColor:  pal.down,
+      wickUpColor:    pal.up, wickDownColor:    pal.down,
       autoscaleInfoProvider: provider
     });
     emaSeries.value = chart.value.addLineSeries({ color: "#2976ff", lineWidth: 2, priceLineVisible: false, autoscaleInfoProvider: provider });

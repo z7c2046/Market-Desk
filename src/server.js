@@ -6,12 +6,17 @@ import { fileURLToPath } from 'node:url';
 import { fetchWatchlistSymbols } from './notion.js';
 import { createMarketWorkspace } from './market-workspace.js';
 import { getWatchlistQuoteService } from './watchlist-quotes.js';
+import { getAiSearchService } from './ai-search-service.js';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const publicDir = path.join(root, 'public');
-const vendor = { '/vendor/vue.js': 'node_modules/vue/dist/vue.global.prod.js', '/vendor/echarts.js': 'node_modules/echarts/dist/echarts.min.js' };
+const vendor = {
+  '/vendor/vue.js': 'node_modules/vue/dist/vue.global.prod.js',
+  '/vendor/echarts.js': 'node_modules/echarts/dist/echarts.min.js',
+  '/vendor/lightweight-charts.standalone.js': 'node_modules/lightweight-charts/dist/lightweight-charts.standalone.production.js'
+};
 const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.json': 'application/json', '.csv': 'text/csv; charset=utf-8' };
 function json(res, status, data) { res.writeHead(status, { 'Content-Type': mime['.json'], 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' }); res.end(JSON.stringify(data)); }
-export function createServer({ workspace = createMarketWorkspace(), watchlist = fetchWatchlistSymbols, quoteService = getWatchlistQuoteService() } = {}) {
+export function createServer({ workspace = createMarketWorkspace(), watchlist = fetchWatchlistSymbols, quoteService = getWatchlistQuoteService(), aiSearchService = getAiSearchService() } = {}) {
   return http.createServer(async (req, res) => {
     try {
       const url = new URL(req.url, 'http://localhost');
@@ -32,7 +37,9 @@ export function createServer({ workspace = createMarketWorkspace(), watchlist = 
         '/api/market/overview': () => workspace.overview(), '/api/market/chart': () => workspace.chart(params),
         '/api/macro': () => (workspace.macro ? workspace.macro() : { items: [] }),
         '/api/crypto': () => (workspace.crypto ? workspace.crypto() : { items: [] }),
-        '/api/news': () => workspace.news(params), '/api/options': () => workspace.options(params),
+        '/api/news': () => workspace.news(params),
+        '/api/news/ai-search': () => aiSearchService.search(params),
+        '/api/options': () => workspace.options(params),
         '/api/watchlist': () => watchlist({ force: params.force === '1' }),
       };
       if (routes[url.pathname]) { json(res, 200, await routes[url.pathname]()); return; }

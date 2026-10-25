@@ -21,9 +21,11 @@ async function mount(t, fetchImpl) {
   Object.defineProperty(w.HTMLElement.prototype, 'clientWidth', { get: () => 800 });
   w.echarts = { init: el => ({ setOption: config => configs.set(el.id, config), off() {}, on() {}, resize() {}, dispose() {} }) };
   w.eval(await fs.readFile(new URL('../node_modules/vue/dist/vue.global.prod.js', import.meta.url), 'utf8'));
+  w.bindKlineGestures = () => ({ focusLatest() {}, dispose() {}, isFollowingLatest() { return true; } });
   const appSrc = (await fs.readFile(new URL('../public/app.js', import.meta.url), 'utf8'))
     .replace("import { parseFlows } from './flows.js';", 'const parseFlows = window.parseFlows;')
-    .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/watchlist-model\.js';/, 'const { WatchlistManager, sortWatchlistRows, getSelectedExtQuote, MAX_UNIQUE_SYMBOLS, validSymbol, SYMBOL_NAMES, NASDAQ100_STOCKS, SP500_STOCKS, isLeveragedEtf } = window;')
+    .replace("import { bindKlineGestures } from './composables/klineGesture.js';", 'const bindKlineGestures = window.bindKlineGestures;')
+    .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/watchlist-model\.js';/, 'const { WatchlistManager, sortWatchlistRows, getSelectedExtQuote, MAX_UNIQUE_SYMBOLS, validSymbol, SYMBOL_NAMES, NASDAQ100_STOCKS, SP500_STOCKS, isLeveragedEtf, STOCK_MARKET_CAPS, getStockMarketCap, sortSymbolsByMarketCap } = window;')
     .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/earnings-calendar-model\.js';/, 'const { AI_SECTOR_FILTERS, EARNINGS_DAYS, CORPORATE_LOGOS, DEFAULT_TECH_EARNINGS, MACRO_CALENDAR_ITEMS, filterEarningsByDay } = window;');
   w.eval(appSrc);
   await tick();
@@ -89,3 +91,66 @@ test('network failure renders a recoverable error with no fabricated quote cards
   const ui = await mount(t, async () => ({ ok: false, json: async () => ({ error: 'Source offline' }) }));
   assert.match(ui.w.document.querySelector('.error-box').textContent, /Source offline/); assert.equal(ui.w.document.querySelectorAll('.index-card').length, 0); assert.deepEqual(ui.errors, []);
 });
+
+test('K-line color schemes: defaults to classic (图一), switches to neon (图二) and cyberpunk (图三), adapts day/night backgrounds and persists in settings', async t => {
+  const ui = await mount(t, async url => ({ ok: true, json: async () => fixture(url) }));
+  await ui.click('个股行情');
+  
+  // 1. Initial default state: Classic (图一: #10B981 up, #F43F5E down)
+  let chartCfg = ui.configs.get('price-chart');
+  assert.ok(chartCfg, 'Price chart config exists');
+  assert.equal(chartCfg.backgroundColor, '#FFFFFF', 'Day mode has pure white #FFFFFF background');
+  assert.equal(chartCfg.series[0].itemStyle.color, '#10B981', 'Default up color is classic green #10B981');
+  assert.equal(chartCfg.series[0].itemStyle.color0, '#F43F5E', 'Default down color is classic red #F43F5E');
+  assert.equal(chartCfg.xAxis[0].splitLine.show, true, 'X axis grid lines visible');
+  assert.equal(chartCfg.yAxis[0].splitLine.show, true, 'Y axis grid lines visible');
+
+  // 2. Day / Night mode adaptation: Dark mode has pure black #000000 background
+  await ui.click('Dark');
+  chartCfg = ui.configs.get('price-chart');
+  assert.equal(chartCfg.backgroundColor, '#000000', 'Dark mode has pure deep black #000000 background');
+  assert.ok(chartCfg.xAxis[0].splitLine.lineStyle.color.includes('255'), 'Dark mode grid is subtle light grey');
+
+  // 3. Switch to neon (图二: #7CE138 up, #FF4D82 down)
+  await ui.click('亮绿玫粉');
+  chartCfg = ui.configs.get('price-chart');
+  assert.equal(chartCfg.series[0].itemStyle.color, '#7CE138', 'Style 2 up color is neon lime #7CE138');
+  assert.equal(chartCfg.series[0].itemStyle.color0, '#FF4D82', 'Style 2 down color is rose pink #FF4D82');
+  assert.equal(JSON.parse(ui.w.localStorage.getItem('market-desk-kline-scheme')), 'neon');
+
+  // 4. Switch to cyberpunk (图三: #00D2FF up, #FF3377 down)
+  await ui.click('青蓝品红');
+  chartCfg = ui.configs.get('price-chart');
+  assert.equal(chartCfg.series[0].itemStyle.color, '#00D2FF', 'Style 3 up color is electric cyan #00D2FF');
+  assert.equal(chartCfg.series[0].itemStyle.color0, '#FF3377', 'Style 3 down color is electric pink #FF3377');
+  assert.equal(JSON.parse(ui.w.localStorage.getItem('market-desk-kline-scheme')), 'cyberpunk');
+
+  // 5. Open Preferences Modal
+  const settingsBtn = ui.w.document.querySelector('.settings-modal-btn');
+  assert.ok(settingsBtn, 'Settings modal button exists in topbar');
+  settingsBtn.click();
+  await tick();
+  const modal = ui.w.document.querySelector('.preferences-modal-backdrop');
+  assert.ok(modal, 'Preferences modal opens');
+  assert.match(modal.textContent, /工作台与图表偏好设置/);
+  assert.match(modal.textContent, /经典绿红/);
+  assert.match(modal.textContent, /荧光极光/);
+  assert.match(modal.textContent, /赛博霓虹/);
+
+  // Switch back to classic in modal
+  const classicCard = modal.querySelector('.preview-classic').closest('.kline-scheme-card');
+  assert.ok(classicCard, 'Classic card found in modal');
+  classicCard.click();
+  await tick();
+  assert.equal(JSON.parse(ui.w.localStorage.getItem('market-desk-kline-scheme')), 'classic');
+  chartCfg = ui.configs.get('price-chart');
+  assert.equal(chartCfg.series[0].itemStyle.color, '#10B981', 'Reverted to classic green');
+
+  // Close modal via finish button
+  modal.querySelector('.pref-confirm-btn').click();
+  await tick();
+  assert.equal(ui.w.document.querySelector('.preferences-modal-backdrop'), null, 'Modal closes');
+
+  assert.deepEqual(ui.errors, []);
+});
+

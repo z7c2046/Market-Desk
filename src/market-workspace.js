@@ -1,4 +1,4 @@
-import { BENCHMARKS, SECTORS, STOCKS, MACRO_INDICATORS, CRYPTO_CURRENCIES, getFearGreedIndex, DataCache, ticker, remote, parseYahoo, parseNews, mapLimit } from './workspace-data.js';
+import { BENCHMARKS, SECTORS, STOCKS, MACRO_INDICATORS, CRYPTO_CURRENCIES, getFearGreedIndex, fetchCnnFearGreed, DataCache, ticker, remote, parseYahoo, parseNews, mapLimit } from './workspace-data.js';
 import { buildOptionsWall } from './options-wall.js';
 
 export function createMarketWorkspace({ fetchImpl = fetch, now = () => new Date(), cache = new DataCache() } = {}) {
@@ -53,17 +53,29 @@ export function createMarketWorkspace({ fetchImpl = fetch, now = () => new Date(
       }
     }));
     const vix = items.find(i => i.displaySymbol === 'VIX');
-    const fearGreed = getFearGreedIndex(vix?.price || 19.22);
+    let fearGreed = null;
+    try {
+      fearGreed = await cache.get('cnn:feargreed', 180000, async () => {
+        const live = await fetchCnnFearGreed({ fetchImpl });
+        if (!live) throw new Error('CNN API unavailable');
+        return live;
+      });
+    } catch {
+      fearGreed = null;
+    }
+    if (!fearGreed) {
+      fearGreed = getFearGreedIndex(vix?.price || 19.22);
+    }
     return { items, fearGreed, fetchedAt: now().toISOString() };
   }
 
   async function crypto() {
     const items = await Promise.all(CRYPTO_CURRENCIES.map(async c => {
       try {
-        const q = await quote(c.symbol);
+        const q = await quote(c.symbol, '3mo', '1d');
         const bars = q.bars || [];
-        const high24h = bars.length ? Math.max(...bars.map(b => b.high)) : c.high24h;
-        const low24h = bars.length ? Math.min(...bars.map(b => b.low)) : c.low24h;
+        const high24h = q.dayHigh ?? (bars.length ? Math.max(...bars.slice(-2).map(b => b.high)) : c.high24h);
+        const low24h = q.dayLow ?? (bars.length ? Math.min(...bars.slice(-2).map(b => b.low)) : c.low24h);
         let changePercent = q.changePercent;
         if ((changePercent == null || Math.abs(changePercent) < 0.005) && bars.length >= 2) {
           const prevBar = bars.at(-2);
@@ -82,7 +94,7 @@ export function createMarketWorkspace({ fetchImpl = fetch, now = () => new Date(
           low24h: low24h || c.low24h,
           volume: q.volume,
           asOf: q.asOf || now().toISOString(),
-          bars: bars.slice(-15)
+          bars: bars.slice(-90)
         };
       } catch {
         return { ...c, price: c.defaultPrice, changePercent: c.defaultChange, asOf: now().toISOString(), fallback: true };
@@ -124,11 +136,16 @@ export function createMarketWorkspace({ fetchImpl = fetch, now = () => new Date(
     const symbol = params.symbol ? ticker(params.symbol) : '';
     return cache.get(`news:${symbol}`, 300000, async () => {
       const feeds = symbol ? [{ source: `Yahoo Finance · ${symbol}`, url: `https://feeds.finance.yahoo.com/rss/2.0/headline?s=${encodeURIComponent(symbol)}&region=US&lang=en-US` }]
-        : [{ source: 'MarketWatch', url: 'https://feeds.content.dowjones.io/public/rss/mw_topstories' }, { source: 'CNBC', url: 'https://www.cnbc.com/id/100003114/device/rss/rss.html' }];
+        : [
+            { source: 'MarketWatch', url: 'https://feeds.content.dowjones.io/public/rss/mw_topstories' },
+            { source: 'CNBC', url: 'https://www.cnbc.com/id/100003114/device/rss/rss.html' },
+            { source: 'CNBC World · 地缘国际', url: 'https://www.cnbc.com/id/100727362/device/rss/rss.html' },
+            { source: 'BBC World · 国际政经', url: 'https://feeds.bbci.co.uk/news/world/rss.xml' }
+          ];
       const results = await Promise.allSettled(feeds.map(async feed => parseNews(await read(feed.url, { type: 'text', maxBytes: 2000000 }), feed.source)));
       const items = results.flatMap(r => r.status === 'fulfilled' ? r.value : []);
       if (!items.length) throw new Error('暂未取得新闻，请稍后重试或切换市场新闻。');
-      const unique = [...new Map(items.map(item => [item.url, item])).values()].sort((a, b) => (Date.parse(b.publishedAt) || 0) - (Date.parse(a.publishedAt) || 0)).slice(0, 40);
+      const unique = [...new Map(items.map(item => [item.url, item])).values()].sort((a, b) => (Date.parse(b.publishedAt) || 0) - (Date.parse(a.publishedAt) || 0)).slice(0, 60);
       return { symbol, items: unique, fetchedAt: now().toISOString(), unavailable: results.flatMap((r, i) => r.status === 'rejected' ? [feeds[i].source] : []) };
     });
   }

@@ -1,12 +1,11 @@
-<!doctype html><html lang="zh-CN"><head>
+<!doctype html><html lang="zh-CN" data-script="zh" data-preset="dashboard" :data-theme="isDark ? 'dark' : 'light'" :class="{dark: isDark}"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Market Desk · 美股观察工作台</title><meta name="description" content="集中观察美股行情、板块热力图、财经新闻、期权持仓分布及多时段自选看板。">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/styles.css?v=2.6.0">
-<script defer src="/vendor/vue.js"></script><script defer src="/vendor/echarts.js"></script><script type="module" src="/app.js?v=2.6.0"></script>
+<script defer src="/vendor/vue.js"></script><script defer src="/vendor/echarts.js"></script><script defer src="/vendor/lightweight-charts.standalone.js"></script><script type="module" src="/app.js?v=2.6.0"></script>
 </head><body><div id="app" v-cloak>
 <div class="ios-backdrop mobile-only" :class="{show:showSettings}" @click="closeSettings" aria-hidden="true"></div>
 <aside id="workspace-settings" class="sidebar" :class="{'show-mobile':showSettings}" :inert="isMobile&&!showSettings" :role="isMobile?'dialog':undefined" :aria-modal="isMobile&&showSettings?'true':undefined" aria-label="工作台导航与自选" @keydown="handleDrawerKey">
@@ -67,7 +66,8 @@
             </svg>
           </button>
           <button class="watch-add-btn" @click="showAddStockModal=true" title="添加自选股票" aria-label="添加自选股票">+</button>
-          <button class="trash-toggle-btn" :class="{active: isDeleteMode}" :title="isDeleteMode ? '完成管理' : '管理/删除自选'" @click="toggleDeleteMode" aria-label="管理/删除自选">
+          <button class="watch-add-group-btn" @click="showGroupModal=true" title="新建自选分组" aria-label="新建自选分组">+组</button>
+          <button class="trash-toggle-btn" :class="{active: isDeleteMode}" :title="isDeleteMode ? '完成管理' : '管理/删除自选与分组'" @click="toggleDeleteMode" aria-label="管理/删除自选与分组">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
           </button>
         </div>
@@ -76,6 +76,9 @@
       <!-- Sort Controls Bar & Mode / EXT Selector -->
       <div class="sidebar-sort-bar">
         <div class="sort-pills-wrap">
+          <button class="sort-pill-btn" :class="{active: sidebarSortField === 'manual'}" @click="setSidebarSort('manual')" title="自定义拖拽排序">
+            自定义 <span class="sort-arr" v-if="sidebarSortField === 'manual'">⠿</span>
+          </button>
           <button class="sort-pill-btn" :class="{active: sidebarSortField === 'regularPrice'}" @click="setSidebarSort('regularPrice')" title="按常规收盘价排序">
             价格 <span class="sort-arr" v-if="sidebarSortField === 'regularPrice'">{{ sidebarSortDirection === 'desc' ? '▼' : '▲' }}</span>
           </button>
@@ -90,6 +93,9 @@
           </button>
           <button class="sort-pill-btn" :class="{active: sidebarSortField === 'symbol'}" @click="setSidebarSort('symbol')" title="按股票代码 A-Z 排序">
             代码 <span class="sort-arr" v-if="sidebarSortField === 'symbol'">{{ sidebarSortDirection === 'desc' ? '▼' : '▲' }}</span>
+          </button>
+          <button class="sort-pill-btn" :class="{active: sidebarSortField === 'marketCap'}" @click="setSidebarSort('marketCap')" title="按公司总市值高低排序">
+            市值 <span class="sort-arr" v-if="sidebarSortField === 'marketCap'">{{ sidebarSortDirection === 'desc' ? '▼' : '▲' }}</span>
           </button>
         </div>
         <div class="sidebar-mode-controls">
@@ -106,12 +112,35 @@
       </div>
 
       <!-- TradingView Style Watchlist Content -->
-      <!-- 1. Vertical Grouped Sections (几行几行是一个组，可收起展开，组内排序) -->
+      <!-- 1. Vertical Grouped Sections (几行几行是一个组，可收起展开，组内排序，支持拖拽排序与跨组拖拽) -->
       <div v-if="sidebarViewMode === 'grouped'" class="tv-watchlist-wrap" :class="{'delete-mode': isDeleteMode}">
-        <div v-for="sec in sidebarGroupSections" :key="sec.id" class="tv-group-section">
-          <!-- Group Header Row -->
-          <div class="tv-group-header" @click="toggleGroupCollapse(sec.id)" :title="sec.collapsed ? '点击展开 ' + sec.name : '点击收起 ' + sec.name">
+        <div v-for="(sec, secIdx) in sidebarGroupSections" :key="sec.id" 
+             class="tv-group-section"
+             :class="{
+               'drop-group-before': dragOverGroupOrderTarget?.groupId === sec.id && dragOverGroupOrderTarget?.position === 'before',
+               'drop-group-after': dragOverGroupOrderTarget?.groupId === sec.id && dragOverGroupOrderTarget?.position === 'after',
+               'is-dragging-group': draggedGroup === sec.id
+             }">
+          <!-- Group Header Row (可点击收折，支持拖拽排序分组、删除分组、上下微调) -->
+          <div class="tv-group-header" 
+               :class="{ 
+                 'drag-over-group': dragOverGroup === sec.id && !dragOverTarget && !draggedGroup,
+                 'is-deletable': sec.id !== 'default'
+               }"
+               @click="toggleGroupCollapse(sec.id)" 
+               @dragover="onGroupHeaderDragOver($event, sec.id)"
+               @dragleave="onGroupHeaderDragLeave($event, sec.id)"
+               @drop.stop="onGroupHeaderDrop($event, sec.id)"
+               :title="sec.collapsed ? '点击展开 ' + sec.name + '（按住左侧 ⠿ 可拖动排序）' : '点击收起 ' + sec.name + '（按住左侧 ⠿ 可拖动排序）'">
             <div class="tv-group-header-left">
+              <!-- Group Drag Grip (拖拽排序整个分组) -->
+              <span class="tv-group-drag-handle" 
+                    draggable="true" 
+                    @click.stop
+                    @dragstart.stop="onGroupDragStart($event, sec.id)" 
+                    @dragend="onGroupDragEnd"
+                    title="按住拖拽调整分组排序"
+                    aria-label="按住拖拽调整分组排序">⠿</span>
               <span class="tv-group-chevron" :class="{ collapsed: sec.collapsed }">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                   <polyline points="6 9 12 15 18 9"></polyline>
@@ -122,17 +151,45 @@
             </div>
             <div class="tv-group-header-right">
               <span v-if="sec.avgChange !== null" class="tv-group-avg" :class="tone(sec.avgChange)">{{ pct(sec.avgChange) }}</span>
+              <!-- 上移 / 下移微调快捷键 -->
+              <div class="tv-group-order-btns" @click.stop>
+                <button v-if="secIdx > 0" 
+                        class="tv-group-order-btn" 
+                        @click="moveGroupUp(sec.id)" 
+                        title="将该分组上移" 
+                        aria-label="上移分组">▲</button>
+                <button v-if="secIdx < sidebarGroupSections.length - 1" 
+                        class="tv-group-order-btn" 
+                        @click="moveGroupDown(sec.id)" 
+                        title="将该分组下移" 
+                        aria-label="下移分组">▼</button>
+              </div>
+              <!-- 添加股票按钮 -->
               <button class="tv-group-add-btn" @click.stop="openAddStockToGroup(sec.id)" title="为此分组添加股票" aria-label="为此分组添加股票">
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                   <line x1="12" y1="5" x2="12" y2="19"></line>
                   <line x1="5" y1="12" x2="19" y2="12"></line>
                 </svg>
               </button>
+              <!-- 删除分组按钮 (非默认未分组支持删除) -->
+              <button v-if="sec.id !== 'default'" 
+                      class="tv-group-del-btn" 
+                      :class="{ 'in-delete-mode': isDeleteMode }"
+                      @click.stop="handleDeleteGroup(sec.id)" 
+                      title="删除此分组（标的将安全移至未分组，支持一键撤销）" 
+                      aria-label="删除此分组">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="3 6 5 6 21 6"></polyline>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                </svg>
+              </button>
             </div>
           </div>
 
-          <!-- Group Rows (几行几行是一个组) -->
-          <div v-show="!sec.collapsed" class="tv-group-body">
+          <!-- Group Rows (几行几行是一个组，组内拖拽重新排序，拖向其他组实现跨组移动) -->
+          <div v-show="!sec.collapsed" class="tv-group-body"
+               @dragover.prevent 
+               @drop="onGroupBodyDrop($event, sec.id)">
             <div v-if="sec.rows.length" class="sidebar-stock-cards">
               <div v-for="r in sec.rows" :key="r.symbol" 
                    class="sidebar-card" 
@@ -140,14 +197,25 @@
                      active: page==='chart' && symbol===r.symbol, 
                      gainer: (r.regularChange || 0) > 0, 
                      jiggling: isDeleteMode, 
-                     'staged-delete': isDeleteMode && pendingDeleteSymbol===r.symbol
+                     'staged-delete': isDeleteMode && pendingDeleteSymbol===r.symbol,
+                     'is-dragging': draggedStock?.symbol === r.symbol,
+                     'drop-before': dragOverTarget?.symbol === r.symbol && dragOverTarget?.position === 'before',
+                     'drop-after': dragOverTarget?.symbol === r.symbol && dragOverTarget?.position === 'after'
                    }" 
+                   :draggable="!isDeleteMode"
+                   @dragstart="onStockDragStart($event, r, sec.id)"
+                   @dragend="onStockDragEnd"
+                   @dragover="onStockDragOver($event, r, sec.id)"
+                   @dragleave="onStockDragLeave($event, r)"
+                   @drop.stop="onStockDrop($event, r, sec.id)"
                    @click="handleChipClick(r.symbol)">
-                <!-- Top Row: Ticker & Name | Regular Price & Change% -->
+                <!-- Top Row: Drag Grip, Ticker & Name | Regular Price & Change% -->
                 <div class="card-head">
                   <div class="card-left">
+                    <span class="card-drag-grip" title="按住拖拽排序或跨组移动" aria-hidden="true">⠿</span>
                     <strong class="card-sym">{{ r.symbol }}</strong>
                     <span class="card-name" :title="r.name">{{ r.name }}</span>
+                    <span v-if="r.marketCap" class="card-mcap-pill" :title="'总市值: ' + r.marketCap">{{ r.marketCap }}</span>
                   </div>
                   <div class="card-quote">
                     <span class="card-price" :class="cellFlashes[r.symbol + '_regular'] ? 'cell-flash-' + cellFlashes[r.symbol + '_regular'] : ''">{{ num(r.regularPrice) }}</span>
@@ -188,8 +256,12 @@
                 </span>
               </div>
             </div>
-            <div v-else class="tv-empty-group-notice">
-              <span>该组暂无自选标的</span>
+            <div v-else 
+                 class="tv-empty-group-notice"
+                 :class="{ 'drag-over-empty': dragOverGroup === sec.id }"
+                 @dragover.prevent="onGroupHeaderDragOver($event, sec.id)"
+                 @drop.stop="onEmptyGroupDrop($event, sec.id)">
+              <span>可拖入标的至此分组</span>
               <button class="tv-empty-add-btn" @click.stop="openAddStockToGroup(sec.id)">+ 添加</button>
             </div>
           </div>
@@ -206,13 +278,24 @@
                  active: page==='chart' && symbol===r.symbol, 
                  gainer: (r.regularChange || 0) > 0, 
                  jiggling: isDeleteMode, 
-                 'staged-delete': isDeleteMode && pendingDeleteSymbol===r.symbol
+                 'staged-delete': isDeleteMode && pendingDeleteSymbol===r.symbol,
+                 'is-dragging': draggedStock?.symbol === r.symbol,
+                 'drop-before': dragOverTarget?.symbol === r.symbol && dragOverTarget?.position === 'before',
+                 'drop-after': dragOverTarget?.symbol === r.symbol && dragOverTarget?.position === 'after'
                }" 
+               :draggable="!isDeleteMode"
+               @dragstart="onFlatStockDragStart($event, r)"
+               @dragend="onStockDragEnd"
+               @dragover="onStockDragOver($event, r, '')"
+               @dragleave="onStockDragLeave($event, r)"
+               @drop.stop="onFlatStockDrop($event, r)"
                @click="handleChipClick(r.symbol)">
             <div class="card-head">
               <div class="card-left">
+                <span class="card-drag-grip" title="按住拖拽排序" aria-hidden="true">⠿</span>
                 <strong class="card-sym">{{ r.symbol }}</strong>
                 <span class="card-name" :title="r.name">{{ r.name }}</span>
+                <span v-if="r.marketCap" class="card-mcap-pill" :title="'总市值: ' + r.marketCap">{{ r.marketCap }}</span>
               </div>
               <div class="card-quote">
                 <span class="card-price" :class="cellFlashes[r.symbol + '_regular'] ? 'cell-flash-' + cellFlashes[r.symbol + '_regular'] : ''">{{ num(r.regularPrice) }}</span>
@@ -253,7 +336,13 @@
         <p v-if="!sidebarFlatRows.length" class="muted small" style="text-align:center;padding:12px;">该分组暂无自选标的。</p>
       </div>
     </div>
-    <div class="sidebar-bottom"><span>外观</span><button class="theme-toggle" @click="toggleTheme" :aria-pressed="isDark">{{isDark?'Light':'Dark'}}</button></div>
+    <div class="sidebar-bottom">
+      <span>外观与偏好</span>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <button class="theme-toggle" @click="toggleTheme" :aria-pressed="isDark">{{isDark?'Light':'Dark'}}</button>
+        <button class="theme-toggle" @click="openPreferencesModal" title="K 线图表与系统偏好设置">⚙️ 设置</button>
+      </div>
+    </div>
   </div>
 </aside>
 <div class="workspace" :inert="isMobile&&showSettings">
@@ -281,6 +370,8 @@
     <button class="topbar-btn refresh" @click="refresh" :disabled="refreshing">{{refreshing?'刷新中…':'↻ 刷新'}}</button>
     <button v-if="isWide && page!=='watchlist'" class="topbar-btn desktop-only" @click="compactPanelOpen=!compactPanelOpen">{{compactPanelOpen?'收起自选 ◨':'展开自选 ◧'}}</button>
     <button class="topbar-btn theme-toggle desktop-only" @click="toggleTheme" :aria-pressed="isDark">{{isDark?'☀️ Light':'🌙 Dark'}}</button>
+    <button class="topbar-btn settings-modal-btn desktop-only" @click="openPreferencesModal" title="K 线配色与偏好设置">⚙️ 设置</button>
+    <button class="topbar-btn mobile-only" style="padding:4px 8px;font-size:12px;" @click="openPreferencesModal" title="K 线配色与设置">⚙️</button>
   </div>
 </header>
 <main>
@@ -601,6 +692,7 @@
                 <td>
                   <strong>{{ r.symbol }}</strong>
                   <span class="muted small" style="margin-left:6px;">{{ r.name }}</span>
+                  <span v-if="r.marketCap" class="card-mcap-pill" style="margin-left:6px;" :title="'总市值: ' + r.marketCap">{{ r.marketCap }}</span>
                 </td>
                 <td class="num" :class="cellFlashes[r.symbol + '_regular'] ? 'cell-flash-' + cellFlashes[r.symbol + '_regular'] : ''">{{ num(r.regularPrice) }}</td>
                 <td class="num" :class="[tone(r.regularChange), cellFlashes[r.symbol + '_regular'] ? 'cell-flash-' + cellFlashes[r.symbol + '_regular'] : '']">{{ pct(r.regularChange) }}</td>
@@ -631,6 +723,7 @@
             <td>
               <strong>{{ r.symbol }}</strong>
               <span class="muted small" style="margin-left:6px;">{{ r.name }}</span>
+              <span v-if="r.marketCap" class="card-mcap-pill" style="margin-left:6px;" :title="'总市值: ' + r.marketCap">{{ r.marketCap }}</span>
               <span class="group-tags"><span v-for="tag in r.groups" :key="tag" class="group-tag">{{ tag }}</span></span>
             </td>
             <td class="num" :class="cellFlashes[r.symbol + '_regular'] ? 'cell-flash-' + cellFlashes[r.symbol + '_regular'] : ''">{{ num(r.regularPrice) }}</td>
@@ -658,7 +751,7 @@
   </section>
 </template>
 
-<template v-if="page==='chart'"><section class="panel"><div class="panel-heading"><div><h2>{{symbol}} <span class="muted">{{chart?.name}}</span></h2><div v-if="chart" class="stock-price">{{num(chart.price)}} <small>{{chart.currency}}</small><span :class="tone(chart.changePercent)">{{pct(chart.changePercent)}}</span></div></div><div class="controls"><button @click="addWatch(symbol)">{{watchlist.includes(symbol)?'✓ 已在自选':'+ 加入自选'}}</button><button class="topbar-btn" style="height:32px;padding:0 10px;" @click="resetPriceChartZoom" title="复位视角 (也可双击图表)">⟲ 复位</button><select v-model="chartRange" aria-label="行情周期"><option value="1d">日内 · 5 分钟</option><option value="1mo">1 个月</option><option value="3mo">3 个月</option><option value="6mo">6 个月</option><option value="1y">1 年</option><option value="2y">2 年</option></select></div></div><div v-if="states.chart.loading" class="loading-block">正在获取 {{symbol}} 行情…</div><div v-if="states.chart.error" class="error-box">{{states.chart.error}} <button @click="loadChart">重试</button></div><div v-show="chart&&!states.chart.loading" id="price-chart" class="price-chart" role="img" :aria-label="symbol+'价格与成交量图'"></div><div v-if="chart" class="panel-note">{{chart.source}} · {{chart.delay}} · 最新交易 {{time(chart.asOf)}} · {{chart.bars.length}} 根 K 线 · 最新一根可能尚未收盘 <strong v-if="chart.stale" class="warning">· 旧快照</strong></div></section><div class="quick-actions"><button @click="optionSymbol=symbol;page='options'">{{symbol}} 期权墙 →</button><button @click="newsSymbol=symbol;page='news'">{{symbol}} 相关新闻 →</button></div></template>
+<template v-if="page==='chart'"><section class="panel chart-panel"><div class="panel-heading"><div><h2>{{symbol}} <span class="muted">{{chart?.name}}</span></h2><div v-if="chart" class="stock-price">{{num(chart.price)}} <small>{{chart.currency}}</small><span :class="tone(chart.changePercent)">{{pct(chart.changePercent)}}</span></div></div><div class="controls"><button @click="addWatch(symbol)">{{watchlist.includes(symbol)?'✓ 已在自选':'+ 加入自选'}}</button><button class="topbar-btn" style="height:32px;padding:0 10px;" @click="resetPriceChartZoom" title="复位视角 (也可双击图表)">⟲ 复位</button><select v-model="chartRange" aria-label="行情周期"><option value="1d">日内 · 5 分钟</option><option value="1mo">1 个月</option><option value="3mo">3 个月</option><option value="6mo">6 个月</option><option value="1y">1 年</option><option value="2y">2 年</option></select><div class="kline-palette-quick-selector" title="K 线走势配色方案"><button v-for="item in klineSchemeOptions" :key="item.id" class="kline-palette-chip" :class="{ active: klineScheme === item.id }" :title="item.title" @click="setKlineScheme(item.id)"><span class="chip-dot" :style="{ backgroundColor: item.up }"></span><span class="chip-dot" :style="{ backgroundColor: item.down }"></span><span class="chip-name">{{ item.shortName }}</span></button><button class="btn-settings-icon" @click="openPreferencesModal" title="K 线图表与偏好设置">⚙️</button></div></div></div><div v-if="chart" class="chart-readout-strip" id="chart-readout-strip"><div class="readout-left"><span class="readout-state-tag" :class="klineInteractionMode === 'history' ? 'mode-history' : 'mode-latest'">{{ klineInteractionMode === 'history' ? '历史探索 (指针锚定)' : '最新K线锚定' }}</span><span class="readout-ohlc" id="chart-readout-text">移动光标探索 K 线</span></div><div class="readout-right"><span class="ma-tag ma5">MA5</span><span class="ma-tag ma20">MA20</span><span class="ma-tag ma60">MA60</span><span class="ma-tag ma120">MA120</span><span class="ma-tag ma250">MA250</span><span class="ma-tag vol-tag">VOL</span></div></div><div v-if="states.chart.loading" class="loading-block">正在获取 {{symbol}} 行情…</div><div v-if="states.chart.error" class="error-box">{{states.chart.error}} <button @click="loadChart">重试</button></div><div v-show="chart&&!states.chart.loading" id="price-chart" class="price-chart" role="img" :aria-label="symbol+'价格与成交量图'"></div><div v-if="chart" class="panel-note">{{chart.source}} · {{chart.delay}} · 最新交易 {{time(chart.asOf)}} · {{chart.bars.length}} 根 K 线 · 最新一根可能尚未收盘 <strong v-if="chart.stale" class="warning">· 旧快照</strong></div></section><div class="quick-actions"><button @click="optionSymbol=symbol;page='options'">{{symbol}} 期权墙 →</button><button @click="newsSymbol=symbol;page='news'">{{symbol}} 相关新闻 →</button></div></template>
 
 <template v-if="page==='crypto'">
   <div class="crypto-dashboard-view">
@@ -862,6 +955,21 @@
               <button :class="{active: cryptoTimeframe==='7d'}" @click="cryptoTimeframe='7d'">7D</button>
               <button :class="{active: cryptoTimeframe==='30d'}" @click="cryptoTimeframe='30d'">30D</button>
               <button :class="{active: cryptoTimeframe==='1y'}" @click="cryptoTimeframe='1y'">1Y</button>
+            </div>
+            <div class="kline-palette-quick-selector" title="K 线走势配色方案">
+              <button
+                v-for="item in klineSchemeOptions"
+                :key="item.id"
+                class="kline-palette-chip"
+                :class="{ active: klineScheme === item.id }"
+                :title="item.title"
+                @click="setKlineScheme(item.id)"
+              >
+                <span class="chip-dot" :style="{ backgroundColor: item.up }"></span>
+                <span class="chip-dot" :style="{ backgroundColor: item.down }"></span>
+                <span class="chip-name">{{ item.shortName }}</span>
+              </button>
+              <button class="btn-settings-icon" @click="openPreferencesModal" title="K 线图表与偏好设置">⚙️</button>
             </div>
           </div>
         </div>
@@ -1218,12 +1326,20 @@
   <!-- Top Navigation & View Switcher Bar for News Module -->
   <div class="news-main-switch-bar">
     <div class="news-view-tabs">
+      <button class="news-view-btn" :class="{ active: newsSubView === 'stream' }" @click="newsSubView = 'stream'">
+        <span class="btn-icon">📰</span> 市场全天候快讯流
+      </button>
+      <button class="news-view-btn" :class="{ active: newsSubView === 'ai_search' }" @click="newsSubView = 'ai_search'">
+        <span class="btn-icon">🤖</span> AI 全网深度检索
+        <span class="badge-fire-pill">Tavily · Exa · Firecrawl</span>
+      </button>
+      <button class="news-view-btn" :class="{ active: newsSubView === 'geopolitics' }" @click="newsSubView = 'geopolitics'">
+        <span class="btn-icon">🌍</span> 全球地缘政治看板
+        <span class="badge-fire-pill">Hot Radar</span>
+      </button>
       <button class="news-view-btn" :class="{ active: newsSubView === 'earnings' }" @click="newsSubView = 'earnings'">
         <span class="btn-icon">📅</span> 科技与 AI 财报周历
         <span class="badge-fire-pill">Earnings Whispers 原版</span>
-      </button>
-      <button class="news-view-btn" :class="{ active: newsSubView === 'stream' }" @click="newsSubView = 'stream'">
-        <span class="btn-icon">📰</span> 市场全天候快讯流
       </button>
       <button class="news-view-btn" :class="{ active: newsSubView === 'macro' }" @click="newsSubView = 'macro'">
         <span class="btn-icon">📊</span> 宏观重磅经济日历 (CPI / PPI)
@@ -1231,9 +1347,17 @@
     </div>
 
     <!-- Quick Telemetry & Stats -->
+    <div v-if="newsSubView === 'ai_search'" class="earnings-header-stats">
+      <span class="stat-pill"><span class="pulse-dot"></span> 3 大 AI 搜索引擎协同在线：Tavily · Exa · Firecrawl</span>
+      <span class="stat-pill stat-accent">穿透信源：Reddit · X · 路透社 · 华尔街日报 · 彭博 · FT</span>
+    </div>
     <div v-if="newsSubView === 'earnings'" class="earnings-header-stats">
       <span class="stat-pill">📅 2026 Q3/Q4 核心披露周 · 10月26日 - 10月30日</span>
       <span class="stat-pill stat-accent">覆盖 29 家核心科技与 AI 链标的</span>
+    </div>
+    <div v-if="newsSubView === 'geopolitics'" class="earnings-header-stats">
+      <span class="stat-pill"><span class="pulse-dot"></span> 全球地缘风险指数：高位戒备 (84.6)</span>
+      <span class="stat-pill stat-accent">重点监控：中东霍尔木兹 · 东欧北约军费 · 印太芯片管制</span>
     </div>
   </div>
 
@@ -1440,6 +1564,77 @@
 
         <!-- Right Intelligence Rail -->
         <aside class="right-rail-stack">
+          <!-- Widget AI: AI Multi-Engine Intelligence Wire (Jump to AI Search) -->
+          <div class="rail-widget" style="border-left: 3px solid #6366f1;">
+            <div class="rail-widget-head">
+              <h4><span class="status-dot-pulse" style="background:#6366f1;box-shadow:0 0 8px rgba(99,102,241,0.6);"></span> 🤖 AI 跨引擎全网情报</h4>
+              <button class="rail-widget-more-btn" @click="newsSubView = 'ai_search'">打开检索 ↗</button>
+            </div>
+            <p style="font-size:12px;color:var(--text-secondary);margin:0 0 10px 0;line-height:1.4;">接入 Tavily · Exa · Firecrawl，实时穿透 Reddit 散户、X 交易圈及权威外媒</p>
+            <div class="calendar-item" style="cursor:pointer;" @click="filterAiNewsTopic('Wall Street stock market economy Fed inflation', 'wsj_reuters')">
+              <div class="calendar-top">
+                <span>📰 华尔街核心大报焦点</span>
+                <span class="kpi-pill kpi-pill-blue">权威主流</span>
+              </div>
+              <div class="calendar-sub font-mono">
+                <span>直通华尔街日报、路透社最新深度报道</span>
+              </div>
+            </div>
+            <div class="calendar-item" style="cursor:pointer;" @click="filterAiNewsTopic('reddit wallstreetbets stocks trending tickers sentiment', 'reddit')">
+              <div class="calendar-top">
+                <span>💬 Reddit 散户社群 (WSB)</span>
+                <span class="kpi-pill kpi-pill-amber">散户情绪</span>
+              </div>
+              <div class="calendar-sub font-mono">
+                <span>r/wallstreetbets、r/stocks 爆炒异动</span>
+              </div>
+            </div>
+            <div class="calendar-item" style="cursor:pointer;" @click="filterAiNewsTopic('stock market trading macro CPI Fed earnings', 'x')">
+              <div class="calendar-top">
+                <span>🐦 X (Twitter) 交易圈速递</span>
+                <span class="kpi-pill kpi-pill-green">实时推文</span>
+              </div>
+              <div class="calendar-sub font-mono">
+                <span>宏观交易员与华尔街大V即时观点</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Widget 0: Geopolitical Risk Radar (Jump to Geopolitics) -->
+          <div class="rail-widget" style="border-left: 3px solid #ef4444;">
+            <div class="rail-widget-head">
+              <h4><span class="status-dot-pulse" style="background:#ef4444;box-shadow:0 0 8px rgba(239,68,68,0.6);"></span> 地缘政治风险雷达 (Geopolitics)</h4>
+              <button class="rail-widget-more-btn" @click="newsSubView = 'geopolitics'">全局看板 ↗</button>
+            </div>
+            <div class="calendar-item" style="cursor:pointer;" @click="filterGeopoliticsTopic('中东')">
+              <div class="calendar-top">
+                <span>中东霍尔木兹 · 曼德海峡</span>
+                <span class="kpi-pill kpi-pill-red">高危</span>
+              </div>
+              <div class="calendar-sub font-mono">
+                <span>原油风险溢价走阔，航运绕行南非</span>
+              </div>
+            </div>
+            <div class="calendar-item" style="cursor:pointer;" @click="filterGeopoliticsTopic('乌克兰')">
+              <div class="calendar-top">
+                <span>东欧前线 · 北约防务订单</span>
+                <span class="kpi-pill kpi-pill-amber">常态</span>
+              </div>
+              <div class="calendar-sub font-mono">
+                <span>军费开支占 GDP 2.5%+，弹药反导扩产</span>
+              </div>
+            </div>
+            <div class="calendar-item" style="cursor:pointer;" @click="filterGeopoliticsTopic('芯片')">
+              <div class="calendar-top">
+                <span>印太半导体 · 出口管制</span>
+                <span class="kpi-pill kpi-pill-blue">升级</span>
+              </div>
+              <div class="calendar-sub font-mono">
+                <span>先进制程双轨化，战略矿产出口许可</span>
+              </div>
+            </div>
+          </div>
+
           <!-- Widget 1: Macro Calendar (CPI / PPI / 失业金) -->
           <div class="rail-widget">
             <div class="rail-widget-head">
@@ -1501,9 +1696,11 @@
               <h4>🔥 快讯热搜词云 (Trending)</h4>
             </div>
             <div class="trending-cloud">
+              <span class="trending-tag" @click="newsCategory='geopolitics';newsSearch='原油';newsSymbol='XLE'">#原油地缘溢价</span>
+              <span class="trending-tag" @click="newsCategory='geopolitics';newsSearch='红海';newsSymbol=''">#红海航运受阻</span>
+              <span class="trending-tag" @click="newsCategory='geopolitics';newsSearch='军工';newsSymbol='LMT'">#军工防务订单</span>
+              <span class="trending-tag" @click="newsCategory='geopolitics';newsSearch='芯片';newsSymbol='NVDA'">#芯片出口管制</span>
               <span class="trending-tag" @click="newsSearch='存储芯片';newsSymbol='MU'">#存储芯片周期</span>
-              <span class="trending-tag" @click="newsSearch='原油';newsSymbol='XLE'">#原油地缘溢价</span>
-              <span class="trending-tag" @click="newsSearch='AI';newsSymbol='NVDA'">#AI裁员增效</span>
               <span class="trending-tag" @click="newsSearch='财报';newsSymbol=''">#三季度财报季</span>
               <span class="trending-tag" @click="newsSearch='美债';newsSymbol='SPY'">#10Y美债突破4.2</span>
               <span class="trending-tag" @click="newsSearch='HBM';newsSymbol=''">#HBM3e产能</span>
@@ -1516,20 +1713,20 @@
               <h4>📡 直连数据源状态 (Sources)</h4>
             </div>
             <div class="source-status-row">
-              <span>Bloomberg Terminal API</span>
+              <span>CNBC World · 地缘国际</span>
               <span class="source-status-ok">OK (0.2s)</span>
             </div>
             <div class="source-status-row">
-              <span>Reuters Macro Wire</span>
-              <span class="source-status-ok">OK (0.4s)</span>
-            </div>
-            <div class="source-status-row">
-              <span>CNBC Breaking Wire</span>
+              <span>BBC World · 国际政经</span>
               <span class="source-status-ok">OK (0.3s)</span>
             </div>
             <div class="source-status-row">
-              <span>SEC EDGAR RSS Feed</span>
-              <span class="source-status-ok">OK (0.5s)</span>
+              <span>MarketWatch Top Stories</span>
+              <span class="source-status-ok">OK (0.3s)</span>
+            </div>
+            <div class="source-status-row">
+              <span>CNBC Breaking Wire</span>
+              <span class="source-status-ok">OK (0.4s)</span>
             </div>
           </div>
         </aside>
@@ -1582,6 +1779,401 @@
       </table>
     </div>
   </section>
+
+  <!-- ================= SUBVIEW 4: GLOBAL GEOPOLITICAL DASHBOARD (全球地缘政治与宏观博弈看板) ================= -->
+  <section v-else-if="newsSubView === 'geopolitics'" class="geopolitics-dashboard-section">
+    <!-- Header KPI Overview Strip -->
+    <div class="geopolitics-kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-head">
+          <span>全球地缘风险指数 (GPR)</span>
+          <span class="kpi-pill kpi-pill-red">高位戒备</span>
+        </div>
+        <div class="kpi-body">
+          <span class="kpi-val font-mono" style="color:var(--apple-red);">84.6</span>
+          <span class="kpi-subval font-mono neg-text">处近 3 年 89% 分位数</span>
+        </div>
+        <div class="kpi-foot">
+          <span>多重冲突点同步共振</span>
+          <span>战略威慑升级</span>
+        </div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-head">
+          <span>原油地缘溢价估算</span>
+          <span class="kpi-pill kpi-pill-amber">Brent Premium</span>
+        </div>
+        <div class="kpi-body">
+          <span class="kpi-val font-mono" style="color:#d97706;">+$4.50</span>
+          <span class="kpi-subval font-mono">占现价 ~$75/bbl 的 6%</span>
+        </div>
+        <div class="kpi-foot">
+          <span>霍尔木兹海峡及红海防务</span>
+          <span>高油价对冲通胀</span>
+        </div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-head">
+          <span>避险黄金主权中枢</span>
+          <span class="kpi-pill kpi-pill-green">Gold Safe-Haven</span>
+        </div>
+        <div class="kpi-body">
+          <span class="kpi-val font-mono" style="color:#10b981;">$2,720+</span>
+          <span class="kpi-subval font-mono pos-text">全球央行持续净购金</span>
+        </div>
+        <div class="kpi-foot">
+          <span>去美元化与信用对冲</span>
+          <span>抗地缘违约资产</span>
+        </div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-head">
+          <span>海运关键航道吸纳率</span>
+          <span class="kpi-pill kpi-pill-blue">Cape of Good Hope</span>
+        </div>
+        <div class="kpi-body">
+          <span class="kpi-val font-mono" style="color:var(--apple-blue);">+8.2%</span>
+          <span class="kpi-subval font-mono">额外消耗有效集装箱运力</span>
+        </div>
+        <div class="kpi-foot">
+          <span>曼德海峡绕行好望角 +12天</span>
+          <span>即期运价与保费高位</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4 大热点地缘态势深度卡片网格 -->
+    <div style="margin-top:14px;">
+      <div class="panel-heading" style="margin-bottom:12px;">
+        <div>
+          <h2>全球四大核心地缘态势与博弈焦点 (Global Flashpoints)</h2>
+          <p>实时跟踪中东咽喉、东欧前线、中美半导体管制与全球关键水道，透视美股资产定价与供应链冲击</p>
+        </div>
+        <button class="text-button" @click="filterGeopoliticsTopic('')">进入地缘快讯流 ↗</button>
+      </div>
+
+      <div class="hotspots-grid">
+        <div v-for="spot in GEOPOLITICAL_HOTSPOTS" :key="spot.id" class="hotspot-card">
+          <div class="hotspot-head">
+            <div>
+              <span class="hotspot-region-pill">{{ spot.region }}</span>
+              <h3 class="hotspot-title">{{ spot.title }}</h3>
+            </div>
+            <span class="risk-level-badge" :class="spot.riskCls">{{ spot.riskLevel }}</span>
+          </div>
+
+          <p class="hotspot-summary">{{ spot.summary }}</p>
+
+          <div class="hotspot-impact-box">
+            <div class="impact-row">
+              <span class="impact-label">经贸通道影响:</span>
+              <span class="impact-value">{{ spot.channelImpact }}</span>
+            </div>
+            <div class="impact-row">
+              <span class="impact-label">资产传导机制:</span>
+              <span class="impact-value">{{ spot.transmission }}</span>
+            </div>
+          </div>
+
+          <div class="hotspot-tickers-footer">
+            <span class="footer-label">联动核心美股与大宗:</span>
+            <div class="hotspot-tickers-chips">
+              <button v-for="t in spot.tickers" :key="t.sym" class="hotspot-ticker-btn" @click="selectSymbol(t.sym)" :title="t.name + ' · ' + t.type">
+                <strong>{{ t.sym }}</strong>
+                <small>{{ t.name }}</small>
+                <span class="ticker-type-pill">{{ t.type }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 地缘政治金融资产传导与对冲矩阵 -->
+    <div style="margin-top:20px;">
+      <div class="panel-heading" style="margin-bottom:12px;">
+        <div>
+          <h2>地缘风险金融资产传导矩阵 (Asset Transmission Matrix)</h2>
+          <p>梳理地缘冲突升级背景下，大宗商品、外汇、主权债券及核心美股行业板块的多空弹性与对冲机制</p>
+        </div>
+      </div>
+
+      <div class="macro-table-container">
+        <table class="macro-calendar-table">
+          <thead>
+            <tr>
+              <th style="width:200px;">资产 / 行业类别</th>
+              <th style="width:140px;">多空敏感度</th>
+              <th>核心传导机制与逻辑剖析</th>
+              <th style="width:240px;">美股核心相关标的</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in GEOPOLITICAL_ASSET_MATRIX" :key="row.asset">
+              <td style="font-weight:700;">{{ row.asset }}</td>
+              <td><span class="kpi-pill" :class="row.cls">{{ row.direction }}</span></td>
+              <td class="item-desc-cell">{{ row.mechanism }}</td>
+              <td>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                  <button v-for="s in row.tickers" :key="s" class="text-button" style="font-size:11px;padding:2px 7px;background:var(--surface-hover);border-radius:4px;" @click="selectSymbol(s)">
+                    {{ s }} ↗
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 实时地缘突发快讯瀑布流 -->
+    <div style="margin-top:20px;">
+      <div class="panel-heading" style="margin-bottom:12px;">
+        <div>
+          <h2>地缘政治突发快讯流 (Geopolitical Wire)</h2>
+          <p>来自 BBC World、CNBC World、MarketWatch 等公开权威外媒关于国际局势与安全博弈的最新报道</p>
+        </div>
+        <button class="text-button" @click="newsCategory='geopolitics';newsSubView='stream'">在全屏快讯流中查看 ↗</button>
+      </div>
+
+      <div class="news-bento-grid">
+        <a v-for="n in filteredNews.filter(item => getNewsSentiment(item).text === '地缘政治').slice(0, 10)" :key="n.url" :href="n.url" target="_blank" rel="noopener noreferrer" class="news-card news-card-bento" style="border-left: 3px solid #ef4444;">
+          <div>
+            <div class="news-card-head">
+              <div style="display:flex;align-items:center;gap:6px;">
+                <span class="news-source-tag">{{ n.source }}</span>
+                <span class="news-sentiment-tag kpi-pill-red">地缘政治</span>
+              </div>
+              <span class="muted" style="font-size:12px;">↗</span>
+            </div>
+            <h3>{{ n.title }}</h3>
+            <div class="news-tickers-row">
+              <span v-for="t in getNewsTags(n)" :key="t" class="news-ticker-pill">{{ t }}</span>
+            </div>
+          </div>
+          <div class="news-card-foot">
+            <span class="font-mono">{{ time(n.publishedAt) }}</span>
+            <span style="color:var(--apple-blue);font-weight:600;">阅读原文 ↗</span>
+          </div>
+        </a>
+      </div>
+      <p v-if="!filteredNews.filter(item => getNewsSentiment(item).text === '地缘政治').length" class="empty" style="padding:30px;text-align:center;">暂无匹配的地缘突发快讯，请稍后刷新。</p>
+    </div>
+  </section>
+
+  <!-- ================= SUBVIEW 5: AI NEWS SEARCH (Tavily, Firecrawl, Exa) ================= -->
+  <section v-else-if="newsSubView === 'ai_search'" class="ai-search-workspace-section">
+    <!-- AI Search Console Card -->
+    <div class="ai-search-console-card">
+      <div class="ai-search-top-row">
+        <div class="ai-search-brand">
+          <span class="ai-brand-badge">MULTI-ENGINE AI INTELLIGENCE</span>
+          <h2 class="ai-search-heading">AI 全网财经与股市深度检索</h2>
+          <p class="ai-search-subheading">接入 <strong>Tavily</strong>、<strong>Firecrawl</strong>、<strong>Exa</strong> 三大前沿 AI 搜索引擎，穿透 Reddit 散户热议、X (Twitter) 交易员速递，以及路透社、华尔街日报、彭博社等顶级权威财经媒体。</p>
+        </div>
+        <div class="ai-engines-status-pills">
+          <span class="engine-live-pill"><span class="engine-indicator green"></span> Tavily AI</span>
+          <span class="engine-live-pill"><span class="engine-indicator green"></span> Exa Neural</span>
+          <span class="engine-live-pill"><span class="engine-indicator green"></span> Firecrawl</span>
+        </div>
+      </div>
+
+      <!-- Main Search Input Bar -->
+      <form class="ai-search-form" @submit.prevent="executeAiSearch()">
+        <div class="ai-search-input-wrap">
+          <span class="search-input-icon">🔍</span>
+          <input
+            type="text"
+            v-model="aiSearchQuery"
+            class="ai-search-input"
+            placeholder="搜索美股标的 (如 NVDA、TSLA)、宏观议题 (如 美联储降息、非农、通胀) 或 Reddit/X 讨论..."
+            :disabled="aiSearchLoading"
+          />
+          <button
+            v-if="aiSearchQuery"
+            type="button"
+            class="ai-input-clear-btn"
+            @click="aiSearchQuery = ''; executeAiSearch({ query: '' })"
+            aria-label="清空输入"
+          >×</button>
+        </div>
+        <button type="submit" class="ai-search-submit-btn" :disabled="aiSearchLoading">
+          <span v-if="aiSearchLoading" class="ai-spinner"></span>
+          <span v-else>🤖 AI 深度检索</span>
+        </button>
+      </form>
+
+      <!-- Engine Selector & Source Scope Filters -->
+      <div class="ai-search-filters-row">
+        <!-- AI Engine Selector -->
+        <div class="ai-engine-selector-group">
+          <span class="filter-group-label">引擎选择：</span>
+          <div class="ai-engine-chips">
+            <button
+              v-for="eng in AI_SEARCH_ENGINES"
+              :key="eng.id"
+              type="button"
+              class="ai-engine-chip"
+              :class="{ active: aiSearchEngine === eng.id }"
+              :title="eng.desc"
+              @click="aiSearchEngine = eng.id; executeAiSearch()"
+            >
+              <span class="chip-engine-icon">{{ eng.icon }}</span>
+              <span class="chip-engine-label">{{ eng.label }}</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Source Channels Filter -->
+        <div class="ai-source-selector-group">
+          <span class="filter-group-label">信源通道：</span>
+          <div class="ai-source-chips">
+            <button
+              v-for="src in AI_SEARCH_SOURCES"
+              :key="src.id"
+              type="button"
+              class="ai-source-chip"
+              :class="{ active: aiSearchSource === src.id }"
+              :title="src.desc"
+              @click="aiSearchSource = src.id; executeAiSearch()"
+            >
+              {{ src.label }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Preset Chips -->
+      <div class="ai-search-presets-row">
+        <span class="presets-label">⚡ 快捷探索热词：</span>
+        <div class="ai-preset-chips">
+          <button
+            v-for="preset in AI_SEARCH_PRESETS"
+            :key="preset.label"
+            type="button"
+            class="ai-preset-chip"
+            @click="selectAiSearchPreset(preset)"
+          >
+            <span>{{ preset.label }}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Telemetry & Statistics Strip -->
+    <div v-if="aiSearchTelemetry" class="ai-search-telemetry-strip">
+      <div class="telemetry-left">
+        <span class="telemetry-pill">
+          ⚡ 响应耗时 <strong>{{ aiSearchTelemetry.latencyMs }} ms</strong>
+        </span>
+        <span class="telemetry-pill">
+          📑 检索召回 <strong>{{ aiSearchResults.length }}</strong> 条深度资讯
+        </span>
+        <span class="telemetry-pill">
+          🤖 当前引擎模式：<strong>{{ AI_SEARCH_ENGINES.find(e => e.id === aiSearchTelemetry.engine)?.label || aiSearchTelemetry.engine }}</strong>
+        </span>
+      </div>
+      <div class="telemetry-right" v-if="aiSearchTelemetry.sourceCounts">
+        <span v-for="(cnt, srcName) in aiSearchTelemetry.sourceCounts" :key="srcName" class="telemetry-source-badge">
+          {{ srcName }}: {{ cnt }}
+        </span>
+      </div>
+    </div>
+
+    <!-- Error Banner -->
+    <div v-if="aiSearchError" class="ai-search-error-box">
+      <div class="error-msg-wrap">
+        <span class="error-icon">⚠️</span>
+        <div class="error-text">
+          <strong>检索请求遇到问题：</strong>{{ aiSearchError }}
+        </div>
+      </div>
+      <button class="ai-retry-btn" @click="executeAiSearch()">重新检索</button>
+    </div>
+
+    <!-- Loading Skeleton Stream -->
+    <div v-if="aiSearchLoading" class="ai-search-skeleton-grid">
+      <div v-for="i in 4" :key="i" class="ai-skeleton-card">
+        <div class="skeleton-header">
+          <div class="skeleton-pill"></div>
+          <div class="skeleton-pill mini"></div>
+        </div>
+        <div class="skeleton-title"></div>
+        <div class="skeleton-title short"></div>
+        <div class="skeleton-snippet"></div>
+        <div class="skeleton-footer"></div>
+      </div>
+    </div>
+
+    <!-- Results Grid -->
+    <div v-else-if="aiSearchResults.length > 0" class="ai-search-results-grid">
+      <div
+        v-for="item in aiSearchResults"
+        :key="item.id || item.url"
+        class="ai-news-card"
+        :class="'card-border-' + item.sourceType"
+      >
+        <div class="ai-card-header">
+          <div class="ai-card-badges">
+            <span class="ai-source-badge" :class="item.sourceClass">
+              <span class="source-icon">{{ item.sourceIcon }}</span>
+              {{ item.source }}
+            </span>
+            <span class="ai-engine-tag" :class="getAiEngineBadge(item.engine).cls">
+              {{ getAiEngineBadge(item.engine).name }}
+            </span>
+          </div>
+          <span class="ai-time-tag">{{ formatAiTime(item.publishedAt) }}</span>
+        </div>
+
+        <a :href="item.url" target="_blank" rel="noopener noreferrer" class="ai-card-title-link">
+          <h3 class="ai-card-title">{{ item.title }}</h3>
+        </a>
+
+        <p class="ai-card-snippet">{{ item.snippet || '该新闻未提供正文摘要，点击下方按钮直达完整原文报道。' }}</p>
+
+        <div class="ai-card-footer">
+          <span class="ai-card-domain" :title="item.url">
+            <span class="domain-icon">🔗</span> {{ item.domain }}
+          </span>
+          <div class="ai-card-actions">
+            <button
+              type="button"
+              class="ai-btn-copy"
+              @click="copyAiNewsLink(item.url, item.id)"
+              :title="'复制链接: ' + item.url"
+            >
+              {{ aiSearchCopiedId === item.id ? '✓ 已复制' : '📋 复制' }}
+            </button>
+            <a
+              :href="item.url"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="ai-btn-direct-jump"
+              title="在浏览器新标签页中打开原文"
+            >
+              直达原文 ↗
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Empty State -->
+    <div v-else-if="!aiSearchLoading && !aiSearchError" class="ai-search-empty-state">
+      <div class="empty-icon">🔍</div>
+      <h3>未检索到匹配的资讯结果</h3>
+      <p>可以尝试缩短搜索词，或切换信源通道为「全部信源」，亦可点击上方快捷探索热词重新搜索。</p>
+      <div class="empty-actions">
+        <button class="ai-btn-direct-jump" @click="selectAiSearchPreset(AI_SEARCH_PRESETS[0])">
+          浏览华尔街核心焦点
+        </button>
+      </div>
+    </div>
+  </section>
 </template>
 
 <template v-if="page==='sources'"><section class="panel documentation"><h2>每一个图表，都有明确的数据口径</h2><div class="table-wrap"><table><thead><tr><th>模块</th><th>来源与刷新</th><th>如何阅读</th></tr></thead><tbody><tr><td>行情 / 热力图</td><td>Yahoo Finance · 60 秒缓存</td><td>可能延迟；显示源站最近交易时间。18 只精选股不代表全市场。</td></tr><tr><td>资金观察</td><td>11 个板块 ETF / 用户 CSV</td><td>成交活跃度与 ETF 净申赎分别显示，不推算主力净流入。</td></tr><tr><td>期权墙</td><td>Cboe · 15 分钟缓存</td><td>延迟快照；OI 通常每日更新。GEX 是带符号假设的估算。</td></tr><tr><td>新闻</td><td>CNBC、MarketWatch、Yahoo RSS · 5 分钟缓存</td><td>标题、来源、发布时间与原文链接。</td></tr><tr><td>自选与多时段</td><td>长桥 (Longbridge) OpenAPI US LV1 / 本地分组模型</td><td>覆盖常规、盘前、盘后与隔夜时段；基准收盘相对最近真实 RTH。</td></tr></tbody></table></div><h2>开源融合</h2><p><a href="https://github.com/aaguiar10/gflows" target="_blank" rel="noopener">G|Flows · MIT</a>：移植 Cboe 接入和按行权价计算的逻辑，补充校验、缺失值处理和明确单位。</p><p><a href="https://github.com/apache/echarts" target="_blank" rel="noopener">Apache ECharts · Apache-2.0</a>：热力图、K 线、板块轮动及期权分布图。</p><p><a href="https://github.com/Open-Dev-Society/OpenStock" target="_blank" rel="noopener">OpenStock</a>、<a href="https://github.com/openbq-org/OpenBB" target="_blank" rel="noopener">OpenBB</a>：产品与数据分层参考，未复制其应用代码。</p><h2>产品定位</h2><p>Market Desk 是美股信息与分析辅助工作台。旧版拐点策略、买卖标记和胜率回测入口已停用，历史代码保留归档。网络失败会显示明确状态，已有缓存会标注为旧快照。</p></section></template>
@@ -1626,6 +2218,286 @@
       </div>
     </div>
     <div class="modal-actions"><button @click="showGroupModal=false">完成</button></div>
+  </div>
+</div>
+
+<!-- Modal: Global Settings & K-Line Preferences -->
+<div
+  v-if="showPreferencesModal"
+  class="preferences-modal-backdrop"
+  @click.self="closePreferencesModal"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="pref-modal-title"
+>
+  <div class="preferences-modal-card">
+    <div class="preferences-modal-header">
+      <div class="header-titles">
+        <h3 id="pref-modal-title" class="pref-title">
+          <span class="pref-icon">⚙️</span> 工作台与图表偏好设置
+        </h3>
+        <p class="pref-subtitle">定制 K 线走势色彩、昼夜模式与网格线视觉规范</p>
+      </div>
+      <button class="pref-close-btn" @click="closePreferencesModal" aria-label="关闭设置">×</button>
+    </div>
+
+    <div class="preferences-modal-body">
+      <!-- 模块 1: K 线走势配色方案 (图一 / 图二 / 图三) -->
+      <section class="pref-section">
+        <div class="pref-section-header">
+          <div class="pref-section-title-wrap">
+            <h4 class="pref-section-title">K 线配色方案</h4>
+            <span class="pref-badge">图一 / 图二 / 图三 规范</span>
+          </div>
+          <span class="pref-section-desc">支持实时切换并持久化保存，已适配个股行情与加密资产全场景 K 线及成交量</span>
+        </div>
+
+        <div class="kline-schemes-grid">
+          <!-- 方案 1: 图一 默认经典绿红 -->
+          <div
+            class="kline-scheme-card"
+            :class="{ active: klineScheme === 'classic' }"
+            @click="setKlineScheme('classic')"
+            role="radio"
+            :aria-checked="klineScheme === 'classic'"
+            tabindex="0"
+            @keydown.enter.space.prevent="setKlineScheme('classic')"
+          >
+            <div class="scheme-radio-indicator">
+              <span class="radio-circle"></span>
+              <span class="scheme-order-tag">图一 · 默认</span>
+            </div>
+            <div class="scheme-info">
+              <div class="scheme-title">经典绿红 (OKX / 默认)</div>
+              <div class="scheme-desc">翡翠绿与珊瑚红，沉稳清晰，全球交易所通用标配</div>
+            </div>
+            <!-- 迷你 K 线与成交量柱示意图 -->
+            <div class="kline-mini-preview preview-classic">
+              <div class="preview-candles">
+                <div class="mini-candle up" style="--c-color: #10B981; height: 32px;"><span class="wick"></span><span class="body"></span></div>
+                <div class="mini-candle down" style="--c-color: #F43F5E; height: 26px;"><span class="wick"></span><span class="body"></span></div>
+                <div class="mini-candle up" style="--c-color: #10B981; height: 42px;"><span class="wick"></span><span class="body"></span></div>
+                <div class="mini-candle up" style="--c-color: #10B981; height: 22px;"><span class="wick"></span><span class="body"></span></div>
+                <div class="mini-candle down" style="--c-color: #F43F5E; height: 36px;"><span class="wick"></span><span class="body"></span></div>
+              </div>
+              <div class="preview-volume">
+                <span class="vol-bar up" style="background:#10B981; height: 60%;"></span>
+                <span class="vol-bar down" style="background:#F43F5E; height: 40%;"></span>
+                <span class="vol-bar up" style="background:#10B981; height: 95%;"></span>
+                <span class="vol-bar up" style="background:#10B981; height: 35%;"></span>
+                <span class="vol-bar down" style="background:#F43F5E; height: 75%;"></span>
+              </div>
+            </div>
+            <div class="scheme-palette-badges">
+              <span class="color-badge"><i style="background: #10B981"></i> 阳线 #10B981</span>
+              <span class="color-badge"><i style="background: #F43F5E"></i> 阴线 #F43F5E</span>
+            </div>
+          </div>
+
+          <!-- 方案 2: 图二 荧光极光亮绿与芭比玫粉 -->
+          <div
+            class="kline-scheme-card"
+            :class="{ active: klineScheme === 'neon' }"
+            @click="setKlineScheme('neon')"
+            role="radio"
+            :aria-checked="klineScheme === 'neon'"
+            tabindex="0"
+            @keydown.enter.space.prevent="setKlineScheme('neon')"
+          >
+            <div class="scheme-radio-indicator">
+              <span class="radio-circle"></span>
+              <span class="scheme-order-tag highlight-neon">图二 · 荧光</span>
+            </div>
+            <div class="scheme-info">
+              <div class="scheme-title">荧光极光 (亮绿 / 玫粉)</div>
+              <div class="scheme-desc">鲜亮荧光黄绿与鲜亮芭比玫粉，高对比度视觉冲击</div>
+            </div>
+            <!-- 迷你 K 线与成交量柱示意图 -->
+            <div class="kline-mini-preview preview-neon">
+              <div class="preview-candles">
+                <div class="mini-candle up" style="--c-color: #7CE138; height: 32px;"><span class="wick"></span><span class="body"></span></div>
+                <div class="mini-candle down" style="--c-color: #FF4D82; height: 26px;"><span class="wick"></span><span class="body"></span></div>
+                <div class="mini-candle up" style="--c-color: #7CE138; height: 42px;"><span class="wick"></span><span class="body"></span></div>
+                <div class="mini-candle up" style="--c-color: #7CE138; height: 22px;"><span class="wick"></span><span class="body"></span></div>
+                <div class="mini-candle down" style="--c-color: #FF4D82; height: 36px;"><span class="wick"></span><span class="body"></span></div>
+              </div>
+              <div class="preview-volume">
+                <span class="vol-bar up" style="background:#7CE138; height: 60%;"></span>
+                <span class="vol-bar down" style="background:#FF4D82; height: 40%;"></span>
+                <span class="vol-bar up" style="background:#7CE138; height: 95%;"></span>
+                <span class="vol-bar up" style="background:#7CE138; height: 35%;"></span>
+                <span class="vol-bar down" style="background:#FF4D82; height: 75%;"></span>
+              </div>
+            </div>
+            <div class="scheme-palette-badges">
+              <span class="color-badge"><i style="background: #7CE138"></i> 阳线 #7CE138</span>
+              <span class="color-badge"><i style="background: #FF4D82"></i> 阴线 #FF4D82</span>
+            </div>
+          </div>
+
+          <!-- 方案 3: 图三 赛博霓虹青蓝与品红 -->
+          <div
+            class="kline-scheme-card"
+            :class="{ active: klineScheme === 'cyberpunk' }"
+            @click="setKlineScheme('cyberpunk')"
+            role="radio"
+            :aria-checked="klineScheme === 'cyberpunk'"
+            tabindex="0"
+            @keydown.enter.space.prevent="setKlineScheme('cyberpunk')"
+          >
+            <div class="scheme-radio-indicator">
+              <span class="radio-circle"></span>
+              <span class="scheme-order-tag highlight-cyber">图三 · 赛博</span>
+            </div>
+            <div class="scheme-info">
+              <div class="scheme-title">赛博霓虹 (青蓝 / 品红)</div>
+              <div class="scheme-desc">电光青蓝与炫彩品红，赛博朋克极客风尚，暗夜视觉拔群</div>
+            </div>
+            <!-- 迷你 K 线与成交量柱示意图 -->
+            <div class="kline-mini-preview preview-cyber">
+              <div class="preview-candles">
+                <div class="mini-candle up" style="--c-color: #00D2FF; height: 32px;"><span class="wick"></span><span class="body"></span></div>
+                <div class="mini-candle down" style="--c-color: #FF3377; height: 26px;"><span class="wick"></span><span class="body"></span></div>
+                <div class="mini-candle up" style="--c-color: #00D2FF; height: 42px;"><span class="wick"></span><span class="body"></span></div>
+                <div class="mini-candle up" style="--c-color: #00D2FF; height: 22px;"><span class="wick"></span><span class="body"></span></div>
+                <div class="mini-candle down" style="--c-color: #FF3377; height: 36px;"><span class="wick"></span><span class="body"></span></div>
+              </div>
+              <div class="preview-volume">
+                <span class="vol-bar up" style="background:#00D2FF; height: 60%;"></span>
+                <span class="vol-bar down" style="background:#FF3377; height: 40%;"></span>
+                <span class="vol-bar up" style="background:#00D2FF; height: 95%;"></span>
+                <span class="vol-bar up" style="background:#00D2FF; height: 35%;"></span>
+                <span class="vol-bar down" style="background:#FF3377; height: 75%;"></span>
+              </div>
+            </div>
+            <div class="scheme-palette-badges">
+              <span class="color-badge"><i style="background: #00D2FF"></i> 阳线 #00D2FF</span>
+              <span class="color-badge"><i style="background: #FF3377"></i> 阴线 #FF3377</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 模块 2: 白天黑夜显示模式 (适配黑夜纯黑底 + 白天纯白底) -->
+      <section class="pref-section">
+        <div class="pref-section-header">
+          <div class="pref-section-title-wrap">
+            <h4 class="pref-section-title">白天 / 黑夜外观模式</h4>
+            <span class="pref-badge">图一 底色规范</span>
+          </div>
+          <span class="pref-section-desc">黑夜模式下 K 线图为纯黑背景并带浅灰网格；白天模式自动适配纯白清爽背景</span>
+        </div>
+
+        <div class="pref-theme-options">
+          <button
+            class="pref-theme-card"
+            :class="{ active: !isDark }"
+            @click="isDark ? toggleTheme() : null"
+            type="button"
+          >
+            <span class="theme-icon">☀️</span>
+            <div class="theme-card-text">
+              <strong>白天模式 (Light)</strong>
+              <span>纯白洁净背景 · 柔和浅灰网格</span>
+            </div>
+            <span v-if="!isDark" class="theme-active-tag">当前生效</span>
+          </button>
+
+          <button
+            class="pref-theme-card"
+            :class="{ active: isDark }"
+            @click="!isDark ? toggleTheme() : null"
+            type="button"
+          >
+            <span class="theme-icon">🌙</span>
+            <div class="theme-card-text">
+              <strong>黑夜模式 (Dark)</strong>
+              <span>纯黑深邃背景 · 浅灰网格线 (图一风格)</span>
+            </div>
+            <span v-if="isDark" class="theme-active-tag">当前生效</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- 模块 3: K 线网格线样式 (浅灰虚线 / 实线 / 无网格) -->
+      <section class="pref-section">
+        <div class="pref-section-header">
+          <div class="pref-section-title-wrap">
+            <h4 class="pref-section-title">图表网格线 (Gridlines)</h4>
+          </div>
+          <span class="pref-section-desc">图一默认采用中间浅灰色虚线网格，辅助精准定位高低点与时间刻度</span>
+        </div>
+
+        <div class="pref-grid-options">
+          <button
+            class="pref-grid-btn"
+            :class="{ active: klineGridStyle === 'dashed' }"
+            @click="setKlineGrid('dashed')"
+            type="button"
+          >
+            <span class="grid-icon">┄┄</span> 浅灰虚线 (图一默认)
+          </button>
+          <button
+            class="pref-grid-btn"
+            :class="{ active: klineGridStyle === 'solid' }"
+            @click="setKlineGrid('solid')"
+            type="button"
+          >
+            <span class="grid-icon">──</span> 浅灰实线
+          </button>
+          <button
+            class="pref-grid-btn"
+            :class="{ active: klineGridStyle === 'none' }"
+            @click="setKlineGrid('none')"
+            type="button"
+          >
+            <span class="grid-icon">✕</span> 隐藏网格
+          </button>
+        </div>
+      </section>
+
+      <!-- 模块 4: AI 搜索引擎状态与密钥配置 (Tavily, Firecrawl, EXA) -->
+      <section class="pref-section">
+        <div class="pref-section-header">
+          <div class="pref-section-title-wrap">
+            <h4 class="pref-section-title">AI 搜索引擎配置 (AI Intelligence Engines)</h4>
+            <span class="pref-badge">3 大前沿 AI 引擎在线</span>
+          </div>
+          <span class="pref-section-desc">已成功接入 Tavily、Firecrawl、EXA 密钥，支持全网穿透检索 Reddit、X 及权威财经媒体</span>
+        </div>
+        <div class="ai-engines-pref-grid">
+          <div class="ai-engine-pref-card">
+            <div class="pref-card-header">
+              <span class="pref-engine-name">🔍 Tavily Search API</span>
+              <span class="status-indicator-tag green">● 200 OK 在线</span>
+            </div>
+            <div class="pref-key-display">密钥：已在环境变量配置（••••••••••••••••）</div>
+            <div class="pref-key-usage">专长：实时事实抓取、深度网页发现、Reddit/X 散户与交易圈挖掘</div>
+          </div>
+          <div class="ai-engine-pref-card">
+            <div class="pref-card-header">
+              <span class="pref-engine-name">🔥 Firecrawl Web Search</span>
+              <span class="status-indicator-tag green">● 200 OK 在线</span>
+            </div>
+            <div class="pref-key-display">密钥：已在环境变量配置（••••••••••••••••）</div>
+            <div class="pref-key-usage">专长：全网精准爬取、Markdown 结构化金融文本解析</div>
+          </div>
+          <div class="ai-engine-pref-card">
+            <div class="pref-card-header">
+              <span class="pref-engine-name">🧠 Exa Neural Search</span>
+              <span class="status-indicator-tag green">● 200 OK 在线</span>
+            </div>
+            <div class="pref-key-display">密钥：已在环境变量配置（••••••••••••••••）</div>
+            <div class="pref-key-usage">专长：基于语义神经网络的金融深度长文、权威主流媒体深度检索</div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="preferences-modal-footer">
+      <span class="footer-hint">✨ 设置即时生效并自动持久化保存于本地浏览器</span>
+      <button class="pref-confirm-btn" @click="closePreferencesModal" type="button">完成</button>
+    </div>
   </div>
 </div>
 

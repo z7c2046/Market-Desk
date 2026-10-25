@@ -17,6 +17,7 @@ test('API routing, disabled strategies, method guard, static boundaries, local v
   assert.equal((await fetch(base + '/%zz')).status, 400);
   assert.equal((await fetch(base + '/vendor/vue.js')).status, 200);
   assert.equal((await fetch(base + '/vendor/echarts.js')).status, 200);
+  assert.equal((await fetch(base + '/vendor/lightweight-charts.standalone.js')).status, 200);
   const html = await (await fetch(base)).text(); assert.match(html, /Market Desk/); assert.doesNotMatch(html, /Inflection Hunter|Strategy Algorithm/);
 });
 test('partial provider failures are listed and chart preserves requested ticker', async () => {

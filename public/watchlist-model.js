@@ -73,11 +73,82 @@ export const SYMBOL_NAMES = {
   LLY: '礼来'
 };
 
+// Global Market Cap Data & Rankings for Trillion Dollar Club & Key Watchlist Stocks
+export const STOCK_MARKET_CAPS = {
+  NVDA: { label: '$3.52T', value: 3520000000000, rank: 1 },
+  AAPL: { label: '$3.48T', value: 3480000000000, rank: 2 },
+  MSFT: { label: '$3.18T', value: 3180000000000, rank: 3 },
+  GOOGL: { label: '$2.05T', value: 2050000000000, rank: 4 },
+  GOOG: { label: '$2.05T', value: 2050000000000, rank: 4 },
+  AMZN: { label: '$1.96T', value: 1960000000000, rank: 5 },
+  META: { label: '$1.47T', value: 1470000000000, rank: 6 },
+  TSM: { label: '$1.04T', value: 1040000000000, rank: 7 },
+  'BRK-B': { label: '$1.00T', value: 1000000000000, rank: 8 },
+  'BRK.B': { label: '$1.00T', value: 1000000000000, rank: 8 },
+  TSLA: { label: '$850B', value: 850000000000, rank: 9 },
+  AVGO: { label: '$840B', value: 840000000000, rank: 10 },
+  LLY: { label: '$790B', value: 790000000000, rank: 11 },
+  WMT: { label: '$640B', value: 640000000000, rank: 12 },
+  JPM: { label: '$640B', value: 640000000000, rank: 13 },
+  V: { label: '$580B', value: 580000000000, rank: 14 },
+  XOM: { label: '$480B', value: 480000000000, rank: 15 },
+  NFLX: { label: '$320B', value: 320000000000, rank: 16 },
+  AMD: { label: '$250B', value: 250000000000, rank: 17 },
+  CAT: { label: '$190B', value: 190000000000, rank: 18 },
+  NEE: { label: '$160B', value: 160000000000, rank: 19 },
+  MU: { label: '$120B', value: 120000000000, rank: 20 },
+  ANET: { label: '$120B', value: 120000000000, rank: 21 },
+  DELL: { label: '$95B', value: 95000000000, rank: 22 },
+  MRVL: { label: '$75B', value: 75000000000, rank: 23 },
+  VRT: { label: '$42B', value: 42000000000, rank: 24 },
+  GLW: { label: '$38B', value: 38000000000, rank: 25 },
+  NOK: { label: '$24B', value: 24000000000, rank: 26 },
+  ALAB: { label: '$16.5B', value: 16500000000, rank: 27 },
+  COHR: { label: '$15.8B', value: 15800000000, rank: 28 },
+  FN: { label: '$14.5B', value: 14500000000, rank: 29 },
+  NVT: { label: '$14.2B', value: 14200000000, rank: 30 },
+  CIEN: { label: '$9.8B', value: 9800000000, rank: 31 },
+  CRDO: { label: '$8.5B', value: 8500000000, rank: 32 },
+  MOD: { label: '$7.2B', value: 7200000000, rank: 33 },
+  LITE: { label: '$5.2B', value: 5200000000, rank: 34 },
+  NBIS: { label: '$4.8B', value: 4800000000, rank: 35 },
+  IREN: { label: '$3.1B', value: 3100000000, rank: 36 },
+  CRWV: { label: '$2.8B', value: 2800000000, rank: 37 },
+  PENG: { label: '$2.5B', value: 2500000000, rank: 38 },
+  APLD: { label: '$2.1B', value: 2100000000, rank: 39 },
+  AAOI: { label: '$1.2B', value: 1200000000, rank: 40 },
+  POET: { label: '$450M', value: 450000000, rank: 41 }
+};
+
+export function getStockMarketCap(symbol) {
+  if (!symbol) return null;
+  const sym = String(symbol).trim().toUpperCase();
+  return STOCK_MARKET_CAPS[sym] || null;
+}
+
+export function sortSymbolsByMarketCap(symbolArray) {
+  if (!Array.isArray(symbolArray)) return [];
+  return [...symbolArray].sort((a, b) => {
+    const capA = STOCK_MARKET_CAPS[a]?.value ?? -1;
+    const capB = STOCK_MARKET_CAPS[b]?.value ?? -1;
+    if (capA !== capB) return capB - capA; // Descending: larger market cap first
+    return a.localeCompare(b);
+  });
+}
+
 export function sortWatchlistRows(rows, sortField = 'extChange', sortDirection = 'desc') {
+  if (!sortField || sortField === 'manual' || sortField === 'custom') {
+    return [...rows];
+  }
   const dir = sortDirection === 'asc' ? 1 : -1;
   return [...rows].sort((a, b) => {
     let valA = a[sortField];
     let valB = b[sortField];
+
+    if (sortField === 'marketCap' || sortField === 'marketCapNum') {
+      valA = a.marketCapNum ?? (STOCK_MARKET_CAPS[a.symbol]?.value ?? null);
+      valB = b.marketCapNum ?? (STOCK_MARKET_CAPS[b.symbol]?.value ?? null);
+    }
 
     if (sortField === 'symbol') {
       const cmp = String(valA || '').localeCompare(String(valB || ''));
@@ -225,7 +296,7 @@ export const PRESET_GROUPS = [
     name: '万亿市值',
     collapsed: false,
     order: 5,
-    symbolIds: ['NVDA', 'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSM', 'AVGO', 'TSLA', 'BRK-B', 'LLY']
+    symbolIds: ['NVDA', 'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSM', 'BRK-B', 'TSLA', 'AVGO', 'LLY']
   },
   {
     id: 'default',
@@ -336,6 +407,11 @@ export class WatchlistManager {
                 symbolIds: [...trillionGroup.symbolIds]
               });
             }
+          }
+          // Ensure the 'trillion' group is always sorted by market cap
+          const trillionGroup = parsed.groups.find(g => g.id === 'trillion' || g.name === '万亿市值');
+          if (trillionGroup && Array.isArray(trillionGroup.symbolIds)) {
+            trillionGroup.symbolIds = sortSymbolsByMarketCap(trillionGroup.symbolIds);
           }
           const sanitized = this.sanitizeData(parsed);
           this.save(sanitized);
@@ -496,6 +572,64 @@ export class WatchlistManager {
     return true;
   }
 
+  moveSymbolWithinGroup(groupId, sourceSymbol, targetSymbol, position = 'before') {
+    const src = String(sourceSymbol || '').trim().toUpperCase();
+    const tgt = String(targetSymbol || '').trim().toUpperCase();
+    const group = this.getGroup(groupId);
+    if (!group || !Array.isArray(group.symbolIds)) return false;
+    if (src === tgt) return false;
+    const srcIndex = group.symbolIds.indexOf(src);
+    if (srcIndex === -1) return false;
+
+    // Remove source symbol
+    group.symbolIds.splice(srcIndex, 1);
+
+    const tgtIndex = group.symbolIds.indexOf(tgt);
+    if (tgtIndex === -1) {
+      group.symbolIds.push(src);
+    } else {
+      const insertIndex = position === 'after' ? tgtIndex + 1 : tgtIndex;
+      group.symbolIds.splice(insertIndex, 0, src);
+    }
+    this.save();
+    return true;
+  }
+
+  moveSymbolBetweenGroups(fromGroupId, toGroupId, sourceSymbol, targetSymbol = null, position = 'before') {
+    const src = String(sourceSymbol || '').trim().toUpperCase();
+    const fromGroup = this.getGroup(fromGroupId);
+    const toGroup = this.getGroup(toGroupId);
+    if (!fromGroup || !toGroup) return false;
+
+    // Remove from fromGroup
+    fromGroup.symbolIds = fromGroup.symbolIds.filter(s => s !== src);
+
+    // Remove from toGroup if already present to prevent duplicate
+    toGroup.symbolIds = toGroup.symbolIds.filter(s => s !== src);
+
+    if (targetSymbol) {
+      const tgt = String(targetSymbol).trim().toUpperCase();
+      const tgtIndex = toGroup.symbolIds.indexOf(tgt);
+      if (tgtIndex === -1) {
+        toGroup.symbolIds.push(src);
+      } else {
+        const insertIndex = position === 'after' ? tgtIndex + 1 : tgtIndex;
+        toGroup.symbolIds.splice(insertIndex, 0, src);
+      }
+    } else {
+      // Dropped onto group header or empty group body -> append to end
+      toGroup.symbolIds.push(src);
+    }
+
+    // Auto-expand target group if collapsed so the moved stock is visible
+    if (toGroup.collapsed) {
+      toGroup.collapsed = false;
+    }
+
+    this.save();
+    return true;
+  }
+
   createGroup(name) {
     const trimmed = String(name || '').trim();
     if (!trimmed) return { ok: false, error: '分组名称不能为空' };
@@ -577,6 +711,92 @@ export class WatchlistManager {
     if (!group) return;
     group.collapsed = !group.collapsed;
     this.save();
+  }
+
+  moveGroup(sourceGroupId, targetGroupId, position = 'before') {
+    if (!sourceGroupId || !targetGroupId || sourceGroupId === targetGroupId) {
+      return { ok: false, error: '无效的分组移动参数' };
+    }
+    const srcIndex = this.data.groups.findIndex(g => g.id === sourceGroupId);
+    if (srcIndex === -1) return { ok: false, error: '源分组不存在' };
+
+    const [movedGroup] = this.data.groups.splice(srcIndex, 1);
+    const targetIndex = this.data.groups.findIndex(g => g.id === targetGroupId);
+    if (targetIndex === -1) {
+      this.data.groups.splice(srcIndex, 0, movedGroup);
+      return { ok: false, error: '目标分组不存在' };
+    }
+
+    const insertIndex = position === 'after' ? targetIndex + 1 : targetIndex;
+    this.data.groups.splice(insertIndex, 0, movedGroup);
+
+    this.data.groups.forEach((g, idx) => { g.order = idx; });
+    this.save();
+    return { ok: true, groups: this.data.groups };
+  }
+
+  moveGroupOrder(groupId, direction = 'up') {
+    const index = this.data.groups.findIndex(g => g.id === groupId);
+    if (index === -1) return { ok: false, error: '分组不存在' };
+    if (direction === 'up') {
+      if (index === 0) return { ok: false, error: '已位于最顶部' };
+      const temp = this.data.groups[index - 1];
+      this.data.groups[index - 1] = this.data.groups[index];
+      this.data.groups[index] = temp;
+    } else if (direction === 'down') {
+      if (index >= this.data.groups.length - 1) return { ok: false, error: '已位于最底部' };
+      const temp = this.data.groups[index + 1];
+      this.data.groups[index + 1] = this.data.groups[index];
+      this.data.groups[index] = temp;
+    }
+    this.data.groups.forEach((g, idx) => { g.order = idx; });
+    this.save();
+    return { ok: true, groups: this.data.groups };
+  }
+
+  reorderGroups(groupIds) {
+    if (!Array.isArray(groupIds)) return { ok: false, error: '参数必须为数组' };
+    const groupMap = new Map(this.data.groups.map(g => [g.id, g]));
+    const nextGroups = [];
+    for (const id of groupIds) {
+      if (groupMap.has(id)) {
+        nextGroups.push(groupMap.get(id));
+        groupMap.delete(id);
+      }
+    }
+    for (const remaining of groupMap.values()) {
+      nextGroups.push(remaining);
+    }
+    this.data.groups = nextGroups;
+    this.data.groups.forEach((g, idx) => { g.order = idx; });
+    this.save();
+    return { ok: true, groups: this.data.groups };
+  }
+
+  sortGroups(criterion = 'manual', direction = 'asc', averagesMap = {}) {
+    if (!criterion || criterion === 'manual') return { ok: true, groups: this.data.groups };
+    const dir = direction === 'desc' ? -1 : 1;
+    this.data.groups.sort((a, b) => {
+      if (a.id === 'default' && b.id !== 'default') return 1;
+      if (b.id === 'default' && a.id !== 'default') return -1;
+      if (criterion === 'name') {
+        return a.name.localeCompare(b.name, 'zh-CN') * dir;
+      }
+      if (criterion === 'count') {
+        return (a.symbolIds.length - b.symbolIds.length) * dir;
+      }
+      if (criterion === 'avgChange') {
+        const avgA = averagesMap[a.id]?.avg;
+        const avgB = averagesMap[b.id]?.avg;
+        const valA = (avgA !== null && avgA !== undefined && Number.isFinite(avgA)) ? avgA : (dir === 1 ? Infinity : -Infinity);
+        const valB = (avgB !== null && avgB !== undefined && Number.isFinite(avgB)) ? avgB : (dir === 1 ? Infinity : -Infinity);
+        return (valA - valB) * dir;
+      }
+      return 0;
+    });
+    this.data.groups.forEach((g, idx) => { g.order = idx; });
+    this.save();
+    return { ok: true, groups: this.data.groups };
   }
 
   exportJson() {
