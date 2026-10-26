@@ -27,7 +27,8 @@ export const MACRO_INDICATORS = [
   { symbol: 'DX-Y.NYB', displaySymbol: 'DXY', name: '美元指数', category: 'fx', icon: '💲', defaultPrice: 101.782, defaultChange: 0.16 },
   { symbol: 'BZ=F', displaySymbol: 'BRN1!', name: '布伦特原油连续', category: 'commodity', icon: '🛢️', defaultPrice: 117.18, defaultChange: 3.54 },
   { symbol: 'UKOIL', displaySymbol: 'UKOIL', name: '伦敦布伦特现货', category: 'commodity', icon: '🛢️', defaultPrice: 117.01, defaultChange: 3.63 },
-  { symbol: 'GC=F', displaySymbol: 'XAU/USD', name: '黄金现货 / 合约', category: 'commodity', icon: '🪙', defaultPrice: 2748.50, defaultChange: 0.65 }
+  { symbol: 'GC=F', displaySymbol: 'XAU/USD', name: '黄金现货 / 合约', category: 'commodity', icon: '🪙', defaultPrice: 2748.50, defaultChange: 0.65 },
+  { symbol: 'CNY=X', displaySymbol: 'USD/CNY', name: '美元兑人民币', category: 'fx', icon: '🇨🇳', defaultPrice: 7.1200, defaultChange: 0.05 }
 ];
 
 export const CRYPTO_CURRENCIES = [
@@ -225,7 +226,22 @@ export function parseNews(xml, source) {
     const url = safeUrl(typeof item.link === 'string' ? item.link : '');
     const title = String(item.title || '').replace(/<[^>]*>/g, '').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
     const date = Date.parse(item.pubDate);
-    return { title, url, source, publishedAt: Number.isFinite(date) ? new Date(date).toISOString() : null };
+    let image = null;
+    if (item.enclosure && item.enclosure['@_url']) {
+      image = safeUrl(item.enclosure['@_url']);
+    }
+    const mc = item['media:content'] || item['media:thumbnail'];
+    if (!image && mc) {
+      const candidate = Array.isArray(mc) ? mc[0]?.['@_url'] : mc['@_url'];
+      if (candidate) image = safeUrl(candidate);
+    }
+    let summary = '';
+    if (typeof item.description === 'string') {
+      const imgMatch = item.description.match(/<img[^>]+src=["']([^"']+)["']/i);
+      if (!image && imgMatch) image = safeUrl(imgMatch[1]);
+      summary = item.description.replace(/<[^>]*>/g, '').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").trim();
+    }
+    return { title, url, source, publishedAt: Number.isFinite(date) ? new Date(date).toISOString() : null, image, summary };
   }).filter(x => x.url && x.title);
 }
 

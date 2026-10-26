@@ -1,11 +1,17 @@
 <!doctype html><html lang="zh-CN" data-script="zh" data-preset="dashboard" :data-theme="isDark ? 'dark' : 'light'" :class="{dark: isDark}"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0d1117" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
 <title>Market Desk · 美股观察工作台</title><meta name="description" content="集中观察美股行情、板块热力图、财经新闻、期权持仓分布及多时段自选看板。">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/styles.css?v=2.6.0">
-<script defer src="/vendor/vue.js"></script><script defer src="/vendor/echarts.js"></script><script defer src="/vendor/lightweight-charts.standalone.js"></script><script type="module" src="/app.js?v=2.6.0"></script>
+<script defer src="/vendor/vue.js"></script><script defer src="/vendor/echarts.js"></script><script defer src="/vendor/lightweight-charts.standalone.js"></script><script type="module" src="/app.js?v=2.7.0"></script>
 </head><body><div id="app" v-cloak>
 <div class="ios-backdrop mobile-only" :class="{show:showSettings}" @click="closeSettings" aria-hidden="true"></div>
 <aside id="workspace-settings" class="sidebar" :class="{'show-mobile':showSettings}" :inert="isMobile&&!showSettings" :role="isMobile?'dialog':undefined" :aria-modal="isMobile&&showSettings?'true':undefined" aria-label="工作台导航与自选" @keydown="handleDrawerKey">
@@ -151,19 +157,36 @@
             </div>
             <div class="tv-group-header-right">
               <span v-if="sec.avgChange !== null" class="tv-group-avg" :class="tone(sec.avgChange)">{{ pct(sec.avgChange) }}</span>
-              <!-- 上移 / 下移微调快捷键 -->
-              <div class="tv-group-order-btns" @click.stop>
-                <button v-if="secIdx > 0" 
-                        class="tv-group-order-btn" 
-                        @click="moveGroupUp(sec.id)" 
-                        title="将该分组上移" 
-                        aria-label="上移分组">▲</button>
-                <button v-if="secIdx < sidebarGroupSections.length - 1" 
-                        class="tv-group-order-btn" 
-                        @click="moveGroupDown(sec.id)" 
-                        title="将该分组下移" 
-                        aria-label="下移分组">▼</button>
-              </div>
+              <!-- 组内按涨跌幅排序按钮 (3态循环: 降序 -> 升序 -> 恢复默认) -->
+              <button class="tv-group-sort-btn" 
+                      :class="{
+                        'is-active': groupSortStates[sec.id] && groupSortStates[sec.id] !== 'default',
+                        'is-desc': groupSortStates[sec.id] === 'desc',
+                        'is-asc': groupSortStates[sec.id] === 'asc'
+                      }"
+                      @click.stop="cycleGroupSort(sec.id)" 
+                      :title="getGroupSortTitle(sec.id)" 
+                      :aria-label="getGroupSortTitle(sec.id)">
+                <span v-if="groupSortStates[sec.id] === 'desc'" class="grp-sort-inner is-desc">
+                  <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 18l-7-7h14l-7 7z"/>
+                  </svg>
+                  <span class="grp-sort-txt">%</span>
+                </span>
+                <span v-else-if="groupSortStates[sec.id] === 'asc'" class="grp-sort-inner is-asc">
+                  <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 6l7 7H5l7-7z"/>
+                  </svg>
+                  <span class="grp-sort-txt">%</span>
+                </span>
+                <span v-else class="grp-sort-inner is-default">
+                  <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M7 15l5 5 5-5"/>
+                    <path d="M7 9l5-5 5 5"/>
+                  </svg>
+                  <span class="grp-sort-txt">%</span>
+                </span>
+              </button>
               <!-- 添加股票按钮 -->
               <button class="tv-group-add-btn" @click.stop="openAddStockToGroup(sec.id)" title="为此分组添加股票" aria-label="为此分组添加股票">
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -171,12 +194,11 @@
                   <line x1="5" y1="12" x2="19" y2="12"></line>
                 </svg>
               </button>
-              <!-- 删除分组按钮 (非默认未分组支持删除) -->
-              <button v-if="sec.id !== 'default'" 
-                      class="tv-group-del-btn" 
-                      :class="{ 'in-delete-mode': isDeleteMode }"
+              <!-- 删除分组按钮 (仅在顶部点击删除图标进入管理模式时显示，非默认未分组支持删除) -->
+              <button v-if="isDeleteMode && sec.id !== 'default'" 
+                      class="tv-group-del-btn in-delete-mode" 
                       @click.stop="handleDeleteGroup(sec.id)" 
-                      title="删除此分组（标的将安全移至未分组，支持一键撤销）" 
+                      title="删除此分组（分组中所有标的将直接转移至“未分组”）" 
                       aria-label="删除此分组">
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                   <polyline points="3 6 5 6 21 6"></polyline>
@@ -349,29 +371,51 @@
 <header class="topbar">
   <div class="topbar-left-wrapper">
     <button class="settings-trigger mobile-only" aria-label="打开导航与自选" aria-controls="workspace-settings" :aria-expanded="showSettings" @click="openSettings">☷</button>
-    <a class="topbar-brand mobile-only" href="#overview" @click.prevent="navigate('overview')">
+    <a class="topbar-brand desktop-only" href="#overview" @click.prevent="navigate('overview')">
       <span class="brand-mark-sm">MD</span>
       <div class="brand-titles">
         <div class="brand-name">Market Desk <span class="badge-pro">PRO</span></div>
         <div class="brand-desc">美股实时行情观察工作台</div>
       </div>
     </a>
-    <div class="topbar-breadcrumb">
+    <div class="topbar-breadcrumb desktop-only">
       <span class="crumb-root">MARKET DESK</span>
       <span class="crumb-sep">/</span>
       <span class="crumb-active"><i class="crumb-dot"></i> {{ breadcrumbLabel }}</span>
     </div>
   </div>
+
+  <!-- Mobile Center Context Title -->
+  <div class="mobile-topbar-center mobile-only">
+    <template v-if="mobileTitleInfo.isChart">
+      <div class="mobile-chart-title" @click="resetPriceChartZoom" title="点击复位图表视角">
+        <span class="m-sym">{{ mobileTitleInfo.symbol }}</span>
+        <span v-if="mobileTitleInfo.price" class="m-price">${{ mobileTitleInfo.price }}</span>
+        <span v-if="mobileTitleInfo.changePercent != null" class="m-pct" :class="tone(mobileTitleInfo.changePercent)">
+          {{ pct(mobileTitleInfo.changePercent) }}
+        </span>
+      </div>
+    </template>
+    <template v-else>
+      <div class="mobile-page-title">
+        <span class="m-title">{{ mobileTitleInfo.title }}</span>
+        <span v-if="mobileTitleInfo.subtitle" class="m-sub">{{ mobileTitleInfo.subtitle }}</span>
+      </div>
+    </template>
+  </div>
+
   <div class="topbar-right">
     <div class="market-clock-detailed desktop-only">
       <div class="clock-top"><i class="clock-live-dot"></i><strong>{{nyClockInfo.nyTime}}</strong> <small>{{nyClockInfo.nyTz}} ({{nyClockInfo.nyDate}})</small></div>
       <div class="clock-sub">{{nyClockInfo.bjTime}} · {{sessionStatusText}}</div>
     </div>
-    <button class="topbar-btn refresh" @click="refresh" :disabled="refreshing">{{refreshing?'刷新中…':'↻ 刷新'}}</button>
+    <button class="topbar-btn mobile-only icon-btn" @click="openMobileSearch" title="搜索美股代码" aria-label="搜索美股代码">🔍</button>
+    <button class="topbar-btn refresh desktop-only" @click="refresh" :disabled="refreshing">{{refreshing?'刷新中…':'↻ 刷新'}}</button>
+    <button class="topbar-btn refresh mobile-only icon-btn" @click="refresh" :disabled="refreshing" :aria-label="refreshing?'刷新中':'刷新行情'">{{refreshing?'…':'↻'}}</button>
     <button v-if="isWide && page!=='watchlist'" class="topbar-btn desktop-only" @click="compactPanelOpen=!compactPanelOpen">{{compactPanelOpen?'收起自选 ◨':'展开自选 ◧'}}</button>
     <button class="topbar-btn theme-toggle desktop-only" @click="toggleTheme" :aria-pressed="isDark">{{isDark?'☀️ Light':'🌙 Dark'}}</button>
     <button class="topbar-btn settings-modal-btn desktop-only" @click="openPreferencesModal" title="K 线配色与偏好设置">⚙️ 设置</button>
-    <button class="topbar-btn mobile-only" style="padding:4px 8px;font-size:12px;" @click="openPreferencesModal" title="K 线配色与设置">⚙️</button>
+    <button class="topbar-btn mobile-only icon-btn" @click="openPreferencesModal" title="K 线配色与设置" aria-label="K 线配色与设置">⚙️</button>
   </div>
 </header>
 <main>
@@ -451,6 +495,10 @@
           <span class="pct-pill" :class="goldContract.changePercent >= 0 ? 'badge-pos' : 'badge-neg'">
             {{ pct(goldContract.changePercent) }}
           </span>
+        </div>
+        <div class="gold-cny-row" v-if="goldCnyPerGram" :title="'国际金衡盎司经实时汇率换算：1 oz t ≈ 31.1035 g，当前汇率：' + goldCnyPerGram.rate">
+          <span class="gold-cny-val">折合 <strong>¥{{ goldCnyPerGram.price }}</strong>/克</span>
+          <span class="gold-cny-rate">汇率 {{ goldCnyPerGram.rateShort }}</span>
         </div>
         <div class="index-card-foot">
           <span>COMEX 黄金连续 · 24h 避险中枢</span>
@@ -751,7 +799,82 @@
   </section>
 </template>
 
-<template v-if="page==='chart'"><section class="panel chart-panel"><div class="panel-heading"><div><h2>{{symbol}} <span class="muted">{{chart?.name}}</span></h2><div v-if="chart" class="stock-price">{{num(chart.price)}} <small>{{chart.currency}}</small><span :class="tone(chart.changePercent)">{{pct(chart.changePercent)}}</span></div></div><div class="controls"><button @click="addWatch(symbol)">{{watchlist.includes(symbol)?'✓ 已在自选':'+ 加入自选'}}</button><button class="topbar-btn" style="height:32px;padding:0 10px;" @click="resetPriceChartZoom" title="复位视角 (也可双击图表)">⟲ 复位</button><select v-model="chartRange" aria-label="行情周期"><option value="1d">日内 · 5 分钟</option><option value="1mo">1 个月</option><option value="3mo">3 个月</option><option value="6mo">6 个月</option><option value="1y">1 年</option><option value="2y">2 年</option></select><div class="kline-palette-quick-selector" title="K 线走势配色方案"><button v-for="item in klineSchemeOptions" :key="item.id" class="kline-palette-chip" :class="{ active: klineScheme === item.id }" :title="item.title" @click="setKlineScheme(item.id)"><span class="chip-dot" :style="{ backgroundColor: item.up }"></span><span class="chip-dot" :style="{ backgroundColor: item.down }"></span><span class="chip-name">{{ item.shortName }}</span></button><button class="btn-settings-icon" @click="openPreferencesModal" title="K 线图表与偏好设置">⚙️</button></div></div></div><div v-if="chart" class="chart-readout-strip" id="chart-readout-strip"><div class="readout-left"><span class="readout-state-tag" :class="klineInteractionMode === 'history' ? 'mode-history' : 'mode-latest'">{{ klineInteractionMode === 'history' ? '历史探索 (指针锚定)' : '最新K线锚定' }}</span><span class="readout-ohlc" id="chart-readout-text">移动光标探索 K 线</span></div><div class="readout-right"><span class="ma-tag ma5">MA5</span><span class="ma-tag ma20">MA20</span><span class="ma-tag ma60">MA60</span><span class="ma-tag ma120">MA120</span><span class="ma-tag ma250">MA250</span><span class="ma-tag vol-tag">VOL</span></div></div><div v-if="states.chart.loading" class="loading-block">正在获取 {{symbol}} 行情…</div><div v-if="states.chart.error" class="error-box">{{states.chart.error}} <button @click="loadChart">重试</button></div><div v-show="chart&&!states.chart.loading" id="price-chart" class="price-chart" role="img" :aria-label="symbol+'价格与成交量图'"></div><div v-if="chart" class="panel-note">{{chart.source}} · {{chart.delay}} · 最新交易 {{time(chart.asOf)}} · {{chart.bars.length}} 根 K 线 · 最新一根可能尚未收盘 <strong v-if="chart.stale" class="warning">· 旧快照</strong></div></section><div class="quick-actions"><button @click="optionSymbol=symbol;page='options'">{{symbol}} 期权墙 →</button><button @click="newsSymbol=symbol;page='news'">{{symbol}} 相关新闻 →</button></div></template>
+<template v-if="page==='chart'">
+  <section class="panel chart-panel">
+    <div class="panel-heading">
+      <div>
+        <h2>{{symbol}} <span class="muted">{{chart?.name}}</span></h2>
+        <div v-if="chart" class="stock-price">{{num(chart.price)}} <small>{{chart.currency}}</small><span :class="tone(chart.changePercent)">{{pct(chart.changePercent)}}</span></div>
+      </div>
+      <div class="controls">
+        <button @click="addWatch(symbol)">{{watchlist.includes(symbol)?'✓ 已在自选':'+ 加入自选'}}</button>
+        <button class="topbar-btn" style="height:32px;padding:0 10px;" @click="resetPriceChartZoom" title="复位视角 (也可双击图表)">⟲ 复位</button>
+        <select class="desktop-only" v-model="chartRange" aria-label="行情周期">
+          <option value="1d">日内 · 5 分钟</option>
+          <option value="1mo">1 个月</option>
+          <option value="3mo">3 个月</option>
+          <option value="6mo">6 个月</option>
+          <option value="1y">1 年</option>
+          <option value="2y">2 年</option>
+        </select>
+        <div class="kline-palette-quick-selector desktop-only" title="K 线走势配色方案">
+          <button v-for="item in klineSchemeOptions" :key="item.id" class="kline-palette-chip" :class="{ active: klineScheme === item.id }" :title="item.title" @click="setKlineScheme(item.id)">
+            <span class="chip-dot" :style="{ backgroundColor: item.up }"></span>
+            <span class="chip-dot" :style="{ backgroundColor: item.down }"></span>
+            <span class="chip-name">{{ item.shortName }}</span>
+          </button>
+          <button class="btn-settings-icon" @click="openPreferencesModal" title="K 线图表与偏好设置">⚙️</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mobile Timeframe Range Pill Tabs -->
+    <div class="mobile-range-pills mobile-only" role="tablist" aria-label="行情周期切换">
+      <button v-for="opt in RANGE_OPTIONS" 
+              :key="opt.value" 
+              type="button"
+              role="tab"
+              :aria-selected="chartRange === opt.value"
+              class="mobile-range-pill" 
+              :class="{ active: chartRange === opt.value }" 
+              @click="chartRange = opt.value">
+        {{ opt.label }}
+      </button>
+    </div>
+
+    <!-- Top Chart Legend Bar matching Crypto Chart style -->
+    <div v-if="chart" class="kline-legend-bar chart-readout-strip" id="chart-readout-strip">
+      <div class="legend-left readout-left">
+        <span class="chart-currency-tag">{{ chart.currency || 'USD' }}</span>
+        <span class="readout-state-tag" :class="klineInteractionMode === 'history' ? 'mode-history' : 'mode-latest'">{{ klineInteractionMode === 'history' ? '历史' : '最新' }}</span>
+        <span class="readout-ohlc" id="chart-readout-text">移动光标探索 K 线</span>
+      </div>
+      <div class="legend-right readout-right" role="toolbar" aria-label="均线与指标系统开关">
+        <span class="chart-legend-item legend-candlestick">
+          <span class="legend-rect" :style="{ backgroundColor: activeKlineScheme.up }"></span>
+          <span class="legend-label">{{ symbol }} 走势</span>
+        </span>
+        <button v-for="m in MA_CONFIGS" :key="m.key"
+                type="button" 
+                class="chart-legend-item ma-switch-btn" 
+                :class="[m.key, { 'is-active': klineMaVisibility[m.key], 'is-off': !klineMaVisibility[m.key] }]"
+                @click="toggleMa(m.key)"
+                :title="m.label + ' ' + m.desc + ' (' + (klineMaVisibility[m.key] ? '显示中，点击关闭' : '已关闭，点击开启') + ')'"
+                :aria-label="'切换 ' + m.label + ' 均线显示状态'"
+                :aria-pressed="klineMaVisibility[m.key]">
+          <template v-if="m.key !== 'vol'">
+            <svg class="ma-switch-icon" width="25" height="12" viewBox="0 0 25 12" fill="none" aria-hidden="true">
+              <line class="ma-switch-line" x1="1" y1="6" x2="24" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+              <circle class="ma-switch-circle" cx="12.5" cy="6" r="3.5" stroke="currentColor" stroke-width="1.8" />
+            </svg>
+          </template>
+          <template v-else>
+            <span class="legend-rect legend-vol-rect"></span>
+          </template>
+          <span class="ma-switch-label">{{ m.label === 'VOL' ? '成交量' : m.label }}</span>
+        </button>
+      </div>
+    </div><div v-if="states.chart.loading" class="loading-block">正在获取 {{symbol}} 行情…</div><div v-if="states.chart.error" class="error-box">{{states.chart.error}} <button @click="loadChart">重试</button></div><div v-show="chart&&!states.chart.loading" id="price-chart" class="price-chart" role="img" :aria-label="symbol+'价格与成交量图'"></div><div v-if="chart" class="panel-note">{{chart.source}} · {{chart.delay}} · 最新交易 {{time(chart.asOf)}} · {{chart.bars.length}} 根 K 线 · 最新一根可能尚未收盘 <strong v-if="chart.stale" class="warning">· 旧快照</strong></div></section><div class="quick-actions"><button @click="optionSymbol=symbol;page='options'">{{symbol}} 期权墙 →</button><button @click="newsSymbol=symbol;page='news'">{{symbol}} 相关新闻 →</button></div></template>
 
 <template v-if="page==='crypto'">
   <div class="crypto-dashboard-view">
@@ -1504,234 +1627,199 @@
     </div>
   </section>
 
-  <!-- ================= SUBVIEW 2: LIVE STREAM (NEWS WIRE + RIGHT RAIL) ================= -->
-  <section v-else-if="newsSubView === 'stream'">
-    <!-- News Controls & Category Filter Stack -->
-    <div class="news-filter-stack">
-      <div class="news-cat-tabs">
-        <div class="news-cat-chips">
-          <button v-for="cat in newsCategories" :key="cat.id" class="news-cat-chip" :class="{active: newsCategory === cat.id}" @click="newsCategory = cat.id">{{ cat.label }}</button>
+  <!-- ================= SUBVIEW 2: IMMERSIVE WATERFALL MASONRY NEWS ================= -->
+  <section v-else-if="newsSubView === 'stream'" class="news-waterfall-section">
+    <!-- Top Category Filter Tabs Bar (Matching Prototype Exactly) -->
+    <div class="news-proto-filter-bar">
+      <div class="news-proto-tabs">
+        <button 
+          v-for="cat in newsCategories" 
+          :key="cat.id" 
+          class="news-proto-tab" 
+          :class="{ active: newsCategory === cat.id }"
+          @click="newsCategory = cat.id"
+        >
+          {{ cat.label }}
+        </button>
+        
+        <!-- '更多 ∨' Dropdown Menu -->
+        <div class="news-proto-more-wrap">
+          <button 
+            class="news-proto-tab news-proto-more-btn" 
+            :class="{ active: ['personal_finance', 'commodities', 'saved'].includes(newsCategory) || showNewsMoreMenu }"
+            @click="showNewsMoreMenu = !showNewsMoreMenu"
+            aria-label="更多分类"
+          >
+            {{ newsCategory === 'saved' ? '★ 我的收藏 (' + savedNewsUrls.length + ')' : 
+               newsCategory === 'personal_finance' ? '个人理财' :
+               newsCategory === 'commodities' ? '能源大宗' : '更多 ∨' }}
+          </button>
+          
+          <div v-if="showNewsMoreMenu" class="news-proto-dropdown" @click="showNewsMoreMenu = false">
+            <button class="dropdown-item" :class="{ selected: newsCategory === 'personal_finance' }" @click="newsCategory = 'personal_finance'">
+              <span>🏠 个人理财 & 房产</span>
+            </button>
+            <button class="dropdown-item" :class="{ selected: newsCategory === 'commodities' }" @click="newsCategory = 'commodities'">
+              <span>🛢️ 能源大宗 & 黄金</span>
+            </button>
+            <button class="dropdown-item" :class="{ selected: newsCategory === 'saved' }" @click="newsCategory = 'saved'">
+              <span>★ 我的收藏快讯 ({{ savedNewsUrls.length }})</span>
+            </button>
+            <div class="dropdown-divider"></div>
+            <button class="dropdown-item special-link" @click="newsSubView = 'ai_search'">
+              <span>🤖 AI 全网深度检索 ↗</span>
+            </button>
+            <button class="dropdown-item special-link" @click="newsSubView = 'geopolitics'">
+              <span>🌍 全球地缘政治看板 ↗</span>
+            </button>
+            <button class="dropdown-item special-link" @click="newsSubView = 'earnings'">
+              <span>📅 科技与 AI 财报周历 ↗</span>
+            </button>
+            <button class="dropdown-item special-link" @click="newsSubView = 'macro'">
+              <span>📊 宏观重磅经济日历 ↗</span>
+            </button>
+          </div>
         </div>
-        <form class="controls" style="margin:0;" @submit.prevent="newsSymbol=newsSearch.trim().toUpperCase()">
-          <input v-model="newsSearch" aria-label="新闻股票代码" placeholder="输入代码筛选 (如 NVDA)" style="width:160px;height:30px;font-size:11.5px;">
-          <button type="submit" style="height:30px;padding:0 10px;font-size:11.5px;">查看</button>
-        </form>
       </div>
-      <!-- Watchlist Tickers Strip -->
-      <div class="tabs" style="border:0;padding:0;gap:4px;flex-wrap:wrap;">
-        <button :class="{selected:!newsSymbol}" @click="newsSymbol=''">市场焦点</button>
-        <button v-for="s in watchlist.slice(0, 10)" :key="s" :class="{selected:newsSymbol===s}" @click="newsSymbol=s">{{s}}</button>
+
+      <!-- Quick Ticker Search Form -->
+      <div class="news-proto-search-box">
+        <form @submit.prevent="onNewsSearchSubmit" class="news-proto-search-form">
+          <input v-model="newsSearch" placeholder="搜索代码 (如 NVDA)" aria-label="新闻代码搜索">
+          <button v-if="newsSymbol" type="button" class="clear-btn" @click="newsSymbol = ''; newsSearch = ''" title="清除筛选">✕</button>
+          <button type="submit" class="search-btn">筛选</button>
+        </form>
       </div>
     </div>
 
-    <div v-if="states.news.loading" class="loading-block">正在读取新闻源…</div>
-    <div v-if="states.news.error" class="error-box">{{states.news.error}} <button @click="loadNews">重试</button></div>
+    <!-- Ticker Focus Quick Bar -->
+    <div v-if="newsSymbol" class="news-symbol-active-bar">
+      <span>当前正在筛选 <strong>{{ newsSymbol }}</strong> 相关资讯</span>
+      <button class="text-button" @click="newsSymbol = ''; newsSearch = ''">清除筛选，看全部快讯 ✕</button>
+    </div>
 
-    <template v-if="news">
-      <div class="inline-note" style="margin-bottom:14px;">
-        {{news.symbol?news.symbol+' 相关新闻':'市场新闻'}} · 共 {{news.items.length}} 条 · 获取 {{time(news.fetchedAt)}} · RSS 缓存 5 分钟
-        <span v-if="news.stale" class="warning">· 旧快照</span>
-        <span v-if="news.unavailable.length" class="warning"> · 暂缺 {{news.unavailable.join('、')}}</span>
-      </div>
+    <!-- Loading & Error States -->
+    <div v-if="states.news.loading && !filteredNews.length" class="loading-block">正在获取最新资讯…</div>
+    <div v-if="states.news.error && !filteredNews.length" class="error-box">
+      {{ states.news.error }} <button @click="loadNews">重试</button>
+    </div>
 
-      <!-- News Bento Layout Split with Right Rail -->
-      <div class="news-layout-split">
-        <!-- Main News Bento Grid -->
-        <div>
-          <div class="news-bento-grid">
-            <a v-for="n in filteredNews" :key="n.url" :href="n.url" target="_blank" rel="noopener noreferrer" class="news-card news-card-bento">
-              <div>
-                <div class="news-card-head">
-                  <div style="display:flex;align-items:center;gap:6px;">
-                    <span class="news-source-tag">{{ n.source }}</span>
-                    <span class="news-sentiment-tag" :class="getNewsSentiment(n).cls">{{ getNewsSentiment(n).text }}</span>
-                  </div>
-                  <span class="muted" style="font-size:12px;">↗</span>
-                </div>
-                <h3>{{ n.title }}</h3>
-                <div class="news-tickers-row">
-                  <span v-for="t in getNewsTags(n)" :key="t" class="news-ticker-pill">{{ t }}</span>
-                </div>
-              </div>
-              <div class="news-card-foot">
-                <span class="font-mono">{{ time(n.publishedAt) }}</span>
-                <span style="color:var(--apple-blue);font-weight:600;">阅读原文 ↗</span>
-              </div>
-            </a>
+    <!-- Waterfall Masonry Grid (每一个卡片宽度相同，高度随内容自适应) -->
+    <div v-if="filteredNews.length" class="news-waterfall-masonry">
+      <div 
+        v-for="(n, idx) in filteredNews" 
+        :key="n.url"
+        class="news-card news-card-waterfall"
+        :class="{
+          'news-card-featured': idx === 0 && (newsCategory === 'all' || n.isFeatured),
+          'is-bookmarked': isBookmarked(n)
+        }"
+        @click="openNewsUrl(n.url)"
+      >
+        <!-- Case 1: Featured / Immersive Dark Card (Like Card 1 in Prototype) -->
+        <template v-if="idx === 0 && (newsCategory === 'all' || n.isFeatured)">
+          <div class="news-featured-bg-wrap">
+            <img :src="getNewsImage(n)" :alt="n.title" class="news-featured-bg-img" loading="lazy" @error="handleImgError($event, n)">
+            <div class="news-featured-gradient-mask"></div>
           </div>
-          <p v-if="!filteredNews.length" class="empty" style="padding:40px;text-align:center;">当前筛选分类暂无快讯，请切换分类或清除股票筛选。</p>
-        </div>
+          
+          <div class="news-featured-content">
+            <!-- Header Row -->
+            <div class="news-card-meta-row">
+              <div class="meta-left">
+                <span class="source-icon-svg" v-html="getSourceMeta(n.source).iconSvg"></span>
+                <span class="source-name">{{ getSourceMeta(n.source).name }}</span>
+                <span class="meta-dot">·</span>
+                <span class="meta-time">{{ formatRelativeTime(n.publishedAt) }}</span>
+              </div>
+              <button 
+                class="news-bookmark-btn" 
+                :class="{ active: isBookmarked(n) }"
+                @click.stop="toggleBookmark(n)"
+                :title="isBookmarked(n) ? '取消收藏' : '收藏此快讯'"
+                aria-label="收藏快讯"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" :fill="isBookmarked(n) ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+                </svg>
+              </button>
+            </div>
 
-        <!-- Right Intelligence Rail -->
-        <aside class="right-rail-stack">
-          <!-- Widget AI: AI Multi-Engine Intelligence Wire (Jump to AI Search) -->
-          <div class="rail-widget" style="border-left: 3px solid #6366f1;">
-            <div class="rail-widget-head">
-              <h4><span class="status-dot-pulse" style="background:#6366f1;box-shadow:0 0 8px rgba(99,102,241,0.6);"></span> 🤖 AI 跨引擎全网情报</h4>
-              <button class="rail-widget-more-btn" @click="newsSubView = 'ai_search'">打开检索 ↗</button>
-            </div>
-            <p style="font-size:12px;color:var(--text-secondary);margin:0 0 10px 0;line-height:1.4;">接入 Tavily · Exa · Firecrawl，实时穿透 Reddit 散户、X 交易圈及权威外媒</p>
-            <div class="calendar-item" style="cursor:pointer;" @click="filterAiNewsTopic('Wall Street stock market economy Fed inflation', 'wsj_reuters')">
-              <div class="calendar-top">
-                <span>📰 华尔街核心大报焦点</span>
-                <span class="kpi-pill kpi-pill-blue">权威主流</span>
-              </div>
-              <div class="calendar-sub font-mono">
-                <span>直通华尔街日报、路透社最新深度报道</span>
-              </div>
-            </div>
-            <div class="calendar-item" style="cursor:pointer;" @click="filterAiNewsTopic('reddit wallstreetbets stocks trending tickers sentiment', 'reddit')">
-              <div class="calendar-top">
-                <span>💬 Reddit 散户社群 (WSB)</span>
-                <span class="kpi-pill kpi-pill-amber">散户情绪</span>
-              </div>
-              <div class="calendar-sub font-mono">
-                <span>r/wallstreetbets、r/stocks 爆炒异动</span>
-              </div>
-            </div>
-            <div class="calendar-item" style="cursor:pointer;" @click="filterAiNewsTopic('stock market trading macro CPI Fed earnings', 'x')">
-              <div class="calendar-top">
-                <span>🐦 X (Twitter) 交易圈速递</span>
-                <span class="kpi-pill kpi-pill-green">实时推文</span>
-              </div>
-              <div class="calendar-sub font-mono">
-                <span>宏观交易员与华尔街大V即时观点</span>
-              </div>
+            <!-- Headline -->
+            <h3 class="news-card-title">{{ n.title }}</h3>
+
+            <!-- Frosted Glass Tag Pills -->
+            <div class="news-tags-row">
+              <span 
+                v-for="tag in getNewsTags(n)" 
+                :key="tag" 
+                class="news-tag-pill tag-frosted"
+              >
+                {{ tag }}
+              </span>
             </div>
           </div>
+        </template>
 
-          <!-- Widget 0: Geopolitical Risk Radar (Jump to Geopolitics) -->
-          <div class="rail-widget" style="border-left: 3px solid #ef4444;">
-            <div class="rail-widget-head">
-              <h4><span class="status-dot-pulse" style="background:#ef4444;box-shadow:0 0 8px rgba(239,68,68,0.6);"></span> 地缘政治风险雷达 (Geopolitics)</h4>
-              <button class="rail-widget-more-btn" @click="newsSubView = 'geopolitics'">全局看板 ↗</button>
+        <!-- Case 2: Standard Clean Card (Like Cards 2, 3, 4, 5, 6 in Prototype) -->
+        <template v-else>
+          <!-- Top Meta Row -->
+          <div class="news-card-meta-row">
+            <div class="meta-left">
+              <span class="source-icon-svg" v-html="getSourceMeta(n.source).iconSvg"></span>
+              <span class="source-name">{{ getSourceMeta(n.source).name }}</span>
+              <span class="meta-dot">·</span>
+              <span class="meta-time">{{ formatRelativeTime(n.publishedAt) }}</span>
             </div>
-            <div class="calendar-item" style="cursor:pointer;" @click="filterGeopoliticsTopic('中东')">
-              <div class="calendar-top">
-                <span>中东霍尔木兹 · 曼德海峡</span>
-                <span class="kpi-pill kpi-pill-red">高危</span>
-              </div>
-              <div class="calendar-sub font-mono">
-                <span>原油风险溢价走阔，航运绕行南非</span>
-              </div>
-            </div>
-            <div class="calendar-item" style="cursor:pointer;" @click="filterGeopoliticsTopic('乌克兰')">
-              <div class="calendar-top">
-                <span>东欧前线 · 北约防务订单</span>
-                <span class="kpi-pill kpi-pill-amber">常态</span>
-              </div>
-              <div class="calendar-sub font-mono">
-                <span>军费开支占 GDP 2.5%+，弹药反导扩产</span>
-              </div>
-            </div>
-            <div class="calendar-item" style="cursor:pointer;" @click="filterGeopoliticsTopic('芯片')">
-              <div class="calendar-top">
-                <span>印太半导体 · 出口管制</span>
-                <span class="kpi-pill kpi-pill-blue">升级</span>
-              </div>
-              <div class="calendar-sub font-mono">
-                <span>先进制程双轨化，战略矿产出口许可</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Widget 1: Macro Calendar (CPI / PPI / 失业金) -->
-          <div class="rail-widget">
-            <div class="rail-widget-head">
-              <h4><span class="status-dot-pulse"></span> 宏观要闻速览 (Macro)</h4>
-              <button class="rail-widget-more-btn" @click="newsSubView = 'macro'">完整宏观日历 ↗</button>
-            </div>
-            <div class="calendar-item">
-              <div class="calendar-top">
-                <span>美国 9 月最终需求 PPI 月率</span>
-                <span class="kpi-pill kpi-pill-green">利好 (0.0%)</span>
-              </div>
-              <div class="calendar-sub font-mono">
-                <span>出厂端通胀停滞，传导压力减轻</span>
-              </div>
-            </div>
-            <div class="calendar-item">
-              <div class="calendar-top">
-                <span>美国 9 月核心 CPI 年率</span>
-                <span class="kpi-pill kpi-pill-red">偏空 (3.3%)</span>
-              </div>
-              <div class="calendar-sub font-mono">
-                <span>核心服务业粘性推升 10Y 美债</span>
-              </div>
-            </div>
-            <div class="calendar-item">
-              <div class="calendar-top">
-                <span>初请失业金人数 (当周)</span>
-                <span class="kpi-pill kpi-pill-green">利好 (22.7万)</span>
-              </div>
-              <div class="calendar-sub font-mono">
-                <span>劳动力韧性强，软着陆概率大</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Widget 2: Tech Earnings Teaser Wall (Jump to Earnings Whispers) -->
-          <div class="rail-widget earnings-teaser-widget" @click="newsSubView = 'earnings'">
-            <div class="rail-widget-head">
-              <h4>🔥 本周科技重磅财报 (Earnings)</h4>
-              <span class="more-link">完整周历 ➔</span>
-            </div>
-            <p class="teaser-sub">微软 · 谷歌 · Meta · 苹果 · 亚马逊 · 维谛Vertiv</p>
-            <div class="teaser-logos-grid">
-              <span class="teaser-logo-chip" v-html="getCompanyLogoSvg('MSFT')"></span>
-              <span class="teaser-logo-chip" v-html="getCompanyLogoSvg('GOOGL')"></span>
-              <span class="teaser-logo-chip" v-html="getCompanyLogoSvg('VRT')"></span>
-              <span class="teaser-logo-chip" v-html="getCompanyLogoSvg('AMZN')"></span>
-              <span class="teaser-logo-chip" v-html="getCompanyLogoSvg('AAPL')"></span>
-              <span class="teaser-logo-chip" v-html="getCompanyLogoSvg('GEV')"></span>
-            </div>
-            <button class="teaser-jump-btn" @click.stop="newsSubView = 'earnings'">
-              打开 Earnings Whispers 原版财报日历 ↗
+            <button 
+              class="news-bookmark-btn" 
+              :class="{ active: isBookmarked(n) }"
+              @click.stop="toggleBookmark(n)"
+              :title="isBookmarked(n) ? '取消收藏' : '收藏此快讯'"
+              aria-label="收藏快讯"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" :fill="isBookmarked(n) ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+              </svg>
             </button>
           </div>
 
-          <!-- Widget 3: Trending Heat Word Cloud -->
-          <div class="rail-widget">
-            <div class="rail-widget-head">
-              <h4>🔥 快讯热搜词云 (Trending)</h4>
-            </div>
-            <div class="trending-cloud">
-              <span class="trending-tag" @click="newsCategory='geopolitics';newsSearch='原油';newsSymbol='XLE'">#原油地缘溢价</span>
-              <span class="trending-tag" @click="newsCategory='geopolitics';newsSearch='红海';newsSymbol=''">#红海航运受阻</span>
-              <span class="trending-tag" @click="newsCategory='geopolitics';newsSearch='军工';newsSymbol='LMT'">#军工防务订单</span>
-              <span class="trending-tag" @click="newsCategory='geopolitics';newsSearch='芯片';newsSymbol='NVDA'">#芯片出口管制</span>
-              <span class="trending-tag" @click="newsSearch='存储芯片';newsSymbol='MU'">#存储芯片周期</span>
-              <span class="trending-tag" @click="newsSearch='财报';newsSymbol=''">#三季度财报季</span>
-              <span class="trending-tag" @click="newsSearch='美债';newsSymbol='SPY'">#10Y美债突破4.2</span>
-              <span class="trending-tag" @click="newsSearch='HBM';newsSymbol=''">#HBM3e产能</span>
-            </div>
+          <!-- Headline -->
+          <h3 class="news-card-title">{{ n.title }}</h3>
+
+          <!-- Card Photo -->
+          <div class="news-card-img-wrap">
+            <img 
+              :src="getNewsImage(n)" 
+              :alt="n.title" 
+              class="news-card-img" 
+              loading="lazy"
+              @error="handleImgError($event, n)"
+            >
           </div>
 
-          <!-- Widget 4: Sources Telemetry -->
-          <div class="rail-widget">
-            <div class="rail-widget-head">
-              <h4>📡 直连数据源状态 (Sources)</h4>
-            </div>
-            <div class="source-status-row">
-              <span>CNBC World · 地缘国际</span>
-              <span class="source-status-ok">OK (0.2s)</span>
-            </div>
-            <div class="source-status-row">
-              <span>BBC World · 国际政经</span>
-              <span class="source-status-ok">OK (0.3s)</span>
-            </div>
-            <div class="source-status-row">
-              <span>MarketWatch Top Stories</span>
-              <span class="source-status-ok">OK (0.3s)</span>
-            </div>
-            <div class="source-status-row">
-              <span>CNBC Breaking Wire</span>
-              <span class="source-status-ok">OK (0.4s)</span>
-            </div>
+          <!-- Bottom Tag Pills -->
+          <div class="news-tags-row">
+            <span 
+              v-for="tag in getNewsTags(n)" 
+              :key="tag" 
+              class="news-tag-pill"
+              :class="getTagColorClass(tag)"
+            >
+              {{ tag }}
+            </span>
           </div>
-        </aside>
+        </template>
       </div>
-    </template>
+    </div>
+
+    <!-- Empty State -->
+    <div v-if="!filteredNews.length && !states.news.loading" class="empty-news-state">
+      <div class="empty-icon">📰</div>
+      <p>当前筛选暂无快讯</p>
+      <button class="empty-reset-btn" @click="newsCategory = 'all'; newsSymbol = ''; newsSearch = ''">重置并查看全部快讯</button>
+    </div>
+
   </section>
 
   <!-- ================= SUBVIEW 3: MACRO ECONOMIC CALENDAR (CPI / PPI / PCE / NFP) ================= -->
@@ -2456,7 +2544,46 @@
         </div>
       </section>
 
-      <!-- 模块 4: AI 搜索引擎状态与密钥配置 (Tavily, Firecrawl, EXA) -->
+      <!-- 模块: 均线与成交量指标开关 (MA Moving Averages & Volume) -->
+      <section class="pref-section">
+        <div class="pref-section-header">
+          <div class="pref-section-title-wrap">
+            <h4 class="pref-section-title">均线与成交量指标开关 (Moving Averages)</h4>
+            <div class="pref-ma-bulk-actions">
+              <button class="pref-sub-btn" type="button" @click="setAllMaVisibility(true)">全部显示</button>
+              <button class="pref-sub-btn" type="button" @click="setAllMaVisibility(false)">全部隐藏</button>
+            </div>
+          </div>
+          <span class="pref-section-desc">快捷控制 K 线图表上的均线系统与成交量柱状图，实时生效并自动持久化</span>
+        </div>
+
+        <div class="pref-ma-grid">
+          <div v-for="m in MA_CONFIGS" :key="m.key" 
+               class="pref-ma-card" 
+               :class="{ active: klineMaVisibility[m.key] }"
+               @click="toggleMa(m.key)"
+               role="checkbox"
+               :aria-checked="klineMaVisibility[m.key]"
+               tabindex="0"
+               @keydown.enter.space.prevent="toggleMa(m.key)">
+            <div class="pref-ma-left">
+              <svg class="ma-switch-icon" width="22" height="12" viewBox="0 0 22 12" fill="none" aria-hidden="true" :style="{ color: m.color }">
+                <line class="ma-switch-line" x1="1" y1="6" x2="21" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                <circle class="ma-switch-circle" cx="11" cy="6" r="3.6" fill="var(--surface-card, #1e222d)" stroke="currentColor" stroke-width="1.8" />
+              </svg>
+              <div class="pref-ma-info">
+                <strong class="pref-ma-name" :style="{ color: klineMaVisibility[m.key] ? m.color : 'inherit' }">{{ m.label }}</strong>
+                <span class="pref-ma-desc">{{ m.desc }}</span>
+              </div>
+            </div>
+            <div class="pref-ma-switch-pill" :class="{ 'is-on': klineMaVisibility[m.key] }">
+              <span class="pill-slider"></span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 模块: AI 搜索引擎状态与密钥配置 (Tavily, Firecrawl, EXA) -->
       <section class="pref-section">
         <div class="pref-section-header">
           <div class="pref-section-title-wrap">
@@ -3034,8 +3161,12 @@
 </main></div>
 <nav class="ios-tab-bar mobile-only" aria-label="底部导航" :inert="isMobile&&showSettings">
   <button v-for="item in mobileNav" :key="item.id" :class="['tab-item',{active:page===item.id}]" :aria-current="page===item.id?'page':undefined" @click="navigate(item.id)">
-    <span class="tab-icon">{{item.icon}}</span>{{item.label}}
+    <span class="tab-icon">{{item.icon}}</span>
+    <span class="tab-label">{{item.label}}</span>
   </button>
-  <button class="tab-item" @click="openSettings"><span class="tab-icon">☷</span>更多</button>
+  <button :class="['tab-item', { active: showSettings }]" @click="openSettings" aria-label="更多功能与导航">
+    <span class="tab-icon">☷</span>
+    <span class="tab-label">更多</span>
+  </button>
 </nav>
 </div><noscript>请启用 JavaScript 以使用 Market Desk。</noscript></body></html>

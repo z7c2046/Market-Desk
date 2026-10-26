@@ -181,22 +181,43 @@ export function bindKlineGestures(element, chart, series, options = {}) {
       : anchorZoom(start, fraction, factor, minBars, effectiveMaxBars());
   }
 
-  function focusLatest(bars = initialBars) {
+  function getOverviewRange() {
+    const first = options.getFirstLogicalIndex?.() ?? 0;
+    const last = options.getLatestLogicalIndex?.() ?? 0;
+    const total = Math.max(1, last - first + 1);
+    // 右侧预留 3~8 根 K 线的舒适呼吸空隙（约 5% 绘图区宽度），首根 K 线贴合左边缘
+    const rightMargin = Math.max(3, Math.min(15, Math.round(total * 0.05)));
+    return {
+      from: first - 0.5,
+      to: last + rightMargin + 0.5
+    };
+  }
+
+  function focusLatest(bars) {
     followLatest = true;
     flushFrame();
     wheelBatch = null;
-    applyTime(latestRange(bars));
+    const first = options.getFirstLogicalIndex?.() ?? 0;
+    const last = options.getLatestLogicalIndex?.() ?? 0;
+    const total = Math.max(1, last - first + 1);
+    if (typeof bars === 'number' && bars > 0 && bars < total) {
+      applyTime(latestRange(bars));
+    } else {
+      applyTime(getOverviewRange());
+    }
     emit('follow-latest');
   }
 
   function showAll() {
     flushFrame();
     wheelBatch = null;
-    const first = options.getFirstLogicalIndex?.() ?? 0;
-    const last = options.getLatestLogicalIndex?.() ?? 0;
-    const span = clamp((last - first + 1) / rightFraction, minBars, effectiveMaxBars());
+    resetPriceScale();
     followLatest = true;
-    applyTime(latestRange(span));
+    if (typeof chart.timeScale?.().fitContent === 'function') {
+      chart.timeScale().fitContent();
+    } else {
+      applyTime(getOverviewRange());
+    }
     emit('follow-latest');
   }
 
@@ -339,21 +360,61 @@ export function bindKlineGestures(element, chart, series, options = {}) {
     queue(commitWheel);
   }
 
+  function resetPriceScale() {
+    const scale = chart.priceScale('right');
+    if (typeof scale.setAutoScale === 'function') {
+      scale.setAutoScale(true);
+    }
+    if (typeof scale.applyOptions === 'function') {
+      scale.applyOptions({ autoScale: true });
+    }
+    try {
+      chart.applyOptions({ rightPriceScale: { autoScale: true } });
+    } catch (_) {}
+    if (series && typeof series.priceScale === 'function') {
+      try {
+        const sScale = series.priceScale();
+        if (typeof sScale.setAutoScale === 'function') sScale.setAutoScale(true);
+        if (typeof sScale.applyOptions === 'function') sScale.applyOptions({ autoScale: true });
+      } catch (_) {}
+    }
+  }
+
+  function reset(bars) {
+    followLatest = true;
+    flushFrame();
+    wheelBatch = null;
+    resetPriceScale();
+    const first = options.getFirstLogicalIndex?.() ?? 0;
+    const last = options.getLatestLogicalIndex?.() ?? 0;
+    const total = Math.max(1, last - first + 1);
+    if (typeof bars === 'number' && bars > 0 && bars < total) {
+      applyTime(latestRange(bars));
+    } else {
+      if (typeof chart.timeScale?.().fitContent === 'function') {
+        chart.timeScale().fitContent();
+      } else {
+        applyTime(getOverviewRange());
+      }
+    }
+    requestAnimationFrame(() => {
+      resetPriceScale();
+      if (!(typeof bars === 'number' && bars > 0 && bars < total) && typeof chart.timeScale?.().fitContent === 'function') {
+        chart.timeScale().fitContent();
+      }
+    });
+    emit('follow-latest');
+  }
+
   function onDblClick(e) {
     flushFrame();
     wheelBatch = null;
     const rect = element.getBoundingClientRect();
     const zone = hitZone(e.clientX - rect.left, e.clientY - rect.top);
     if (zone === 'price-axis') {
-      const scale = chart.priceScale('right');
-      if (typeof scale.setAutoScale === 'function') {
-        scale.setAutoScale(true);
-      } else if (typeof scale.applyOptions === 'function') {
-        scale.applyOptions({ autoScale: true });
-      }
-    }
-    if (zone === 'time-axis') {
-      focusLatest(initialBars);
+      resetPriceScale();
+    } else {
+      reset(); // 双击图表任意区域直接复位至全景纵览（如 3 个月完整 K 线）
     }
     e.preventDefault();
   }
@@ -384,6 +445,8 @@ export function bindKlineGestures(element, chart, series, options = {}) {
   return {
     focusLatest,
     showAll,
+    reset,
+    resetPriceScale,
     isFollowingLatest: () => followLatest,
     notifyLatestBarChanged: () => {
       if (!followLatest || active) return;

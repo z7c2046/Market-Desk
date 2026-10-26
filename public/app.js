@@ -45,7 +45,8 @@ const DEFAULT_MACRO = [
   { symbol: 'DX-Y.NYB', displaySymbol: 'DXY', name: '美元指数', category: 'fx', icon: '💲', price: 101.782, changePercent: 0.16 },
   { symbol: 'BZ=F', displaySymbol: 'BRN1!', name: '布伦特原油连续', category: 'commodity', icon: '🛢️', price: 117.18, changePercent: 3.54, badge: 'D' },
   { symbol: 'UKOIL', displaySymbol: 'UKOIL', name: '伦敦布伦特现货', category: 'commodity', icon: '🛢️', price: 117.01, changePercent: 3.63 },
-  { symbol: 'GC=F', displaySymbol: 'XAU/USD', name: '黄金现货 / 合约', category: 'commodity', icon: '🪙', price: 2748.50, changePercent: 0.65 }
+  { symbol: 'GC=F', displaySymbol: 'XAU/USD', name: '黄金现货 / 合约', category: 'commodity', icon: '🪙', price: 2748.50, changePercent: 0.65 },
+  { symbol: 'CNY=X', displaySymbol: 'USD/CNY', name: '美元兑人民币', category: 'fx', icon: '🇨🇳', price: 7.1200, changePercent: 0.05 }
 ];
 
 const DEFAULT_FEAR_GREED = {
@@ -127,6 +128,97 @@ createApp({ setup() {
   const showPreferencesModal = ref(false);
   const activeKlineScheme = computed(() => KLINE_SCHEMES[klineScheme.value] || KLINE_SCHEMES.classic);
 
+  const DEFAULT_MA_VISIBILITY = {
+    ma5: true,
+    ma20: true,
+    ma60: true,
+    ma120: true,
+    ma250: true,
+    vol: true
+  };
+  const klineMaVisibility = reactive({
+    ...DEFAULT_MA_VISIBILITY,
+    ...readStorage('market-desk-ma-visibility', {})
+  });
+
+  const MA_CONFIGS = [
+    { key: 'ma5', period: 5, label: 'MA5', desc: '5 日短线均线', color: '#f97316' },
+    { key: 'ma20', period: 20, label: 'MA20', desc: '20 日月线均线', color: '#3b82f6' },
+    { key: 'ma60', period: 60, label: 'MA60', desc: '60 日季线均线', color: '#a855f7' },
+    { key: 'ma120', period: 120, label: 'MA120', desc: '120 日半年线', color: '#06b6d4' },
+    { key: 'ma250', period: 250, label: 'MA250', desc: '250 日年线', color: '#eab308' },
+    { key: 'vol', period: null, label: 'VOL', desc: '成交量柱状图', color: '#10b981' }
+  ];
+
+  function toggleMa(key) {
+    if (!(key in klineMaVisibility)) return;
+    klineMaVisibility[key] = !klineMaVisibility[key];
+    persist('market-desk-ma-visibility', { ...klineMaVisibility });
+
+    const isVisible = Boolean(klineMaVisibility[key]);
+
+    if (key === 'vol') {
+      if (lwVolumeSeries) {
+        lwVolumeSeries.applyOptions({ visible: isVisible });
+      }
+    } else {
+      if (lwMaSeriesMap && lwMaSeriesMap[key]) {
+        lwMaSeriesMap[key].applyOptions({ visible: isVisible });
+      }
+    }
+
+    if (charts.has('price-chart')) {
+      const entry = charts.get('price-chart');
+      if (entry && entry.chart) {
+        const nameMap = {
+          ma5: 'MA5',
+          ma20: 'MA20',
+          ma60: 'MA60',
+          ma120: 'MA120',
+          ma250: 'MA250',
+          vol: '成交股数'
+        };
+        const seriesName = nameMap[key];
+        if (seriesName) {
+          entry.chart.dispatchAction({
+            type: isVisible ? 'legendSelect' : 'legendUnSelect',
+            name: seriesName
+          });
+        }
+      }
+    }
+
+    const item = MA_CONFIGS.find(m => m.key === key);
+    const label = item ? item.label : key.toUpperCase();
+    toast.value = `已${isVisible ? '开启' : '关闭'} ${label} 指标`;
+  }
+
+  function setAllMaVisibility(visible) {
+    const val = Boolean(visible);
+    for (const key of Object.keys(DEFAULT_MA_VISIBILITY)) {
+      klineMaVisibility[key] = val;
+      if (key === 'vol') {
+        if (lwVolumeSeries) lwVolumeSeries.applyOptions({ visible: val });
+      } else {
+        if (lwMaSeriesMap && lwMaSeriesMap[key]) lwMaSeriesMap[key].applyOptions({ visible: val });
+      }
+    }
+    persist('market-desk-ma-visibility', { ...klineMaVisibility });
+    if (charts.has('price-chart')) {
+      const entry = charts.get('price-chart');
+      if (entry && entry.chart) {
+        const names = ['MA5', 'MA20', 'MA60', 'MA120', 'MA250', '成交股数'];
+        for (const name of names) {
+          entry.chart.dispatchAction({
+            type: val ? 'legendSelect' : 'legendUnSelect',
+            name
+          });
+        }
+      }
+    }
+    toast.value = `已${val ? '开启全部均线与指标' : '关闭全部均线与指标'}`;
+  }
+
   const klineInteractionMode = ref('follow-latest');
   let lwPriceChart = null;
   let lwCandleSeries = null;
@@ -134,8 +226,12 @@ createApp({ setup() {
   let lwMaSeriesMap = {};
   let klineGestureCtrl = null;
   let lwChartResizeObserver = null;
+  let lastRenderedSymbol = '';
+  let lastRenderedRange = '';
 
   function disposePriceChart() {
+    lastRenderedSymbol = '';
+    lastRenderedRange = '';
     if (klineGestureCtrl) {
       klineGestureCtrl.dispose();
       klineGestureCtrl = null;
@@ -176,7 +272,29 @@ createApp({ setup() {
   const isMobile = ref(window.innerWidth < 768);
   const isWide = ref(window.innerWidth >= 1600);
   const showSettings = ref(false);
-  const mobileNav = nav.filter(item => ['overview', 'watchlist', 'chart', 'crypto', 'options', 'news'].includes(item.id));
+  const mobileNav = [
+    { id: 'overview', label: '总览', icon: '◫' },
+    { id: 'watchlist', label: '自选', icon: '★' },
+    { id: 'chart', label: '行情', icon: '⌁' },
+    { id: 'crypto', label: '加密', icon: '₿' }
+  ];
+  const RANGE_OPTIONS = [
+    { value: '1d', label: '分时' },
+    { value: '1mo', label: '1月' },
+    { value: '3mo', label: '3月' },
+    { value: '6mo', label: '6月' },
+    { value: '1y', label: '1年' },
+    { value: '2y', label: '2年' }
+  ];
+  function openMobileSearch() {
+    openSettings();
+    nextTick(() => {
+      const searchEl = document.querySelector('.sidebar-search-form input');
+      if (searchEl) {
+        searchEl.focus();
+      }
+    });
+  }
   let themeOverride = savedTheme === 'dark' || savedTheme === 'light';
   let muted, gridColor, chartText, chartSurface, axis, tooltip;
 
@@ -290,7 +408,29 @@ createApp({ setup() {
   });
 
   const goldContract = computed(() => {
-    return macroItems.value.find(m => m.displaySymbol === 'XAU/USD') || DEFAULT_MACRO[7];
+    return macroItems.value.find(m => m.displaySymbol === 'XAU/USD') || DEFAULT_MACRO.find(m => m.displaySymbol === 'XAU/USD') || DEFAULT_MACRO[7];
+  });
+
+  const usdCnyRate = computed(() => {
+    const item = macroItems.value.find(m => m.displaySymbol === 'USD/CNY' || m.symbol === 'CNY=X');
+    const p = Number(item?.price);
+    if (Number.isFinite(p) && p > 0) return p;
+    return 7.12;
+  });
+
+  // 1 金衡盎司 (Troy Ounce, oz t) = 31.1034768 克
+  const OUNCE_TO_GRAM = 31.1034768;
+
+  const goldCnyPerGram = computed(() => {
+    const priceUsd = Number(goldContract.value?.price);
+    if (!Number.isFinite(priceUsd) || priceUsd <= 0) return null;
+    const rate = usdCnyRate.value;
+    const cnyPerGram = (priceUsd * rate) / OUNCE_TO_GRAM;
+    return {
+      price: cnyPerGram.toFixed(2),
+      rate: rate.toFixed(4),
+      rateShort: rate.toFixed(2)
+    };
   });
 
   const macroMap = computed(() => {
@@ -753,17 +893,217 @@ createApp({ setup() {
     return dist.toFixed(2);
   });
 
-  // News Category Filters & Enrichment Helpers
+  // News Prototype & Masonry Waterfall Engine
+  const DEFAULT_PROTOTYPE_NEWS = [
+    {
+      title: 'In pictures: Initially peaceful protests across France over inequality again descend into violence',
+      url: 'https://www.cnbc.com/2026/10/25/france-protests-inequality-violence.html',
+      source: 'CNBC',
+      publishedAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+      image: 'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=800&auto=format&fit=crop&q=80',
+      tags: ['France', 'Protests', 'Europe'],
+      isFeatured: true
+    },
+    {
+      title: 'More than a third of S&P 500 companies are about to report earnings as market confidence cracks',
+      url: 'https://www.marketwatch.com/story/sp500-earnings-season-preview-2026',
+      source: 'MarketWatch',
+      publishedAt: new Date(Date.now() - 12 * 60 * 1000).toISOString(),
+      image: 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=800&auto=format&fit=crop&q=80',
+      tags: ['Earnings', 'S&P 500', 'Markets']
+    },
+    {
+      title: 'Saudi Arabia says it intercepted missiles and drones from Iran-backed Houthis',
+      url: 'https://www.cnbc.com/2026/10/25/saudi-arabia-intercepts-missiles-drones-houthis.html',
+      source: 'CNBC',
+      publishedAt: new Date(Date.now() - 20 * 60 * 1000).toISOString(),
+      image: 'https://images.unsplash.com/photo-1579273166152-d725a4e2b755?w=800&auto=format&fit=crop&q=80',
+      tags: ['Middle East', 'Geopolitics']
+    },
+    {
+      title: "My husband wants to sell our $1.5 million home and invest the proceeds. But this is where we raised our kids — and I can't bear to leave.",
+      url: 'https://www.marketwatch.com/story/personal-finance-housing-decision-2026',
+      source: 'MarketWatch',
+      publishedAt: new Date(Date.now() - 24 * 60 * 1000).toISOString(),
+      image: 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?w=800&auto=format&fit=crop&q=80',
+      tags: ['Personal Finance', 'Housing', 'Family']
+    },
+    {
+      title: "'What Democrats and Republicans fear most about each other': CNBC survey has the answers",
+      url: 'https://www.cnbc.com/2026/10/25/democrats-republicans-fear-survey-cnbc.html',
+      source: 'CNBC',
+      publishedAt: new Date(Date.now() - 33 * 60 * 1000).toISOString(),
+      image: 'https://images.unsplash.com/photo-1540910419892-4a36d2c3266c?w=800&auto=format&fit=crop&q=80',
+      tags: ['Politics', 'U.S. Election']
+    },
+    {
+      title: 'Why economic health no longer dictates stock-market returns',
+      url: 'https://www.bbc.co.uk/news/articles/economy-markets-returns-2026',
+      source: 'BBC',
+      publishedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+      image: 'https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?w=800&auto=format&fit=crop&q=80',
+      tags: ['Macro', 'Stock Market', 'Analysis']
+    }
+  ];
+
+  // News Category Filters & Saved Bookmarks
   const newsCategory = ref('all');
   const newsCategories = [
-    { id: 'all', label: '全部快讯' },
-    { id: 'geopolitics', label: '🌍 地缘政治' },
-    { id: 'macro', label: '市场宏观' },
-    { id: 'movers', label: '个股异动' },
-    { id: 'earnings', label: '重磅财报' },
-    { id: 'fed', label: '美联储与利率' },
-    { id: 'tech', label: '产业与AI' }
+    { id: 'all', label: '全部' },
+    { id: 'us_stocks', label: '美股' },
+    { id: 'macro', label: '宏观' },
+    { id: 'geopolitics', label: '地缘政治' },
+    { id: 'crypto', label: '加密货币' },
+    { id: 'tech', label: '科技 / AI' },
+    { id: 'earnings', label: '公司财报' },
+    { id: 'economy', label: '经济数据' },
+    { id: 'opinion', label: '观点' }
   ];
+
+  const savedNewsUrls = ref(readStorage('market-desk-saved-news', []));
+  const showNewsMoreMenu = ref(false);
+
+  function isBookmarked(item) {
+    return Boolean(item?.url && savedNewsUrls.value.includes(item.url));
+  }
+
+  function toggleBookmark(item) {
+    if (!item?.url) return;
+    const list = [...savedNewsUrls.value];
+    const idx = list.indexOf(item.url);
+    if (idx > -1) {
+      list.splice(idx, 1);
+      toast.value = '已从收藏夹移除';
+    } else {
+      list.unshift(item.url);
+      toast.value = '已保存至我的收藏快讯';
+    }
+    savedNewsUrls.value = list;
+    try {
+      localStorage.setItem('market-desk-saved-news', JSON.stringify(list));
+    } catch {}
+  }
+
+  function formatRelativeTime(dateStr) {
+    if (!dateStr) return '刚刚';
+    const t = Date.parse(dateStr);
+    if (!Number.isFinite(t)) return '刚刚';
+    const diffSec = Math.max(0, Math.floor((Date.now() - t) / 1000));
+    if (diffSec < 60) return '刚刚';
+    const diffMin = Math.floor(diffSec / 60);
+    if (diffMin < 60) return `${diffMin}分钟前`;
+    const diffHour = Math.floor(diffMin / 60);
+    if (diffHour < 24) return `${diffHour}小时前`;
+    const diffDay = Math.floor(diffHour / 24);
+    if (diffDay < 7) return `${diffDay}天前`;
+    return new Intl.DateTimeFormat('zh-CN', { month: '2-digit', day: '2-digit' }).format(new Date(t));
+  }
+
+  function getSourceMeta(sourceStr) {
+    const s = String(sourceStr || '').toLowerCase();
+    if (s.includes('cnbc')) {
+      return {
+        name: 'CNBC',
+        cls: 'src-cnbc',
+        color: '#002f6c',
+        badgeText: 'CNBC',
+        iconSvg: '<svg width="18" height="18" viewBox="0 0 32 32"><circle cx="16" cy="16" r="15" fill="#002f6c"/><path d="M16 7c-1.5 2-2.5 5-2 8 1-3 3-5 5-6zm-4 2c-2 2-3 5-2 8 1.5-2.5 3.5-4 5.5-5zm8 0c2 2 3 5 2 8-1.5-2.5-3.5-4-5.5-5zm-7 4c-2 1.5-3.5 4-3 7 2-2 4.5-3 6.5-3.5zm14 0c2 1.5 3.5 4 3 7-2-2-4.5-3-6.5-3.5z" fill="#f5a623"/></svg>'
+      };
+    }
+    if (s.includes('marketwatch') || s.includes('mw')) {
+      return {
+        name: 'MarketWatch',
+        cls: 'src-marketwatch',
+        color: '#008037',
+        badgeText: 'MW',
+        iconSvg: '<svg width="18" height="18" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="#008037"/><text x="16" y="21" font-family="system-ui, sans-serif" font-weight="900" font-size="13" fill="#ffffff" text-anchor="middle">MW</text></svg>'
+      };
+    }
+    if (s.includes('bbc')) {
+      return {
+        name: 'BBC',
+        cls: 'src-bbc',
+        color: '#111827',
+        badgeText: 'BBC',
+        iconSvg: '<svg width="18" height="18" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="#111827"/><text x="16" y="21" font-family="system-ui, sans-serif" font-weight="900" font-size="11" fill="#ffffff" text-anchor="middle">BBC</text></svg>'
+      };
+    }
+    if (s.includes('yahoo')) {
+      return {
+        name: 'Yahoo Finance',
+        cls: 'src-yahoo',
+        color: '#6001d2',
+        badgeText: 'Y!',
+        iconSvg: '<svg width="18" height="18" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="#6001d2"/><text x="16" y="22" font-family="system-ui, sans-serif" font-weight="900" font-size="14" fill="#ffffff" text-anchor="middle">Y!</text></svg>'
+      };
+    }
+    if (s.includes('bloomberg')) {
+      return {
+        name: 'Bloomberg',
+        cls: 'src-bloomberg',
+        color: '#0f172a',
+        badgeText: 'B',
+        iconSvg: '<svg width="18" height="18" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="#0f172a"/><text x="16" y="22" font-family="system-ui, sans-serif" font-weight="900" font-size="14" fill="#ffffff" text-anchor="middle">B</text></svg>'
+      };
+    }
+    if (s.includes('reuters')) {
+      return {
+        name: 'Reuters',
+        cls: 'src-reuters',
+        color: '#ea580c',
+        badgeText: 'R',
+        iconSvg: '<svg width="18" height="18" viewBox="0 0 32 32"><circle cx="16" cy="16" r="15" fill="#ea580c"/><text x="16" y="22" font-family="system-ui, sans-serif" font-weight="900" font-size="14" fill="#ffffff" text-anchor="middle">R</text></svg>'
+      };
+    }
+    return {
+      name: sourceStr || 'News',
+      cls: 'src-generic',
+      color: '#3b82f6',
+      badgeText: (sourceStr || 'N').slice(0, 2).toUpperCase(),
+      iconSvg: `<svg width="18" height="18" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="#3b82f6"/><text x="16" y="21" font-family="system-ui, sans-serif" font-weight="900" font-size="12" fill="#ffffff" text-anchor="middle">${(sourceStr || 'N').slice(0, 2).toUpperCase()}</text></svg>`
+    };
+  }
+
+  function getNewsImage(item) {
+    if (item.image && typeof item.image === 'string' && item.image.startsWith('http')) {
+      return item.image;
+    }
+    const title = (item.title || '').toLowerCase();
+    if (/(france|paris|protest|riot|violence|demonstrat)/i.test(title)) {
+      return 'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=800&auto=format&fit=crop&q=80';
+    }
+    if (/(missile|drone|houthi|saudi|israel|gaza|iran|yemen|red sea|military|war|strike|defense)/i.test(title)) {
+      return 'https://images.unsplash.com/photo-1579273166152-d725a4e2b755?w=800&auto=format&fit=crop&q=80';
+    }
+    if (/(home|house|housing|mortgage|million home|raised our kids|property|residential)/i.test(title)) {
+      return 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?w=800&auto=format&fit=crop&q=80';
+    }
+    if (/(democrat|republican|trump|biden|harris|election|survey|poll|voter|congress)/i.test(title)) {
+      return 'https://images.unsplash.com/photo-1540910419892-4a36d2c3266c?w=800&auto=format&fit=crop&q=80';
+    }
+    if (/(economic health|stock-market returns|candlestick|chart|trading|returns|yield)/i.test(title)) {
+      return 'https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?w=800&auto=format&fit=crop&q=80';
+    }
+    if (/(earnings|report earnings|s&p 500|sp500|wall street|wall st|markets)/i.test(title)) {
+      return 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=800&auto=format&fit=crop&q=80';
+    }
+    if (/(ai|nvidia|chip|semiconductor|blackwell|hbm|datacenter|cloud)/i.test(title)) {
+      return 'https://images.unsplash.com/photo-1677442136019-21780ecad995?w=800&auto=format&fit=crop&q=80';
+    }
+    if (/(bitcoin|btc|crypto|ethereum|blockchain)/i.test(title)) {
+      return 'https://images.unsplash.com/photo-1621416894569-0f39ed31d247?w=800&auto=format&fit=crop&q=80';
+    }
+    if (/(oil|crude|brent|energy|gas|opec)/i.test(title)) {
+      return 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=800&auto=format&fit=crop&q=80';
+    }
+    if (/(gold|bullion|xau|safe haven)/i.test(title)) {
+      return 'https://images.unsplash.com/photo-1610375461246-83df859d849d?w=800&auto=format&fit=crop&q=80';
+    }
+    if (/(fed|powell|interest rate|fomc|central bank|inflation|cpi)/i.test(title)) {
+      return 'https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?w=800&auto=format&fit=crop&q=80';
+    }
+    return 'https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?w=800&auto=format&fit=crop&q=80';
+  }
 
   function getNewsSentiment(item) {
     const title = (item.title || '').toLowerCase();
@@ -787,18 +1127,67 @@ createApp({ setup() {
   }
 
   function getNewsTags(item) {
-    const title = item.title || '';
+    if (Array.isArray(item.tags) && item.tags.length) return item.tags.slice(0, 3);
+    const title = (item.title || '').toLowerCase();
     const tags = [];
-    const candidates = ['NVDA', 'AAPL', 'MSFT', 'TSLA', 'AMZN', 'GOOGL', 'META', 'AMD', 'MU', 'AVGO', 'INTC', 'SPY', 'QQQ', 'BRENT', 'XLE', 'LMT', 'RTX', 'GLD'];
+    
+    if (/(france|paris|protest)/i.test(title)) { tags.push('France', 'Protests', 'Europe'); }
+    else if (/(middle east|israel|gaza|iran|houthi|yemen|red sea|saudi)/i.test(title)) { tags.push('Middle East', 'Geopolitics'); }
+    else if (/(ukraine|russia|nato|putin|zelenskyy)/i.test(title)) { tags.push('Ukraine', 'Geopolitics'); }
+    else if (/(missile|defense|pentagon|military|weapons)/i.test(title)) { tags.push('Defense', 'Geopolitics'); }
+    
+    if (/(earnings|report earnings|revenue|profit|q3|q4|guidance)/i.test(title)) { tags.push('Earnings'); }
+    if (/(s&p 500|sp500|wall street|nasdaq|dow)/i.test(title)) { tags.push('S&P 500', 'Markets'); }
+    
+    if (/(democrat|republican|trump|biden|harris|election|congress|white house|survey)/i.test(title)) { tags.push('Politics', 'U.S. Election'); }
+    if (/(home|house|mortgage|husband|wife|kids|real estate|million home)/i.test(title)) { tags.push('Personal Finance', 'Housing', 'Family'); }
+    if (/(fed|powell|interest rate|cpi|inflation|treasury|yield)/i.test(title)) { tags.push('Federal Reserve', 'Macro'); }
+    if (/(economic health|stock-market returns|economy|recession|gdp)/i.test(title)) { tags.push('Macro', 'Stock Market', 'Analysis'); }
+    if (/(ai|nvidia|chip|semiconductor|cloud|openai|datacenter)/i.test(title)) { tags.push('Tech', 'AI'); }
+    if (/(bitcoin|btc|ethereum|eth|crypto|solana)/i.test(title)) { tags.push('Crypto', 'Digital Assets'); }
+    if (/(oil|crude|brent|opec|energy)/i.test(title)) { tags.push('Energy', 'Commodity'); }
+    if (/(gold|bullion|xau)/i.test(title)) { tags.push('Gold', 'Safe Haven'); }
+    
+    const candidates = ['NVDA', 'AAPL', 'MSFT', 'TSLA', 'AMZN', 'GOOGL', 'META', 'AMD', 'MU', 'AVGO', 'INTC', 'SPY', 'QQQ', 'LMT', 'XOM'];
     for (const sym of candidates) {
-      const re = new RegExp(`\\b${sym}\\b`, 'i');
-      if (re.test(title)) tags.push(sym);
+      if (new RegExp(`\\b${sym}\\b`, 'i').test(item.title) && !tags.includes(sym)) {
+        tags.push(sym);
+      }
     }
-    if (/\b(defense|missile|military|nato|weapons)\b/i.test(title) && !tags.includes('LMT')) tags.push('LMT');
-    if (/\b(ukraine|russia|gazprom|nord stream)\b/i.test(title) && !tags.includes('XLE')) tags.push('XLE');
-    if (/\b(israel|gaza|iran|houthi|red sea|middle east)\b/i.test(title) && !tags.includes('BRENT')) tags.push('BRENT');
-    if (/\b(gold|bullion|safe haven)\b/i.test(title) && !tags.includes('GLD')) tags.push('GLD');
-    return tags.slice(0, 3);
+    if (!tags.length) {
+      tags.push('Markets', 'News');
+    }
+    return [...new Set(tags)].slice(0, 3);
+  }
+
+  function getTagColorClass(tag) {
+    const t = String(tag || '').toLowerCase();
+    if (['middle east', 'geopolitics', 'protests', 'france', 'ukraine', 'defense', 'war'].includes(t)) {
+      return 'tag-red';
+    }
+    if (['federal reserve', 'inflation', 'interest rates', 'energy', 'crude oil', 'gold', 'commodity'].includes(t)) {
+      return 'tag-amber';
+    }
+    if (['ai', 'tech', 'semiconductors', 'crypto', 'bitcoin', 'digital assets'].includes(t)) {
+      return 'tag-purple';
+    }
+    return 'tag-blue';
+  }
+
+  function handleImgError(event, item) {
+    if (event?.target) {
+      event.target.src = 'https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?w=800&auto=format&fit=crop&q=80';
+    }
+  }
+
+  function openNewsUrl(url) {
+    if (url) {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+  }
+
+  function onNewsSearchSubmit() {
+    newsSymbol.value = newsSearch.value.trim().toUpperCase();
   }
 
   function cleanHtmlEntities(str) {
@@ -824,30 +1213,62 @@ createApp({ setup() {
   }
 
   const filteredNews = computed(() => {
-    const rawList = news.value?.items || [];
-    const list = rawList.map(item => ({
+    const backendList = (news.value?.items || []).map(item => ({
       ...item,
       title: cleanHtmlEntities(item.title)
     }));
-    if (newsCategory.value === 'all') return list;
-    if (newsCategory.value === 'geopolitics') {
-      return list.filter(n => /(war|ukraine|russia|israel|gaza|iran|taiwan|china|middle east|sanction|sanctions|military|geopolitic|geopolitical|election|tariff|tariffs|putin|zelenskyy|biden|trump|nato|defense|pentagon|houthi|red sea|strait|missile|brent|crude|oil embargo|ceasefire|tensions|treaty|starlink|hamas|hezbollah|lebanon|yemen|france|protest)/i.test(n.title) || /(BBC World|CNBC World|地缘)/i.test(n.source));
+    
+    // Deduplicate between backendList and DEFAULT_PROTOTYPE_NEWS
+    const map = new Map();
+    for (const it of backendList) {
+      map.set(it.url, it);
+    }
+    for (const it of DEFAULT_PROTOTYPE_NEWS) {
+      if (!map.has(it.url)) {
+        map.set(it.url, it);
+      }
+    }
+    let list = Array.from(map.values());
+    
+    if (newsCategory.value === 'saved') {
+      return list.filter(n => savedNewsUrls.value.includes(n.url));
+    }
+    if (newsCategory.value === 'us_stocks') {
+      return list.filter(n => /(s&p|sp500|nasdaq|dow|stock|equity|shares|wall st|nyse|invest|trader|company|companies|fed|market)/i.test(n.title) || getNewsTags(n).some(t => ['S&P 500', 'Markets', 'Stock Market'].includes(t)));
     }
     if (newsCategory.value === 'macro') {
-      return list.filter(n => /(economy|gdp|inflation|market|treasury|bond|brent|oil)/i.test(n.title));
+      return list.filter(n => /(economy|economic|fed|powell|rate|treasury|yield|bond|dollar|inflation|cpi|ppi|gdp)/i.test(n.title) || getNewsTags(n).some(t => ['Macro', 'Federal Reserve', 'Interest Rates', 'Analysis'].includes(t)));
     }
-    if (newsCategory.value === 'movers') {
-      return list.filter(n => /(plunge|surge|jump|tumble|slump|spike|rally|record)/i.test(n.title));
+    if (newsCategory.value === 'geopolitics') {
+      return list.filter(n => /(protest|france|missile|drone|houthi|saudi|israel|gaza|iran|ukraine|russia|taiwan|china|military|defense|pentagon|war|sanction|nato|yemen|red sea)/i.test(n.title) || getNewsTags(n).some(t => ['Geopolitics', 'Middle East', 'France', 'Protests', 'Europe', 'Defense'].includes(t)) || /(world|地缘)/i.test(n.source));
     }
-    if (newsCategory.value === 'earnings') {
-      return list.filter(n => /(earning|revenue|profit|guidance|q3|q4|capex|forecast)/i.test(n.title));
-    }
-    if (newsCategory.value === 'fed') {
-      return list.filter(n => /(fed|powell|rate|cut|hike|fomc|central bank)/i.test(n.title));
+    if (newsCategory.value === 'crypto') {
+      return list.filter(n => /(crypto|bitcoin|btc|eth|ethereum|solana|binance|coinbase|digital asset)/i.test(n.title) || getNewsTags(n).some(t => ['Crypto', 'Bitcoin', 'Digital Assets'].includes(t)));
     }
     if (newsCategory.value === 'tech') {
-      return list.filter(n => /(tech|ai|chip|cloud|semi|nvidia|apple|microsoft|google)/i.test(n.title));
+      return list.filter(n => /(tech|ai|chip|chips|semiconductor|nvidia|apple|microsoft|google|cloud|software|openai)/i.test(n.title) || getNewsTags(n).some(t => ['Tech', 'AI', 'Semiconductors'].includes(t)));
     }
+    if (newsCategory.value === 'earnings') {
+      return list.filter(n => /(earning|earnings|report|quarter|revenue|profit|guidance|q3|q4|results|sales)/i.test(n.title) || getNewsTags(n).some(t => ['Earnings', 'S&P 500'].includes(t)));
+    }
+    if (newsCategory.value === 'economy') {
+      return list.filter(n => /(economic|economy|health|cpi|ppi|jobs|labor|nonfarm|unemployment|gdp|retail|housing|home|mortgage)/i.test(n.title) || getNewsTags(n).some(t => ['Macro', 'Housing', 'Personal Finance'].includes(t)));
+    }
+    if (newsCategory.value === 'opinion') {
+      return list.filter(n => /(why|survey|answers|what|fear|perspective|column|opinion|bear|view|reckoning|analysis)/i.test(n.title) || getNewsTags(n).some(t => ['Analysis', 'Politics', 'Personal Finance'].includes(t)));
+    }
+    if (newsCategory.value === 'personal_finance') {
+      return list.filter(n => /(home|house|housing|husband|wife|kids|retire|million|invest the proceeds|family|savings)/i.test(n.title) || getNewsTags(n).some(t => ['Personal Finance', 'Housing', 'Family'].includes(t)));
+    }
+    if (newsCategory.value === 'commodities') {
+      return list.filter(n => /(oil|crude|brent|gold|commodity|opec|energy|gas)/i.test(n.title) || getNewsTags(n).some(t => ['Energy', 'Commodity', 'Gold'].includes(t)));
+    }
+    
+    if (newsSymbol.value) {
+      const sym = newsSymbol.value.toUpperCase();
+      list = list.filter(n => (n.title || '').toUpperCase().includes(sym) || getNewsTags(n).includes(sym));
+    }
+    
     return list;
   });
 
@@ -1144,6 +1565,40 @@ createApp({ setup() {
     if (page.value === 'sources') return '数据源与计算口径说明';
     return currentNav.value?.label || '行情看板';
   });
+
+  const mobileTitleInfo = computed(() => {
+    if (page.value === 'chart') {
+      const q = quoteStore.value[symbol.value]?.regular || (chart.value?.symbol === symbol.value ? chart.value : null);
+      return {
+        isChart: true,
+        symbol: symbol.value,
+        name: chart.value?.name || '',
+        price: q?.price != null ? num(q.price) : (chart.value?.price != null ? num(chart.value.price) : ''),
+        currency: chart.value?.currency || 'USD',
+        changePercent: q?.changePercent ?? chart.value?.changePercent ?? null
+      };
+    }
+    if (page.value === 'watchlist') {
+      return { isChart: false, title: '自选看板', subtitle: `${watchlist.value?.length || 0} 支标的` };
+    }
+    if (page.value === 'overview') {
+      return { isChart: false, title: '美股全景', subtitle: '核心股指 · 热力图' };
+    }
+    if (page.value === 'crypto') {
+      return { isChart: false, title: '主流加密', subtitle: '24/7 现货行情' };
+    }
+    if (page.value === 'news') {
+      return { isChart: false, title: 'AI 财经智讯', subtitle: '多源情报 · 深度检索' };
+    }
+    if (page.value === 'options') {
+      return { isChart: false, title: `${optionSymbol.value} 期权墙`, subtitle: '持仓与 Gamma 分布' };
+    }
+    if (page.value === 'flows') {
+      return { isChart: false, title: '资金流向', subtitle: '板块轮动与 ETF' };
+    }
+    return { isChart: false, title: currentNav.value?.label || 'Market Desk', subtitle: '' };
+  });
+
   function isStockGainer(s) {
     const q = quoteStore.value[s];
     if (q?.regular?.changePercent > 0 || q?.post?.changePercent > 0) return true;
@@ -1363,15 +1818,64 @@ createApp({ setup() {
     showAddStockModal.value = true;
   }
 
+  // Group-level Change% Sorting States (3-state cycle: 'default' -> 'desc' -> 'asc' -> 'default')
+  const groupSortStates = reactive(readStorage('market-desk-group-sort-states', {}));
+
+  function persistGroupSortStates() {
+    persist('market-desk-group-sort-states', { ...groupSortStates });
+  }
+
+  function cycleGroupSort(groupId) {
+    const current = groupSortStates[groupId] || 'default';
+    let next = 'desc';
+    if (current === 'default') {
+      next = 'desc';
+    } else if (current === 'desc') {
+      next = 'asc';
+    } else {
+      next = 'default';
+    }
+    groupSortStates[groupId] = next;
+    persistGroupSortStates();
+
+    const grp = watchlistMgr.getGroup(groupId);
+    const grpName = grp?.name || '分组';
+    if (next === 'desc') {
+      toast.value = `「${grpName}」已按涨跌幅降序排列`;
+    } else if (next === 'asc') {
+      toast.value = `「${grpName}」已按涨跌幅升序排列`;
+    } else {
+      toast.value = `「${grpName}」已恢复默认排序（支持手动拖拽）`;
+    }
+  }
+
+  function getGroupSortTitle(groupId) {
+    const state = groupSortStates[groupId] || 'default';
+    if (state === 'desc') {
+      return '当前：按涨跌幅降序（点击切换为升序）';
+    } else if (state === 'asc') {
+      return '当前：按涨跌幅升序（点击恢复默认排序）';
+    }
+    return '组内按涨跌幅排序（点击切换为降序，恢复默认后支持手动拖拽）';
+  }
+
   // TradingView Style: Vertical sections with internal sorting and group-level sorting
   const sidebarGroupSections = computed(() => {
     const list = groups.value.map(g => {
       const rows = g.symbolIds.map(buildRow);
       let sortedRows;
-      if ((g.id === 'trillion' || g.name === '万亿市值') && (!sidebarSortField.value || sidebarSortField.value === 'manual' || sidebarSortField.value === 'regularPrice' || sidebarSortField.value === 'marketCap')) {
+      const grpSort = groupSortStates[g.id] || 'default';
+
+      if (grpSort === 'desc') {
+        sortedRows = sortWatchlistRows(rows, 'regularChange', 'desc');
+      } else if (grpSort === 'asc') {
+        sortedRows = sortWatchlistRows(rows, 'regularChange', 'asc');
+      } else if ((g.id === 'trillion' || g.name === '万亿市值') && (!sidebarSortField.value || sidebarSortField.value === 'manual' || sidebarSortField.value === 'regularPrice' || sidebarSortField.value === 'marketCap')) {
         sortedRows = sortWatchlistRows(rows, 'marketCap', sidebarSortField.value === 'marketCap' ? sidebarSortDirection.value : 'desc');
-      } else {
+      } else if (sidebarSortField.value && sidebarSortField.value !== 'manual' && sidebarSortField.value !== 'custom') {
         sortedRows = sortWatchlistRows(rows, sidebarSortField.value, sidebarSortDirection.value);
+      } else {
+        sortedRows = [...rows];
       }
       const valid = rows.filter(r => r.regularChange !== null && Number.isFinite(r.regularChange));
       let avg = null;
@@ -1557,6 +2061,10 @@ createApp({ setup() {
     // Switch sort mode to manual so the user's custom ordering is immediately visible
     sidebarSortField.value = 'manual';
     persist('market-desk-sidebar-sort-field', 'manual');
+    if (groupSortStates[targetGroupId] && groupSortStates[targetGroupId] !== 'default') {
+      groupSortStates[targetGroupId] = 'default';
+      persistGroupSortStates();
+    }
     syncWatchlistData();
     onStockDragEnd();
   }
@@ -1643,6 +2151,10 @@ createApp({ setup() {
 
     sidebarSortField.value = 'manual';
     persist('market-desk-sidebar-sort-field', 'manual');
+    if (groupSortStates[groupId] && groupSortStates[groupId] !== 'default') {
+      groupSortStates[groupId] = 'default';
+      persistGroupSortStates();
+    }
     syncWatchlistData();
     onStockDragEnd();
   }
@@ -1667,6 +2179,10 @@ createApp({ setup() {
     }
     sidebarSortField.value = 'manual';
     persist('market-desk-sidebar-sort-field', 'manual');
+    if (groupSortStates[groupId] && groupSortStates[groupId] !== 'default') {
+      groupSortStates[groupId] = 'default';
+      persistGroupSortStates();
+    }
     syncWatchlistData();
     onStockDragEnd();
   }
@@ -1681,6 +2197,10 @@ createApp({ setup() {
     toast.value = `已将 ${srcSym} 移入「${toGrp?.name || '新分组'}」`;
     sidebarSortField.value = 'manual';
     persist('market-desk-sidebar-sort-field', 'manual');
+    if (groupSortStates[groupId] && groupSortStates[groupId] !== 'default') {
+      groupSortStates[groupId] = 'default';
+      persistGroupSortStates();
+    }
     syncWatchlistData();
     onStockDragEnd();
   }
@@ -1892,6 +2412,13 @@ createApp({ setup() {
   }
 
   function handleDeleteGroup(groupId) {
+    if (groupSortStates[groupId]) {
+      delete groupSortStates[groupId];
+      persistGroupSortStates();
+    }
+    const groupObj = watchlistMgr.getGroup(groupId);
+    const groupName = groupObj?.name || '分组';
+
     const res = watchlistMgr.deleteGroup(groupId);
     if (!res.ok) {
       toast.value = res.error;
@@ -1901,10 +2428,10 @@ createApp({ setup() {
     undoAction.value = () => {
       watchlistMgr.undoDeleteGroup();
       syncWatchlistData();
-      toast.value = '已撤销删除分组';
+      toast.value = `已撤销删除“${groupName}”`;
       undoAction.value = null;
     };
-    toast.value = `分组已删除（未在其他组的 ${res.movedSymbolsCount} 支标的已移至“未分组”）`;
+    toast.value = `分组“${groupName}”已删除，${res.movedSymbolsCount} 支标的已直接转移至“未分组”`;
   }
 
   function handleAddStockModalSubmit() {
@@ -1934,7 +2461,14 @@ createApp({ setup() {
     showBackupModal.value = false;
   }
 
-  function selectSymbol(s) { symbol.value = s; navigate('chart'); }
+  function selectSymbol(s) {
+    if (symbol.value === s && page.value === 'chart') {
+      resetPriceChartZoom();
+      return;
+    }
+    symbol.value = s;
+    navigate('chart');
+  }
   function search() { const s = searchInput.value.trim().toUpperCase(); if (!validSymbol(s)) { toast.value = '请输入有效代码，例如 AAPL、SPY 或 BRK-B。'; return; } selectSymbol(s); }
 
   async function request(key, endpoint, params, target) {
@@ -2017,11 +2551,25 @@ createApp({ setup() {
   function clearFlows() { flows.value = []; persist('market-desk-flows', ''); }
 
   function resetPriceChartZoom() {
-    if (klineGestureCtrl) {
-      klineGestureCtrl.focusLatest();
-    }
     if (lwPriceChart) {
+      try { lwPriceChart.timeScale().fitContent(); } catch (_) {}
+      try { lwPriceChart.applyOptions({ rightPriceScale: { autoScale: true } }); } catch (_) {}
       try { lwPriceChart.priceScale('right').setAutoScale(true); } catch (_) {}
+      try { lwPriceChart.priceScale('right').applyOptions({ autoScale: true }); } catch (_) {}
+    }
+    if (klineGestureCtrl) {
+      if (typeof klineGestureCtrl.reset === 'function') {
+        klineGestureCtrl.reset();
+      } else {
+        klineGestureCtrl.focusLatest();
+      }
+    }
+    if (lwCandleSeries) {
+      try {
+        const sScale = lwCandleSeries.priceScale();
+        if (typeof sScale.setAutoScale === 'function') sScale.setAutoScale(true);
+        if (typeof sScale.applyOptions === 'function') sScale.applyOptions({ autoScale: true });
+      } catch (_) {}
     }
     const entry = charts.get('price-chart');
     if (!entry || !entry.chart) return;
@@ -2329,6 +2877,10 @@ createApp({ setup() {
     const bars = d.bars || [];
     if (!bars.length) return;
 
+    const isNewSymbolOrRange = (d.symbol !== lastRenderedSymbol || d.range !== lastRenderedRange);
+    lastRenderedSymbol = d.symbol;
+    lastRenderedRange = d.range;
+
     // 1. Production TradingView + OKX Engine via Lightweight Charts 5.2
     if (LW && typeof LW.createChart === 'function') {
       if (lwPriceChart && lwPriceChart._hostEl !== el) {
@@ -2360,10 +2912,10 @@ createApp({ setup() {
             timeVisible: d.range === '1d',
             secondsVisible: false,
             borderColor: gridColorValue,
-            rightOffset: 0,
+            rightOffset: 4,
             minBarSpacing: 0.5,
             fixRightEdge: false,
-            lockVisibleTimeRangeOnResize: true,
+            lockVisibleTimeRangeOnResize: false,
             shiftVisibleRangeOnNewBar: false
           },
           crosshair: {
@@ -2394,7 +2946,8 @@ createApp({ setup() {
 
         const volumeSeries = chartInstance.addSeries(LW.HistogramSeries, {
           priceScaleId: 'volume',
-          priceFormat: { type: 'volume' }
+          priceFormat: { type: 'volume' },
+          visible: klineMaVisibility.vol !== false
         });
         chartInstance.priceScale('volume').applyOptions({
           scaleMargins: { top: 0.80, bottom: 0 }
@@ -2414,7 +2967,8 @@ createApp({ setup() {
             lineWidth: 1.5,
             priceLineVisible: false,
             lastValueVisible: false,
-            crosshairMarkerVisible: false
+            crosshairMarkerVisible: false,
+            visible: klineMaVisibility[m.key] !== false
           });
         }
 
@@ -2447,6 +3001,9 @@ createApp({ setup() {
         lwVolumeSeries = volumeSeries;
         lwMaSeriesMap = maSeriesMap;
         klineGestureCtrl = gestures;
+        window.lwPriceChart = chartInstance;
+        window.klineGestureCtrl = gestures;
+        window.lwCandleSeries = candleSeries;
       }
 
       lwPriceChart.applyOptions({
@@ -2458,12 +3015,30 @@ createApp({ setup() {
           vertLines: { color: gridColorValue, style: gridStyleNum, visible: showGrid },
           horzLines: { color: gridColorValue, style: gridStyleNum, visible: showGrid }
         },
-        rightPriceScale: { borderColor: gridColorValue },
+        rightPriceScale: {
+          borderColor: gridColorValue,
+          ...(isNewSymbolOrRange ? { autoScale: true } : {})
+        },
         timeScale: {
           borderColor: gridColorValue,
           timeVisible: d.range === '1d'
         }
       });
+
+      if (isNewSymbolOrRange) {
+        try {
+          const scale = lwPriceChart.priceScale('right');
+          if (typeof scale.setAutoScale === 'function') scale.setAutoScale(true);
+          if (typeof scale.applyOptions === 'function') scale.applyOptions({ autoScale: true });
+        } catch (_) {}
+        try {
+          if (lwCandleSeries) {
+            const sScale = lwCandleSeries.priceScale();
+            if (typeof sScale.setAutoScale === 'function') sScale.setAutoScale(true);
+            if (typeof sScale.applyOptions === 'function') sScale.applyOptions({ autoScale: true });
+          }
+        } catch (_) {}
+      }
 
       lwCandleSeries.applyOptions({
         upColor: klineUp,
@@ -2488,17 +3063,44 @@ createApp({ setup() {
           ? (isDarkTheme ? 'rgba(16, 185, 129, 0.65)' : 'rgba(16, 185, 129, 0.75)')
           : (isDarkTheme ? 'rgba(244, 63, 94, 0.65)' : 'rgba(244, 63, 94, 0.75)')
       }));
+      if (lwVolumeSeries) {
+        lwVolumeSeries.applyOptions({ visible: klineMaVisibility.vol !== false });
+      }
       lwVolumeSeries.setData(volData);
 
       const maPeriods = { ma5: 5, ma20: 20, ma60: 60, ma120: 120, ma250: 250 };
       for (const [key, period] of Object.entries(maPeriods)) {
         if (lwMaSeriesMap[key]) {
+          lwMaSeriesMap[key].applyOptions({ visible: klineMaVisibility[key] !== false });
           lwMaSeriesMap[key].setData(calcMALineData(bars, period));
         }
       }
 
-      if (klineGestureCtrl && klineGestureCtrl.isFollowingLatest()) {
-        klineGestureCtrl.focusLatest(Math.min(bars.length, 120));
+      if (isNewSymbolOrRange) {
+        if (lwPriceChart) {
+          try { lwPriceChart.timeScale().fitContent(); } catch (_) {}
+        }
+        if (klineGestureCtrl) {
+          if (typeof klineGestureCtrl.reset === 'function') {
+            klineGestureCtrl.reset();
+            requestAnimationFrame(() => {
+              try {
+                if (lwPriceChart) lwPriceChart.timeScale().fitContent();
+                klineGestureCtrl.reset();
+              } catch (_) {}
+            });
+          } else if (typeof klineGestureCtrl.showAll === 'function') {
+            klineGestureCtrl.showAll();
+          }
+        }
+      }
+
+      if (isNewSymbolOrRange) {
+        try {
+          const scale = lwPriceChart.priceScale('right');
+          if (typeof scale.setAutoScale === 'function') scale.setAutoScale(true);
+          if (typeof scale.applyOptions === 'function') scale.applyOptions({ autoScale: true });
+        } catch (_) {}
       }
       updateReadoutFromCrosshair(null, lwCandleSeries, lwMaSeriesMap, bars);
       if (charts.has('price-chart')) {
@@ -2522,7 +3124,20 @@ createApp({ setup() {
       backgroundColor: chartBg,
       tooltip: { ...tooltip, trigger: 'axis' },
       axisPointer: { link: [{ xAxisIndex: 'all' }], lineStyle: { color: gridColorValue } },
-      legend: { data: ['价格 OHLC', 'MA5', 'MA20', 'MA60', 'MA120', 'MA250', '成交股数'], textStyle: { color: muted }, top: 0, right: 20 },
+      legend: {
+        data: ['价格 OHLC', 'MA5', 'MA20', 'MA60', 'MA120', 'MA250', '成交股数'],
+        selected: {
+          'MA5': klineMaVisibility.ma5 !== false,
+          'MA20': klineMaVisibility.ma20 !== false,
+          'MA60': klineMaVisibility.ma60 !== false,
+          'MA120': klineMaVisibility.ma120 !== false,
+          'MA250': klineMaVisibility.ma250 !== false,
+          '成交股数': klineMaVisibility.vol !== false
+        },
+        textStyle: { color: muted },
+        top: 0,
+        right: 20
+      },
       grid: [{ left: 70, right: 25, top: 32, height: '62%' }, { left: 70, right: 25, top: '76%', height: '13%' }],
       xAxis: [0, 1].map(i => ({
         ...axis,
@@ -2855,15 +3470,17 @@ createApp({ setup() {
 
   return {
     nav, mobileNav, isDark, isMobile, isWide, showSettings, toggleTheme, openSettings, closeSettings, navigate, handleDrawerKey,
+    RANGE_OPTIONS, openMobileSearch, mobileTitleInfo,
     // K-Line Color Schemes & Preferences Modal
     klineScheme, klineGridStyle, showPreferencesModal, openPreferencesModal, closePreferencesModal, setKlineScheme, setKlineGrid, klineSchemeOptions, activeKlineScheme, KLINE_SCHEMES,
+    klineMaVisibility, MA_CONFIGS, toggleMa, setAllMaVisibility,
     page, currentNav, onPageEntered,
     overview, chart, options, news, states, searchInput, symbol, chartRange,
     optionSymbol, optionExpiry, optionMetric, strikeRange, newsSymbol, newsSearch, heatSize, sectorFilter,
     heatmapScope, activeHeatmapStocks, onHeatmapScopeChange, renderHeatmap, isLeveragedEtf, nonLeveragedWatchlist,
     flowTab, flows, flowDate, flowDates, dayFlows,
     // Macro & Fear/Greed & Gold & Crypto & Treasury
-    macroItems, macroMap, fearGreedIndex, goldContract, formatMacroPrice,
+    macroItems, macroMap, fearGreedIndex, goldContract, goldCnyPerGram, usdCnyRate, formatMacroPrice,
     showFearGreedModal, openFearGreedModal, closeFearGreedModal, getFearGreedRatingText, getFearGreedTone, fearGreedIndicators,
     showTreasuryModal, openTreasuryModal, closeTreasuryModal, spread30Y10Y, spread20Y10Y, isCurveInverted,
     cryptoData, cryptoList, selectedCrypto, selectedCryptoItem, cryptoTimeframe,
@@ -2875,6 +3492,7 @@ createApp({ setup() {
     STOCK_MARKET_CAPS, getStockMarketCap, sortSymbolsByMarketCap,
     sidebarSortField, sidebarSortDirection, sidebarActiveGroup, setSidebarSort, setSidebarGroup, sidebarWatchlistRows,
     sidebarViewMode, toggleSidebarViewMode, toggleGroupCollapse, toggleAllGroupsCollapse, areAllGroupsCollapsed, openAddStockToGroup, sidebarGroupSections, sidebarFlatRows,
+    groupSortStates, cycleGroupSort, getGroupSortTitle,
     draggedStock, dragOverTarget, dragOverGroup,
     draggedGroup, dragOverGroupOrderTarget, onGroupDragStart, onGroupDragEnd, onGroupHeaderDragLeave, moveGroupUp, moveGroupDown,
     onStockDragStart, onStockDragEnd, onStockDragOver, onStockDragLeave, onStockDrop,
@@ -2890,8 +3508,8 @@ createApp({ setup() {
     breadcrumbLabel, upSectorsCount, downSectorsCount, upSectorsRatio, isStockGainer, getSparkline,
     stockSectors, rankedSectors, quoteWindow, breadth, findQuote, barWidth, walls, num, compact, pct, tone, time,
     SECTOR_LEADERS, topGainerSector, topLoserSector, mostActiveSector, totalSectorTurnover, avgSectorTurnover, sectorBullBearRatio,
-    callWallDist, putWallDist,
     newsCategory, newsCategories, filteredNews, getNewsSentiment, getNewsTags, getDayRange, getDayRangeWidth, missingTurnoverCount,
+    savedNewsUrls, isBookmarked, toggleBookmark, showNewsMoreMenu, formatRelativeTime, getSourceMeta, getNewsImage, getTagColorClass, handleImgError, openNewsUrl, onNewsSearchSubmit,
     // Earnings & Macro & Geopolitics Calendars
     newsSubView, earningsSectorFilter, earningsTimingFilter, earningsAiOnly, earningsSearch,
     showEarningsModal, selectedEarningsItem, earningsList, macroCalendarList,

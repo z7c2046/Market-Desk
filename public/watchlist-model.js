@@ -664,11 +664,10 @@ export class WatchlistManager {
     const deletedGroup = this.data.groups[index];
     const defaultGroup = this.getGroup('default');
 
-    // Symbols that only exist in this group move to 'default'
+    // 将被删除分组中的所有标的直接转移至“未分组”
     const movedSymbols = [];
-    for (const sym of deletedGroup.symbolIds) {
-      const otherGroups = this.data.groups.filter(g => g.id !== groupId && g.symbolIds.includes(sym));
-      if (!otherGroups.length) {
+    if (defaultGroup) {
+      for (const sym of deletedGroup.symbolIds) {
         if (!defaultGroup.symbolIds.includes(sym)) {
           defaultGroup.symbolIds.push(sym);
           movedSymbols.push(sym);

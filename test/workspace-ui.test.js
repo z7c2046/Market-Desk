@@ -21,7 +21,7 @@ async function mount(t, fetchImpl) {
   Object.defineProperty(w.HTMLElement.prototype, 'clientWidth', { get: () => 800 });
   w.echarts = { init: el => ({ setOption: config => configs.set(el.id, config), off() {}, on() {}, resize() {}, dispose() {} }) };
   w.eval(await fs.readFile(new URL('../node_modules/vue/dist/vue.global.prod.js', import.meta.url), 'utf8'));
-  w.bindKlineGestures = () => ({ focusLatest() {}, dispose() {}, isFollowingLatest() { return true; } });
+  w.bindKlineGestures = () => ({ focusLatest() {}, reset() {}, resetPriceScale() {}, dispose() {}, isFollowingLatest() { return true; } });
   const appSrc = (await fs.readFile(new URL('../public/app.js', import.meta.url), 'utf8'))
     .replace("import { parseFlows } from './flows.js';", 'const parseFlows = window.parseFlows;')
     .replace("import { bindKlineGestures } from './composables/klineGesture.js';", 'const bindKlineGestures = window.bindKlineGestures;')
@@ -153,4 +153,32 @@ test('K-line color schemes: defaults to classic (图一), switches to neon (图�
 
   assert.deepEqual(ui.errors, []);
 });
+
+test('K-line MA switches: clicking MA5/MA20 toggles visibility in readout strip and preferences modal, and persists to localStorage', async t => {
+  const ui = await mount(t, async url => ({ ok: true, json: async () => fixture(url) }));
+  await ui.click('个股行情');
+  await tick();
+
+  const maButtons = [...ui.w.document.querySelectorAll('.ma-switch-btn')];
+  assert.equal(maButtons.length, 6, 'Should render 6 switches: MA5, MA20, MA60, MA120, MA250, VOL');
+
+  const ma5Btn = maButtons.find(b => b.classList.contains('ma5'));
+  assert.ok(ma5Btn, 'MA5 switch button exists');
+  assert.ok(ma5Btn.classList.contains('is-active'));
+
+  // Click MA5 to turn off
+  ma5Btn.click();
+  await tick();
+  assert.ok(ma5Btn.classList.contains('is-off'), 'MA5 switch button turns off');
+  const stored = JSON.parse(ui.w.localStorage.getItem('market-desk-ma-visibility'));
+  assert.equal(stored.ma5, false);
+
+  // Click MA5 to turn back on
+  ma5Btn.click();
+  await tick();
+  assert.ok(ma5Btn.classList.contains('is-active'), 'MA5 switch button turns back on');
+  const storedAfter = JSON.parse(ui.w.localStorage.getItem('market-desk-ma-visibility'));
+  assert.equal(storedAfter.ma5, true);
+});
+
 

@@ -91,6 +91,27 @@ test('WatchlistManager: deleteGroup moves orphaned symbols to default with one-s
   assert.ok(!manager.getGroup('default').symbolIds.includes('UNQ'));
 });
 
+test('WatchlistManager: deleteGroup transfers all group symbols directly to default', () => {
+  const storage = new MockStorage();
+  const manager = new WatchlistManager({ storage });
+
+  const createRes = manager.createGroup('存储');
+  assert.ok(createRes.ok);
+  const groupId = createRes.group.id;
+
+  manager.addSymbol('MU', groupId);
+  manager.addSymbol('SNDK', groupId);
+  manager.addSymbol('WDC', groupId);
+  assert.equal(manager.getGroup(groupId).symbolIds.length, 3);
+
+  const delRes = manager.deleteGroup(groupId);
+  assert.ok(delRes.ok);
+  const def = manager.getGroup('default');
+  assert.ok(def.symbolIds.includes('MU'));
+  assert.ok(def.symbolIds.includes('SNDK'));
+  assert.ok(def.symbolIds.includes('WDC'));
+});
+
 test('WatchlistManager: JSON export and import validation', () => {
   const storage = new MockStorage();
   const manager = new WatchlistManager({ storage });
@@ -355,6 +376,61 @@ test('sortWatchlistRows: sorts by marketCap and marketCapNum descending and asce
   const asc = sortWatchlistRows(rows, 'marketCap', 'asc');
   assert.deepEqual(asc.map(r => r.symbol), ['TSLA', 'AAPL', 'NVDA', 'UNKNOWN']);
 });
+
+test('sortWatchlistRows: sorts by regularChange descending and ascending (in-group 3-state sorting)', () => {
+  const storageGroupRows = [
+    { symbol: 'NTAP', regularChange: 1.40 },
+    { symbol: 'MU', regularChange: 2.46 },
+    { symbol: 'SKHY', regularChange: 4.05 },
+    { symbol: 'WDC', regularChange: -2.97 },
+    { symbol: 'P', regularChange: 1.76 },
+    { symbol: 'SNDK', regularChange: -1.82 },
+    { symbol: 'KXIAY', regularChange: 5.13 },
+    { symbol: 'STX', regularChange: -1.81 },
+    { symbol: 'NOCONTRACT', regularChange: null }
+  ];
+
+  // 1st click: 降序 (highest positive change first, nulls at bottom)
+  const desc = sortWatchlistRows(storageGroupRows, 'regularChange', 'desc');
+  assert.deepEqual(desc.map(r => r.symbol), [
+    'KXIAY', 'SKHY', 'MU', 'P', 'NTAP', 'STX', 'SNDK', 'WDC', 'NOCONTRACT'
+  ]);
+
+  // 2nd click: 升序 (biggest loss / negative change first, nulls at bottom)
+  const asc = sortWatchlistRows(storageGroupRows, 'regularChange', 'asc');
+  assert.deepEqual(asc.map(r => r.symbol), [
+    'WDC', 'SNDK', 'STX', 'NTAP', 'P', 'MU', 'SKHY', 'KXIAY', 'NOCONTRACT'
+  ]);
+
+  // 3rd click: 恢复默认顺序 (manual array order)
+  const defaultOrder = sortWatchlistRows(storageGroupRows, 'manual');
+  assert.deepEqual(defaultOrder.map(r => r.symbol), [
+    'NTAP', 'MU', 'SKHY', 'WDC', 'P', 'SNDK', 'KXIAY', 'STX', 'NOCONTRACT'
+  ]);
+});
+
+test('WatchlistManager: default group order can be manually reordered by drag-and-drop and persists', () => {
+  const storage = new MockStorage();
+  const manager = new WatchlistManager({ storage });
+  const storageGroup = manager.getGroup('storage');
+  assert.ok(storageGroup);
+
+  // Original order starts with NTAP, MU, SKHY...
+  assert.equal(storageGroup.symbolIds[0], 'NTAP');
+
+  // Drag KXIAY to the top (before NTAP)
+  manager.moveSymbolWithinGroup('storage', 'KXIAY', 'NTAP', 'before');
+  assert.equal(manager.getGroup('storage').symbolIds[0], 'KXIAY');
+  assert.equal(manager.getGroup('storage').symbolIds[1], 'NTAP');
+
+  // Drag WDC to after MU
+  manager.moveSymbolWithinGroup('storage', 'WDC', 'MU', 'after');
+  const symbols = manager.getGroup('storage').symbolIds;
+  const idxMU = symbols.indexOf('MU');
+  const idxWDC = symbols.indexOf('WDC');
+  assert.equal(idxWDC, idxMU + 1);
+});
+
 
 
 
