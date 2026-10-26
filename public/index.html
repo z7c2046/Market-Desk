@@ -10,8 +10,8 @@
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/styles.css?v=2.6.0">
-<script defer src="/vendor/vue.js"></script><script defer src="/vendor/echarts.js"></script><script defer src="/vendor/lightweight-charts.standalone.js"></script><script type="module" src="/app.js?v=2.7.0"></script>
+<link rel="stylesheet" href="/styles.css?v=2.7.1">
+<script defer src="/vendor/vue.js"></script><script defer src="/vendor/echarts.js"></script><script defer src="/vendor/lightweight-charts.standalone.js"></script><script type="module" src="/app.js?v=2.7.1"></script>
 </head><body><div id="app" v-cloak>
 <div class="ios-backdrop mobile-only" :class="{show:showSettings}" @click="closeSettings" aria-hidden="true"></div>
 <aside id="workspace-settings" class="sidebar" :class="{'show-mobile':showSettings}" :inert="isMobile&&!showSettings" :role="isMobile?'dialog':undefined" :aria-modal="isMobile&&showSettings?'true':undefined" aria-label="工作台导航与自选" @keydown="handleDrawerKey">
@@ -236,6 +236,7 @@
                   <div class="card-left">
                     <span class="card-drag-grip" title="按住拖拽排序或跨组移动" aria-hidden="true">⠿</span>
                     <strong class="card-sym">{{ r.symbol }}</strong>
+                    <span v-if="r.delayStatus === 'delayed'" class="tv-delay-badge" title="行情延迟 15 分钟 (Delayed) · 来自公开备用数据源">D</span>
                     <span class="card-name" :title="r.name">{{ r.name }}</span>
                     <span v-if="r.marketCap" class="card-mcap-pill" :title="'总市值: ' + r.marketCap">{{ r.marketCap }}</span>
                   </div>
@@ -316,6 +317,7 @@
               <div class="card-left">
                 <span class="card-drag-grip" title="按住拖拽排序" aria-hidden="true">⠿</span>
                 <strong class="card-sym">{{ r.symbol }}</strong>
+                <span v-if="r.delayStatus === 'delayed'" class="tv-delay-badge" title="行情延迟 15 分钟 (Delayed) · 来自公开备用数据源">D</span>
                 <span class="card-name" :title="r.name">{{ r.name }}</span>
                 <span v-if="r.marketCap" class="card-mcap-pill" :title="'总市值: ' + r.marketCap">{{ r.marketCap }}</span>
               </div>
@@ -803,8 +805,26 @@
   <section class="panel chart-panel">
     <div class="panel-heading">
       <div>
-        <h2>{{symbol}} <span class="muted">{{chart?.name}}</span></h2>
-        <div v-if="chart" class="stock-price">{{num(chart.price)}} <small>{{chart.currency}}</small><span :class="tone(chart.changePercent)">{{pct(chart.changePercent)}}</span></div>
+        <h2>
+          {{symbol}}
+          <span v-if="chartDelayStatus === 'delayed'" class="tv-delay-badge" title="行情延迟 15 分钟 (Delayed) · 来自公开市场备用源">D</span>
+          <span class="muted">{{chart?.name}}</span>
+        </h2>
+        <div v-if="chart" class="stock-price">
+          <span class="stock-reg-quote">
+            <span class="stock-price-val">{{num(chart.price)}}</span> 
+            <small>{{chart.currency}}</small>
+            <span :class="tone(chart.changePercent)">{{pct(chart.changePercent)}}</span>
+          </span>
+          <!-- TradingView-style Pre-market / Post-market EXT inline pill -->
+          <span v-if="activeChartExtQuote?.price != null" class="stock-ext-inline-pill" :class="activeChartExtQuote.session">
+            <span class="ext-tag-name">
+              {{ activeChartExtQuote.session === 'pre' ? '🌅 盘前' : activeChartExtQuote.session === 'post' ? '🌇 盘后' : '🌙 隔夜' }}
+            </span>
+            <span class="ext-price-val">{{ num(activeChartExtQuote.price) }}</span>
+            <span class="ext-pct-val" :class="tone(activeChartExtQuote.changePercent)">{{ pct(activeChartExtQuote.changePercent) }}</span>
+          </span>
+        </div>
       </div>
       <div class="controls">
         <button @click="addWatch(symbol)">{{watchlist.includes(symbol)?'✓ 已在自选':'+ 加入自选'}}</button>
@@ -869,7 +889,7 @@
             </svg>
           </template>
           <template v-else>
-            <span class="legend-rect legend-vol-rect"></span>
+            <span class="legend-rect legend-vol-rect" :style="{ backgroundColor: activeKlineScheme.up }"></span>
           </template>
           <span class="ma-switch-label">{{ m.label === 'VOL' ? '成交量' : m.label }}</span>
         </button>

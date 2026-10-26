@@ -206,6 +206,79 @@ export function isLeveragedEtf(symbol, name = '') {
   return false;
 }
 
+export const SESSION_TYPES = {
+  PRE: 'pre',
+  REGULAR: 'regular',
+  POST: 'post',
+  OVERNIGHT: 'overnight',
+  CLOSED: 'closed'
+};
+
+export function getNyTime(date = new Date()) {
+  const d = date instanceof Date ? date : new Date(date);
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+    weekday: 'short'
+  });
+  const parts = Object.fromEntries(formatter.formatToParts(d).map(p => [p.type, p.value]));
+  const year = Number(parts.year);
+  const month = Number(parts.month);
+  const day = Number(parts.day);
+  const hour = Number(parts.hour);
+  const minute = Number(parts.minute);
+  const second = Number(parts.second);
+  const weekday = parts.weekday;
+  const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  const minutesOfDay = hour * 60 + minute;
+  return { year, month, day, hour, minute, second, weekday, dateStr, minutesOfDay, parts };
+}
+
+export function getCurrentSession(date = new Date()) {
+  const ny = getNyTime(date);
+  const { weekday, minutesOfDay, dateStr } = ny;
+
+  // Weekend checks
+  if (weekday === 'Sat') {
+    return { session: SESSION_TYPES.CLOSED, isExt: false, tradeDate: dateStr, desc: '周末休市' };
+  }
+  if (weekday === 'Sun') {
+    if (minutesOfDay >= 1200) {
+      return { session: SESSION_TYPES.OVERNIGHT, isExt: true, tradeDate: dateStr, desc: '周日隔夜时段' };
+    }
+    return { session: SESSION_TYPES.CLOSED, isExt: false, tradeDate: dateStr, desc: '周末休市' };
+  }
+  if (weekday === 'Fri' && minutesOfDay >= 1200) {
+    return { session: SESSION_TYPES.CLOSED, isExt: false, tradeDate: dateStr, desc: '周末休市' };
+  }
+
+  // Weekday Monday to Friday
+  if (minutesOfDay >= 240 && minutesOfDay < 570) {
+    // 04:00 - 09:30 Pre-market (北京夏令时 16:00 - 21:30)
+    return { session: SESSION_TYPES.PRE, isExt: true, tradeDate: dateStr, desc: '盘前交易' };
+  }
+  if (minutesOfDay >= 570 && minutesOfDay < 960) {
+    // 09:30 - 16:00 Regular Market (RTH)
+    return { session: SESSION_TYPES.REGULAR, isExt: false, tradeDate: dateStr, desc: '常规交易' };
+  }
+  if (minutesOfDay >= 960 && minutesOfDay < 1200) {
+    // 16:00 - 20:00 Post-market
+    return { session: SESSION_TYPES.POST, isExt: true, tradeDate: dateStr, desc: '盘后交易' };
+  }
+  if (minutesOfDay >= 1200 || minutesOfDay < 240) {
+    // 20:00 - 04:00 Overnight
+    return { session: SESSION_TYPES.OVERNIGHT, isExt: true, tradeDate: dateStr, desc: '隔夜交易' };
+  }
+
+  return { session: SESSION_TYPES.CLOSED, isExt: false, tradeDate: dateStr, desc: '休市' };
+}
+
 export function getSelectedExtQuote(quote, extMode = 'auto', currentSession = null) {
   if (!quote) return { price: null, changePercent: null, session: 'none', label: '—', status: '无数据' };
 
@@ -214,24 +287,27 @@ export function getSelectedExtQuote(quote, extMode = 'auto', currentSession = nu
 
   if (extMode === 'auto') {
     const active = currentSession?.session;
-    if (active === 'pre' && quote.pre?.price != null) {
-      target = 'pre';
-    } else if (active === 'post' && quote.post?.price != null) {
-      target = 'post';
-    } else if (active === 'overnight' && quote.overnight?.price != null) {
-      target = 'overnight';
+    if (active === SESSION_TYPES.PRE) {
+      target = SESSION_TYPES.PRE;
+      isCurrent = true;
+    } else if (active === SESSION_TYPES.POST) {
+      target = SESSION_TYPES.POST;
+      isCurrent = true;
+    } else if (active === SESSION_TYPES.OVERNIGHT) {
+      target = SESSION_TYPES.OVERNIGHT;
+      isCurrent = true;
     } else {
       if (quote.post?.price != null) {
-        target = 'post';
+        target = SESSION_TYPES.POST;
         isCurrent = false;
       } else if (quote.overnight?.price != null) {
-        target = 'overnight';
+        target = SESSION_TYPES.OVERNIGHT;
         isCurrent = false;
       } else if (quote.pre?.price != null) {
-        target = 'pre';
+        target = SESSION_TYPES.PRE;
         isCurrent = false;
       } else {
-        target = 'post';
+        target = SESSION_TYPES.POST;
         isCurrent = false;
       }
     }

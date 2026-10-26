@@ -145,8 +145,8 @@ export function resolveExtReferenceClose({
       // Overnight relative to the most recent completed RTH close
       return todayRthClose ?? prevRthClose ?? null;
     case SESSION_TYPES.PRE:
-      // Pre-market relative to previous completed RTH close
-      return prevRthClose ?? todayRthClose ?? null;
+      // Pre-market relative to latest completed RTH close
+      return todayRthClose ?? prevRthClose ?? null;
     case SESSION_TYPES.REGULAR:
     default:
       // Regular relative to previous trading day's RTH close
@@ -273,12 +273,15 @@ export function getSelectedExtQuote(quote, extMode = 'auto', currentSession = nu
 
   if (extMode === 'auto') {
     const active = currentSession?.session;
-    if (active === SESSION_TYPES.PRE && quote.pre?.price != null) {
+    if (active === SESSION_TYPES.PRE) {
       target = SESSION_TYPES.PRE;
-    } else if (active === SESSION_TYPES.POST && quote.post?.price != null) {
+      isCurrent = true;
+    } else if (active === SESSION_TYPES.POST) {
       target = SESSION_TYPES.POST;
-    } else if (active === SESSION_TYPES.OVERNIGHT && quote.overnight?.price != null) {
+      isCurrent = true;
+    } else if (active === SESSION_TYPES.OVERNIGHT) {
       target = SESSION_TYPES.OVERNIGHT;
+      isCurrent = true;
     } else {
       // In regular hours or closed: fallback to most recent completed EXT with price
       if (quote.post?.price != null) {

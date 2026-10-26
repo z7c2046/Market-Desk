@@ -40,11 +40,33 @@ export async function fetchYahooQuote(rawSymbol) {
     const regularTime = meta.regularMarketTime ? new Date(meta.regularMarketTime * 1000).toISOString() : null;
     const regularVolume = meta.regularMarketVolume ?? null;
 
-    const prePrice = meta.preMarketPrice ?? null;
-    const preTime = meta.preMarketTime ? new Date(meta.preMarketTime * 1000).toISOString() : null;
+    const currentSess = getCurrentSession();
+    let prePrice = meta.preMarketPrice ?? null;
+    let preTime = meta.preMarketTime ? new Date(meta.preMarketTime * 1000).toISOString() : null;
 
-    const postPrice = meta.postMarketPrice ?? null;
-    const postTime = meta.postMarketTime ? new Date(meta.postMarketTime * 1000).toISOString() : null;
+    let postPrice = meta.postMarketPrice ?? null;
+    let postTime = meta.postMarketTime ? new Date(meta.postMarketTime * 1000).toISOString() : null;
+
+    // Yahoo Finance v8 chart API:
+    // In pre-market or post-market, live/delayed extended trading price is provided in meta.fulldayPrice
+    if (currentSess.session === 'pre') {
+      if (meta.fulldayPrice != null && meta.fulldayPrice !== regularPrice) {
+        prePrice = meta.fulldayPrice;
+        preTime = new Date().toISOString();
+      } else if (meta.preMarketPrice != null) {
+        prePrice = meta.preMarketPrice;
+      }
+    } else if (currentSess.session === 'post') {
+      if (meta.fulldayPrice != null && meta.fulldayPrice !== regularPrice) {
+        postPrice = meta.fulldayPrice;
+        postTime = new Date().toISOString();
+      } else if (meta.postMarketPrice != null) {
+        postPrice = meta.postMarketPrice;
+      }
+    } else {
+      if (meta.preMarketPrice != null) prePrice = meta.preMarketPrice;
+      if (meta.postMarketPrice != null) postPrice = meta.postMarketPrice;
+    }
 
     const quote = buildMultiSessionQuote({
       symbol: sym,
@@ -67,7 +89,7 @@ export async function fetchYahooQuote(rawSymbol) {
       statusReason: '来自公开市场备用源'
     });
 
-    yahooCache.set(sym, { quote, expiresAt: Date.now() + 30000 });
+    yahooCache.set(sym, { quote, expiresAt: Date.now() + 15000 });
     return quote;
   } catch (err) {
     return null;

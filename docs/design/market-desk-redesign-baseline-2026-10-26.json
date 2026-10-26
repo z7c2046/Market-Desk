@@ -1,0 +1,115 @@
+﻿{
+    "date":  "2026-10-26",
+    "timezone":  "Asia/Shanghai",
+    "workspace":  "D:/YUXIANZHAO/Code/Market Desk",
+    "gitHead":  "b0e405c8878e1487841ec04b0f8659167547220b",
+    "basis":  "Current working tree including existing uncommitted edits; not a clean HEAD snapshot",
+    "existingModifiedFiles":  [
+                                  "public/app.js",
+                                  "public/index.html",
+                                  "public/styles.css",
+                                  "public/watchlist-model.js",
+                                  "src/market-sessions.js",
+                                  "src/watchlist-quotes.js",
+                                  "src/workspace-data.js",
+                                  "test/workspace-ui.test.js"
+                              ],
+    "prototype":  {
+                      "file":  "market-desk-approved-prototype-light-v1.png",
+                      "sha256":  "EDD0DC283F1A01C8AA6DF045294FF6377A264B98ADE03CD89DD7B4D6BB90371A",
+                      "role":  "Approved visual reference; existing heatmap and K-line override the image"
+                  },
+    "validation":  {
+                       "syntax":  "npm.cmd run check: passed",
+                       "testCommand":  "node --preserve-symlinks-main --preserve-symlinks --test test/market-sessions.test.js test/watchlist-model.test.js test/watchlist-api.test.js test/workspace.test.js test/workspace-http.test.js test/workspace-ui.test.js test/kline-geometry.test.js",
+                       "tests":  58,
+                       "passed":  58,
+                       "failed":  0,
+                       "normalCommandLimitation":  "Initial node test invocation hit EPERM lstat D:/YUXIANZHAO before tests loaded; preserve-symlinks flags resolved execution",
+                       "browser":  "Not revalidated in this documentation task",
+                       "marketCoverage":  "Not established by local tests",
+                       "revalidatedAfterConcurrentChanges":  true
+                   },
+    "files":  [
+                  {
+                      "path":  "public/index.html",
+                      "sha256":  "69BDA451EA9B72007A1F7B4BE1F3265D1C5785A7CB3E29A48978A4FF59BDF6E6",
+                      "bytes":  174860
+                  },
+                  {
+                      "path":  "public/app.js",
+                      "sha256":  "3C7A7E362E71D5D20D03841C85C6B3A8816E606BC2F4CB9BE0EC1C5CCB79F0B2",
+                      "bytes":  158141
+                  },
+                  {
+                      "path":  "public/styles.css",
+                      "sha256":  "E48C58E17A83D64F26D4896F6BDA564AC222EEB19B10942E2FFD66FED86E97F6",
+                      "bytes":  196728
+                  },
+                  {
+                      "path":  "public/watchlist-model.js",
+                      "sha256":  "72C8362E5D742E7ABA91E7686FD58032B42633780B4642442759F667CF6B13D3",
+                      "bytes":  47271
+                  },
+                  {
+                      "path":  "public/composables/klineGesture.js",
+                      "sha256":  "1148BE7162FB0C46861F12A453B48EC5B1EDAECF49B6E5B43FC9E0D454173263",
+                      "bytes":  14324
+                  },
+                  {
+                      "path":  "public/composables/klineGeometry.js",
+                      "sha256":  "F7B9D55897DD0851F4679AAB25A6D3580C598E0F3AF599AA4A00D588ADC81CC1",
+                      "bytes":  3639
+                  },
+                  {
+                      "path":  "public/composables/useChart.js",
+                      "sha256":  "76D9B80A64D39A861CCFEC0DC1197D96D13658234C377F2564398BB17A1698B0",
+                      "bytes":  9088
+                  },
+                  {
+                      "path":  "src/market-sessions.js",
+                      "sha256":  "7B591876DAA27F662B22ACFD309D65D710F47F17E67D0FE3498C9FBA94FCDB51",
+                      "bytes":  11387
+                  },
+                  {
+                      "path":  "src/watchlist-quotes.js",
+                      "sha256":  "3178BDC1268AFB557D8F605510C05C6976F0A31110EC46EAC68BF59031980908",
+                      "bytes":  11103
+                  },
+                  {
+                      "path":  "src/workspace-data.js",
+                      "sha256":  "37FE44393D7BE28A55B8DABCDD39A6757BD7BE4473A6F8684A593B18CBAF5423",
+                      "bytes":  13901
+                  },
+                  {
+                      "path":  "src/market-workspace.js",
+                      "sha256":  "CBA54E01A316E20A6717A9ED317441701EB46ECF07ED92D08D8EBC70E43BC392",
+                      "bytes":  8613
+                  },
+                  {
+                      "path":  "test/kline-geometry.test.js",
+                      "sha256":  "696A9469AF2DB5FA2216566094C78DBC86FC3749702700819217297C7953FED9",
+                      "bytes":  2471
+                  },
+                  {
+                      "path":  "test/workspace-ui.test.js",
+                      "sha256":  "D9BBF0BB012268EE3E63F94AA7E4D781EB2DD70CCEA62F6790CAA3EC47B3125D",
+                      "bytes":  14450
+                  },
+                  {
+                      "path":  "package.json",
+                      "sha256":  "6EFBCFDAA674B3723A738DD2EE83AB72FFC7539A6C92C0D1E89C4AED78298DA2",
+                      "bytes":  1189
+                  },
+                  {
+                      "path":  "package-lock.json",
+                      "sha256":  "3C04BAAC9EF0C08437075B9D772E0529A0A4BA920C06A308D4AB9C6507E17B33",
+                      "bytes":  40597
+                  }
+              ],
+    "observedConcurrentChangesDuringDocumentation":  [
+                                                         "public/app.js",
+                                                         "public/index.html",
+                                                         "test/workspace-ui.test.js"
+                                                     ]
+}

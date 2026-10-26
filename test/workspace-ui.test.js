@@ -25,7 +25,7 @@ async function mount(t, fetchImpl) {
   const appSrc = (await fs.readFile(new URL('../public/app.js', import.meta.url), 'utf8'))
     .replace("import { parseFlows } from './flows.js';", 'const parseFlows = window.parseFlows;')
     .replace("import { bindKlineGestures } from './composables/klineGesture.js';", 'const bindKlineGestures = window.bindKlineGestures;')
-    .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/watchlist-model\.js';/, 'const { WatchlistManager, sortWatchlistRows, getSelectedExtQuote, MAX_UNIQUE_SYMBOLS, validSymbol, SYMBOL_NAMES, NASDAQ100_STOCKS, SP500_STOCKS, isLeveragedEtf, STOCK_MARKET_CAPS, getStockMarketCap, sortSymbolsByMarketCap } = window;')
+    .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/watchlist-model\.js';/, 'const { WatchlistManager, sortWatchlistRows, getSelectedExtQuote, getCurrentSession, getNyTime, SESSION_TYPES, MAX_UNIQUE_SYMBOLS, validSymbol, SYMBOL_NAMES, NASDAQ100_STOCKS, SP500_STOCKS, isLeveragedEtf, STOCK_MARKET_CAPS, getStockMarketCap, sortSymbolsByMarketCap } = window;')
     .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/earnings-calendar-model\.js';/, 'const { AI_SECTOR_FILTERS, EARNINGS_DAYS, CORPORATE_LOGOS, DEFAULT_TECH_EARNINGS, MACRO_CALENDAR_ITEMS, filterEarningsByDay } = window;');
   w.eval(appSrc);
   await tick();
@@ -46,7 +46,7 @@ test('Vue page mounts, navigates all modules, wires chart data and handles watch
   const ui = await mount(t, async url => ({ ok: true, json: async () => fixture(url) }));
   assert.ok(ui.w.document.querySelector('#heatmap-chart')); assert.ok(ui.configs.get('heatmap-chart').series[0].data.length > 0);
   await ui.click('个股行情'); assert.equal(ui.configs.get('price-chart').series[0].data[0][1], 100);
-  const search = ui.w.document.querySelector('[aria-label="搜索美股代码"]'); search.value = 'BABA'; search.dispatchEvent(new ui.w.Event('input', { bubbles: true })); search.form.dispatchEvent(new ui.w.Event('submit', { bubbles: true, cancelable: true })); await tick();
+  const search = ui.w.document.querySelector('[aria-label="搜索美股代码"]'); search.value = 'BABA'; search.dispatchEvent(new ui.w.Event('input', { bubbles: true })); await tick(); search.form.dispatchEvent(new ui.w.Event('submit', { bubbles: true, cancelable: true })); await tick(); await tick();
   assert.match(ui.w.document.querySelector('main h2').textContent, /BABA/); await ui.click('+ 加入自选'); assert.ok(JSON.parse(ui.w.localStorage.getItem('market-desk-watchlist')).includes('BABA'));
   const lightAxis = ui.configs.get('price-chart').yAxis[0].axisLine.lineStyle.color;
   await ui.click('Dark');
@@ -102,6 +102,7 @@ test('K-line color schemes: defaults to classic (图一), switches to neon (图�
   assert.equal(chartCfg.backgroundColor, '#FFFFFF', 'Day mode has pure white #FFFFFF background');
   assert.equal(chartCfg.series[0].itemStyle.color, '#10B981', 'Default up color is classic green #10B981');
   assert.equal(chartCfg.series[0].itemStyle.color0, '#F43F5E', 'Default down color is classic red #F43F5E');
+  assert.equal(chartCfg.series[6].data[0].itemStyle.color, 'rgba(16, 185, 129, 0.75)', 'Day volume color is classic green with 0.75 alpha');
   assert.equal(chartCfg.xAxis[0].splitLine.show, true, 'X axis grid lines visible');
   assert.equal(chartCfg.yAxis[0].splitLine.show, true, 'Y axis grid lines visible');
 
@@ -110,12 +111,14 @@ test('K-line color schemes: defaults to classic (图一), switches to neon (图�
   chartCfg = ui.configs.get('price-chart');
   assert.equal(chartCfg.backgroundColor, '#000000', 'Dark mode has pure deep black #000000 background');
   assert.ok(chartCfg.xAxis[0].splitLine.lineStyle.color.includes('255'), 'Dark mode grid is subtle light grey');
+  assert.equal(chartCfg.series[6].data[0].itemStyle.color, 'rgba(16, 185, 129, 0.65)', 'Dark volume color is classic green with 0.65 alpha');
 
   // 3. Switch to neon (图二: #7CE138 up, #FF4D82 down)
   await ui.click('亮绿玫粉');
   chartCfg = ui.configs.get('price-chart');
   assert.equal(chartCfg.series[0].itemStyle.color, '#7CE138', 'Style 2 up color is neon lime #7CE138');
   assert.equal(chartCfg.series[0].itemStyle.color0, '#FF4D82', 'Style 2 down color is rose pink #FF4D82');
+  assert.equal(chartCfg.series[6].data[0].itemStyle.color, 'rgba(124, 225, 56, 0.65)', 'Volume series matches neon lime #7CE138');
   assert.equal(JSON.parse(ui.w.localStorage.getItem('market-desk-kline-scheme')), 'neon');
 
   // 4. Switch to cyberpunk (图三: #00D2FF up, #FF3377 down)
@@ -123,6 +126,7 @@ test('K-line color schemes: defaults to classic (图一), switches to neon (图�
   chartCfg = ui.configs.get('price-chart');
   assert.equal(chartCfg.series[0].itemStyle.color, '#00D2FF', 'Style 3 up color is electric cyan #00D2FF');
   assert.equal(chartCfg.series[0].itemStyle.color0, '#FF3377', 'Style 3 down color is electric pink #FF3377');
+  assert.equal(chartCfg.series[6].data[0].itemStyle.color, 'rgba(0, 210, 255, 0.65)', 'Volume series matches cyberpunk cyan #00D2FF');
   assert.equal(JSON.parse(ui.w.localStorage.getItem('market-desk-kline-scheme')), 'cyberpunk');
 
   // 5. Open Preferences Modal

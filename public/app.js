@@ -4,6 +4,9 @@ import {
   WatchlistManager,
   sortWatchlistRows,
   getSelectedExtQuote,
+  getCurrentSession,
+  getNyTime,
+  SESSION_TYPES,
   MAX_UNIQUE_SYMBOLS,
   validSymbol,
   SYMBOL_NAMES,
@@ -77,6 +80,24 @@ const tone = v => !Number.isFinite(v) || v === 0 ? 'muted' : v > 0 ? 'positive' 
 const time = v => v && Number.isFinite(Date.parse(v)) ? new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(v)) + ' 北京' : '时间未提供';
 function readStorage(key, fallback) { try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; } }
 
+function hexToRgba(hex, alpha = 1) {
+  if (!hex || typeof hex !== 'string') return hex;
+  let clean = hex.trim().replace(/^#/, '');
+  if (clean.length === 3) {
+    clean = clean.split('').map(c => c + c).join('');
+  }
+  if (clean.length === 6) {
+    const num = parseInt(clean, 16);
+    if (!isNaN(num)) {
+      const r = (num >> 16) & 255;
+      const g = (num >> 8) & 255;
+      const b = num & 255;
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+  }
+  return hex;
+}
+
 const KLINE_SCHEMES = {
   classic: {
     id: 'classic',
@@ -147,7 +168,15 @@ createApp({ setup() {
     { key: 'ma60', period: 60, label: 'MA60', desc: '60 日季线均线', color: '#a855f7' },
     { key: 'ma120', period: 120, label: 'MA120', desc: '120 日半年线', color: '#06b6d4' },
     { key: 'ma250', period: 250, label: 'MA250', desc: '250 日年线', color: '#eab308' },
-    { key: 'vol', period: null, label: 'VOL', desc: '成交量柱状图', color: '#10b981' }
+    {
+      key: 'vol',
+      period: null,
+      label: 'VOL',
+      desc: '成交量柱状图',
+      get color() {
+        return (KLINE_SCHEMES[klineScheme.value] || KLINE_SCHEMES.classic).up;
+      }
+    }
   ];
 
   function toggleMa(key) {
@@ -530,7 +559,6 @@ createApp({ setup() {
   // Quote Store & Session
   const quoteStore = ref({});
   const providerInfo = ref({ name: 'Longbridge', status: 'unconfigured', reason: '', isConfigured: false });
-  const currentSession = ref({ session: 'regular', isExt: false, desc: '常规交易' });
   const cellFlashes = reactive({}); // `${symbol}_${field}` -> 'up' | 'down'
 
   // Modals & UI Controls
@@ -714,6 +742,10 @@ createApp({ setup() {
   }
 
   const toast = ref(''), undoAction = ref(null), importing = ref(false), clock = ref(getAuthoritativeTime());
+  const serverSession = ref(null);
+  const currentSession = computed(() => {
+    return serverSession.value || (typeof getCurrentSession === 'function' ? getCurrentSession(clock.value) : { session: 'regular', isExt: false, desc: '常规交易' });
+  });
   const nyClock = computed(() => new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', hour12: false }).format(clock.value));
   const nyClockDetailed = computed(() => new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(clock.value));
   const nyClockInfo = computed(() => {
@@ -1599,6 +1631,27 @@ createApp({ setup() {
     return { isChart: false, title: currentNav.value?.label || 'Market Desk', subtitle: '' };
   });
 
+  const chartDelayStatus = computed(() => {
+    const q = quoteStore.value[symbol.value];
+    return q?.meta?.delayStatus || chart.value?.delayStatus || 'delayed';
+  });
+
+  const activeChartExtQuote = computed(() => {
+    const q = quoteStore.value[symbol.value];
+    if (q) {
+      const ext = getSelectedExtQuote(q, extMode.value, currentSession.value);
+      if (ext && ext.price != null) return ext;
+    }
+    if (chart.value?.extPrice != null) {
+      return {
+        price: chart.value.extPrice,
+        changePercent: chart.value.extChangePercent,
+        session: currentSession.value?.session || 'pre'
+      };
+    }
+    return null;
+  });
+
   function isStockGainer(s) {
     const q = quoteStore.value[s];
     if (q?.regular?.changePercent > 0 || q?.post?.changePercent > 0) return true;
@@ -2257,7 +2310,7 @@ createApp({ setup() {
         quoteStore.value = { ...quoteStore.value, ...data.quotes };
       }
       if (data.provider) providerInfo.value = data.provider;
-      if (data.session) currentSession.value = data.session;
+      if (data.session) serverSession.value = data.session;
       states.watchlist.error = '';
     } catch (err) {
       states.watchlist.error = err.message || '获取自选报价失败';
@@ -2839,7 +2892,8 @@ createApp({ setup() {
     const c = Number(bar.close).toFixed(2);
     const diff = Number(bar.close - bar.open).toFixed(2);
     const diffPct = bar.open > 0 ? ((bar.close - bar.open) / bar.open * 100).toFixed(2) + '%' : '0.00%';
-    const toneColor = bar.close >= bar.open ? 'var(--semantic-up)' : 'var(--semantic-down)';
+    const curKline = KLINE_SCHEMES[klineScheme.value] || KLINE_SCHEMES.classic;
+    const toneColor = bar.close >= bar.open ? curKline.up : curKline.down;
 
     const dateStr = bar.time
       ? new Intl.DateTimeFormat('zh-CN', {
@@ -2873,6 +2927,9 @@ createApp({ setup() {
     const textThemeColor = isDarkTheme ? '#94A3B8' : '#64748B';
     const showGrid = klineGridStyle.value !== 'none';
     const gridStyleNum = klineGridStyle.value === 'solid' ? 0 : 2;
+    const volAlpha = isDarkTheme ? 0.65 : 0.75;
+    const volUpColor = hexToRgba(klineUp, volAlpha);
+    const volDownColor = hexToRgba(klineDown, volAlpha);
 
     const bars = d.bars || [];
     if (!bars.length) return;
@@ -2947,6 +3004,7 @@ createApp({ setup() {
         const volumeSeries = chartInstance.addSeries(LW.HistogramSeries, {
           priceScaleId: 'volume',
           priceFormat: { type: 'volume' },
+          color: volUpColor,
           visible: klineMaVisibility.vol !== false
         });
         chartInstance.priceScale('volume').applyOptions({
@@ -3059,12 +3117,13 @@ createApp({ setup() {
       const volData = bars.map(b => ({
         time: b.time,
         value: b.volume || 0,
-        color: b.close >= b.open
-          ? (isDarkTheme ? 'rgba(16, 185, 129, 0.65)' : 'rgba(16, 185, 129, 0.75)')
-          : (isDarkTheme ? 'rgba(244, 63, 94, 0.65)' : 'rgba(244, 63, 94, 0.75)')
+        color: b.close >= b.open ? volUpColor : volDownColor
       }));
       if (lwVolumeSeries) {
-        lwVolumeSeries.applyOptions({ visible: klineMaVisibility.vol !== false });
+        lwVolumeSeries.applyOptions({
+          color: volUpColor,
+          visible: klineMaVisibility.vol !== false
+        });
       }
       lwVolumeSeries.setData(volData);
 
@@ -3204,7 +3263,7 @@ createApp({ setup() {
         { name: 'MA60', type: 'line', data: ma60, smooth: true, showSymbol: false, lineStyle: { width: 1.5, color: '#a855f7' } },
         { name: 'MA120', type: 'line', data: ma120, smooth: true, showSymbol: false, lineStyle: { width: 1.5, color: '#06b6d4' } },
         { name: 'MA250', type: 'line', data: ma250, smooth: true, showSymbol: false, lineStyle: { width: 1.5, color: '#eab308' } },
-        { name: '成交股数', type: 'bar', xAxisIndex: 1, yAxisIndex: 1, data: d.bars.map(b => ({ value: b.volume, itemStyle: { color: b.close >= b.open ? klineUp : klineDown } })) }
+        { name: '成交股数', type: 'bar', xAxisIndex: 1, yAxisIndex: 1, data: d.bars.map(b => ({ value: b.volume, itemStyle: { color: b.close >= b.open ? volUpColor : volDownColor } })) }
       ]
     });
   }
@@ -3520,7 +3579,7 @@ createApp({ setup() {
     aiSearchQuery, aiSearchEngine, aiSearchSource, aiSearchResults, aiSearchLoading, aiSearchError, aiSearchTelemetry, aiSearchCopiedId,
     AI_SEARCH_ENGINES, AI_SEARCH_SOURCES, AI_SEARCH_PRESETS,
     executeAiSearch, selectAiSearchPreset, filterAiNewsTopic, copyAiNewsLink, formatAiTime, getAiEngineBadge,
-    klineInteractionMode,
+    klineInteractionMode, chartDelayStatus, activeChartExtQuote,
     selectSymbol, search, refresh, loadOverview, loadChart, loadNews, loadOptions, resetPriceChartZoom, fetchWatchlistQuotes, importNotion, importFlows, clearFlows
   };
 } }).mount('#app');

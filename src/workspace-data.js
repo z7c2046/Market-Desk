@@ -207,13 +207,19 @@ export function parseYahoo(payload, symbol) {
   const previousBar = bars.filter(b => nyDate(new Date(b.time * 1000)) < tradeDate).at(-1);
   const previousClose = number(meta.previousClose) ?? previousBar?.close ?? null;
   const volume = number(meta.regularMarketVolume);
+  const fulldayPrice = number(meta.fulldayPrice);
+  const extPrice = (fulldayPrice != null && fulldayPrice !== price) ? fulldayPrice : null;
+  const extChangePercent = extPrice != null
+    ? (number(meta.fulldayChangePercent) ?? (price > 0 ? (extPrice / price - 1) * 100 : null))
+    : null;
   return {
     symbol, name: meta.longName || meta.shortName || symbol, price, previousClose,
     changePercent: price !== null && previousClose > 0 ? (price / previousClose - 1) * 100 : null,
+    extPrice, extChangePercent,
     volume, turnover: price !== null && volume !== null ? price * volume : null,
     dayHigh: number(meta.regularMarketDayHigh), dayLow: number(meta.regularMarketDayLow),
     currency: meta.currency || 'USD', asOf: meta.regularMarketTime ? new Date(meta.regularMarketTime * 1000).toISOString() : null,
-    source: 'Yahoo Finance', delay: '可能延迟', bars,
+    source: 'Yahoo Finance', delay: '可能延迟', delayStatus: 'delayed', bars,
   };
 }
 
