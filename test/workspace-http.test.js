@@ -27,7 +27,7 @@ test('partial provider failures are listed and chart preserves requested ticker'
     return Response.json({ chart: { result: [{ meta: { regularMarketPrice: 10, previousClose: 8, regularMarketTime: 1792612800 }, timestamp: [], indicators: { quote: [{}] } }] } });
   };
   const api = createMarketWorkspace({ fetchImpl }); const d = await api.overview();
-  assert.deepEqual(d.unavailable, ['NVDA']); assert.equal(d.stocks.length, 17); assert.equal(d.benchmarks.length, 5);
+  assert.deepEqual(d.unavailable, ['NVDA']); assert.equal(d.stocks.length, 17); assert.equal(d.benchmarks.length, 4);
   assert.equal((await api.chart({ symbol: 'AAPL' })).symbol, 'AAPL');
   await assert.rejects(api.chart({ symbol: 'AAPL', range: 'bad' }), /不支持/);
 });

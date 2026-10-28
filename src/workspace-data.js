@@ -2,7 +2,7 @@ import { XMLParser } from 'fast-xml-parser';
 
 export const BENCHMARKS = [
   ['^GSPC', '标普 500 指数'], ['^NDX', '纳斯达克 100 指数'], ['^DJI', '道琼斯工业指数'],
-  ['^RUT', '罗素 2000 指数'], ['^VIX', '波动率 VIX'],
+  ['^VIX', '波动率 VIX'],
 ].map(([symbol, name]) => ({ symbol, name }));
 export const SECTORS = [
   ['XLK', '科技'], ['XLC', '通信服务'], ['XLY', '可选消费'], ['XLP', '必需消费'],
@@ -25,6 +25,7 @@ export const MACRO_INDICATORS = [
   { symbol: 'US20Y', displaySymbol: 'US20Y', name: '20年期美债收益率', category: 'rates', icon: '🇺🇸', defaultPrice: 5.360, defaultChange: 0.66 },
   { symbol: '^TYX', displaySymbol: 'US30Y', name: '30年期美债收益率', category: 'rates', icon: '🇺🇸', defaultPrice: 5.314, defaultChange: 0.53 },
   { symbol: 'DX-Y.NYB', displaySymbol: 'DXY', name: '美元指数', category: 'fx', icon: '💲', defaultPrice: 101.782, defaultChange: 0.16 },
+  { symbol: 'CL=F', displaySymbol: 'CL=F', name: 'WTI 原油连续', category: 'commodity', icon: '🛢️', defaultPrice: 71.32, defaultChange: 0.32 },
   { symbol: 'BZ=F', displaySymbol: 'BRN1!', name: '布伦特原油连续', category: 'commodity', icon: '🛢️', defaultPrice: 117.18, defaultChange: 3.54 },
   { symbol: 'UKOIL', displaySymbol: 'UKOIL', name: '伦敦布伦特现货', category: 'commodity', icon: '🛢️', defaultPrice: 117.01, defaultChange: 3.63 },
   { symbol: 'GC=F', displaySymbol: 'XAU/USD', name: '黄金现货 / 合约', category: 'commodity', icon: '🪙', defaultPrice: 2748.50, defaultChange: 0.65 },

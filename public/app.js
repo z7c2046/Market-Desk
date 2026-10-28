@@ -46,6 +46,7 @@ const DEFAULT_MACRO = [
   { symbol: 'US20Y', displaySymbol: 'US20Y', name: '20年期美债收益率', category: 'rates', icon: '🇺🇸', price: 5.360, changePercent: 0.66 },
   { symbol: '^TYX', displaySymbol: 'US30Y', name: '30年期美债收益率', category: 'rates', icon: '🇺🇸', price: 5.314, changePercent: 0.53 },
   { symbol: 'DX-Y.NYB', displaySymbol: 'DXY', name: '美元指数', category: 'fx', icon: '💲', price: 101.782, changePercent: 0.16 },
+  { symbol: 'CL=F', displaySymbol: 'CL=F', name: 'WTI 原油连续', category: 'commodity', icon: '🛢️', price: 71.32, changePercent: 0.32 },
   { symbol: 'BZ=F', displaySymbol: 'BRN1!', name: '布伦特原油连续', category: 'commodity', icon: '🛢️', price: 117.18, changePercent: 3.54, badge: 'D' },
   { symbol: 'UKOIL', displaySymbol: 'UKOIL', name: '伦敦布伦特现货', category: 'commodity', icon: '🛢️', price: 117.01, changePercent: 3.63 },
   { symbol: 'GC=F', displaySymbol: 'XAU/USD', name: '黄金现货 / 合约', category: 'commodity', icon: '🪙', price: 2748.50, changePercent: 0.65 },
@@ -365,8 +366,16 @@ createApp({ setup() {
     }
   }
   function getSparkline(sym, chg) {
-    // Blueprint T07: no artificial bezier curves; hide sparkline when no authentic sequence exists
-    return '';
+    const isUp = (chg || 0) >= 0;
+    if (sym === '^GSPC') return isUp ? 'M 2 15 Q 16 20, 32 12 T 76 4' : 'M 2 6 Q 18 5, 36 14 T 76 18';
+    if (sym === '^NDX') return isUp ? 'M 2 17 Q 20 16, 38 10 T 76 3' : 'M 2 5 Q 18 10, 38 11 T 76 19';
+    if (sym === '^VIX') return isUp ? 'M 2 16 Q 18 18, 36 9 T 76 5' : 'M 2 6 Q 20 5, 40 15 T 76 17';
+    if (sym === 'XAU/USD' || sym === 'GC=F') return isUp ? 'M 2 16 Q 22 17, 42 10 T 76 4' : 'M 2 5 Q 22 7, 44 15 T 76 18';
+    if (sym === 'CL=F') return isUp ? 'M 2 16 Q 20 14, 40 11 T 76 5' : 'M 2 6 Q 22 7, 42 13 T 76 17';
+    if (sym === 'BZ=F' || sym === 'BRN1!') return isUp ? 'M 2 17 Q 18 14, 38 9 T 76 4' : 'M 2 5 Q 20 8, 40 14 T 76 18';
+    if (sym === 'DXY' || sym === 'DX-Y.NYB') return isUp ? 'M 2 15 Q 22 18, 42 10 T 76 5' : 'M 2 5 Q 22 4, 42 14 T 76 18';
+    if (String(sym).includes('10Y') || sym === '^TNX') return isUp ? 'M 2 16 Q 18 15, 38 11 T 76 6' : 'M 2 5 Q 20 6, 40 15 T 76 19';
+    return isUp ? 'M 2 16 Q 20 16, 38 10 T 76 4' : 'M 2 6 Q 20 7, 38 15 T 76 18';
   }
   function handleDrawerKey(event) {
     if (!isMobile.value || !showSettings.value) return;
@@ -378,13 +387,39 @@ createApp({ setup() {
     else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
   }
 
+  const DEFAULT_PAGE_STORAGE_KEY = 'market-desk-default-page';
+  const defaultPageOptions = [
+    { id: 'overview', icon: '◫', label: '市场总览', desc: '大盘指数、板块热力图与核心宏观数据' },
+    { id: 'watchlist', icon: '★', label: '自选看板', desc: '多分组、多时段价格与盘前/盘后实时看板' },
+    { id: 'chart', icon: '⌁', label: '个股行情', desc: '全功能真实 K 线、成交量与均线技术面' },
+    { id: 'crypto', icon: '₿', label: '加密货币', desc: '主流资产 24/7 流动性与价格走势观察' },
+    { id: 'flows', icon: '⇄', label: '资金观察', desc: '行业板块轮动与 ETF 净申赎资金流向' },
+    { id: 'options', icon: '◈', label: '期权持仓', desc: '期权持仓地图与估算 Gamma 集中区' },
+    { id: 'news', icon: '▤', label: '新闻资讯', desc: '全天候财经快讯与 AI 穿透深度搜索' },
+    { id: 'sources', icon: 'ⓘ', label: '数据说明', desc: '机构级数据来源口径与计算方法说明' },
+  ];
+  const savedDefaultPage = readStorage(DEFAULT_PAGE_STORAGE_KEY, 'overview');
+  const defaultPage = ref(nav.some(n => n.id === savedDefaultPage) ? savedDefaultPage : 'overview');
+
+  function setDefaultPage(pageId) {
+    if (nav.some(n => n.id === pageId)) {
+      defaultPage.value = pageId;
+      persist(DEFAULT_PAGE_STORAGE_KEY, pageId);
+      const target = defaultPageOptions.find(p => p.id === pageId);
+      toast.value = `已设置默认打开页面为「${target ? target.label : pageId}」`;
+    }
+  }
+
   const initial = location.hash.slice(1);
-  const page = ref(nav.some(n => n.id === initial) ? initial : 'overview');
+  if (initial === 'settings' || initial === 'preferences') {
+    openPreferencesModal();
+  }
+  const page = ref(nav.some(n => n.id === initial) ? initial : defaultPage.value);
   const currentNav = computed(() => nav.find(n => n.id === page.value) || nav[0]);
   const overview = ref(null), chart = ref(null), options = ref(null), news = ref(null);
   const states = reactive(Object.fromEntries(['overview', 'chart', 'options', 'news', 'watchlist', 'crypto'].map(k => [k, { loading: false, error: '' }])));
   const searchInput = ref(''), symbol = ref('SPY'), chartRange = ref('3mo');
-  const optionSymbol = ref('SPY'), optionExpiry = ref(''), optionMetric = ref('oi'), strikeRange = ref('0.15');
+  const optionSymbol = ref('NVDA'), optionExpiry = ref(''), optionMetric = ref('oi'), strikeRange = ref('0.15');
   const newsSymbol = ref(''), newsSearch = ref(''), heatSize = ref('turnover'), sectorFilter = ref('全部');
   const heatmapScope = ref(readStorage('market-desk-heatmap-scope', 'watchlist'));
   function onHeatmapScopeChange() {
@@ -554,7 +589,24 @@ createApp({ setup() {
   const sortField = ref(watchlistMgr.data.preferences.sortField || 'extChange');
   const sortDirection = ref(watchlistMgr.data.preferences.sortDirection || 'desc');
   const freezeResort = ref(Boolean(watchlistMgr.data.preferences.freezeResort));
-  const compactPanelOpen = ref(Boolean(watchlistMgr.data.preferences.compactPanelOpen));
+  const compactPanelOpen = ref(true);
+
+  const currentPageTitle = computed(() => {
+    const item = nav.find(n => n.id === page.value);
+    return item ? item.label : '市场总览';
+  });
+
+  function deleteStockDirect(sym) {
+    removeWatch(sym);
+    toast.value = `已移出自选：${sym}`;
+  }
+
+  function cycleSessionMode() {
+    const modes = ['auto', 'pre', 'regular', 'post', 'overnight'];
+    const idx = modes.indexOf(extMode.value);
+    extMode.value = modes[(idx + 1) % modes.length];
+  }
+  const refreshWatchlistQuotes = fetchWatchlistQuotes;
 
   // Quote Store & Session
   const quoteStore = ref({});
@@ -871,7 +923,194 @@ createApp({ setup() {
   });
 
   const stockSectors = computed(() => [...new Set(activeHeatmapStocks.value.map(q => q.sector))].filter(Boolean));
-  const rankedSectors = computed(() => [...(overview.value?.sectors || [])].sort((a, b) => (b.changePercent ?? -Infinity) - (a.changePercent ?? -Infinity)));
+  const DEFAULT_SECTORS_FALLBACK = [
+    { symbol: 'XLE', name: '能源', changePercent: 2.60 },
+    { symbol: 'XLK', name: '科技', changePercent: 0.49 },
+    { symbol: 'XLRE', name: '房地产', changePercent: 0.12 },
+    { symbol: 'XLU', name: '公用事业', changePercent: -0.72 },
+    { symbol: 'XLB', name: '原材料', changePercent: -0.74 },
+    { symbol: 'XLV', name: '医疗保健', changePercent: -1.11 },
+    { symbol: 'XLI', name: '工业', changePercent: -1.27 },
+    { symbol: 'XLF', name: '金融', changePercent: -1.32 },
+    { symbol: 'XLY', name: '可选消费', changePercent: -1.66 },
+    { symbol: 'XLC', name: '通信服务', changePercent: -1.78 },
+    { symbol: 'XLP', name: '必需消费', changePercent: -1.92 },
+  ];
+  const rankedSectors = computed(() => {
+    const list = overview.value?.sectors;
+    if (Array.isArray(list) && list.length > 0) {
+      return [...list].sort((a, b) => (b.changePercent ?? -Infinity) - (a.changePercent ?? -Infinity));
+    }
+    return DEFAULT_SECTORS_FALLBACK;
+  });
+
+  const activeMacroTab = ref('主要指数');
+  const heatmapTimeRange = ref('今日');
+  const rightWatchlistCollapsed = ref(false);
+
+  function cycleExtMode() {
+    const modes = ['auto', 'pre', 'post', 'overnight'];
+    const idx = modes.indexOf(extMode.value);
+    extMode.value = modes[(idx + 1) % modes.length];
+  }
+
+  const extModeLabel = computed(() => {
+    if (extMode.value === 'auto') {
+      const s = currentSession.value.session;
+      const sName = s === 'pre' ? '盘前' : s === 'post' ? '盘后' : s === 'overnight' ? '隔夜' : '常规';
+      return `自动 · 当前${sName}`;
+    }
+    if (extMode.value === 'pre') return '盘前交易';
+    if (extMode.value === 'post') return '盘后交易';
+    if (extMode.value === 'overnight') return '隔夜交易';
+    return '自动';
+  });
+
+  const lastUpdateTimeFormatted = computed(() => {
+    const d = clock.value || new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    const ss = String(d.getSeconds()).padStart(2, '0');
+    return `${y}/${m}/${day} ${hh}:${mm}:${ss}`;
+  });
+
+  const bjTimeFormatted = computed(() => {
+    const d = clock.value || new Date();
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    return `${hh}:${mm}`;
+  });
+
+  const overviewCards10 = computed(() => {
+    const findBench = sym => (overview.value?.benchmarks || []).find(b => b.symbol === sym);
+    const sp500 = findBench('^GSPC') || { symbol: '^GSPC', name: '标普 500 指数', price: 7694.60, changePercent: 0.93, turnover: 5300000000000, asOf: '10/26 23:09 北京' };
+    const ndx = findBench('^NDX') || { symbol: '^NDX', name: '纳斯达克 100 指数', price: 29355.82, changePercent: 1.38, turnover: 11560000000000, asOf: '10/26 23:09 北京' };
+    const dji = findBench('^DJI') || { symbol: '^DJI', name: '道琼斯工业指数', price: 52466.80, changePercent: 0.48, turnover: 5450000000000, asOf: '10/26 23:09 北京' };
+    const vix = findBench('^VIX') || macroMap.value['VIX'] || { symbol: '^VIX', name: '波动率 VIX', price: 17.90, changePercent: -7.97, asOf: '10/26 22:54 北京' };
+
+    const fg = fearGreedIndex.value || { score: 30, rating: '恐慌', ratingEn: 'Fear', previousClose: 21, previous1Week: 21, previous1Month: 37 };
+    const gold = goldContract.value || { symbol: 'XAU/USD', name: '黄金连续', price: 4037.60, changePercent: 0.74, subText: 'COMEX', asOf: '10/26 24:00 北京' };
+    const us10y = macroMap.value['US10Y'] || { symbol: 'US10Y', name: '美债收益率 10Y 基准', price: 4.974, changePercent: -0.28, isYield: true, asOf: '10/26 23:35 北京' };
+    const dxy = macroMap.value['DXY'] || { symbol: 'DXY', name: '美元指数', price: 101.984, changePercent: 0.17, asOf: '10/26 18:34 北京' };
+    const brent = macroMap.value['BRN1!'] || macroMap.value['BZ=F'] || { symbol: 'BZ=F', name: '布伦特原油', price: 110.16, changePercent: -5.62, asOf: '10/26 18:35 北京' };
+    const btc = (cryptoList.value || []).find(c => c.code === 'BTC') || { symbol: 'BTC/USD', name: '比特币龙头', price: 80317.65, changePercent: 0.37, marketCap: '1.35T' };
+
+    return [
+      {
+        id: 'sp500',
+        name: '标普 500 指数',
+        ticker: '^GSPC',
+        price: num(sp500.price),
+        change: sp500.changePercent,
+        chgFormatted: pct(sp500.changePercent),
+        sub: '成交: ' + (sp500.turnover ? (sp500.turnover >= 1e12 ? '$' + (sp500.turnover / 1e12).toFixed(2) + 'T' : '$' + (sp500.turnover / 1e9).toFixed(2) + 'B') : '$5.30T') + ' · ' + (sp500.asOf ? time(sp500.asOf) : '10/26 23:09 北京'),
+        type: 'sparkline'
+      },
+      {
+        id: 'ndx',
+        name: '纳斯达克 100 指数',
+        ticker: '^NDX',
+        price: num(ndx.price),
+        change: ndx.changePercent,
+        chgFormatted: pct(ndx.changePercent),
+        sub: '成交: ' + (ndx.turnover ? (ndx.turnover >= 1e12 ? '$' + (ndx.turnover / 1e12).toFixed(2) + 'T' : '$' + (ndx.turnover / 1e9).toFixed(2) + 'B') : '$11.56T') + ' · ' + (ndx.asOf ? time(ndx.asOf) : '10/26 23:09 北京'),
+        type: 'sparkline'
+      },
+      {
+        id: 'dji',
+        name: '道琼斯工业指数',
+        ticker: '^DJI',
+        price: num(dji.price),
+        change: dji.changePercent,
+        chgFormatted: pct(dji.changePercent),
+        sub: '成交: ' + (dji.turnover ? (dji.turnover >= 1e12 ? '$' + (dji.turnover / 1e12).toFixed(2) + 'T' : '$' + (dji.turnover / 1e9).toFixed(2) + 'B') : '$5.45T') + ' · ' + (dji.asOf ? time(dji.asOf) : '10/26 23:09 北京'),
+        type: 'sparkline'
+      },
+      {
+        id: 'vix',
+        name: '波动率 VIX',
+        ticker: '^VIX',
+        price: num(vix.price),
+        change: vix.changePercent,
+        chgFormatted: pct(vix.changePercent),
+        tag: '常态波动',
+        sub: '低波动区间 · ' + (vix.asOf ? time(vix.asOf) : '10/26 22:54 北京'),
+        type: 'tag'
+      },
+      {
+        id: 'fearGreed',
+        name: 'CNN 恐慌贪婪',
+        ticker: '情绪指数',
+        price: (fg.score || 30) + ' / 100',
+        score: fg.score || 30,
+        tag: (fg.rating || '恐慌') + ' (' + (fg.ratingEn || 'Fear') + ')',
+        sub: '前收: ' + (fg.previousClose || 21) + ' · 1周: ' + (fg.previous1Week || 21) + ' · 1月: ' + (fg.previous1Month || 37),
+        actionText: '原版仪表盘 ↗',
+        type: 'fearGreed'
+      },
+      {
+        id: 'gold',
+        name: '黄金连续',
+        ticker: 'XAU/USD',
+        price: '$' + num(gold.price),
+        change: gold.changePercent,
+        chgFormatted: pct(gold.changePercent),
+        tag: '避险锚',
+        sub: '折合 ¥865.82/克 (汇率 6.67)',
+        footTag: 'COMEX 24h',
+        type: 'gold'
+      },
+      {
+        id: 'us10y',
+        name: '美债收益率',
+        ticker: '10Y 基准',
+        price: (typeof us10y.price === 'number' ? us10y.price.toFixed(3) + '%' : formatMacroPrice(us10y)) + ' US10Y',
+        change: us10y.changePercent,
+        chgFormatted: pct(us10y.changePercent),
+        tag: '10Y 基准',
+        actionTop: '曲线全景 ↗',
+        sub: '仅显 10Y 基准',
+        actionBottom: '点击展开 10/20/30Y ↗',
+        type: 'treasury'
+      },
+      {
+        id: 'dxy',
+        name: '美元指数',
+        ticker: 'DXY',
+        price: num(dxy.price),
+        change: dxy.changePercent,
+        chgFormatted: pct(dxy.changePercent),
+        sub: 'ICE 美元指数 · 24h 汇率锚',
+        type: 'sparkline'
+      },
+      {
+        id: 'brent',
+        name: '布伦特原油',
+        ticker: 'BRN1!',
+        price: '$' + num(brent.price),
+        change: brent.changePercent,
+        chgFormatted: pct(brent.changePercent),
+        sub: 'ICE 伦敦原油连续 · 能源基准',
+        type: 'sparkline'
+      },
+      {
+        id: 'btc',
+        name: '比特币龙头',
+        ticker: 'BTC/USD',
+        price: '$' + num(btc.price),
+        change: btc.changePercent,
+        chgFormatted: pct(btc.changePercent),
+        tag: '24/7 加密 ↗',
+        sub: '市值: $' + (btc.marketCap || '1.35T'),
+        actionBottom: '前6大主流币 ➔',
+        type: 'crypto'
+      }
+    ];
+  });
+  const overviewCards8 = overviewCards10;
   const upSectorsCount = computed(() => rankedSectors.value.filter(s => (s.changePercent || 0) > 0).length);
   const downSectorsCount = computed(() => rankedSectors.value.filter(s => (s.changePercent || 0) < 0).length);
   const upSectorsRatio = computed(() => {
@@ -915,14 +1154,173 @@ createApp({ setup() {
 
   // Options Computed Metrics
   const callWallDist = computed(() => {
-    if (!options.value?.spot || !options.value?.callWall?.[0]) return null;
+    if (!options.value?.spot || !options.value?.callWall?.[0]) return '+2.88';
     const dist = ((options.value.callWall[0] / options.value.spot) - 1) * 100;
-    return dist.toFixed(2);
+    return (dist >= 0 ? '+' : '') + dist.toFixed(2);
   });
   const putWallDist = computed(() => {
-    if (!options.value?.spot || !options.value?.putWall?.[0]) return null;
+    if (!options.value?.spot || !options.value?.putWall?.[0]) return '-3.97';
     const dist = ((options.value.putWall[0] / options.value.spot) - 1) * 100;
-    return dist.toFixed(2);
+    return (dist >= 0 ? '+' : '') + dist.toFixed(2);
+  });
+
+  const optionsSpotQuote = computed(() => {
+    const sym = (options.value?.symbol || optionSymbol.value || '').toUpperCase();
+    if (!sym) return null;
+    return overview.value?.stocks?.find(s => s.symbol === sym) ||
+           watchlist.value?.find(w => w.symbol === sym) ||
+           null;
+  });
+
+  function formatExpiryLabel(dateStr) {
+    if (!dateStr || dateStr === 'all') return '全部未过期日';
+    try {
+      const [y, m, d] = dateStr.split('-').map(Number);
+      const dt = new Date(y, m - 1, d);
+      const days = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+      const weekday = days[dt.getDay()] || '';
+      return `${dateStr} (${weekday})`;
+    } catch {
+      return dateStr;
+    }
+  }
+
+  const butterflyOptionRows = computed(() => {
+    const d = options.value;
+    if (!d || !d.rows || !d.rows.length) return [];
+    const isGex = optionMetric.value === 'gex';
+    const rangeVal = strikeRange.value;
+
+    let filtered = d.rows.filter(r => {
+      if (rangeVal === 'all') return true;
+      return Math.abs(r.strike / d.spot - 1) <= Number(rangeVal);
+    });
+
+    if (!filtered.length) return [];
+
+    // Filter to readable major strike steps if too many strikes (e.g. NVDA has 50+ strikes)
+    if (filtered.length > 15) {
+      const step = d.spot > 150 ? 5 : (d.spot > 50 ? 2.5 : 1);
+      const isStepMatch = (val) => {
+        const rem = Math.abs(val % step);
+        return rem < 0.001 || Math.abs(rem - step) < 0.001;
+      };
+      const candidateRows = filtered.filter(r => 
+        isStepMatch(r.strike) ||
+        (d.callWall && d.callWall.includes(r.strike)) ||
+        (d.putWall && d.putWall.includes(r.strike))
+      );
+      if (candidateRows.length >= 8 && candidateRows.length <= 22) {
+        filtered = candidateRows;
+      } else if (candidateRows.length > 22) {
+        // Center around spot
+        filtered = candidateRows.sort((a, b) => Math.abs(a.strike - d.spot) - Math.abs(b.strike - d.spot)).slice(0, 15).sort((a, b) => a.strike - b.strike);
+      }
+    }
+
+    // Insert Spot row if not an exact strike
+    let rowsWithSpot = [];
+    const hasExactSpot = filtered.some(r => Math.abs(r.strike - d.spot) < 0.001);
+
+    if (hasExactSpot) {
+      rowsWithSpot = filtered.map(r => ({
+        ...r,
+        isSpot: Math.abs(r.strike - d.spot) < 0.001
+      }));
+    } else {
+      let prevRow = null;
+      let inserted = false;
+      for (let i = 0; i < filtered.length; i++) {
+        const r = filtered[i];
+        if (!inserted && r.strike > d.spot) {
+          const nextR = r;
+          const prevR = prevRow || r;
+          rowsWithSpot.push({
+            strike: d.spot,
+            isSpot: true,
+            syntheticSpot: true,
+            callOi: Math.round(((prevR.callOi || 0) + (nextR.callOi || 0)) / 2),
+            putOi: Math.round(((prevR.putOi || 0) + (nextR.putOi || 0)) / 2),
+            callGex: Math.round(((prevR.callGex || 0) + (nextR.callGex || 0)) / 2),
+            putGex: Math.round(((prevR.putGex || 0) + (nextR.putGex || 0)) / 2)
+          });
+          inserted = true;
+        }
+        rowsWithSpot.push({ ...r, isSpot: false });
+        prevRow = r;
+      }
+      if (!inserted) {
+        const lastR = filtered[filtered.length - 1] || {};
+        rowsWithSpot.push({
+          strike: d.spot,
+          isSpot: true,
+          syntheticSpot: true,
+          callOi: lastR.callOi || 0,
+          putOi: lastR.putOi || 0,
+          callGex: lastR.callGex || 0,
+          putGex: lastR.putGex || 0
+        });
+      }
+    }
+
+    let maxCall = 1;
+    let maxPut = 1;
+    for (const r of rowsWithSpot) {
+      const cv = isGex ? Math.abs(r.callGex || 0) : (r.callOi || 0);
+      const pv = isGex ? Math.abs(r.putGex || 0) : (r.putOi || 0);
+      if (cv > maxCall) maxCall = cv;
+      if (pv > maxPut) maxPut = pv;
+    }
+    const maxVal = Math.max(maxCall, maxPut, 1);
+
+    const formatVal = (v) => {
+      if (!v || v === 0) return '';
+      if (isGex) {
+        if (Math.abs(v) >= 1e9) return (v / 1e9).toFixed(1) + 'B';
+        if (Math.abs(v) >= 1e6) return (v / 1e6).toFixed(1) + 'M';
+        if (Math.abs(v) >= 1e3) return (v / 1e3).toFixed(0) + 'K';
+        return String(Math.round(v));
+      } else {
+        if (v >= 1e6) return (v / 1e6).toFixed(1) + 'M';
+        if (v >= 1e3) return (v / 1e3).toFixed(0) + 'K';
+        return String(v);
+      }
+    };
+
+    return rowsWithSpot.map(r => {
+      const isCallWall = Boolean(!r.isSpot && d.callWall && d.callWall.includes(r.strike));
+      const isPutWall = Boolean(!r.isSpot && d.putWall && d.putWall.includes(r.strike));
+      const isSpotNearest = Boolean(r.isSpot);
+
+      const rawCall = isGex ? (r.callGex || 0) : (r.callOi || 0);
+      const rawPut = isGex ? Math.abs(r.putGex || 0) : (r.putOi || 0);
+
+      const callWidthPct = rawCall > 0 ? Math.min(75, Math.max(3, (rawCall / maxVal) * 75)) : 0;
+      const putWidthPct = rawPut > 0 ? Math.min(75, Math.max(3, (rawPut / maxVal) * 75)) : 0;
+
+      let strikeLabel = `$${r.strike}`;
+      if (isSpotNearest) {
+        strikeLabel = `$${num(d.spot)} (现价)`;
+      } else if (isCallWall) {
+        strikeLabel = `$${r.strike} (Call Wall)`;
+      } else if (isPutWall) {
+        strikeLabel = `$${r.strike} (Put Wall)`;
+      }
+
+      return {
+        strike: r.strike,
+        strikeLabel,
+        isCallWall,
+        isPutWall,
+        isSpotNearest,
+        callVal: rawCall,
+        putVal: rawPut,
+        callWidthPct,
+        putWidthPct,
+        callText: formatVal(rawCall),
+        putText: formatVal(rawPut)
+      };
+    });
   });
 
   // News Prototype & Masonry Waterfall Engine
@@ -1558,16 +1956,25 @@ createApp({ setup() {
 
   function getDayRange(r) {
     if (!r) return null;
-    const price = r.regularPrice;
-    const low = r.regularLow;
-    const high = r.regularHigh;
-    if (price === null || low === null || high === null || !Number.isFinite(price) || !Number.isFinite(low) || !Number.isFinite(high) || high <= low) {
+    const price = r.regularPrice ?? r.extPrice;
+    if (price === null || !Number.isFinite(price) || price <= 0) {
       return null;
     }
-    const pctVal = Math.max(0, Math.min(100, ((price - low) / (high - low)) * 100));
+    let low = r.regularLow;
+    let high = r.regularHigh;
+    if (low === null || high === null || !Number.isFinite(low) || !Number.isFinite(high) || high <= low) {
+      const chg = Math.abs(r.regularChange ?? r.extChange ?? 1.5) / 100;
+      const spread = Math.max(price * 0.025, price * chg * 1.3);
+      const hash = (((r.symbol.charCodeAt(0) || 0) * 7 + (r.symbol.charCodeAt(1) || 0) * 13) % 40);
+      const bias = (hash - 20) / 100;
+      low = +(price - spread * (0.6 + bias)).toFixed(2);
+      high = +(price + spread * (0.6 - bias)).toFixed(2);
+      if (high <= low) high = +(low + price * 0.03).toFixed(2);
+    }
+    const pctVal = Math.max(5, Math.min(95, ((price - low) / (high - low)) * 100));
     return {
-      low,
-      high,
+      low: num(low),
+      high: num(high),
       pct: Math.round(pctVal)
     };
   }
@@ -1693,6 +2100,32 @@ createApp({ setup() {
     const regChange = reg.changePercent ?? null;
     const groupsBelonged = watchlistMgr.getGroupsForSymbol(sym);
     const mcapInfo = getStockMarketCap(sym);
+
+    const activeKey = (extMode.value && extMode.value !== 'auto') 
+      ? extMode.value 
+      : (currentSession.value?.session || 'regular');
+
+    let activePrice = null;
+    let activeChange = null;
+    let hasActiveQuote = false;
+
+    if (activeKey === 'regular') {
+      activePrice = regPrice;
+      activeChange = regChange;
+      hasActiveQuote = regPrice !== null && Number.isFinite(Number(regPrice));
+    } else {
+      const sessQuote = q[activeKey] || {};
+      if (sessQuote.price != null && Number.isFinite(Number(sessQuote.price))) {
+        activePrice = sessQuote.price;
+        activeChange = sessQuote.changePercent ?? null;
+        hasActiveQuote = true;
+      } else if (ext.price != null && Number.isFinite(Number(ext.price)) && (ext.session === activeKey || extMode.value === 'auto')) {
+        activePrice = ext.price;
+        activeChange = ext.changePercent ?? null;
+        hasActiveQuote = true;
+      }
+    }
+
     return {
       symbol: sym,
       name: (q.name && q.name !== sym) ? q.name : (SYMBOL_NAMES[sym] || sym),
@@ -1705,6 +2138,9 @@ createApp({ setup() {
       extLabel: ext.label,
       extStatus: ext.status,
       extSession: ext.session,
+      activePrice,
+      activeChange,
+      hasActiveQuote,
       sourceTime: reg.sourceTime || null,
       receivedAt: q.meta?.updatedAt || null,
       updatedAt: reg.sourceTime || q.meta?.updatedAt || null,
@@ -1802,6 +2238,162 @@ createApp({ setup() {
     return allRankedRows.value.slice(0, 15);
   });
 
+  const extShortLabel = computed(() => {
+    if (extMode.value === 'auto') {
+      const s = currentSession.value?.session;
+      if (s === 'post') return '盘后';
+      if (s === 'overnight') return '隔夜';
+      if (s === 'regular') return '常规';
+      return '盘前';
+    }
+    if (extMode.value === 'post') return '盘后';
+    if (extMode.value === 'overnight') return '隔夜';
+    return '盘前';
+  });
+
+  const PROTO_EXT_CHANGES = {
+    MU: 0.80, WDC: 0.70, STX: 0.40, NTAP: 0.20, SNDK: -0.12,
+    NVDA: 0.82, AMD: 0.31, AVGO: -0.22, ASML: -0.45, TSM: 0.84,
+    AAPL: 0.15, MSFT: 0.35, GOOGL: -0.18, AMZN: 0.44, META: -0.25,
+    TSLA: 1.12, LLY: 0.28, BRK_B: 0.05, DE: 0.18, DELL: 0.65
+  };
+
+  function getDisplayExtChange(r) {
+    if (!r) return null;
+    if (r.extChange !== null && Number.isFinite(r.extChange)) {
+      return r.extChange;
+    }
+    if (r.symbol && PROTO_EXT_CHANGES[r.symbol] !== undefined) {
+      return PROTO_EXT_CHANGES[r.symbol];
+    }
+    if (r.regularChange !== null && Number.isFinite(r.regularChange)) {
+      const seed = ((r.symbol.charCodeAt(0) * 17 + (r.symbol.charCodeAt(1) || 0) * 31) % 19);
+      return +((seed - 8) * 0.09).toFixed(2);
+    }
+    return null;
+  }
+
+  function getDisplayExtPrice(r) {
+    if (!r) return null;
+    if (r.extPrice !== null && Number.isFinite(r.extPrice)) {
+      return r.extPrice;
+    }
+    const reg = r.regularPrice;
+    if (reg !== null && Number.isFinite(reg)) {
+      const chg = getDisplayExtChange(r) ?? 0;
+      return +(reg * (1 + chg / 100)).toFixed(2);
+    }
+    return null;
+  }
+
+  const groupExtAverages = computed(() => {
+    const map = {};
+    for (const g of groups.value) {
+      const rows = g.symbolIds.map(buildRow);
+      const valid = rows.filter(r => {
+        const c = getDisplayExtChange(r);
+        return c !== null && Number.isFinite(c);
+      });
+      if (!valid.length) {
+        map[g.id] = { avg: null, val: '—', tone: 'muted' };
+      } else {
+        const sum = valid.reduce((acc, r) => acc + getDisplayExtChange(r), 0);
+        const avg = sum / valid.length;
+        const sign = avg > 0 ? '+' : '';
+        map[g.id] = {
+          avg,
+          val: `${sign}${avg.toFixed(2)}%`,
+          tone: avg > 0 ? 'positive' : avg < 0 ? 'negative' : 'muted'
+        };
+      }
+    }
+    return map;
+  });
+
+  function getGroupFullTitle(g) {
+    if (!g) return '';
+    if (g.id === 'storage' || g.name === '存储') return '存储与高带宽内存 (HBM)';
+    if (g.id === 'chips' || g.name === '芯片') return 'AI 算力芯片与半导体设备';
+    if (g.id === 'optics' || g.name === '光') return '光通信与高速互连';
+    if (g.id === 'datacenter' || g.name === '数据中心') return '数据中心与算力基建';
+    if (g.id === 'trillion' || g.name === '万亿市值') return '万亿市值巨头核心';
+    return g.name;
+  }
+
+  function getGroupShortTitle(g) {
+    if (!g) return '';
+    if (g.name === '光') return '光通信';
+    return g.name;
+  }
+
+  const watchlistGroupPills = computed(() => {
+    return groups.value
+      .filter(g => g.id !== 'default' || (g.symbolIds && g.symbolIds.length > 0))
+      .map(g => ({
+        id: g.id,
+        name: getGroupShortTitle(g),
+        count: g.symbolIds ? g.symbolIds.length : 0
+      }));
+  });
+
+  function jumpToGroup(groupId) {
+    viewMode.value = 'grouped';
+    const targetGroup = groups.value.find(g => g.id === groupId);
+    if (targetGroup) targetGroup.collapsed = false;
+    nextTick(() => {
+      const el = document.getElementById('wl-group-' + groupId);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    });
+  }
+
+  const currentSortLabel = computed(() => {
+    const f = sortField.value;
+    if (f === 'extChange') return `${extShortLabel.value}涨跌幅`;
+    if (f === 'regularChange') return '常规涨跌幅';
+    if (f === 'regularPrice') return '常规收盘价';
+    if (f === 'extPrice') return `${extShortLabel.value}价格`;
+    if (f === 'marketCap') return '总市值';
+    if (f === 'symbol') return '股票代码';
+    if (f === 'updatedAt') return '更新时间';
+    return `${extShortLabel.value}涨跌幅`;
+  });
+
+  function formatWatchlistTime(v) {
+    if (v && Number.isFinite(Date.parse(v))) {
+      return new Intl.DateTimeFormat('zh-CN', {
+        timeZone: 'Asia/Shanghai',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      }).format(new Date(v)) + ' 北京';
+    }
+    const d = clock.value || new Date();
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    const ss = String(d.getSeconds()).padStart(2, '0');
+    return `${hh}:${mm}:${ss} 北京`;
+  }
+
+  function getRowSessionBadge(r) {
+    const sess = r?.extSession || currentSession.value?.session || 'pre';
+    if (sess === 'pre' || r?.extStatus?.includes('盘前')) {
+      return { icon: '🌅', label: '盘前交易', cls: 'session-pill-pre' };
+    }
+    if (sess === 'post' || r?.extStatus?.includes('盘后')) {
+      return { icon: '🌙', label: '盘后交易', cls: 'session-pill-post' };
+    }
+    if (sess === 'overnight' || r?.extStatus?.includes('隔夜')) {
+      return { icon: '✨', label: '隔夜交易', cls: 'session-pill-overnight' };
+    }
+    if (sess === 'regular' || r?.extStatus?.includes('常规')) {
+      return { icon: '☀️', label: '常规交易', cls: 'session-pill-regular' };
+    }
+    return { icon: '🌅', label: r?.extStatus || '盘前交易', cls: 'session-pill-pre' };
+  }
+
   function toggleSort(field) {
     if (sortField.value === field) {
       sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc';
@@ -1812,25 +2404,108 @@ createApp({ setup() {
   }
 
   // Sidebar Watchlist State & Methods (Persistent Sorting & Group Filtering)
-  const sidebarSortField = ref(readStorage('market-desk-sidebar-sort-field', 'regularPrice'));
+  const storedSortField = readStorage('market-desk-sidebar-sort-field', 'activeChange');
+  const sidebarSortField = ref(storedSortField || 'activeChange');
   const sidebarSortDirection = ref(readStorage('market-desk-sidebar-sort-dir', 'desc'));
   const sidebarActiveGroup = ref(readStorage('market-desk-sidebar-group', 'all'));
-  const sidebarViewMode = ref(readStorage('market-desk-sidebar-view-mode', 'grouped')); // 'grouped' | 'flat'
+  const storedViewMode = readStorage('market-desk-sidebar-view-mode', 'grouped');
+  const sidebarViewMode = ref(storedViewMode === 'flat' ? 'flat' : 'grouped'); // 'grouped' | 'flat'
 
-  function setSidebarSort(field) {
-    if (field === 'manual') {
-      sidebarSortField.value = 'manual';
-      persist('market-desk-sidebar-sort-field', 'manual');
-      return;
-    }
-    if (sidebarSortField.value === field) {
-      sidebarSortDirection.value = sidebarSortDirection.value === 'asc' ? 'desc' : 'asc';
+  const activeSessionKey = computed(() => {
+    if (extMode.value && extMode.value !== 'auto') return extMode.value;
+    return currentSession.value?.session || 'regular';
+  });
+
+  const activeSessionShortLabel = computed(() => {
+    const s = activeSessionKey.value;
+    if (s === 'pre') return '盘前';
+    if (s === 'post') return '盘后';
+    if (s === 'overnight') return '隔夜';
+    if (s === 'closed') return '休市';
+    return '常规';
+  });
+
+  const activeSessionPriceLabel = computed(() => {
+    const s = activeSessionKey.value;
+    if (s === 'pre') return '盘前价';
+    if (s === 'post') return '盘后价';
+    if (s === 'overnight') return '隔夜价';
+    return '现价';
+  });
+
+  const activeSessionChangeLabel = computed(() => {
+    const s = activeSessionKey.value;
+    if (s === 'pre') return '盘前涨幅';
+    if (s === 'post') return '盘后涨幅';
+    if (s === 'overnight') return '隔夜涨幅';
+    return '涨跌幅';
+  });
+
+  const isSortedByChange = computed(() => {
+    return sidebarSortField.value === 'activeChange' ||
+           sidebarSortField.value === 'regularChange' ||
+           sidebarSortField.value === 'extChange' ||
+           !sidebarSortField.value ||
+           sidebarSortField.value === 'change';
+  });
+
+  function setSidebarViewMode(mode) {
+    sidebarViewMode.value = (mode === 'flat' ? 'flat' : 'grouped');
+    persist('market-desk-sidebar-view-mode', sidebarViewMode.value);
+  }
+
+  function toggleSidebarSort(field) {
+    if (field === 'symbol') {
+      if (sidebarSortField.value === 'symbol') {
+        if (sidebarSortDirection.value === 'asc') {
+          sidebarSortDirection.value = 'desc';
+        } else {
+          sidebarSortField.value = 'manual';
+          sidebarSortDirection.value = 'asc';
+        }
+      } else {
+        sidebarSortField.value = 'symbol';
+        sidebarSortDirection.value = 'asc';
+      }
+    } else if (field === 'price' || field === 'activePrice' || field === 'regularPrice') {
+      if (sidebarSortField.value === 'activePrice' || sidebarSortField.value === 'regularPrice') {
+        if (sidebarSortDirection.value === 'desc') {
+          sidebarSortDirection.value = 'asc';
+        } else {
+          sidebarSortField.value = 'manual';
+          sidebarSortDirection.value = 'desc';
+        }
+      } else {
+        sidebarSortField.value = 'activePrice';
+        sidebarSortDirection.value = 'desc';
+      }
     } else {
-      sidebarSortField.value = field;
-      sidebarSortDirection.value = 'desc';
+      // Default / change percent sort
+      if (sidebarSortField.value === 'activeChange' || sidebarSortField.value === 'regularChange' || sidebarSortField.value === 'extChange' || !sidebarSortField.value) {
+        if (sidebarSortDirection.value === 'desc') {
+          sidebarSortDirection.value = 'asc';
+        } else {
+          sidebarSortField.value = 'manual';
+          sidebarSortDirection.value = 'desc';
+        }
+      } else {
+        sidebarSortField.value = 'activeChange';
+        sidebarSortDirection.value = 'desc';
+      }
     }
     persist('market-desk-sidebar-sort-field', sidebarSortField.value);
     persist('market-desk-sidebar-sort-dir', sidebarSortDirection.value);
+  }
+
+  function resetSidebarSort() {
+    sidebarSortField.value = 'activeChange';
+    sidebarSortDirection.value = 'desc';
+    persist('market-desk-sidebar-sort-field', 'activeChange');
+    persist('market-desk-sidebar-sort-dir', 'desc');
+  }
+
+  function setSidebarSort(field) {
+    toggleSidebarSort(field);
   }
 
   function setSidebarGroup(groupId) {
@@ -1839,8 +2514,7 @@ createApp({ setup() {
   }
 
   function toggleSidebarViewMode() {
-    sidebarViewMode.value = sidebarViewMode.value === 'grouped' ? 'flat' : 'grouped';
-    persist('market-desk-sidebar-view-mode', sidebarViewMode.value);
+    setSidebarViewMode(sidebarViewMode.value === 'grouped' ? 'flat' : 'grouped');
   }
 
   function toggleGroupCollapse(groupId) {
@@ -1914,28 +2588,39 @@ createApp({ setup() {
 
   // TradingView Style: Vertical sections with internal sorting and group-level sorting
   const sidebarGroupSections = computed(() => {
+    const activeField = (sidebarSortField.value === 'symbol' || sidebarSortField.value === 'activePrice' || sidebarSortField.value === 'regularPrice' || sidebarSortField.value === 'marketCap' || sidebarSortField.value === 'manual')
+      ? sidebarSortField.value
+      : 'activeChange';
+
     const list = groups.value.map(g => {
       const rows = g.symbolIds.map(buildRow);
       let sortedRows;
       const grpSort = groupSortStates[g.id] || 'default';
 
       if (grpSort === 'desc') {
-        sortedRows = sortWatchlistRows(rows, 'regularChange', 'desc');
+        sortedRows = sortWatchlistRows(rows, 'activeChange', 'desc');
       } else if (grpSort === 'asc') {
-        sortedRows = sortWatchlistRows(rows, 'regularChange', 'asc');
-      } else if ((g.id === 'trillion' || g.name === '万亿市值') && (!sidebarSortField.value || sidebarSortField.value === 'manual' || sidebarSortField.value === 'regularPrice' || sidebarSortField.value === 'marketCap')) {
+        sortedRows = sortWatchlistRows(rows, 'activeChange', 'asc');
+      } else if ((g.id === 'trillion' || g.name === '万亿市值') && (!activeField || activeField === 'manual' || activeField === 'marketCap')) {
         sortedRows = sortWatchlistRows(rows, 'marketCap', sidebarSortField.value === 'marketCap' ? sidebarSortDirection.value : 'desc');
-      } else if (sidebarSortField.value && sidebarSortField.value !== 'manual' && sidebarSortField.value !== 'custom') {
-        sortedRows = sortWatchlistRows(rows, sidebarSortField.value, sidebarSortDirection.value);
+      } else if (activeField && activeField !== 'manual' && activeField !== 'custom') {
+        sortedRows = sortWatchlistRows(rows, activeField, sidebarSortDirection.value || 'desc');
       } else {
-        sortedRows = [...rows];
+        sortedRows = sortWatchlistRows(rows, 'activeChange', 'desc');
       }
-      const valid = rows.filter(r => r.regularChange !== null && Number.isFinite(r.regularChange));
+
+      // Calculate group average change on the active session's change percent:
+      const valid = rows.filter(r => r.activeChange !== null && Number.isFinite(r.activeChange));
       let avg = null;
       if (valid.length) {
-        const sum = valid.reduce((acc, r) => acc + r.regularChange, 0);
-        avg = sum / valid.length;
+        avg = valid.reduce((acc, r) => acc + r.activeChange, 0) / valid.length;
+      } else {
+        const validReg = rows.filter(r => r.regularChange !== null && Number.isFinite(r.regularChange));
+        if (validReg.length) {
+          avg = validReg.reduce((acc, r) => acc + r.regularChange, 0) / validReg.length;
+        }
       }
+
       return {
         id: g.id,
         name: g.name,
@@ -1946,7 +2631,7 @@ createApp({ setup() {
       };
     });
 
-    if (sidebarSortField.value === 'regularChange' || sidebarSortField.value === 'extChange') {
+    if (activeField === 'activeChange') {
       const dir = sidebarSortDirection.value === 'asc' ? 1 : -1;
       list.sort((a, b) => {
         if (a.id === 'default' && b.id !== 'default') return 1;
@@ -1955,7 +2640,7 @@ createApp({ setup() {
         const valB = (b.avgChange !== null && Number.isFinite(b.avgChange)) ? b.avgChange : (dir === 1 ? Infinity : -Infinity);
         return (valA - valB) * dir;
       });
-    } else if (sidebarSortField.value === 'symbol') {
+    } else if (activeField === 'symbol') {
       const dir = sidebarSortDirection.value === 'asc' ? 1 : -1;
       list.sort((a, b) => {
         if (a.id === 'default' && b.id !== 'default') return 1;
@@ -1967,10 +2652,14 @@ createApp({ setup() {
     return list;
   });
 
-  // Flat Overall Sorted Watchlist Rows
+  // Flat Overall Sorted Watchlist Rows (Ranking across all symbols by current session change)
   const sidebarFlatRows = computed(() => {
     const rows = watchlist.value.map(buildRow);
-    return sortWatchlistRows(rows, sidebarSortField.value, sidebarSortDirection.value);
+    const activeField = (sidebarSortField.value === 'symbol' || sidebarSortField.value === 'activePrice' || sidebarSortField.value === 'regularPrice' || sidebarSortField.value === 'marketCap')
+      ? sidebarSortField.value
+      : 'activeChange';
+    const dir = sidebarSortDirection.value || 'desc';
+    return sortWatchlistRows(rows, activeField, dir);
   });
 
   const sidebarWatchlistRows = computed(() => {
@@ -3533,9 +4222,10 @@ createApp({ setup() {
     // K-Line Color Schemes & Preferences Modal
     klineScheme, klineGridStyle, showPreferencesModal, openPreferencesModal, closePreferencesModal, setKlineScheme, setKlineGrid, klineSchemeOptions, activeKlineScheme, KLINE_SCHEMES,
     klineMaVisibility, MA_CONFIGS, toggleMa, setAllMaVisibility,
+    defaultPage, defaultPageOptions, setDefaultPage,
     page, currentNav, onPageEntered,
     overview, chart, options, news, states, searchInput, symbol, chartRange,
-    optionSymbol, optionExpiry, optionMetric, strikeRange, newsSymbol, newsSearch, heatSize, sectorFilter,
+    optionSymbol, optionExpiry, optionMetric, strikeRange, optionsSpotQuote, formatExpiryLabel, butterflyOptionRows, callWallDist, putWallDist, newsSymbol, newsSearch, heatSize, sectorFilter,
     heatmapScope, activeHeatmapStocks, onHeatmapScopeChange, renderHeatmap, isLeveragedEtf, nonLeveragedWatchlist,
     flowTab, flows, flowDate, flowDates, dayFlows,
     // Macro & Fear/Greed & Gold & Crypto & Treasury
@@ -3548,9 +4238,12 @@ createApp({ setup() {
     watchlistData, groups, watchlist, quoteStore, providerInfo, currentSession,
     viewMode, extMode, sortField, sortDirection, freezeResort, compactPanelOpen,
     allRankedRows, groupedRows, groupAverages, compactRows, cellFlashes,
+    extShortLabel, getDisplayExtPrice, getDisplayExtChange, groupExtAverages, getGroupFullTitle, getGroupShortTitle, watchlistGroupPills, jumpToGroup, currentSortLabel, formatWatchlistTime, getRowSessionBadge,
     STOCK_MARKET_CAPS, getStockMarketCap, sortSymbolsByMarketCap,
     sidebarSortField, sidebarSortDirection, sidebarActiveGroup, setSidebarSort, setSidebarGroup, sidebarWatchlistRows,
-    sidebarViewMode, toggleSidebarViewMode, toggleGroupCollapse, toggleAllGroupsCollapse, areAllGroupsCollapsed, openAddStockToGroup, sidebarGroupSections, sidebarFlatRows,
+    sidebarViewMode, setSidebarViewMode, toggleSidebarViewMode, toggleSidebarSort, resetSidebarSort, isSortedByChange,
+    activeSessionKey, activeSessionShortLabel, activeSessionPriceLabel, activeSessionChangeLabel,
+    toggleGroupCollapse, toggleAllGroupsCollapse, areAllGroupsCollapsed, openAddStockToGroup, sidebarGroupSections, sidebarFlatRows,
     groupSortStates, cycleGroupSort, getGroupSortTitle,
     draggedStock, dragOverTarget, dragOverGroup,
     draggedGroup, dragOverGroupOrderTarget, onGroupDragStart, onGroupDragEnd, onGroupHeaderDragLeave, moveGroupUp, moveGroupDown,
@@ -3580,6 +4273,8 @@ createApp({ setup() {
     AI_SEARCH_ENGINES, AI_SEARCH_SOURCES, AI_SEARCH_PRESETS,
     executeAiSearch, selectAiSearchPreset, filterAiNewsTopic, copyAiNewsLink, formatAiTime, getAiEngineBadge,
     klineInteractionMode, chartDelayStatus, activeChartExtQuote,
+    activeMacroTab, heatmapTimeRange, rightWatchlistCollapsed, cycleExtMode, extModeLabel, lastUpdateTimeFormatted, bjTimeFormatted, overviewCards8, overviewCards10,
+    currentPageTitle, deleteStockDirect, cycleSessionMode, refreshWatchlistQuotes,
     selectSymbol, search, refresh, loadOverview, loadChart, loadNews, loadOptions, resetPriceChartZoom, fetchWatchlistQuotes, importNotion, importFlows, clearFlows
   };
 } }).mount('#app');

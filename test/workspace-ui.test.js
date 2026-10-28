@@ -7,7 +7,7 @@ import { parseFlows } from '../public/flows.js';
 import * as watchlistModel from '../public/watchlist-model.js';
 import * as earningsCalendarModel from '../public/earnings-calendar-model.js';
 const tick = () => new Promise(resolve => setTimeout(resolve, 30));
-async function mount(t, fetchImpl) {
+async function mount(t, fetchImpl, initStorage = null) {
   const errors = [], configs = new Map();
   const virtualConsole = new VirtualConsole(); virtualConsole.on('jsdomError', e => errors.push(e.message)); virtualConsole.on('error', e => errors.push(String(e)));
   const html = await fs.readFile(new URL('../public/index.html', import.meta.url), 'utf8');
@@ -22,6 +22,11 @@ async function mount(t, fetchImpl) {
   w.echarts = { init: el => ({ setOption: config => configs.set(el.id, config), off() {}, on() {}, resize() {}, dispose() {} }) };
   w.eval(await fs.readFile(new URL('../node_modules/vue/dist/vue.global.prod.js', import.meta.url), 'utf8'));
   w.bindKlineGestures = () => ({ focusLatest() {}, reset() {}, resetPriceScale() {}, dispose() {}, isFollowingLatest() { return true; } });
+  if (initStorage) {
+    for (const [k, v] of Object.entries(initStorage)) {
+      w.localStorage.setItem(k, JSON.stringify(v));
+    }
+  }
   const appSrc = (await fs.readFile(new URL('../public/app.js', import.meta.url), 'utf8'))
     .replace("import { parseFlows } from './flows.js';", 'const parseFlows = window.parseFlows;')
     .replace("import { bindKlineGestures } from './composables/klineGesture.js';", 'const bindKlineGestures = window.bindKlineGestures;')
@@ -183,6 +188,41 @@ test('K-line MA switches: clicking MA5/MA20 toggles visibility in readout strip 
   assert.ok(ma5Btn.classList.contains('is-active'), 'MA5 switch button turns back on');
   const storedAfter = JSON.parse(ui.w.localStorage.getItem('market-desk-ma-visibility'));
   assert.equal(storedAfter.ma5, true);
+});
+
+test('Default launch page preference: configurable in modal, persists to localStorage, and controls initial landing page', async t => {
+  const ui = await mount(t, async url => ({ ok: true, json: async () => fixture(url) }));
+  
+  // 1. Initial page defaults to overview
+  assert.ok(ui.w.document.querySelector('#heatmap-chart'), 'Default landing page is overview');
+
+  // 2. Open preferences modal
+  const settingsBtn = ui.w.document.querySelector('.settings-modal-btn') || [...ui.w.document.querySelectorAll('button')].find(b => b.textContent.includes('设置'));
+  assert.ok(settingsBtn, 'Settings button found');
+  settingsBtn.click();
+  await tick();
+
+  const modal = ui.w.document.querySelector('.preferences-modal-backdrop');
+  assert.ok(modal, 'Preferences modal opened');
+  assert.match(modal.textContent, /默认打开页面/);
+
+  // 3. Select '自选看板' as default launch page
+  const pageCards = [...modal.querySelectorAll('.pref-default-page-card')];
+  assert.ok(pageCards.length >= 7, 'Has default page option cards');
+  const watchlistCard = pageCards.find(c => c.textContent.includes('自选看板'));
+  assert.ok(watchlistCard, 'Watchlist default page card found');
+  watchlistCard.click();
+  await tick();
+
+  // Verify persistence
+  assert.equal(JSON.parse(ui.w.localStorage.getItem('market-desk-default-page')), 'watchlist');
+  assert.ok(watchlistCard.classList.contains('active'), 'Watchlist card is active');
+
+  // 4. Verify mounting a new instance with saved preference loads watchlist as default
+  const ui2 = await mount(t, async url => ({ ok: true, json: async () => fixture(url) }), {
+    'market-desk-default-page': 'watchlist'
+  });
+  assert.ok(ui2.w.document.querySelector('.watchlist-table'), 'Mounts directly to watchlist board');
 });
 
 

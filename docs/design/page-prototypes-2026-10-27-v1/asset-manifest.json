@@ -1,0 +1,44 @@
+﻿[
+    {
+        "file":  "00-approved-overview-reference.png",
+        "width":  1586,
+        "height":  992,
+        "bytes":  1436455,
+        "sha256":  "EDD0DC283F1A01C8AA6DF045294FF6377A264B98ADE03CD89DD7B4D6BB90371A"
+    },
+    {
+        "file":  "01-chart.png",
+        "width":  1586,
+        "height":  992,
+        "bytes":  1380437,
+        "sha256":  "51857D14655F7D857D878414C881706CED64D18B968D8534A7CD55EB84ACEF36"
+    },
+    {
+        "file":  "02-crypto.png",
+        "width":  1586,
+        "height":  992,
+        "bytes":  1462551,
+        "sha256":  "6A6556A76B8D528B6EFCD79B859072F09CCDAD1C57C4175845B4E96F5536B34A"
+    },
+    {
+        "file":  "03-flows.png",
+        "width":  1585,
+        "height":  992,
+        "bytes":  1389957,
+        "sha256":  "8ED58DAB7F5063C56420A1D7D82470476B97C5452039D1133E182AE4CF09066D"
+    },
+    {
+        "file":  "04-options.png",
+        "width":  1586,
+        "height":  992,
+        "bytes":  1641382,
+        "sha256":  "788F4D5B741A3BC8A1B402EE56DCB4625103469C10290B47D51D6BAF858BC5AC"
+    },
+    {
+        "file":  "05-news.png",
+        "width":  1586,
+        "height":  992,
+        "bytes":  1922894,
+        "sha256":  "0F61BCD875B16CD842C79439222437B6D00E4CC885FCCF514D6E74AF0D0E14E4"
+    }
+]

@@ -10,11 +10,43 @@
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/styles.css?v=2.7.1">
-<script defer src="/vendor/vue.js"></script><script defer src="/vendor/echarts.js"></script><script defer src="/vendor/lightweight-charts.standalone.js"></script><script type="module" src="/app.js?v=2.7.1"></script>
+<link rel="stylesheet" href="/styles.css?v=2.8.4">
+<style>
+[v-cloak] { display: none !important; }
+</style>
+<script defer src="/vendor/vue.js"></script><script defer src="/vendor/echarts.js"></script><script defer src="/vendor/lightweight-charts.standalone.js"></script><script type="module" src="/app.js?v=2.8.4"></script>
 </head><body><div id="app" v-cloak>
+<aside class="nav-rail desktop-only" aria-label="工作台主导航">
+  <div class="rail-top">
+    <button v-for="item in nav.slice(0, 7)" :key="item.id" 
+            :class="['rail-nav-item', { active: page === item.id }]" 
+            :data-id="item.id" 
+            @click="navigate(item.id)" 
+            :title="item.label"
+            :aria-label="item.label">
+      <span class="rail-icon">{{ item.icon }}</span>
+      <span class="rail-text">{{ item.label.slice(0, 2) }}</span>
+    </button>
+  </div>
+  <div class="rail-bottom">
+    <button :class="['rail-nav-item', { active: page === 'sources' }]" 
+            @click="navigate('sources')" 
+            title="数据与说明"
+            aria-label="数据与说明">
+      <span class="rail-icon">ⓘ</span>
+      <span class="rail-text">说明</span>
+    </button>
+    <button class="rail-nav-item" 
+            @click="openPreferencesModal" 
+            title="偏好设置"
+            aria-label="偏好设置">
+      <span class="rail-icon">⚙</span>
+      <span class="rail-text">设置</span>
+    </button>
+  </div>
+</aside>
 <div class="ios-backdrop mobile-only" :class="{show:showSettings}" @click="closeSettings" aria-hidden="true"></div>
-<aside id="workspace-settings" class="sidebar" :class="{'show-mobile':showSettings}" :inert="isMobile&&!showSettings" :role="isMobile?'dialog':undefined" :aria-modal="isMobile&&showSettings?'true':undefined" aria-label="工作台导航与自选" @keydown="handleDrawerKey">
+<aside id="workspace-settings" class="sidebar mobile-only" :class="{'show-mobile':showSettings}" :inert="isMobile&&!showSettings" :role="isMobile?'dialog':undefined" :aria-modal="isMobile&&showSettings?'true':undefined" aria-label="工作台导航与自选" @keydown="handleDrawerKey">
   <button class="bottom-sheet-handle mobile-only" aria-label="关闭导航" @click="closeSettings"></button>
 
   <!-- Permanently fixed Brand + Search Header at top-left -->
@@ -373,18 +405,32 @@
 <header class="topbar">
   <div class="topbar-left-wrapper">
     <button class="settings-trigger mobile-only" aria-label="打开导航与自选" aria-controls="workspace-settings" :aria-expanded="showSettings" @click="openSettings">☷</button>
-    <a class="topbar-brand desktop-only" href="#overview" @click.prevent="navigate('overview')">
+    <div class="topbar-brand-area desktop-only">
+      <a class="topbar-brand" href="#overview" @click.prevent="navigate('overview')">
+        <span class="brand-mark-sm">MD</span>
+        <div class="brand-titles">
+          <div class="brand-name">Market Desk <span class="badge-pro">PRO</span></div>
+          <div class="brand-desc">美股实时行情观察工作台</div>
+        </div>
+      </a>
+      <span class="topbar-title-divider"></span>
+      <div class="topbar-page-title">{{ currentPageTitle }}</div>
+    </div>
+    <a class="topbar-brand mobile-only" href="#overview" @click.prevent="navigate('overview')">
       <span class="brand-mark-sm">MD</span>
       <div class="brand-titles">
         <div class="brand-name">Market Desk <span class="badge-pro">PRO</span></div>
         <div class="brand-desc">美股实时行情观察工作台</div>
       </div>
     </a>
-    <div class="topbar-breadcrumb desktop-only">
-      <span class="crumb-root">MARKET DESK</span>
-      <span class="crumb-sep">/</span>
-      <span class="crumb-active"><i class="crumb-dot"></i> {{ breadcrumbLabel }}</span>
-    </div>
+  </div>
+
+  <!-- Center Search Pill matching proto_01_overview.png -->
+  <div class="topbar-center-search desktop-only">
+    <form class="topbar-search-form" @submit.prevent="search">
+      <span class="search-icon">🔍</span>
+      <input aria-label="搜索股票代码 / 名称" placeholder="搜索股票代码 / 名称 ⌘K" v-model="searchInput" maxlength="12" autocomplete="off" spellcheck="false">
+    </form>
   </div>
 
   <!-- Mobile Center Context Title -->
@@ -407,20 +453,64 @@
   </div>
 
   <div class="topbar-right">
-    <div class="market-clock-detailed desktop-only">
-      <div class="clock-top"><i class="clock-live-dot"></i><strong>{{nyClockInfo.nyTime}}</strong> <small>{{nyClockInfo.nyTz}} ({{nyClockInfo.nyDate}})</small></div>
-      <div class="clock-sub">{{nyClockInfo.bjTime}} · {{sessionStatusText}}</div>
+    <div class="topbar-clock-group desktop-only">
+      <div class="clock-line-bj">
+        <i class="clock-live-dot"></i>
+        <strong>{{ nyClockInfo.bjTime }}</strong>
+      </div>
+      <div class="clock-line-ny">
+        <span>{{ nyClockInfo.nyTime }} {{ nyClockInfo.nyTz }}</span>
+      </div>
     </div>
     <button class="topbar-btn mobile-only icon-btn" @click="openMobileSearch" title="搜索美股代码" aria-label="搜索美股代码">🔍</button>
-    <button class="topbar-btn refresh desktop-only" @click="refresh" :disabled="refreshing">{{refreshing?'刷新中…':'↻ 刷新'}}</button>
+    <button class="topbar-btn refresh desktop-only" @click="refresh" :disabled="refreshing" title="刷新行情数据">
+      <svg class="topbar-btn-svg" :class="{'spin-icon': refreshing}" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M23 4v6h-6"></path>
+        <path d="M1 20v-6h6"></path>
+        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+      </svg>
+      <span>{{refreshing ? '刷新中…' : '刷新'}}</span>
+    </button>
     <button class="topbar-btn refresh mobile-only icon-btn" @click="refresh" :disabled="refreshing" :aria-label="refreshing?'刷新中':'刷新行情'">{{refreshing?'…':'↻'}}</button>
-    <button v-if="isWide && page!=='watchlist'" class="topbar-btn desktop-only" @click="compactPanelOpen=!compactPanelOpen">{{compactPanelOpen?'收起自选 ◨':'展开自选 ◧'}}</button>
-    <button class="topbar-btn theme-toggle desktop-only" @click="toggleTheme" :aria-pressed="isDark">{{isDark?'☀️ Light':'🌙 Dark'}}</button>
-    <button class="topbar-btn settings-modal-btn desktop-only" @click="openPreferencesModal" title="K 线配色与偏好设置">⚙️ 设置</button>
+    <button v-if="page !== 'watchlist'" class="toggle-rw-btn desktop-only" :class="{ 'is-collapsed': !compactPanelOpen }" @click="compactPanelOpen = !compactPanelOpen" :title="compactPanelOpen ? '收起右侧自选看板' : '展开右侧自选看板'">
+      <span class="rw-btn-text">自选</span>
+      <svg class="rw-btn-icon-svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+        <line x1="15" y1="3" x2="15" y2="21"></line>
+      </svg>
+    </button>
+    <button class="topbar-btn theme-toggle desktop-only" @click="toggleTheme" :aria-pressed="isDark" :title="isDark ? '切换至白天亮色模式' : '切换至黑夜深色模式'">
+      <span class="theme-icon-wrap">
+        <svg v-if="isDark" class="theme-svg-sun" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="5"></circle>
+          <line x1="12" y1="1" x2="12" y2="3"></line>
+          <line x1="12" y1="21" x2="12" y2="23"></line>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+          <line x1="1" y1="12" x2="3" y2="12"></line>
+          <line x1="21" y1="12" x2="23" y2="12"></line>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+        </svg>
+        <svg v-else class="theme-svg-moon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+        </svg>
+      </span>
+      <span class="theme-btn-label">{{isDark ? 'Light' : 'Dark'}}</span>
+    </button>
+    <button class="topbar-btn settings-modal-btn desktop-only" @click="openPreferencesModal" title="K 线配色与偏好设置">
+      <svg class="topbar-btn-svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3"></circle>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0 2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+      </svg>
+      <span>设置</span>
+    </button>
     <button class="topbar-btn mobile-only icon-btn" @click="openPreferencesModal" title="K 线配色与设置" aria-label="K 线配色与设置">⚙️</button>
   </div>
 </header>
-<main>
+<div class="workspace-body">
+  <div class="workspace-main-wrapper">
+    <main>
 <div v-if="toast" class="toast" role="status"><span>{{toast}}</span><button v-if="undoAction" class="text-button" @click="undoAction(); toast=''">↶ 撤销</button><button aria-label="关闭提示" @click="toast=''">×</button></div>
 
 <div class="workspace-container">
@@ -432,12 +522,24 @@
   <div v-if="states.overview.loading&&!overview" class="loading-block">正在汇集指数、板块与精选美股行情…</div>
   <div v-if="states.overview.error" class="error-box" role="alert">{{states.overview.error}} <button @click="loadOverview">重试</button></div>
   <template v-if="overview">
+    <!-- Overview Header Strip -->
+    <div class="overview-header-bar">
+      <div class="overview-title-group">
+        <h2 class="overview-main-title">市场概览</h2>
+        <span class="overview-sub-desc">10 项核心指数、宏观利率、大宗商品与加密流动性指标 · 美债仅显 10Y 基准 (点击展开 10Y/20Y/30Y)</span>
+      </div>
+      <div class="overview-meta-right">
+        最后更新：{{ lastUpdateTimeFormatted }} (北京时间)
+      </div>
+    </div>
+
+    <!-- Row 1: 美股核心基准与市场情绪 (5张卡片: 标普500、纳指100、道琼斯、VIX、CNN恐慌贪婪) -->
     <div class="index-grid">
       <button v-for="q in overview.benchmarks" :key="q.symbol" class="index-card" @click="selectSymbol(q.symbol)">
         <div class="index-card-head">
           <div class="index-name"><strong>{{q.name}}</strong> <span>{{q.symbol}}</span></div>
           <div v-if="q.symbol==='^VIX'" class="vix-warn-badge" :class="q.price > 20 ? 'vix-warn' : 'vix-normal'">{{ q.price > 20 ? '恐慌抬升' : '常态波动' }}</div>
-          <svg v-else class="index-sparkline" viewBox="0 0 48 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <svg v-else class="index-sparkline" viewBox="0 0 80 22" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path :d="getSparkline(q.symbol, q.changePercent)" :stroke="q.changePercent >= 0 ? 'var(--apple-green)' : 'var(--apple-red)'" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
           </svg>
         </div>
@@ -452,12 +554,8 @@
           <span v-if="q.stale" class="warning">· 旧快照</span>
         </div>
       </button>
-    </div>
-    <div v-if="overview.unavailable.length" class="inline-note warning">暂缺行情：{{overview.unavailable.join('、')}}。仅显示成功返回的数据。</div>
 
-    <!-- 核心宏观指标与大类资产 (紧凑规格，与上方基准卡片尺寸和交互保持一致) -->
-    <div class="index-grid macro-index-grid">
-      <!-- 1. CNN 恐慌与贪婪情绪 (点击打开 CNN 原版仪表盘) -->
+      <!-- 5. CNN 恐慌与贪婪情绪 (点击打开 CNN 原版仪表盘) -->
       <button class="index-card macro-compact-card clickable" @click="openFearGreedModal" aria-label="查看 CNN 恐慌与贪婪情绪原版仪表盘">
         <div class="index-card-head">
           <div class="index-name">
@@ -482,8 +580,12 @@
           <span class="macro-open-hint">原版仪表盘 ↗</span>
         </div>
       </button>
+    </div>
+    <div v-if="overview.unavailable.length" class="inline-note warning">暂缺行情：{{overview.unavailable.join('、')}}。仅显示成功返回的数据。</div>
 
-      <!-- 2. 黄金现货/合约 XAU/USD -->
+    <!-- Row 2: 宏观大类资产与流动性 (5张卡片: 黄金、美债、美元指数、布伦特原油、比特币) -->
+    <div class="index-grid macro-index-grid">
+      <!-- 1. 黄金现货/合约 XAU/USD -->
       <button class="index-card macro-compact-card" @click="selectSymbol('GC=F')">
         <div class="index-card-head">
           <div class="index-name">
@@ -507,7 +609,7 @@
         </div>
       </button>
 
-      <!-- 3. 美债收益率 10Y/20Y/30Y (点击展开全景) -->
+      <!-- 2. 美债收益率 10Y/20Y/30Y (点击展开全景) -->
       <button class="index-card macro-compact-card clickable" @click="openTreasuryModal" aria-label="查看 10年、20年、30年美债收益率全景">
         <div class="index-card-head">
           <div class="index-name">
@@ -527,19 +629,19 @@
         </div>
         <div class="index-card-foot">
           <span>20Y: {{ formatMacroPrice(macroMap.US20Y) }} · 30Y: {{ formatMacroPrice(macroMap.US30Y) }}</span>
-          <span class="macro-open-hint">点开展开 ↗</span>
+          <span class="macro-open-hint">点击展开 ↗</span>
         </div>
       </button>
 
-      <!-- 4. 美元指数 DXY 与布伦特原油 -->
+      <!-- 3. 美元指数 DXY (单独列出) -->
       <button class="index-card macro-compact-card" @click="selectSymbol('DX-Y.NYB')">
         <div class="index-card-head">
           <div class="index-name">
             <strong>美元指数</strong>
             <span>DXY</span>
           </div>
-          <svg class="macro-sparkline" viewBox="0 0 48 18" fill="none">
-            <path d="M2 12 L12 10 L24 14 L36 9 L46 5" :stroke="(macroMap.DXY?.changePercent || 0) >= 0 ? 'var(--apple-green)' : 'var(--apple-red)'" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+          <svg class="macro-sparkline" viewBox="0 0 80 22" fill="none">
+            <path :d="getSparkline('DXY', macroMap.DXY?.changePercent)" :stroke="(macroMap.DXY?.changePercent || 0) >= 0 ? 'var(--apple-green)' : 'var(--apple-red)'" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
           </svg>
         </div>
         <div class="index-price-row">
@@ -549,11 +651,33 @@
           </span>
         </div>
         <div class="index-card-foot">
-          <span>原油布伦特: ${{ formatMacroPrice(macroMap['BRN1!']) }} ({{ pct(macroMap['BRN1!']?.changePercent) }})</span>
+          <span>ICE 美元指数 · 24h 汇率锚</span>
         </div>
       </button>
 
-      <!-- 5. 比特币 BTC/USD (24/7 流动性) -->
+      <!-- 4. 布伦特原油 BRN1! (单独列出，与美元指数区分开) -->
+      <button class="index-card macro-compact-card" @click="selectSymbol('BZ=F')">
+        <div class="index-card-head">
+          <div class="index-name">
+            <strong>布伦特原油</strong>
+            <span>BRN1!</span>
+          </div>
+          <svg class="macro-sparkline" viewBox="0 0 80 22" fill="none">
+            <path :d="getSparkline('BRN1!', macroMap['BRN1!']?.changePercent)" :stroke="(macroMap['BRN1!']?.changePercent || 0) >= 0 ? 'var(--apple-green)' : 'var(--apple-red)'" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </div>
+        <div class="index-price-row">
+          <span class="price-val">${{ formatMacroPrice(macroMap['BRN1!']) }}</span>
+          <span class="pct-pill" :class="(macroMap['BRN1!']?.changePercent || 0) >= 0 ? 'badge-pos' : 'badge-neg'">
+            {{ pct(macroMap['BRN1!']?.changePercent) }}
+          </span>
+        </div>
+        <div class="index-card-foot">
+          <span>ICE 伦敦原油连续 · 能源基准</span>
+        </div>
+      </button>
+
+      <!-- 5. 比特币龙头 BTC/USD (24/7 流动性) -->
       <button class="index-card macro-compact-card" @click="navigate('crypto')">
         <div class="index-card-head">
           <div class="index-name">
@@ -574,7 +698,6 @@
       </button>
     </div>
 
-    <div class="dashboard-grid">
       <section class="panel heatmap-panel">
         <div class="panel-heading">
           <div class="heatmap-title-group">
@@ -632,166 +755,260 @@
           </div>
         </div>
       </section>
-      <section class="panel sector-panel">
-        <div class="panel-heading">
-          <div>
-            <h2>板块温度 <span class="header-live-dot"></span></h2>
-            <p>11 大核心 ETF 当日涨跌排名</p>
+
+      <!-- Sector Temperature Panel matching proto_01_overview.png -->
+      <section class="panel sector-temp-panel">
+        <div class="sector-temp-heading">
+          <div class="sector-temp-title">
+            <h2>板块温度</h2>
+            <span class="sector-temp-desc">11大板块 ETF 当日涨跌幅</span>
           </div>
-          <button class="text-button" @click="page='flows'">资金观察 ↗</button>
+          <button class="text-button" @click="navigate('flows')">资金观察 ↗</button>
         </div>
-        <div class="sector-list">
-          <button v-for="q in rankedSectors" :key="q.symbol" class="sector-row" @click="selectSymbol(q.symbol)">
-            <span class="sector-info"><strong>{{q.name}}</strong> <small>{{q.symbol}}</small></span>
-            <span class="sector-capsule-track">
-              <i :class="q.changePercent >= 0 ? 'pos' : 'neg'" :style="{width:barWidth(q.changePercent)}"></i>
-            </span>
-            <strong :class="tone(q.changePercent)">{{pct(q.changePercent)}}</strong>
-          </button>
-        </div>
-        <div class="sector-ratio-card">
-          <div class="ratio-header">
-            <span>板块多空比 (上涨:下跌)</span>
-            <span class="ratio-nums"><strong class="pos-text">{{upSectorsCount}}</strong> : <strong class="neg-text">{{downSectorsCount}}</strong></span>
-          </div>
-          <div class="ratio-split-bar">
-            <div class="ratio-bar-up" :style="{width: upSectorsRatio + '%'}"></div>
-            <div class="ratio-bar-down" :style="{width: (100 - upSectorsRatio) + '%'}"></div>
-          </div>
-          <div class="ratio-tags">
-            <span class="ratio-tag">{{ upSectorsCount >= downSectorsCount ? '防御与能源板块领跑' : '周期制造承压' }}</span>
-            <span class="ratio-tag">{{ upSectorsCount >= downSectorsCount ? '结构性轮动' : '周期制造告跌' }}</span>
+        <div class="sector-temp-row">
+          <div v-for="q in rankedSectors" :key="q.symbol" class="sector-temp-card" @click="selectSymbol(q.symbol)" :title="q.name + ' (' + q.symbol + '): ' + pct(q.changePercent)">
+            <span class="temp-pct" :class="q.changePercent >= 0 ? 'text-pos' : 'text-neg'">{{ pct(q.changePercent) }}</span>
+            <div class="temp-bar-pill" :class="q.changePercent >= 0 ? 'fill-pos' : 'fill-neg'"></div>
+            <span class="temp-name">{{ q.name }}</span>
+            <span class="temp-sym">{{ q.symbol }}</span>
           </div>
         </div>
       </section>
-    </div>
 
   </template>
 </template>
 
 <template v-if="page==='watchlist'">
   <section class="panel watchlist-panel">
-    <div class="panel-heading">
-      <div>
-        <h2>自选看板 <span class="subtle-badge">多时段高频流</span></h2>
-        <p>多时段美股报价 · 常规与盘前 / 盘后 / 隔夜数据独立计算与动态排序</p>
+    <!-- Watchlist Header Bar -->
+    <div class="wl-header-bar">
+      <div class="wl-title-area">
+        <div class="wl-title-row">
+          <h2 class="wl-main-title">自选看板 · 全景多时段工作台</h2>
+          <span class="wl-summary-badge">共 {{ watchlist.length }} 支自选标的 · {{ groups.length }} 大自定义分组</span>
+        </div>
+        <p class="wl-sub-desc">进入独立「自选」页时自动收起右侧重复侧栏，展开全宽多维数据表（支持常规/盘前/盘后/隔夜对照、日内高低轨与分组批量管理）</p>
       </div>
-      <div class="controls">
-        <span class="status-pill" :class="providerInfo?.isConfigured ? 'realtime' : 'fallback'"><i class="dot"></i>{{ providerInfo?.isConfigured ? providerInfo.name + ' · 实时' : (providerInfo?.name || '公开行情源 · 备用') }}</span>
-        <span class="session-badge">{{ currentSession.desc }}</span>
+
+      <div class="wl-actions-row">
+        <!-- Session Select Dropdown -->
+        <div class="wl-session-select-wrapper">
+          <select class="wl-session-select" v-model="extMode" aria-label="EXT 时段模式">
+            <option value="auto">🕒 自动 · 当前{{ extShortLabel }} (04:00-09:30 EDT)</option>
+            <option value="pre">🕒 盘前交易 (04:00-09:30 EDT)</option>
+            <option value="post">🕒 盘后交易 (16:00-20:00 EDT)</option>
+            <option value="overnight">🕒 隔夜交易 (20:00-04:00 EDT)</option>
+          </select>
+        </div>
+
+        <button class="wl-btn-primary" @click="showAddStockModal = true">+ 添加股票</button>
+        <button class="wl-btn-outline" @click="showGroupModal = true">管理分组</button>
+        <button class="wl-btn-outline" :class="{ active: !freezeResort }" @click="freezeResort = !freezeResort" :title="freezeResort ? '点击恢复自动排序' : '点击冻结当前排序'">
+          {{ freezeResort ? '🔒 排序已冻结' : '⚡ 自动重排' }}
+        </button>
+        <button class="wl-btn-outline" @click="handleExportJson">备份 / 恢复 ↗</button>
       </div>
     </div>
-    <div class="watchlist-toolbar">
-      <div class="watchlist-toolbar-left">
-        <button class="primary-button" style="width:auto;height:32px;font-size:12px;padding:0 12px;" @click="showAddStockModal=true">+ 添加股票</button>
-        <button @click="showGroupModal=true">管理分组</button>
-        <div class="chips">
-          <button :class="{selected: viewMode==='grouped'}" @click="viewMode='grouped'">分组视图</button>
-          <button :class="{selected: viewMode==='all'}" @click="viewMode='all'">全部排行</button>
+
+    <!-- Secondary Toolbar with View Switcher & Group Jump Pills -->
+    <div class="watchlist-toolbar wl-filter-toolbar">
+      <div class="wl-toolbar-left">
+        <!-- Grouped vs All View Pills -->
+        <button class="wl-view-pill" :class="{ active: viewMode === 'grouped' }" @click="viewMode = 'grouped'">
+          分组视图 ({{ groups.length }}组)<span class="sr-only">分组视图</span>
+        </button>
+        <button class="wl-view-pill" :class="{ active: viewMode === 'all' }" @click="viewMode = 'all'">
+          全部排行 ({{ watchlist.length }}支去重)<span class="sr-only">全部排行</span>
+        </button>
+
+        <div class="wl-group-pills">
+          <button
+            v-for="gp in watchlistGroupPills"
+            :key="gp.id"
+            class="wl-group-jump-pill"
+            @click="jumpToGroup(gp.id)"
+            :title="'快速定位到 ' + gp.name"
+          >
+            {{ gp.name }} ({{ gp.count }})
+          </button>
         </div>
       </div>
-      <div class="watchlist-toolbar-right">
-        <label style="font-size:12px;color:var(--text-secondary);display:inline-flex;align-items:center;gap:6px;">EXT 时段
-          <select v-model="extMode" aria-label="EXT 时段模式">
-            <option value="auto">自动 (跟随当前时段)</option>
-            <option value="pre">盘前 (04:00-09:30)</option>
-            <option value="post">盘后 (16:00-20:00)</option>
-            <option value="overnight">隔夜 (20:00-04:00)</option>
-          </select>
-        </label>
-        <button :class="{active: !freezeResort}" @click="freezeResort=!freezeResort" :title="freezeResort?'点击恢复自动排序':'点击冻结当前排序'">{{ freezeResort ? '🔒 排序已冻结' : '⚡ 自动重排' }}</button>
-        <button class="text-button" @click="handleExportJson">备份 / 恢复 ↗</button>
+
+      <div class="wl-toolbar-right">
+        <span class="wl-sort-indicator" @click="toggleSort('extChange')" title="点击切换排序">
+          当前排序: <strong class="wl-sort-name">{{ currentSortLabel }}</strong> {{ sortDirection === 'asc' ? '▲' : '▼' }}
+        </span>
       </div>
     </div>
+
+    <!-- Watchlist Table -->
     <div class="watchlist-table-wrap" @mousedown="isInteractingWithTable=true" @mouseup="isInteractingWithTable=false">
-      <table class="watchlist-table" aria-label="美股自选与多时段报价表">
+      <table class="watchlist-table wl-modern-table" aria-label="美股自选与多时段报价表">
         <thead>
           <tr>
-            <th class="sortable" :class="{sorted: sortField==='symbol'}" @click="toggleSort('symbol')" :aria-sort="sortField==='symbol'?(sortDirection==='asc'?'ascending':'descending'):'none'">代码 / 标的名称 {{sortField==='symbol'?(sortDirection==='asc'?'▲':'▼'):''}}</th>
-            <th class="num sortable" :class="{sorted: sortField==='regularPrice'}" @click="toggleSort('regularPrice')" :aria-sort="sortField==='regularPrice'?(sortDirection==='asc'?'ascending':'descending'):'none'">常规价格 {{sortField==='regularPrice'?(sortDirection==='asc'?'▲':'▼'):''}}</th>
-            <th class="num sortable" :class="{sorted: sortField==='regularChange'}" @click="toggleSort('regularChange')" :aria-sort="sortField==='regularChange'?(sortDirection==='asc'?'ascending':'descending'):'none'">常规涨跌% {{sortField==='regularChange'?(sortDirection==='asc'?'▲':'▼'):''}}</th>
-            <th class="num sortable" :class="{sorted: sortField==='extPrice'}" @click="toggleSort('extPrice')" :aria-sort="sortField==='extPrice'?(sortDirection==='asc'?'ascending':'descending'):'none'">EXT 价格 {{sortField==='extPrice'?(sortDirection==='asc'?'▲':'▼'):''}}</th>
-            <th class="num sortable" :class="{sorted: sortField==='extChange'}" @click="toggleSort('extChange')" :aria-sort="sortField==='extChange'?(sortDirection==='asc'?'ascending':'descending'):'none'">EXT 涨跌% {{sortField==='extChange'?(sortDirection==='asc'?'▲':'▼'):''}}</th>
-            <th style="text-align:center;">日内区间 (L - H)</th>
-            <th>时段 / 状态</th>
-            <th class="sortable" :class="{sorted: sortField==='updatedAt'}" @click="toggleSort('updatedAt')">更新时间 {{sortField==='updatedAt'?(sortDirection==='asc'?'▲':'▼'):''}}</th>
-            <th style="text-align:right;">操作</th>
+            <th class="wl-col-symbol sortable" :class="{ sorted: sortField === 'symbol' }" @click="toggleSort('symbol')" :aria-sort="sortField === 'symbol' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+              代码 / 标的名称 / 市值 {{ sortField === 'symbol' ? (sortDirection === 'asc' ? '▲' : '▼') : '' }}
+            </th>
+            <th class="wl-col-regular-price num sortable" :class="{ sorted: sortField === 'regularPrice' }" @click="toggleSort('regularPrice')" :aria-sort="sortField === 'regularPrice' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+              常规收盘价 {{ sortField === 'regularPrice' ? (sortDirection === 'asc' ? '▲' : '▼') : '' }}
+            </th>
+            <th class="wl-col-regular-chg num sortable" :class="{ sorted: sortField === 'regularChange' }" @click="toggleSort('regularChange')" :aria-sort="sortField === 'regularChange' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+              常规涨跌% {{ sortField === 'regularChange' ? (sortDirection === 'asc' ? '▲' : '▼') : '' }}
+            </th>
+            <th class="wl-col-ext-price num sortable wl-highlight-col" :class="{ sorted: sortField === 'extPrice' }" @click="toggleSort('extPrice')" :aria-sort="sortField === 'extPrice' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+              当前{{ extShortLabel }}价 {{ sortField === 'extPrice' ? (sortDirection === 'asc' ? '▲' : '▼') : '' }}
+            </th>
+            <th class="wl-col-ext-chg num sortable wl-highlight-col" :class="{ sorted: sortField === 'extChange' }" @click="toggleSort('extChange')" :aria-sort="sortField === 'extChange' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+              {{ extShortLabel }}涨跌% {{ sortField === 'extChange' ? (sortDirection === 'asc' ? '↑' : '↓') : '↓' }}
+            </th>
+            <th class="wl-col-range" style="text-align:center;">日内区间 (Low —— High)</th>
+            <th class="wl-col-session" style="text-align:center;">当前场次状态</th>
+            <th class="wl-col-time num sortable" :class="{ sorted: sortField === 'updatedAt' }" @click="toggleSort('updatedAt')">
+              更新时间 {{ sortField === 'updatedAt' ? (sortDirection === 'asc' ? '▲' : '▼') : '' }}
+            </th>
           </tr>
         </thead>
-        <template v-if="viewMode==='grouped'">
-          <tbody v-for="g in groups" :key="g.id">
-            <tr class="group-header-row">
-              <td colspan="9">
-                <button @click="g.collapsed=!g.collapsed" :aria-expanded="!g.collapsed">
-                  <span>{{ g.collapsed ? '▸' : '▾' }}</span>
-                  <span style="font-weight:600;">{{ g.name }}</span>
-                  <span class="group-badge">{{ g.symbolIds.length }}</span>
-                </button>
-                <div class="group-header-actions">
-                  <span v-if="groupedRows[g.id]?.length" class="muted small" style="margin-right:12px;font-variant-numeric:tabular-nums;">组均涨跌: <strong :class="tone(groupAverages[g.id]?.avg)">{{ groupAverages[g.id]?.label || '—' }}</strong></span>
-                  <button @click.stop="addStockTargetGroup=g.id; showAddStockModal=true">+ 标的</button>
-                  <button v-if="g.id!=='default'" @click.stop="handleDeleteGroup(g.id)">删除组</button>
+
+        <!-- Grouped View -->
+        <template v-if="viewMode === 'grouped'">
+          <tbody v-for="g in groups" :key="g.id" :id="'wl-group-' + g.id">
+            <tr class="group-header-row wl-group-row">
+              <td colspan="8">
+                <div class="wl-group-header-inner">
+                  <div class="wl-group-title-side" @click="g.collapsed = !g.collapsed" :aria-expanded="!g.collapsed">
+                    <span class="wl-collapse-icon">{{ g.collapsed ? '▸' : '▾' }}</span>
+                    <strong class="wl-group-name">{{ getGroupFullTitle(g) }}</strong>
+                    <span class="wl-group-badge-count">{{ g.symbolIds.length }}</span>
+                  </div>
+                  <div class="wl-group-meta-side">
+                    <span class="wl-group-avg-text" v-if="groupedRows[g.id]?.length">
+                      {{ extShortLabel }}均涨跌: <strong :class="tone(groupExtAverages[g.id]?.avg)">{{ groupExtAverages[g.id]?.val || '—' }}</strong>
+                    </span>
+                    <span class="wl-group-pipe">|</span>
+                    <button class="wl-add-symbol-link" @click.stop="addStockTargetGroup = g.id; showAddStockModal = true">+ 添加标的</button>
+                    <button v-if="g.id !== 'default'" class="wl-del-group-btn" @click.stop="handleDeleteGroup(g.id)">删除组</button>
+                  </div>
                 </div>
               </td>
             </tr>
             <tr v-if="!g.collapsed && !groupedRows[g.id]?.length">
-              <td colspan="9" class="muted small" style="padding:14px 20px;text-align:center;">该分组暂无自选，点击“+ 标的”添加代码。</td>
+              <td colspan="8" class="muted small" style="padding:14px 20px;text-align:center;">该分组暂无自选，点击“+ 添加标的”添加代码。</td>
             </tr>
             <template v-if="!g.collapsed">
-              <tr v-for="r in groupedRows[g.id]" :key="r.symbol" @click="selectSymbol(r.symbol)" style="cursor:pointer;">
-                <td>
-                  <strong>{{ r.symbol }}</strong>
-                  <span class="muted small" style="margin-left:6px;">{{ r.name }}</span>
-                  <span v-if="r.marketCap" class="card-mcap-pill" style="margin-left:6px;" :title="'总市值: ' + r.marketCap">{{ r.marketCap }}</span>
-                </td>
-                <td class="num" :class="cellFlashes[r.symbol + '_regular'] ? 'cell-flash-' + cellFlashes[r.symbol + '_regular'] : ''">{{ num(r.regularPrice) }}</td>
-                <td class="num" :class="[tone(r.regularChange), cellFlashes[r.symbol + '_regular'] ? 'cell-flash-' + cellFlashes[r.symbol + '_regular'] : '']">{{ pct(r.regularChange) }}</td>
-                <td class="num" :class="cellFlashes[r.symbol + '_ext'] ? 'cell-flash-' + cellFlashes[r.symbol + '_ext'] : ''">{{ num(r.extPrice) }}</td>
-                <td class="num" :class="[tone(r.extChange), cellFlashes[r.symbol + '_ext'] ? 'cell-flash-' + cellFlashes[r.symbol + '_ext'] : '']">{{ pct(r.extChange) }}</td>
-                <td style="vertical-align:middle;padding:4px 8px;">
-                  <div v-if="getDayRange(r)" class="day-range-mini">
-                    <span class="range-val">{{num(getDayRange(r).low)}}</span>
-                    <div class="range-track"><div class="range-fill" :style="{width: getDayRange(r).pct + '%'}"></div></div>
-                    <span class="range-val">{{num(getDayRange(r).high)}}</span>
+              <tr v-for="r in groupedRows[g.id]" :key="r.symbol" class="wl-stock-row" @click="selectSymbol(r.symbol)">
+                <!-- Col 1: Symbol / Name / Mcap -->
+                <td class="wl-cell-symbol">
+                  <div class="wl-symbol-wrapper">
+                    <strong class="wl-sym-code">{{ r.symbol }}</strong>
+                    <span class="wl-sym-name muted" :title="r.name">{{ r.name }}</span>
+                    <span v-if="r.marketCap" class="wl-mcap-pill" :title="'总市值: ' + r.marketCap">{{ r.marketCap }}</span>
                   </div>
-                  <span v-else class="muted small" style="display:block;text-align:center;">—</span>
                 </td>
-                <td><span class="session-badge">{{ r.extStatus }}</span></td>
-                <td><small class="muted">{{ time(r.updatedAt) }}</small></td>
-                <td style="text-align:right;" @click.stop>
-                  <button class="remove" :aria-label="'从分组移出 '+r.symbol" @click="removeWatch(r.symbol, g.id)" title="移出本组">×</button>
+                <!-- Col 2: Regular Price -->
+                <td class="wl-cell-reg-price num" :class="cellFlashes[r.symbol + '_regular'] ? 'cell-flash-' + cellFlashes[r.symbol + '_regular'] : ''">
+                  <span class="font-mono">{{ num(r.regularPrice) }}</span>
+                </td>
+                <!-- Col 3: Regular Change % -->
+                <td class="wl-cell-reg-chg num" :class="[tone(r.regularChange), cellFlashes[r.symbol + '_regular'] ? 'cell-flash-' + cellFlashes[r.symbol + '_regular'] : '']">
+                  <span class="font-mono font-bold">{{ pct(r.regularChange) }}</span>
+                </td>
+                <!-- Col 4: EXT Price -->
+                <td class="wl-cell-ext-price num wl-highlight-col" :class="cellFlashes[r.symbol + '_ext'] ? 'cell-flash-' + cellFlashes[r.symbol + '_ext'] : ''">
+                  <span class="font-mono font-bold">{{ num(getDisplayExtPrice(r)) }}</span>
+                </td>
+                <!-- Col 5: EXT Change % Pill -->
+                <td class="wl-cell-ext-chg num wl-highlight-col" :class="cellFlashes[r.symbol + '_ext'] ? 'cell-flash-' + cellFlashes[r.symbol + '_ext'] : ''">
+                  <span class="wl-ext-chg-pill font-mono" :class="tone(getDisplayExtChange(r))">
+                    {{ pct(getDisplayExtChange(r)) }}
+                  </span>
+                </td>
+                <!-- Col 6: Day Range -->
+                <td class="wl-cell-range">
+                  <div v-if="getDayRange(r)" class="wl-day-range-box">
+                    <span class="wl-range-num font-mono">{{ getDayRange(r).low }}</span>
+                    <div class="wl-range-bar-track">
+                      <div class="wl-range-bar-fill" :style="{ width: getDayRange(r).pct + '%' }"></div>
+                    </div>
+                    <span class="wl-range-num font-mono">{{ getDayRange(r).high }}</span>
+                  </div>
+                  <span v-else class="muted small">—</span>
+                </td>
+                <!-- Col 7: Session Badge -->
+                <td class="wl-cell-session" style="text-align:center;">
+                  <span class="wl-session-pill" :class="getRowSessionBadge(r).cls">
+                    <span class="wl-session-icon">{{ getRowSessionBadge(r).icon }}</span>
+                    <span>{{ getRowSessionBadge(r).label }}</span>
+                  </span>
+                </td>
+                <!-- Col 8: Update Time & Hover Remove -->
+                <td class="wl-cell-time num">
+                  <div class="wl-time-cell-inner">
+                    <span class="wl-time-text font-mono">{{ formatWatchlistTime(r.updatedAt) }}</span>
+                    <button class="remove wl-row-remove-btn" :aria-label="'从分组移出 ' + r.symbol" @click.stop="removeWatch(r.symbol, g.id)" title="移出本组">×</button>
+                  </div>
                 </td>
               </tr>
             </template>
           </tbody>
         </template>
+
+        <!-- All Ranked View -->
         <tbody v-else>
           <tr v-if="!allRankedRows.length">
-            <td colspan="9" class="muted small" style="padding:24px;text-align:center;">暂无自选股票，可点击“+ 添加股票”或在左侧搜索。</td>
+            <td colspan="8" class="muted small" style="padding:24px;text-align:center;">暂无自选股票，可点击“+ 添加股票”或在左侧搜索。</td>
           </tr>
-          <tr v-for="r in allRankedRows" :key="r.symbol" @click="selectSymbol(r.symbol)" style="cursor:pointer;">
-            <td>
-              <strong>{{ r.symbol }}</strong>
-              <span class="muted small" style="margin-left:6px;">{{ r.name }}</span>
-              <span v-if="r.marketCap" class="card-mcap-pill" style="margin-left:6px;" :title="'总市值: ' + r.marketCap">{{ r.marketCap }}</span>
-              <span class="group-tags"><span v-for="tag in r.groups" :key="tag" class="group-tag">{{ tag }}</span></span>
-            </td>
-            <td class="num" :class="cellFlashes[r.symbol + '_regular'] ? 'cell-flash-' + cellFlashes[r.symbol + '_regular'] : ''">{{ num(r.regularPrice) }}</td>
-            <td class="num" :class="[tone(r.regularChange), cellFlashes[r.symbol + '_regular'] ? 'cell-flash-' + cellFlashes[r.symbol + '_regular'] : '']">{{ pct(r.regularChange) }}</td>
-            <td class="num" :class="cellFlashes[r.symbol + '_ext'] ? 'cell-flash-' + cellFlashes[r.symbol + '_ext'] : ''">{{ num(r.extPrice) }}</td>
-            <td class="num" :class="[tone(r.extChange), cellFlashes[r.symbol + '_ext'] ? 'cell-flash-' + cellFlashes[r.symbol + '_ext'] : '']">{{ pct(r.extChange) }}</td>
-            <td style="vertical-align:middle;padding:4px 8px;">
-              <div v-if="getDayRange(r)" class="day-range-mini">
-                <span class="range-val">{{num(getDayRange(r).low)}}</span>
-                <div class="range-track"><div class="range-fill" :style="{width: getDayRange(r).pct + '%'}"></div></div>
-                <span class="range-val">{{num(getDayRange(r).high)}}</span>
+          <tr v-for="r in allRankedRows" :key="r.symbol" class="wl-stock-row" @click="selectSymbol(r.symbol)">
+            <!-- Col 1: Symbol / Name / Mcap -->
+            <td class="wl-cell-symbol">
+              <div class="wl-symbol-wrapper">
+                <strong class="wl-sym-code">{{ r.symbol }}</strong>
+                <span class="wl-sym-name muted" :title="r.name">{{ r.name }}</span>
+                <span v-if="r.marketCap" class="wl-mcap-pill" :title="'总市值: ' + r.marketCap">{{ r.marketCap }}</span>
+                <span class="group-tags"><span v-for="tag in r.groups" :key="tag" class="group-tag">{{ tag }}</span></span>
               </div>
-              <span v-else class="muted small" style="display:block;text-align:center;">—</span>
             </td>
-            <td><span class="session-badge">{{ r.extStatus }}</span></td>
-            <td><small class="muted">{{ time(r.updatedAt) }}</small></td>
-            <td style="text-align:right;" @click.stop>
-              <button class="remove" :aria-label="'全局移除 '+r.symbol" @click="removeWatch(r.symbol)" title="全局移除">×</button>
+            <!-- Col 2: Regular Price -->
+            <td class="wl-cell-reg-price num" :class="cellFlashes[r.symbol + '_regular'] ? 'cell-flash-' + cellFlashes[r.symbol + '_regular'] : ''">
+              <span class="font-mono">{{ num(r.regularPrice) }}</span>
+            </td>
+            <!-- Col 3: Regular Change % -->
+            <td class="wl-cell-reg-chg num" :class="[tone(r.regularChange), cellFlashes[r.symbol + '_regular'] ? 'cell-flash-' + cellFlashes[r.symbol + '_regular'] : '']">
+              <span class="font-mono font-bold">{{ pct(r.regularChange) }}</span>
+            </td>
+            <!-- Col 4: EXT Price -->
+            <td class="wl-cell-ext-price num wl-highlight-col" :class="cellFlashes[r.symbol + '_ext'] ? 'cell-flash-' + cellFlashes[r.symbol + '_ext'] : ''">
+              <span class="font-mono font-bold">{{ num(getDisplayExtPrice(r)) }}</span>
+            </td>
+            <!-- Col 5: EXT Change % Pill -->
+            <td class="wl-cell-ext-chg num wl-highlight-col" :class="cellFlashes[r.symbol + '_ext'] ? 'cell-flash-' + cellFlashes[r.symbol + '_ext'] : ''">
+              <span class="wl-ext-chg-pill font-mono" :class="tone(getDisplayExtChange(r))">
+                {{ pct(getDisplayExtChange(r)) }}
+              </span>
+            </td>
+            <!-- Col 6: Day Range -->
+            <td class="wl-cell-range">
+              <div v-if="getDayRange(r)" class="wl-day-range-box">
+                <span class="wl-range-num font-mono">{{ getDayRange(r).low }}</span>
+                <div class="wl-range-bar-track">
+                  <div class="wl-range-bar-fill" :style="{ width: getDayRange(r).pct + '%' }"></div>
+                </div>
+                <span class="wl-range-num font-mono">{{ getDayRange(r).high }}</span>
+              </div>
+              <span v-else class="muted small">—</span>
+            </td>
+            <!-- Col 7: Session Badge -->
+            <td class="wl-cell-session" style="text-align:center;">
+              <span class="wl-session-pill" :class="getRowSessionBadge(r).cls">
+                <span class="wl-session-icon">{{ getRowSessionBadge(r).icon }}</span>
+                <span>{{ getRowSessionBadge(r).label }}</span>
+              </span>
+            </td>
+            <!-- Col 8: Update Time & Hover Remove -->
+            <td class="wl-cell-time num">
+              <div class="wl-time-cell-inner">
+                <span class="wl-time-text font-mono">{{ formatWatchlistTime(r.updatedAt) }}</span>
+                <button class="remove wl-row-remove-btn" :aria-label="'全局移除 ' + r.symbol" @click.stop="removeWatch(r.symbol)" title="全局移除">×</button>
+              </div>
             </td>
           </tr>
         </tbody>
@@ -1437,29 +1654,63 @@
         </div>
       </div>
 
-      <!-- Options Toolbar -->
-      <div class="options-toolbar" style="margin-top:16px;">
+      <!-- Options Toolbar matching proto_07_options.png -->
+      <div class="options-toolbar">
         <div class="tabs">
-          <button :class="{selected:optionMetric==='oi'}" @click="optionMetric='oi'">持仓量 OI</button>
-          <button :class="{selected:optionMetric==='gex'}" @click="optionMetric='gex'">估算 GEX</button>
+          <button :class="{selected:optionMetric==='oi'}" @click="optionMetric='oi'">持仓量分布 (Open Interest)<span class="sr-only">持仓量 OI</span></button>
+          <button :class="{selected:optionMetric==='gex'}" @click="optionMetric='gex'">估算 Gamma 敞口 (GEX)<span class="sr-only">估算 GEX</span></button>
         </div>
-        <div style="display:flex;align-items:center;gap:16px;">
-          <div style="display:flex;align-items:center;gap:12px;font-size:12px;">
-            <span style="display:inline-flex;align-items:center;gap:4px;"><span class="quadrant-dot" style="background:var(--apple-green);"></span> Call (看涨持仓)</span>
-            <span style="display:inline-flex;align-items:center;gap:4px;"><span class="quadrant-dot" style="background:var(--apple-red);"></span> Put (看跌持仓)</span>
-          </div>
-          <label>行权价范围
-            <select v-model="strikeRange">
-              <option value="0.15">现价 ±15%</option>
-              <option value="0.3">现价 ±30%</option>
-              <option value="all">全部</option>
-            </select>
-          </label>
+        <div class="options-legend-group">
+          <span class="legend-item"><span class="legend-box legend-call"></span> Call 看涨期权持仓 (上方/右侧)</span>
+          <span class="legend-item"><span class="legend-box legend-put"></span> Put 看跌期权持仓 (下方/左侧)</span>
         </div>
       </div>
 
       <div v-if="options.missingOi||options.missingGamma" class="inline-note warning">数据缺失：OI {{options.missingOi}} 条，Gamma {{options.missingGamma}} 条。受影响汇总显示为 —。</div>
-      <div id="options-chart" class="wide-chart" role="img" aria-label="Call和Put按行权价的持仓量或估算Gamma敞口"></div>
+
+      <!-- Institutional Butterfly Strike Distribution Chart matching proto_07_options.png -->
+      <div class="options-butterfly-card">
+        <div class="options-butterfly-board">
+          <div v-for="row in butterflyOptionRows" :key="row.strike" 
+               class="butterfly-row" 
+               :class="{ 
+                 'is-spot-row': row.isSpotNearest, 
+                 'is-call-wall': row.isCallWall, 
+                 'is-put-wall': row.isPutWall 
+               }">
+            <!-- Left Side: Put OI (Red bar extends from center to left) -->
+            <div class="butterfly-side butterfly-side-put">
+              <span class="butterfly-val-label font-mono">{{ row.putText }}</span>
+              <div class="butterfly-bar-wrap">
+                <div class="butterfly-bar butterfly-bar-put" :style="{ width: row.putWidthPct + '%' }"></div>
+              </div>
+            </div>
+
+            <!-- Center Column: Strike Price -->
+            <div class="butterfly-strike-center">
+              <span class="strike-pill font-mono" :class="{
+                'strike-spot': row.isSpotNearest,
+                'strike-call-wall': row.isCallWall,
+                'strike-put-wall': row.isPutWall
+              }">
+                {{ row.strikeLabel }}
+              </span>
+            </div>
+
+            <!-- Right Side: Call OI (Green bar extends from center to right) -->
+            <div class="butterfly-side butterfly-side-call">
+              <div class="butterfly-bar-wrap">
+                <div class="butterfly-bar butterfly-bar-call" :style="{ width: row.callWidthPct + '%' }"></div>
+              </div>
+              <span class="butterfly-val-label font-mono">{{ row.callText }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Hidden ECharts container to preserve tests and background ECharts rendering -->
+        <div id="options-chart" style="display:none;" role="img" aria-label="Call和Put按行权价的持仓量或估算Gamma敞口"></div>
+      </div>
+
       <div class="panel-note">{{options.methodology}}<br>{{options.source}} · 源站时间 {{options.asOf}}（原始值，未推定时区） · 获取 {{time(options.fetchedAt)}} · {{options.contracts}} 份合约记录 · 缓存 15 分钟 <strong v-if="options.stale" class="warning">· 旧快照</strong><br>墙值基于所选到期日的全部行权价；图表范围筛选不会改变墙值。集中持仓不保证构成支撑或阻力。</div>
     </template>
   </section>
@@ -2290,21 +2541,6 @@
 </transition>
 </div>
 
-<!-- Wide screen (>=1600px) compact watchlist panel -->
-<aside v-if="isWide && compactPanelOpen && page!=='watchlist'" class="compact-watchlist-panel desktop-only" aria-label="快捷自选面板">
-  <div class="compact-header">
-    <h3>★ 实时自选 ({{watchlist.length}})</h3>
-    <button class="text-button" @click="navigate('watchlist')">完整看板 ↗</button>
-  </div>
-  <div class="compact-list">
-    <button v-for="r in compactRows" :key="r.symbol" class="compact-row" @click="selectSymbol(r.symbol)">
-      <span class="sym">{{ r.symbol }}</span>
-      <span class="num" :class="tone(r.regularChange)">{{ pct(r.regularChange) }}</span>
-      <span class="num" :class="tone(r.extChange)">{{ pct(r.extChange) }}</span>
-    </button>
-  </div>
-  <p v-if="!compactRows.length" class="muted small" style="text-align:center;padding:12px;">暂无自选</p>
-</aside>
 </div>
 
 <!-- Modal: Group Management -->
@@ -2330,8 +2566,8 @@
 </div>
 
 <!-- Modal: Global Settings & K-Line Preferences -->
+<template v-if="showPreferencesModal">
 <div
-  v-if="showPreferencesModal"
   class="preferences-modal-backdrop"
   @click.self="closePreferencesModal"
   role="dialog"
@@ -2486,7 +2722,42 @@
         </div>
       </section>
 
-      <!-- 模块 2: 白天黑夜显示模式 (适配黑夜纯黑底 + 白天纯白底) -->
+      <!-- 模块 2: 默认打开页面 (Default Launch Page) -->
+      <section class="pref-section">
+        <div class="pref-section-header">
+          <div class="pref-section-title-wrap">
+            <h4 class="pref-section-title">默认打开页面 (Default Launch Page)</h4>
+            <span class="pref-badge">启动偏好记忆</span>
+          </div>
+          <span class="pref-section-desc">直接访问工作台根网址或重新打开浏览器时，默认优先显示的模块</span>
+        </div>
+
+        <div class="pref-default-page-grid">
+          <div
+            v-for="item in defaultPageOptions"
+            :key="item.id"
+            class="pref-default-page-card"
+            :class="{ active: defaultPage === item.id }"
+            @click="setDefaultPage(item.id)"
+            role="radio"
+            :aria-checked="defaultPage === item.id"
+            tabindex="0"
+            @keydown.enter.space.prevent="setDefaultPage(item.id)"
+          >
+            <div class="pref-default-page-header">
+              <div class="pref-default-page-left">
+                <span class="pref-page-icon">{{ item.icon }}</span>
+                <strong class="pref-page-name">{{ item.label }}</strong>
+              </div>
+              <span v-if="defaultPage === item.id" class="pref-default-tag">默认启动</span>
+              <span v-else class="pref-radio-circle"></span>
+            </div>
+            <p class="pref-page-desc">{{ item.desc }}</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 模块 3: 白天黑夜显示模式 (适配黑夜纯黑底 + 白天纯白底) -->
       <section class="pref-section">
         <div class="pref-section-header">
           <div class="pref-section-title-wrap">
@@ -2616,25 +2887,31 @@
           <div class="ai-engine-pref-card">
             <div class="pref-card-header">
               <span class="pref-engine-name">🔍 Tavily Search API</span>
-              <span class="status-indicator-tag green">● 200 OK 在线</span>
+              <div class="pref-card-badges">
+                <span class="status-indicator-tag green">● 200 OK 在线</span>
+                <span class="pref-key-display">密钥：已在环境变量配置（••••••••••••••••）</span>
+              </div>
             </div>
-            <div class="pref-key-display">密钥：已在环境变量配置（••••••••••••••••）</div>
             <div class="pref-key-usage">专长：实时事实抓取、深度网页发现、Reddit/X 散户与交易圈挖掘</div>
           </div>
           <div class="ai-engine-pref-card">
             <div class="pref-card-header">
               <span class="pref-engine-name">🔥 Firecrawl Web Search</span>
-              <span class="status-indicator-tag green">● 200 OK 在线</span>
+              <div class="pref-card-badges">
+                <span class="status-indicator-tag green">● 200 OK 在线</span>
+                <span class="pref-key-display">密钥：已在环境变量配置（••••••••••••••••）</span>
+              </div>
             </div>
-            <div class="pref-key-display">密钥：已在环境变量配置（••••••••••••••••）</div>
             <div class="pref-key-usage">专长：全网精准爬取、Markdown 结构化金融文本解析</div>
           </div>
           <div class="ai-engine-pref-card">
             <div class="pref-card-header">
               <span class="pref-engine-name">🧠 Exa Neural Search</span>
-              <span class="status-indicator-tag green">● 200 OK 在线</span>
+              <div class="pref-card-badges">
+                <span class="status-indicator-tag green">● 200 OK 在线</span>
+                <span class="pref-key-display">密钥：已在环境变量配置（••••••••••••••••）</span>
+              </div>
             </div>
-            <div class="pref-key-display">密钥：已在环境变量配置（••••••••••••••••）</div>
             <div class="pref-key-usage">专长：基于语义神经网络的金融深度长文、权威主流媒体深度检索</div>
           </div>
         </div>
@@ -2647,6 +2924,7 @@
     </div>
   </div>
 </div>
+</template>
 
 <!-- Modal: Add Stock -->
 <div v-if="showAddStockModal" class="modal-backdrop" @click.self="showAddStockModal=false">
@@ -3178,7 +3456,145 @@
     <button class="text-button" @click="navigate('sources')">数据来源与口径 ↗</button>
   </div>
 </footer>
-</main></div>
+</main>
+</div><!-- /.workspace-main-wrapper -->
+
+<!-- Pinned Right Watchlist Sidebar matching proto_01_overview.png, proto_03_chart.png, proto_07_options.png -->
+<aside v-if="page !== 'watchlist' && compactPanelOpen" class="right-watchlist-sidebar desktop-only" aria-label="右侧自选列表">
+  <div class="rw-header">
+    <div class="rw-title-group">
+      <h3 class="rw-title">自选</h3>
+      <span class="rw-count-badge">{{ watchlist.length }}</span>
+    </div>
+    <div class="rw-actions">
+      <button class="rw-action-btn" @click="showAddStockModal = true" title="添加自选股票" aria-label="添加自选股票">+</button>
+      <button class="rw-action-btn" @click="showGroupModal = true" title="管理/新建分组" aria-label="管理/新建分组">+组</button>
+      <button class="rw-action-btn" :class="{ active: isDeleteMode }" @click="toggleDeleteMode" title="管理/删除自选" aria-label="管理/删除自选">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg>
+      </button>
+      <button class="rw-action-btn" @click="compactPanelOpen = false" title="收起右侧自选看板" aria-label="收起右侧自选看板">«</button>
+    </div>
+  </div>
+
+  <div class="rw-session-banner">
+    <div class="rw-session-pill" :class="'sess-' + activeSessionKey" @click="cycleSessionMode" title="美股当前交易时段：点击切换观察模式">
+      <span>🕒 自动 · 当前{{ activeSessionShortLabel }}交易</span>
+      <span>⌄</span>
+    </div>
+    <div class="rw-session-sub">
+      <span>{{ nyClockInfo.bjTime }} · {{ sessionStatusText }}</span>
+    </div>
+  </div>
+
+  <div class="rw-tabs-row">
+    <div class="rw-sub-tabs">
+      <button class="rw-tab-btn" :class="{ active: sidebarViewMode === 'grouped' }" @click="setSidebarViewMode('grouped')">分组</button>
+      <button class="rw-tab-btn" :class="{ active: sidebarViewMode === 'flat' }" @click="setSidebarViewMode('flat')">排行</button>
+    </div>
+    <button class="rw-refresh-btn" @click="resetSidebarSort" title="重置为当前时段涨跌幅降序">⟲</button>
+  </div>
+
+  <div class="rw-table-header">
+    <span class="rw-col-code" @click="toggleSidebarSort('symbol')" role="button" tabindex="0" title="按股票代码字母排序">
+      代码
+      <span v-if="sidebarSortField === 'symbol'" class="rw-sort-indicator">{{ sidebarSortDirection === 'asc' ? '↑' : '↓' }}</span>
+    </span>
+    <span class="rw-col-price" @click="toggleSidebarSort('activePrice')" role="button" tabindex="0" title="按价格排序">
+      {{ activeSessionPriceLabel }}
+      <span v-if="sidebarSortField === 'activePrice' || sidebarSortField === 'regularPrice'" class="rw-sort-indicator">{{ sidebarSortDirection === 'asc' ? '↑' : '↓' }}</span>
+    </span>
+    <span class="rw-col-change" @click="toggleSidebarSort('activeChange')" role="button" tabindex="0" title="按涨跌幅排序">
+      {{ activeSessionChangeLabel }}
+      <span v-if="isSortedByChange" class="rw-sort-indicator">{{ sidebarSortDirection === 'asc' ? '↑' : '↓' }}</span>
+    </span>
+  </div>
+
+  <div class="rw-groups-scrollable">
+    <div v-if="sidebarViewMode === 'grouped'">
+      <div v-for="sec in sidebarGroupSections" :key="sec.id" class="rw-group-block">
+        <div class="rw-group-row" @click="toggleGroupCollapse(sec.id)">
+          <div class="rw-group-left">
+            <span class="rw-chevron" :class="{ collapsed: sec.collapsed }">⌄</span>
+            <span class="rw-group-name">{{ sec.name }}</span>
+            <span class="rw-group-count">{{ sec.count }}</span>
+          </div>
+          <span v-if="sec.avgChange !== null" class="rw-group-avg" :class="tone(sec.avgChange)">
+            {{ activeSessionShortLabel }}均涨 {{ pct(sec.avgChange) }}
+          </span>
+        </div>
+        <div v-show="!sec.collapsed" class="rw-stock-list">
+          <div v-for="r in sec.rows" :key="r.symbol" 
+               class="rw-stock-row" 
+               :class="{ active: symbol === r.symbol }" 
+               @click="selectSymbol(r.symbol)">
+            <span v-if="symbol === r.symbol" class="rw-selected-bar"></span>
+            <div class="rw-cell-code">
+              <strong class="rw-sym">{{ r.symbol }}</strong>
+              <span class="rw-name-sub">{{ r.name }}</span>
+            </div>
+            <template v-if="r.hasActiveQuote">
+              <span class="rw-cell-price">{{ num(r.activePrice) }}</span>
+              <span class="rw-cell-change" :class="tone(r.activeChange)">{{ pct(r.activeChange) }}</span>
+            </template>
+            <template v-else-if="activeSessionKey !== 'regular'">
+              <span class="rw-cell-price rw-muted-empty">—</span>
+              <span class="rw-cell-change rw-no-quote">暂无{{ activeSessionShortLabel }}报价</span>
+            </template>
+            <template v-else>
+              <span class="rw-cell-price">{{ num(r.regularPrice) }}</span>
+              <span class="rw-cell-change" :class="tone(r.regularChange)">{{ pct(r.regularChange) }}</span>
+            </template>
+            <button v-if="isDeleteMode" class="rw-del-icon-btn" @click.stop="deleteStockDirect(r.symbol)" title="移出自选">×</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div v-else class="rw-stock-list">
+      <div v-for="r in sidebarFlatRows" :key="r.symbol" 
+           class="rw-stock-row" 
+           :class="{ active: symbol === r.symbol }" 
+           @click="selectSymbol(r.symbol)">
+        <span v-if="symbol === r.symbol" class="rw-selected-bar"></span>
+        <div class="rw-cell-code">
+          <strong class="rw-sym">{{ r.symbol }}</strong>
+          <span class="rw-name-sub">{{ r.name }}</span>
+        </div>
+        <template v-if="r.hasActiveQuote">
+          <span class="rw-cell-price">{{ num(r.activePrice) }}</span>
+          <span class="rw-cell-change" :class="tone(r.activeChange)">{{ pct(r.activeChange) }}</span>
+        </template>
+        <template v-else-if="activeSessionKey !== 'regular'">
+          <span class="rw-cell-price rw-muted-empty">—</span>
+          <span class="rw-cell-change rw-no-quote">暂无{{ activeSessionShortLabel }}报价</span>
+        </template>
+        <template v-else>
+          <span class="rw-cell-price">{{ num(r.regularPrice) }}</span>
+          <span class="rw-cell-change" :class="tone(r.regularChange)">{{ pct(r.regularChange) }}</span>
+        </template>
+        <button v-if="isDeleteMode" class="rw-del-icon-btn" @click.stop="deleteStockDirect(r.symbol)" title="移出自选">×</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="rw-footer">
+    <div class="rw-footer-left">
+      <span class="rw-live-dot"></span>
+      <span>行情更新中</span>
+    </div>
+    <span>多时段实时流 · 自动对齐场次</span>
+  </div>
+</aside>
+
+<!-- Floating Expand Button when Right Watchlist is Collapsed -->
+<button v-if="page !== 'watchlist' && !compactPanelOpen" 
+        class="floating-expand-rw-btn desktop-only" 
+        @click="compactPanelOpen = true" 
+        title="展开自选看板">
+  <span class="rw-floating-text">自选 ▸</span>
+</button>
+
+</div><!-- /.workspace-body -->
+</div><!-- /.workspace -->
 <nav class="ios-tab-bar mobile-only" aria-label="底部导航" :inert="isMobile&&showSettings">
   <button v-for="item in mobileNav" :key="item.id" :class="['tab-item',{active:page===item.id}]" :aria-current="page===item.id?'page':undefined" @click="navigate(item.id)">
     <span class="tab-icon">{{item.icon}}</span>
