@@ -422,10 +422,27 @@ createApp({ setup() {
   const optionSymbol = ref('NVDA'), optionExpiry = ref(''), optionMetric = ref('oi'), strikeRange = ref('0.15');
   const newsSymbol = ref(''), newsSearch = ref(''), heatSize = ref('turnover'), sectorFilter = ref('全部');
   const heatmapScope = ref(readStorage('market-desk-heatmap-scope', 'watchlist'));
+  const heatmapSession = ref(readStorage('market-desk-heatmap-session', 'auto'));
   function onHeatmapScopeChange() {
     persist('market-desk-heatmap-scope', heatmapScope.value);
     sectorFilter.value = '全部';
+    fetchWatchlistQuotes();
     nextTick(() => renderHeatmap());
+  }
+  function onHeatmapSessionChange() {
+    persist('market-desk-heatmap-session', heatmapSession.value);
+    fetchWatchlistQuotes();
+    nextTick(() => renderHeatmap());
+  }
+  function setHeatmapSession(sess) {
+    heatmapSession.value = sess;
+    onHeatmapSessionChange();
+  }
+  function cycleHeatmapSession() {
+    const modes = ['auto', 'overnight', 'pre', 'regular', 'post'];
+    const idx = modes.indexOf(heatmapSession.value);
+    heatmapSession.value = modes[(idx + 1) % modes.length];
+    onHeatmapSessionChange();
   }
   const flowTab = ref('rotation'), flows = ref([]), flowDate = ref('');
   const savedFlows = readStorage('market-desk-flows', '');
@@ -854,68 +871,87 @@ createApp({ setup() {
   const nonLeveragedWatchlist = computed(() => {
     return (watchlist.value || []).filter(sym => !isLeveragedEtf(sym, SYMBOL_NAMES[sym]));
   });
+  const currentSessionShortLabel = computed(() => {
+    const s = currentSession.value?.session;
+    if (s === 'pre') return '盘前';
+    if (s === 'post') return '盘后';
+    if (s === 'overnight') return '隔夜';
+    return '常规';
+  });
+  const resolvedHeatmapSession = computed(() => 'regular');
+  const resolvedHeatmapSessionLabel = computed(() => '常规');
+  const heatmapSessionBadgeText = computed(() => '☀️ 常规时段');
+
+  function buildHeatmapStockItem({ symbol: sym, name, sector, fallbackStock = null }) {
+    const overviewStock = (overview.value?.stocks || []).find(s => s.symbol === sym);
+    const q = quoteStore.value[sym] || {};
+    const reg = q.regular || {};
+
+    const regPrice = reg.price ?? q.price ?? overviewStock?.price ?? fallbackStock?.price ?? null;
+    const regChange = reg.changePercent ?? q.changePercent ?? overviewStock?.changePercent ?? fallbackStock?.changePercent ?? null;
+    const regVolume = reg.volume ?? q.volume ?? overviewStock?.volume ?? fallbackStock?.volume ?? null;
+    const regTime = reg.sourceTime || q.asOf || overviewStock?.asOf || q.meta?.updatedAt || null;
+
+    // Strictly display regular trading hours (正常开盘正常交易时段的热力图数据)
+    const price = regPrice;
+    const changePercent = regChange;
+    const asOf = regTime;
+    const sessionKey = 'regular';
+    const sessionLabel = '常规';
+
+    const basePrice = price ?? regPrice;
+    let turnover = (regVolume && basePrice)
+      ? (regVolume * basePrice)
+      : (reg.turnover ?? q.turnover ?? overviewStock?.turnover ?? null);
+
+    if ((turnover === null || !Number.isFinite(turnover) || turnover <= 0) && heatmapScope.value !== 'core') {
+      const mcap = STOCK_MARKET_CAPS[sym]?.value;
+      if (mcap) {
+        turnover = mcap * 0.005;
+      } else if (basePrice) {
+        turnover = basePrice * 1000000;
+      }
+    }
+
+    return {
+      symbol: sym,
+      name: SYMBOL_NAMES[sym] || q.name || name || overviewStock?.name || fallbackStock?.name || sym,
+      sector: sector || overviewStock?.sector || fallbackStock?.sector || '美股',
+      price,
+      changePercent,
+      regularPrice: regPrice,
+      regularChange: regChange,
+      sessionKey,
+      sessionLabel,
+      turnover,
+      asOf
+    };
+  }
+
   const activeHeatmapStocks = computed(() => {
     if (heatmapScope.value === 'watchlist') {
       const symbols = nonLeveragedWatchlist.value;
-      if (!symbols.length) return overview.value?.stocks || [];
+      if (!symbols.length) {
+        return (overview.value?.stocks || []).map(s => buildHeatmapStockItem({ symbol: s.symbol, name: s.name, sector: s.sector, fallbackStock: s }));
+      }
       return symbols.map(sym => {
         const overviewStock = (overview.value?.stocks || []).find(s => s.symbol === sym);
-        const q = quoteStore.value[sym] || overviewStock || {};
-        const reg = q.regular || q;
-        const ext = getSelectedExtQuote(q, extMode.value, currentSession.value);
         const groupNames = watchlistMgr.getGroupsForSymbol(sym);
         const groupName = (typeof groupNames[0] === 'string' && groupNames[0]) || (watchlistMgr.data.groups || []).find(g => (g.symbolIds || []).includes(sym))?.name || overviewStock?.sector || '自选标的';
-        const price = ext.price ?? reg.price ?? (q.price != null ? q.price : (overviewStock?.price ?? null));
-        const change = ext.changePercent ?? reg.changePercent ?? (q.changePercent != null ? q.changePercent : (overviewStock?.changePercent ?? null));
-        const turnover = (reg.volume && price) ? (reg.volume * price) : (reg.turnover ?? q.turnover ?? overviewStock?.turnover ?? null);
-        return {
-          symbol: sym,
-          name: SYMBOL_NAMES[sym] || q.name || overviewStock?.name || sym,
-          sector: groupName,
-          price,
-          changePercent: change,
-          turnover,
-          asOf: reg.sourceTime || q.meta?.updatedAt || overviewStock?.asOf || null
-        };
+        return buildHeatmapStockItem({ symbol: sym, sector: groupName, fallbackStock: overviewStock });
       });
     }
 
     if (heatmapScope.value === 'nasdaq100') {
-      return NASDAQ100_STOCKS.map(def => {
-        const q = quoteStore.value[def.symbol] || (overview.value?.stocks || []).find(s => s.symbol === def.symbol) || {};
-        const reg = q.regular || {};
-        const price = reg.price ?? (q.price != null ? q.price : null);
-        const change = reg.changePercent ?? (q.changePercent != null ? q.changePercent : null);
-        const turnover = (reg.volume && price) ? (reg.volume * price) : (q.turnover ?? null);
-        return {
-          ...def,
-          price,
-          changePercent: change,
-          turnover,
-          asOf: reg.sourceTime || q.asOf || null
-        };
-      });
+      return NASDAQ100_STOCKS.map(def => buildHeatmapStockItem({ symbol: def.symbol, name: def.name, sector: def.sector, fallbackStock: def }));
     }
 
     if (heatmapScope.value === 'sp500') {
-      return SP500_STOCKS.map(def => {
-        const q = quoteStore.value[def.symbol] || (overview.value?.stocks || []).find(s => s.symbol === def.symbol) || {};
-        const reg = q.regular || {};
-        const price = reg.price ?? (q.price != null ? q.price : null);
-        const change = reg.changePercent ?? (q.changePercent != null ? q.changePercent : null);
-        const turnover = (reg.volume && price) ? (reg.volume * price) : (q.turnover ?? null);
-        return {
-          ...def,
-          price,
-          changePercent: change,
-          turnover,
-          asOf: reg.sourceTime || q.asOf || null
-        };
-      });
+      return SP500_STOCKS.map(def => buildHeatmapStockItem({ symbol: def.symbol, name: def.name, sector: def.sector, fallbackStock: def }));
     }
 
     // fallback: core 18
-    return overview.value?.stocks || [];
+    return (overview.value?.stocks || []).map(s => buildHeatmapStockItem({ symbol: s.symbol, name: s.name, sector: s.sector, fallbackStock: s }));
   });
 
   const missingTurnoverCount = computed(() => {
@@ -1849,12 +1885,23 @@ createApp({ setup() {
         throw new Error(errJson.error || `HTTP ${res.status}`);
       }
       const data = await res.json();
-      aiSearchResults.value = data.items || [];
+      const sortedItems = [...(data.items || [])].sort((a, b) => {
+        const ta = a.publishedAt ? Date.parse(a.publishedAt) : NaN;
+        const tb = b.publishedAt ? Date.parse(b.publishedAt) : NaN;
+        const va = Number.isFinite(ta);
+        const vb = Number.isFinite(tb);
+        if (va && vb) return tb - ta;
+        if (vb) return 1;
+        if (va) return -1;
+        return 0;
+      });
+      aiSearchResults.value = sortedItems;
       aiSearchTelemetry.value = {
         latencyMs: data.latencyMs,
         total: data.total,
         engine: data.engine,
         source: data.source,
+        sortOrder: data.sortOrder || 'publishedAt_desc',
         sourceCounts: data.sourceCounts || {},
         fetchedAt: data.fetchedAt
       };
@@ -1901,18 +1948,30 @@ createApp({ setup() {
   }
 
   function formatAiTime(dateStr) {
-    if (!dateStr) return '最新速递';
+    if (!dateStr) return '近期收录';
     const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return dateStr;
-    const diff = Date.now() - d.getTime();
-    if (diff < 60000) return '刚刚';
-    if (diff < 3600000) return `${Math.floor(diff / 60000)} 分钟前`;
-    if (diff < 86400000) return `${Math.floor(diff / 3600000)} 小时前`;
-    if (diff < 604800000) return `${Math.floor(diff / 86400000)} 天前`;
-    return d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
+    if (isNaN(d.getTime())) return '近期收录';
+    const isDateOnly = String(dateStr).endsWith('T00:00:00.000Z');
+    const bjStr = new Intl.DateTimeFormat('zh-CN', {
+      timeZone: 'Asia/Shanghai',
+      month: '2-digit',
+      day: '2-digit',
+      ...(isDateOnly ? {} : { hour: '2-digit', minute: '2-digit', hour12: false })
+    }).format(d);
+    const diff = Math.max(0, Date.now() - d.getTime());
+    if (isDateOnly) {
+      const days = Math.floor(diff / 86400000);
+      return days <= 0 ? `今日 · ${bjStr}` : `${days} 天前 · ${bjStr}`;
+    }
+    if (diff < 60000) return `刚刚 · ${bjStr}`;
+    if (diff < 3600000) return `${Math.max(1, Math.floor(diff / 60000))} 分钟前 · ${bjStr}`;
+    if (diff < 86400000) return `${Math.floor(diff / 3600000)} 小时前 · ${bjStr}`;
+    if (diff < 604800000) return `${Math.floor(diff / 86400000)} 天前 · ${bjStr}`;
+    return bjStr;
   }
 
   function getAiEngineBadge(eng) {
+    if (eng === 'live_wire') return { name: '实时权威专线', cls: 'engine-pill-tavily' };
     if (eng === 'tavily') return { name: 'Tavily AI', cls: 'engine-pill-tavily' };
     if (eng === 'exa') return { name: 'Exa Neural', cls: 'engine-pill-exa' };
     if (eng === 'firecrawl') return { name: 'Firecrawl', cls: 'engine-pill-firecrawl' };
@@ -2065,7 +2124,13 @@ createApp({ setup() {
     const oq = findQuote(s);
     return oq ? (oq.changePercent || 0) > 0 : false;
   }
-  const quoteWindow = computed(() => { const dates = (overview.value?.stocks || []).map(q => q.asOf).filter(Boolean).sort(); return dates.length ? time(dates[0]) + (dates[0] !== dates.at(-1) ? ' — ' + time(dates.at(-1)) : '') : '未提供'; });
+  const quoteWindow = computed(() => {
+    const dates = (overview.value?.stocks || []).map(q => q.asOf).filter(Boolean).sort();
+    if (!dates.length) return '未提供';
+    const tStart = time(dates[0]);
+    const tEnd = time(dates.at(-1));
+    return tStart === tEnd ? tStart : `${tStart} — ${tEnd}`;
+  });
   const breadth = computed(() => { const values = (overview.value?.stocks || []).map(q => q.changePercent); return { up: values.filter(v => v > 0).length, down: values.filter(v => v < 0).length, flat: values.filter(v => v === 0).length, unknown: values.filter(v => !Number.isFinite(v)).length }; });
   const flowDates = computed(() => [...new Set(flows.value.map(f => f.date))]);
   const dayFlows = computed(() => flows.value.filter(f => f.date === flowDate.value).sort((a, b) => b.netFlowUsd - a.netFlowUsd));
@@ -2074,6 +2139,11 @@ createApp({ setup() {
 
   const findQuote = s => [...(overview.value?.stocks || []), ...(overview.value?.benchmarks || []), ...(overview.value?.sectors || [])].find(q => q.symbol === s);
   const barWidth = value => `${Math.max(2, Math.min(100, Math.abs(value || 0) / Math.max(0.5, ...rankedSectors.value.map(q => Math.abs(q.changePercent || 0))) * 100))}%`;
+  const getSectorBarHeight = value => {
+    const maxAbs = Math.max(0.5, ...rankedSectors.value.map(q => Math.abs(q.changePercent || 0)));
+    const ratio = Math.abs(value || 0) / maxAbs;
+    return `${Math.round(Math.max(12, Math.min(100, ratio * 100)))}%`;
+  };
   const walls = values => values?.length ? values.map(num).join(' / ') : '—';
   function persist(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch { toast.value = '浏览器存储不可用，本次修改只保留在当前页面。'; } }
 
@@ -2377,16 +2447,40 @@ createApp({ setup() {
     return `${hh}:${mm}:${ss} 北京`;
   }
 
+  function getExtSessionKey(r) {
+    const sess = (r?.extSession && r.extSession !== 'none') ? r.extSession : (currentSession.value?.session || 'pre');
+    if (sess === 'overnight' || r?.extStatus?.includes('隔夜')) return 'overnight';
+    if (sess === 'pre' || r?.extStatus?.includes('盘前')) return 'pre';
+    if (sess === 'post' || r?.extStatus?.includes('盘后')) return 'post';
+    return currentSession.value?.session === 'overnight' ? 'overnight' : 'pre';
+  }
+
+  function getExtSessionIcon(r) {
+    const key = getExtSessionKey(r);
+    if (key === 'overnight') return '🌙';
+    if (key === 'pre') return '🌅';
+    if (key === 'post') return '🌇';
+    return '🌅';
+  }
+
+  function getExtSessionTitle(r) {
+    const key = getExtSessionKey(r);
+    if (key === 'overnight') return '隔夜时段 (Overnight)';
+    if (key === 'pre') return '盘前时段 (Pre-Market)';
+    if (key === 'post') return '盘后时段 (After-Hours)';
+    return '延长交易时段 (EXT)';
+  }
+
   function getRowSessionBadge(r) {
     const sess = r?.extSession || currentSession.value?.session || 'pre';
     if (sess === 'pre' || r?.extStatus?.includes('盘前')) {
       return { icon: '🌅', label: '盘前交易', cls: 'session-pill-pre' };
     }
     if (sess === 'post' || r?.extStatus?.includes('盘后')) {
-      return { icon: '🌙', label: '盘后交易', cls: 'session-pill-post' };
+      return { icon: '🌇', label: '盘后交易', cls: 'session-pill-post' };
     }
     if (sess === 'overnight' || r?.extStatus?.includes('隔夜')) {
-      return { icon: '✨', label: '隔夜交易', cls: 'session-pill-overnight' };
+      return { icon: '🌙', label: '隔夜交易', cls: 'session-pill-overnight' };
     }
     if (sess === 'regular' || r?.extStatus?.includes('常规')) {
       return { icon: '☀️', label: '常规交易', cls: 'session-pill-regular' };
@@ -2404,12 +2498,134 @@ createApp({ setup() {
   }
 
   // Sidebar Watchlist State & Methods (Persistent Sorting & Group Filtering)
-  const storedSortField = readStorage('market-desk-sidebar-sort-field', 'activeChange');
-  const sidebarSortField = ref(storedSortField || 'activeChange');
+  const storedSortField = readStorage('market-desk-sidebar-sort-field', 'regularChange');
+  const sidebarSortField = ref(storedSortField || 'regularChange');
   const sidebarSortDirection = ref(readStorage('market-desk-sidebar-sort-dir', 'desc'));
   const sidebarActiveGroup = ref(readStorage('market-desk-sidebar-group', 'all'));
+  const sidebarSearchQuery = ref('');
   const storedViewMode = readStorage('market-desk-sidebar-view-mode', 'grouped');
   const sidebarViewMode = ref(storedViewMode === 'flat' ? 'flat' : 'grouped'); // 'grouped' | 'flat'
+  // Whole-group average change sort order ('desc' | 'asc' | 'manual')
+  const groupOrderSortDir = ref(readStorage('market-desk-group-order-sort-dir', 'desc'));
+  // Right Watchlist Session Tab ('regular' | 'ext')
+  const rwSessionTab = ref(readStorage('market-desk-rw-session-tab', 'regular'));
+
+  const currentExtSessionShortLabel = computed(() => {
+    const s = currentSession.value?.session;
+    if (s === 'pre') return '盘前';
+    if (s === 'overnight') return '隔夜';
+    return '盘后';
+  });
+
+  function getRowExtSessionLabel(r) {
+    const key = getExtSessionKey(r);
+    if (key === 'overnight') return '隔夜';
+    if (key === 'pre') return '盘前';
+    if (key === 'post') return '盘后';
+    return currentExtSessionShortLabel.value;
+  }
+
+  function setRwSessionTab(tab) {
+    rwSessionTab.value = tab === 'ext' ? 'ext' : 'regular';
+    persist('market-desk-rw-session-tab', rwSessionTab.value);
+    if (rwSessionTab.value === 'ext') {
+      sidebarSortField.value = 'extChange';
+    } else {
+      sidebarSortField.value = 'regularChange';
+    }
+    for (const k of Object.keys(groupSortStates)) {
+      delete groupSortStates[k];
+    }
+    persistGroupSortStates();
+    persist('market-desk-sidebar-sort-field', sidebarSortField.value);
+  }
+
+  const groupPillsBarRef = ref(null);
+  const canScrollPillsLeft = ref(false);
+  const canScrollPillsRight = ref(false);
+  let isDraggingPills = false;
+  let pillsStartX = 0;
+  let pillsStartScrollLeft = 0;
+  let pillsHasMoved = false;
+
+  function checkPillsScroll() {
+    const el = groupPillsBarRef.value;
+    if (!el) return;
+    canScrollPillsLeft.value = el.scrollLeft > 2;
+    canScrollPillsRight.value = el.scrollLeft < (el.scrollWidth - el.clientWidth - 2);
+  }
+
+  function scrollPillsBar(offset) {
+    const el = groupPillsBarRef.value;
+    if (!el) return;
+    el.scrollBy({ left: offset, behavior: 'smooth' });
+    setTimeout(checkPillsScroll, 320);
+  }
+
+  function onGroupPillsWheel(e) {
+    const el = groupPillsBarRef.value || e.currentTarget;
+    if (!el) return;
+    const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+    if (delta !== 0) {
+      if (e.cancelable) e.preventDefault();
+      e.stopPropagation();
+      el.scrollLeft += delta;
+      checkPillsScroll();
+    }
+  }
+
+  function onGroupPillsMouseDown(e) {
+    const el = groupPillsBarRef.value || e.currentTarget;
+    if (!el) return;
+    isDraggingPills = true;
+    pillsHasMoved = false;
+    pillsStartX = e.pageX - el.offsetLeft;
+    pillsStartScrollLeft = el.scrollLeft;
+  }
+
+  function onGroupPillsMouseMove(e) {
+    if (!isDraggingPills) return;
+    const el = groupPillsBarRef.value || e.currentTarget;
+    if (!el) return;
+    const x = e.pageX - el.offsetLeft;
+    const walk = x - pillsStartX;
+    if (Math.abs(walk) > 4) {
+      pillsHasMoved = true;
+      if (e.cancelable) e.preventDefault();
+      el.scrollLeft = pillsStartScrollLeft - walk;
+      checkPillsScroll();
+    }
+  }
+
+  function onGroupPillsMouseUp() {
+    isDraggingPills = false;
+  }
+
+  function handleGroupPillClick(groupId, e) {
+    if (pillsHasMoved) {
+      pillsHasMoved = false;
+      return;
+    }
+    selectSidebarGroupPill(groupId, e);
+  }
+
+  function selectSidebarGroupPill(groupId, e) {
+    if (groupId === 'all' || sidebarActiveGroup.value === groupId) {
+      sidebarActiveGroup.value = 'all';
+    } else {
+      sidebarActiveGroup.value = groupId;
+      const grp = watchlistMgr.getGroup(groupId);
+      if (grp && grp.collapsed) {
+        watchlistMgr.toggleGroupCollapse(groupId);
+        syncWatchlistData();
+      }
+    }
+    persist('market-desk-sidebar-group', sidebarActiveGroup.value);
+    if (e && e.currentTarget && typeof e.currentTarget.scrollIntoView === 'function') {
+      e.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    }
+    setTimeout(checkPillsScroll, 320);
+  }
 
   const activeSessionKey = computed(() => {
     if (extMode.value && extMode.value !== 'auto') return extMode.value;
@@ -2430,7 +2646,7 @@ createApp({ setup() {
     if (s === 'pre') return '盘前价';
     if (s === 'post') return '盘后价';
     if (s === 'overnight') return '隔夜价';
-    return '现价';
+    return '收盘价格';
   });
 
   const activeSessionChangeLabel = computed(() => {
@@ -2438,7 +2654,7 @@ createApp({ setup() {
     if (s === 'pre') return '盘前涨幅';
     if (s === 'post') return '盘后涨幅';
     if (s === 'overnight') return '隔夜涨幅';
-    return '涨跌幅';
+    return 'Chg%';
   });
 
   const isSortedByChange = computed(() => {
@@ -2454,54 +2670,64 @@ createApp({ setup() {
     persist('market-desk-sidebar-view-mode', sidebarViewMode.value);
   }
 
+  function toggleGroupOrderSort() {
+    if (groupOrderSortDir.value === 'desc') {
+      groupOrderSortDir.value = 'asc';
+      toast.value = '已切换：整组按组均涨幅升序排列';
+    } else if (groupOrderSortDir.value === 'asc') {
+      groupOrderSortDir.value = 'manual';
+      toast.value = '已切换：整组按默认分组顺序排列';
+    } else {
+      groupOrderSortDir.value = 'desc';
+      toast.value = '已切换：整组按组均涨幅降序排列';
+    }
+    persist('market-desk-group-order-sort-dir', groupOrderSortDir.value);
+  }
+
   function toggleSidebarSort(field) {
-    if (field === 'symbol') {
+    const normalized =
+      field === 'price' ? 'regularPrice' :
+      field === 'change' ? 'regularChange' :
+      field;
+
+    if (normalized === 'symbol') {
       if (sidebarSortField.value === 'symbol') {
-        if (sidebarSortDirection.value === 'asc') {
-          sidebarSortDirection.value = 'desc';
-        } else {
-          sidebarSortField.value = 'manual';
-          sidebarSortDirection.value = 'asc';
-        }
+        sidebarSortDirection.value = sidebarSortDirection.value === 'asc' ? 'desc' : 'asc';
       } else {
         sidebarSortField.value = 'symbol';
         sidebarSortDirection.value = 'asc';
       }
-    } else if (field === 'price' || field === 'activePrice' || field === 'regularPrice') {
-      if (sidebarSortField.value === 'activePrice' || sidebarSortField.value === 'regularPrice') {
-        if (sidebarSortDirection.value === 'desc') {
-          sidebarSortDirection.value = 'asc';
-        } else {
-          sidebarSortField.value = 'manual';
-          sidebarSortDirection.value = 'desc';
-        }
-      } else {
-        sidebarSortField.value = 'activePrice';
-        sidebarSortDirection.value = 'desc';
-      }
+    } else if (normalized === 'manual') {
+      sidebarSortField.value = 'manual';
+      sidebarSortDirection.value = 'desc';
     } else {
-      // Default / change percent sort
-      if (sidebarSortField.value === 'activeChange' || sidebarSortField.value === 'regularChange' || sidebarSortField.value === 'extChange' || !sidebarSortField.value) {
-        if (sidebarSortDirection.value === 'desc') {
-          sidebarSortDirection.value = 'asc';
-        } else {
-          sidebarSortField.value = 'manual';
-          sidebarSortDirection.value = 'desc';
-        }
+      if (sidebarSortField.value === normalized) {
+        sidebarSortDirection.value = sidebarSortDirection.value === 'desc' ? 'asc' : 'desc';
       } else {
-        sidebarSortField.value = 'activeChange';
+        sidebarSortField.value = normalized;
         sidebarSortDirection.value = 'desc';
       }
     }
+    // Clear individual group overrides when clicking global column header so all groups sync
+    for (const k of Object.keys(groupSortStates)) {
+      delete groupSortStates[k];
+    }
+    persistGroupSortStates();
     persist('market-desk-sidebar-sort-field', sidebarSortField.value);
     persist('market-desk-sidebar-sort-dir', sidebarSortDirection.value);
   }
 
   function resetSidebarSort() {
-    sidebarSortField.value = 'activeChange';
+    sidebarSortField.value = 'regularChange';
     sidebarSortDirection.value = 'desc';
-    persist('market-desk-sidebar-sort-field', 'activeChange');
+    groupOrderSortDir.value = 'desc';
+    for (const k of Object.keys(groupSortStates)) {
+      delete groupSortStates[k];
+    }
+    persistGroupSortStates();
+    persist('market-desk-sidebar-sort-field', 'regularChange');
     persist('market-desk-sidebar-sort-dir', 'desc');
+    persist('market-desk-group-order-sort-dir', 'desc');
   }
 
   function setSidebarSort(field) {
@@ -2545,31 +2771,96 @@ createApp({ setup() {
     showAddStockModal.value = true;
   }
 
-  // Group-level Change% Sorting States (3-state cycle: 'default' -> 'desc' -> 'asc' -> 'default')
+  // Group-level In-Group Column Sorting States
+  // Supports per-group { field: 'symbol' | 'regularPrice' | 'regularChange' | 'extChange', dir: 'desc' | 'asc' }
+  // as well as legacy string 'default' | 'desc' | 'asc'
   const groupSortStates = reactive(readStorage('market-desk-group-sort-states', {}));
 
   function persistGroupSortStates() {
     persist('market-desk-group-sort-states', { ...groupSortStates });
   }
 
-  function cycleGroupSort(groupId) {
-    const current = groupSortStates[groupId] || 'default';
-    let next = 'desc';
-    if (current === 'default') {
-      next = 'desc';
-    } else if (current === 'desc') {
-      next = 'asc';
-    } else {
-      next = 'default';
+  function resolveGroupSortSpec(groupId) {
+    const raw = groupSortStates[groupId];
+    if (!raw || raw === 'default') return null;
+    if (typeof raw === 'string') {
+      if (raw === 'desc' || raw === 'asc') {
+        return { field: 'regularChange', dir: raw };
+      }
+      return null;
     }
-    groupSortStates[groupId] = next;
+    if (typeof raw === 'object' && raw.field && (raw.dir === 'desc' || raw.dir === 'asc')) {
+      return { field: raw.field, dir: raw.dir };
+    }
+    return null;
+  }
+
+  function getGroupEffectiveSort(groupId) {
+    const spec = resolveGroupSortSpec(groupId);
+    if (spec) return spec;
+    const globalField = sidebarSortField.value;
+    if (globalField === 'symbol' || globalField === 'regularPrice' || globalField === 'regularChange' || globalField === 'extChange' || globalField === 'extPrice' || globalField === 'marketCap') {
+      return { field: globalField, dir: sidebarSortDirection.value || 'desc' };
+    }
+    return { field: 'regularChange', dir: sidebarSortDirection.value || 'desc' };
+  }
+
+  function isGroupSortedBy(groupId, field) {
+    const eff = getGroupEffectiveSort(groupId);
+    return eff?.field === field;
+  }
+
+  function getGroupColumnSortDir(groupId, field) {
+    const eff = getGroupEffectiveSort(groupId);
+    return eff?.field === field ? eff.dir : 'desc';
+  }
+
+  function toggleGroupColumnSort(groupId, field) {
+    const current = resolveGroupSortSpec(groupId);
+    const defaultFirstDir = field === 'symbol' ? 'asc' : 'desc';
+    const oppositeDir = defaultFirstDir === 'desc' ? 'asc' : 'desc';
+    let nextSpec = null;
+
+    if (current && current.field === field) {
+      if (current.dir === defaultFirstDir) {
+        nextSpec = { field, dir: oppositeDir };
+      } else {
+        nextSpec = { field, dir: defaultFirstDir };
+      }
+    } else {
+      nextSpec = { field, dir: defaultFirstDir };
+    }
+
+    groupSortStates[groupId] = nextSpec;
     persistGroupSortStates();
 
     const grp = watchlistMgr.getGroup(groupId);
     const grpName = grp?.name || '分组';
-    if (next === 'desc') {
+    const colLabel =
+      field === 'regularPrice' ? '收盘价格' :
+      field === 'regularChange' ? 'Chg% (常规涨跌)' :
+      field === 'extChange' ? 'EXT% (延长涨跌)' :
+      field === 'symbol' ? '标的代码' : field;
+    toast.value = `「${grpName}」组内已按 ${colLabel} ${nextSpec.dir === 'desc' ? '降序' : '升序'}排列`;
+  }
+
+  function cycleGroupSort(groupId) {
+    const spec = resolveGroupSortSpec(groupId);
+    if (!spec) {
+      groupSortStates[groupId] = { field: 'regularChange', dir: 'desc' };
+    } else if (spec.dir === 'desc') {
+      groupSortStates[groupId] = { field: spec.field, dir: 'asc' };
+    } else {
+      delete groupSortStates[groupId];
+    }
+    persistGroupSortStates();
+
+    const grp = watchlistMgr.getGroup(groupId);
+    const grpName = grp?.name || '分组';
+    const after = resolveGroupSortSpec(groupId);
+    if (after?.dir === 'desc') {
       toast.value = `「${grpName}」已按涨跌幅降序排列`;
-    } else if (next === 'asc') {
+    } else if (after?.dir === 'asc') {
       toast.value = `「${grpName}」已按涨跌幅升序排列`;
     } else {
       toast.value = `「${grpName}」已恢复默认排序（支持手动拖拽）`;
@@ -2577,49 +2868,61 @@ createApp({ setup() {
   }
 
   function getGroupSortTitle(groupId) {
-    const state = groupSortStates[groupId] || 'default';
-    if (state === 'desc') {
-      return '当前：按涨跌幅降序（点击切换为升序）';
-    } else if (state === 'asc') {
-      return '当前：按涨跌幅升序（点击恢复默认排序）';
+    const spec = resolveGroupSortSpec(groupId);
+    if (spec?.dir === 'desc') {
+      return '当前：组内按涨跌幅降序（点击切换为升序）';
+    } else if (spec?.dir === 'asc') {
+      return '当前：组内按涨跌幅升序（点击恢复默认排序）';
     }
     return '组内按涨跌幅排序（点击切换为降序，恢复默认后支持手动拖拽）';
   }
 
   // TradingView Style: Vertical sections with internal sorting and group-level sorting
   const sidebarGroupSections = computed(() => {
-    const activeField = (sidebarSortField.value === 'symbol' || sidebarSortField.value === 'activePrice' || sidebarSortField.value === 'regularPrice' || sidebarSortField.value === 'marketCap' || sidebarSortField.value === 'manual')
+    const activeField = (
+      sidebarSortField.value === 'symbol' ||
+      sidebarSortField.value === 'activePrice' ||
+      sidebarSortField.value === 'regularPrice' ||
+      sidebarSortField.value === 'regularChange' ||
+      sidebarSortField.value === 'extChange' ||
+      sidebarSortField.value === 'extPrice' ||
+      sidebarSortField.value === 'marketCap' ||
+      sidebarSortField.value === 'manual'
+    )
       ? sidebarSortField.value
-      : 'activeChange';
+      : 'regularChange';
 
     const list = groups.value.map(g => {
       const rows = g.symbolIds.map(buildRow);
       let sortedRows;
-      const grpSort = groupSortStates[g.id] || 'default';
+      const grpSpec = resolveGroupSortSpec(g.id);
 
-      if (grpSort === 'desc') {
-        sortedRows = sortWatchlistRows(rows, 'activeChange', 'desc');
-      } else if (grpSort === 'asc') {
-        sortedRows = sortWatchlistRows(rows, 'activeChange', 'asc');
-      } else if ((g.id === 'trillion' || g.name === '万亿市值') && (!activeField || activeField === 'manual' || activeField === 'marketCap')) {
-        sortedRows = sortWatchlistRows(rows, 'marketCap', sidebarSortField.value === 'marketCap' ? sidebarSortDirection.value : 'desc');
-      } else if (activeField && activeField !== 'manual' && activeField !== 'custom') {
+      if (grpSpec) {
+        sortedRows = sortWatchlistRows(rows, grpSpec.field, grpSpec.dir);
+      } else if (activeField === 'manual' || activeField === 'custom') {
+        if (g.id === 'trillion' || g.name === '万亿市值') {
+          sortedRows = sortWatchlistRows(rows, 'marketCap', 'desc');
+        } else {
+          sortedRows = sortWatchlistRows(rows, 'manual');
+        }
+      } else if (activeField === 'marketCap') {
+        sortedRows = sortWatchlistRows(rows, 'marketCap', sidebarSortDirection.value || 'desc');
+      } else if (activeField) {
         sortedRows = sortWatchlistRows(rows, activeField, sidebarSortDirection.value || 'desc');
       } else {
-        sortedRows = sortWatchlistRows(rows, 'activeChange', 'desc');
+        sortedRows = sortWatchlistRows(rows, 'regularChange', 'desc');
       }
 
-      // Calculate group average change on the active session's change percent:
-      const valid = rows.filter(r => r.activeChange !== null && Number.isFinite(r.activeChange));
-      let avg = null;
-      if (valid.length) {
-        avg = valid.reduce((acc, r) => acc + r.activeChange, 0) / valid.length;
-      } else {
-        const validReg = rows.filter(r => r.regularChange !== null && Number.isFinite(r.regularChange));
-        if (validReg.length) {
-          avg = validReg.reduce((acc, r) => acc + r.regularChange, 0) / validReg.length;
-        }
-      }
+      // Calculate group average change for Regular session and Extended session:
+      const validReg = rows.filter(r => r.regularChange !== null && Number.isFinite(r.regularChange));
+      const regAvg = validReg.length ? (validReg.reduce((acc, r) => acc + r.regularChange, 0) / validReg.length) : null;
+
+      const validExt = rows.filter(r => r.extChange !== null && Number.isFinite(r.extChange));
+      const extAvg = validExt.length ? (validExt.reduce((acc, r) => acc + r.extChange, 0) / validExt.length) : null;
+
+      const avg = rwSessionTab.value === 'ext'
+        ? (extAvg ?? regAvg)
+        : (regAvg ?? extAvg);
 
       return {
         id: g.id,
@@ -2627,12 +2930,14 @@ createApp({ setup() {
         collapsed: Boolean(g.collapsed),
         count: g.symbolIds.length,
         avgChange: avg,
+        regAvgChange: regAvg,
+        extAvgChange: extAvg,
         rows: sortedRows
       };
     });
 
-    if (activeField === 'activeChange') {
-      const dir = sidebarSortDirection.value === 'asc' ? 1 : -1;
+    if (groupOrderSortDir.value === 'desc' || groupOrderSortDir.value === 'asc') {
+      const dir = groupOrderSortDir.value === 'asc' ? 1 : -1;
       list.sort((a, b) => {
         if (a.id === 'default' && b.id !== 'default') return 1;
         if (b.id === 'default' && a.id !== 'default') return -1;
@@ -2640,24 +2945,49 @@ createApp({ setup() {
         const valB = (b.avgChange !== null && Number.isFinite(b.avgChange)) ? b.avgChange : (dir === 1 ? Infinity : -Infinity);
         return (valA - valB) * dir;
       });
-    } else if (activeField === 'symbol') {
-      const dir = sidebarSortDirection.value === 'asc' ? 1 : -1;
-      list.sort((a, b) => {
-        if (a.id === 'default' && b.id !== 'default') return 1;
-        if (b.id === 'default' && a.id !== 'default') return -1;
-        return a.name.localeCompare(b.name, 'zh-CN') * dir;
-      });
     }
 
     return list;
   });
 
-  // Flat Overall Sorted Watchlist Rows (Ranking across all symbols by current session change)
+  const filteredSidebarGroupSections = computed(() => {
+    const q = (sidebarSearchQuery.value || '').trim().toLowerCase();
+    const activeGrp = sidebarActiveGroup.value;
+    return sidebarGroupSections.value
+      .filter(sec => {
+        if (activeGrp && activeGrp !== 'all' && sec.id !== activeGrp) return false;
+        if (sec.id === 'default' && sec.count === 0) return false;
+        return true;
+      })
+      .map(sec => {
+        if (!q) return sec;
+        const filteredRows = sec.rows.filter(r =>
+          r.symbol.toLowerCase().includes(q) ||
+          (r.name && r.name.toLowerCase().includes(q))
+        );
+        return {
+          ...sec,
+          collapsed: false,
+          rows: filteredRows
+        };
+      })
+      .filter(sec => !q || sec.rows.length > 0);
+  });
+
+  // Flat Overall Sorted Watchlist Rows (Ranking across all symbols by selected column)
   const sidebarFlatRows = computed(() => {
     const rows = watchlist.value.map(buildRow);
-    const activeField = (sidebarSortField.value === 'symbol' || sidebarSortField.value === 'activePrice' || sidebarSortField.value === 'regularPrice' || sidebarSortField.value === 'marketCap')
+    const activeField = (
+      sidebarSortField.value === 'symbol' ||
+      sidebarSortField.value === 'activePrice' ||
+      sidebarSortField.value === 'regularPrice' ||
+      sidebarSortField.value === 'regularChange' ||
+      sidebarSortField.value === 'extChange' ||
+      sidebarSortField.value === 'extPrice' ||
+      sidebarSortField.value === 'marketCap'
+    )
       ? sidebarSortField.value
-      : 'activeChange';
+      : 'regularChange';
     const dir = sidebarSortDirection.value || 'desc';
     return sortWatchlistRows(rows, activeField, dir);
   });
@@ -2987,7 +3317,14 @@ createApp({ setup() {
 
   // Fetch Watchlist Quotes Snapshot
   async function fetchWatchlistQuotes() {
-    const symbols = watchlist.value;
+    const scopeSymbols = heatmapScope.value === 'nasdaq100'
+      ? NASDAQ100_STOCKS.map(d => d.symbol)
+      : heatmapScope.value === 'sp500'
+        ? SP500_STOCKS.map(d => d.symbol)
+        : heatmapScope.value === 'core'
+          ? (overview.value?.stocks || []).map(s => s.symbol)
+          : [];
+    const symbols = [...new Set([...(watchlist.value || []), ...scopeSymbols])];
     if (!symbols.length) return;
     try {
       states.watchlist.loading = true;
@@ -3001,6 +3338,10 @@ createApp({ setup() {
       if (data.provider) providerInfo.value = data.provider;
       if (data.session) serverSession.value = data.session;
       states.watchlist.error = '';
+      if (page.value === 'overview') {
+        await nextTick();
+        renderHeatmap();
+      }
     } catch (err) {
       states.watchlist.error = err.message || '获取自选报价失败';
     } finally {
@@ -3035,6 +3376,7 @@ createApp({ setup() {
         try {
           const msg = JSON.parse(event.data);
           if (msg.type === 'quotes' && Array.isArray(msg.data)) {
+            let updatedAny = false;
             for (const item of msg.data) {
               const current = quoteStore.value[item.symbol];
               if (current && current[item.session]) {
@@ -3042,10 +3384,14 @@ createApp({ setup() {
                 current[item.session].price = item.price;
                 current[item.session].changePercent = item.changePercent;
                 if (item.sourceTime) current[item.session].sourceTime = item.sourceTime;
+                updatedAny = true;
                 if (oldPrice !== null && item.price !== null && oldPrice !== item.price) {
                   flashCell(item.symbol, item.session === 'regular' ? 'regular' : 'ext', item.price > oldPrice ? 'up' : 'down');
                 }
               }
+            }
+            if (updatedAny && page.value === 'overview') {
+              nextTick(() => renderHeatmap());
             }
           }
         } catch {}
@@ -3262,7 +3608,7 @@ createApp({ setup() {
     if (page.value === 'overview' || page.value === 'crypto') loadCrypto();
     if (page.value === 'chart') loadChart();
     if (page.value === 'options') loadOptions();
-    if (page.value === 'watchlist') fetchWatchlistQuotes();
+    if (page.value === 'watchlist' || page.value === 'overview') fetchWatchlistQuotes();
   }
 
   async function importNotion() {
@@ -3340,15 +3686,15 @@ createApp({ setup() {
   }
 
   function updateChartTheme() {
-    muted = isDark.value ? '#94A3B8' : '#64748B';
-    gridColor = isDark.value ? '#334155' : '#E2E8F0';
-    chartText = isDark.value ? '#F8FAFC' : '#0F172A';
-    chartSurface = isDark.value ? '#000000' : '#FFFFFF';
-    green = '#10B981';
-    red = '#F43F5E';
+    muted = isDark.value ? '#6B7280' : '#8E95A2';
+    gridColor = isDark.value ? '#C8CDD6' : '#E2E8F0';
+    chartText = '#141414';
+    chartSurface = isDark.value ? '#F0F2F5' : '#FFFFFF';
+    green = '#00A854';
+    red = '#E1251B';
     blue = '#2563EB';
     axis = { axisLine: { lineStyle: { color: gridColor } }, axisTick: { show: false }, axisLabel: { color: muted }, splitLine: { lineStyle: { color: gridColor, type: 'dashed' } } };
-    tooltip = { renderMode: 'richText', backgroundColor: isDark.value ? '#151D2C' : '#FFFFFF', borderColor: isDark.value ? 'rgba(255,255,255,0.12)' : '#E2E8F0', textStyle: { color: chartText }, confine: true };
+    tooltip = { renderMode: 'richText', backgroundColor: isDark.value ? '#F0F2F5' : '#FFFFFF', borderColor: isDark.value ? 'rgba(20,20,20,0.12)' : '#E2E8F0', textStyle: { color: chartText }, confine: true };
   }
 
   const STOCK_ROLES = {
@@ -3472,12 +3818,16 @@ createApp({ setup() {
         formatter: p => {
           const q = p.data?.quote;
           if (!q) return '';
+          const sessName = q.sessionLabel || resolvedHeatmapSessionLabel.value || '常规';
           const sign = (q.changePercent || 0) > 0 ? '+' : '';
           const pctStr = Number.isFinite(q.changePercent) ? `${sign}${q.changePercent.toFixed(2)}%` : '暂无涨跌';
           const priceStr = q.price !== null && Number.isFinite(q.price) ? `${num(q.price)} USD` : '暂无报价';
+          const regRefStr = (q.sessionKey && q.sessionKey !== 'regular' && q.regularPrice != null && Number.isFinite(q.regularPrice))
+            ? `\n常规收盘: ${num(q.regularPrice)} USD (${pct(q.regularChange)})`
+            : '';
           const volStr = q.turnover ? `估算成交额: $${compact(q.turnover)} (最新价×股数)` : '估算成交额: 未提供';
           const timeStr = q.asOf ? time(q.asOf) : '实时行情';
-          return `${q.symbol} · ${q.name || q.symbol}\n所属: ${q.sector || '美股'}\n现价: ${priceStr}   涨跌: ${pctStr}\n${volStr}\n数据时间: ${timeStr}`;
+          return `${q.symbol} · ${q.name || q.symbol}\n所属: ${q.sector || '美股'} · 时段: ${sessName}\n${sessName}价: ${priceStr}   ${sessName}涨跌: ${pctStr}${regRefStr}\n${volStr}\n数据时间: ${timeStr}`;
         }
       },
       series: [{
@@ -4153,7 +4503,7 @@ createApp({ setup() {
   watch([selectedCrypto, cryptoTimeframe], async () => { if (page.value === 'crypto') { await nextTick(); renderCryptoChart(); } });
   watch(newsSymbol, () => { if (page.value === 'news') loadNews(); });
   watch(optionExpiry, value => { if (page.value === 'options' && value && value !== options.value?.expiration) loadOptions(); });
-  watch([heatSize, sectorFilter, flowTab, flowDate, optionMetric, strikeRange], async () => { await nextTick(); render(); });
+  watch([heatSize, sectorFilter, heatmapSession, resolvedHeatmapSession, extMode, flowTab, flowDate, optionMetric, strikeRange], async () => { await nextTick(); render(); });
   watch(isDark, async value => { document.documentElement.classList.toggle('dark', value); await nextTick(); render(); });
   watch([klineScheme, klineGridStyle], async () => { await nextTick(); render(); });
   watch(showSettings, value => { document.body.classList.toggle('drawer-open', value && isMobile.value); });
@@ -4226,7 +4576,7 @@ createApp({ setup() {
     page, currentNav, onPageEntered,
     overview, chart, options, news, states, searchInput, symbol, chartRange,
     optionSymbol, optionExpiry, optionMetric, strikeRange, optionsSpotQuote, formatExpiryLabel, butterflyOptionRows, callWallDist, putWallDist, newsSymbol, newsSearch, heatSize, sectorFilter,
-    heatmapScope, activeHeatmapStocks, onHeatmapScopeChange, renderHeatmap, isLeveragedEtf, nonLeveragedWatchlist,
+    heatmapScope, heatmapSession, currentSessionShortLabel, resolvedHeatmapSession, resolvedHeatmapSessionLabel, heatmapSessionBadgeText, activeHeatmapStocks, onHeatmapScopeChange, onHeatmapSessionChange, setHeatmapSession, cycleHeatmapSession, renderHeatmap, isLeveragedEtf, nonLeveragedWatchlist,
     flowTab, flows, flowDate, flowDates, dayFlows,
     // Macro & Fear/Greed & Gold & Crypto & Treasury
     macroItems, macroMap, fearGreedIndex, goldContract, goldCnyPerGram, usdCnyRate, formatMacroPrice,
@@ -4239,12 +4589,15 @@ createApp({ setup() {
     viewMode, extMode, sortField, sortDirection, freezeResort, compactPanelOpen,
     allRankedRows, groupedRows, groupAverages, compactRows, cellFlashes,
     extShortLabel, getDisplayExtPrice, getDisplayExtChange, groupExtAverages, getGroupFullTitle, getGroupShortTitle, watchlistGroupPills, jumpToGroup, currentSortLabel, formatWatchlistTime, getRowSessionBadge,
+    getExtSessionKey, getExtSessionIcon, getExtSessionTitle,
     STOCK_MARKET_CAPS, getStockMarketCap, sortSymbolsByMarketCap,
-    sidebarSortField, sidebarSortDirection, sidebarActiveGroup, setSidebarSort, setSidebarGroup, sidebarWatchlistRows,
+    sidebarSortField, sidebarSortDirection, sidebarActiveGroup, sidebarSearchQuery, selectSidebarGroupPill, setSidebarSort, setSidebarGroup, sidebarWatchlistRows,
+    groupPillsBarRef, canScrollPillsLeft, canScrollPillsRight, scrollPillsBar, onGroupPillsWheel, onGroupPillsMouseDown, onGroupPillsMouseMove, onGroupPillsMouseUp, handleGroupPillClick, checkPillsScroll,
     sidebarViewMode, setSidebarViewMode, toggleSidebarViewMode, toggleSidebarSort, resetSidebarSort, isSortedByChange,
+    groupOrderSortDir, toggleGroupOrderSort, rwSessionTab, setRwSessionTab, currentExtSessionShortLabel, getRowExtSessionLabel,
     activeSessionKey, activeSessionShortLabel, activeSessionPriceLabel, activeSessionChangeLabel,
-    toggleGroupCollapse, toggleAllGroupsCollapse, areAllGroupsCollapsed, openAddStockToGroup, sidebarGroupSections, sidebarFlatRows,
-    groupSortStates, cycleGroupSort, getGroupSortTitle,
+    toggleGroupCollapse, toggleAllGroupsCollapse, areAllGroupsCollapsed, openAddStockToGroup, sidebarGroupSections, filteredSidebarGroupSections, sidebarFlatRows,
+    groupSortStates, resolveGroupSortSpec, getGroupEffectiveSort, isGroupSortedBy, getGroupColumnSortDir, toggleGroupColumnSort, cycleGroupSort, getGroupSortTitle,
     draggedStock, dragOverTarget, dragOverGroup,
     draggedGroup, dragOverGroupOrderTarget, onGroupDragStart, onGroupDragEnd, onGroupHeaderDragLeave, moveGroupUp, moveGroupDown,
     onStockDragStart, onStockDragEnd, onStockDragOver, onStockDragLeave, onStockDrop,
@@ -4258,7 +4611,7 @@ createApp({ setup() {
     toast, importing, nyClock, nyClockDetailed, nyClockInfo, sessionStatusText, dateLabel, refreshing,
     isDeleteMode, pendingDeleteSymbol, toggleDeleteMode, handleChipClick,
     breadcrumbLabel, upSectorsCount, downSectorsCount, upSectorsRatio, isStockGainer, getSparkline,
-    stockSectors, rankedSectors, quoteWindow, breadth, findQuote, barWidth, walls, num, compact, pct, tone, time,
+    stockSectors, rankedSectors, quoteWindow, breadth, findQuote, barWidth, getSectorBarHeight, walls, num, compact, pct, tone, time,
     SECTOR_LEADERS, topGainerSector, topLoserSector, mostActiveSector, totalSectorTurnover, avgSectorTurnover, sectorBullBearRatio,
     newsCategory, newsCategories, filteredNews, getNewsSentiment, getNewsTags, getDayRange, getDayRangeWidth, missingTurnoverCount,
     savedNewsUrls, isBookmarked, toggleBookmark, showNewsMoreMenu, formatRelativeTime, getSourceMeta, getNewsImage, getTagColorClass, handleImgError, openNewsUrl, onNewsSearchSubmit,
