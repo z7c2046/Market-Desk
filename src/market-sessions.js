@@ -192,6 +192,9 @@ export function buildMultiSessionQuote({
   overnightVolume = null,
   overnightTime = null,
   todayRthClose = null,
+  preRefClose = null,
+  postRefClose = null,
+  overnightRefClose = null,
   provider = 'Longbridge',
   coverage = 'US LV1',
   delayStatus = 'realtime', // 'realtime' | 'delayed' | 'indicative' | 'unconfirmed'
@@ -201,13 +204,13 @@ export function buildMultiSessionQuote({
   const regChange = calcChangePercent(regularPrice, regularPrevClose);
 
   // Benchmarks for EXT sessions
-  const postRef = resolveExtReferenceClose({ session: SESSION_TYPES.POST, todayRthClose, prevRthClose: regularPrevClose });
+  const postRef = postRefClose ?? resolveExtReferenceClose({ session: SESSION_TYPES.POST, todayRthClose, prevRthClose: regularPrevClose });
   const postChange = calcChangePercent(postPrice, postRef);
 
-  const overnightRef = resolveExtReferenceClose({ session: SESSION_TYPES.OVERNIGHT, todayRthClose, prevRthClose: regularPrevClose });
+  const overnightRef = overnightRefClose ?? resolveExtReferenceClose({ session: SESSION_TYPES.OVERNIGHT, todayRthClose, prevRthClose: regularPrevClose });
   const overnightChange = calcChangePercent(overnightPrice, overnightRef);
 
-  const preRef = resolveExtReferenceClose({ session: SESSION_TYPES.PRE, todayRthClose, prevRthClose: regularPrevClose });
+  const preRef = preRefClose ?? resolveExtReferenceClose({ session: SESSION_TYPES.PRE, todayRthClose, prevRthClose: regularPrevClose });
   const preChange = calcChangePercent(prePrice, preRef);
 
   return {
@@ -273,30 +276,22 @@ export function getSelectedExtQuote(quote, extMode = 'auto', currentSession = nu
 
   if (extMode === 'auto') {
     const active = currentSession?.session;
-    if (active === SESSION_TYPES.PRE) {
-      target = SESSION_TYPES.PRE;
-      isCurrent = true;
-    } else if (active === SESSION_TYPES.POST) {
-      target = SESSION_TYPES.POST;
-      isCurrent = true;
-    } else if (active === SESSION_TYPES.OVERNIGHT) {
-      target = SESSION_TYPES.OVERNIGHT;
+    const candidateOrder =
+      active === SESSION_TYPES.PRE ? [SESSION_TYPES.PRE, SESSION_TYPES.OVERNIGHT, SESSION_TYPES.POST] :
+      active === SESSION_TYPES.OVERNIGHT ? [SESSION_TYPES.OVERNIGHT, SESSION_TYPES.POST, SESSION_TYPES.PRE] :
+      active === SESSION_TYPES.POST ? [SESSION_TYPES.POST, SESSION_TYPES.PRE, SESSION_TYPES.OVERNIGHT] :
+      [SESSION_TYPES.POST, SESSION_TYPES.OVERNIGHT, SESSION_TYPES.PRE];
+
+    const matched = candidateOrder.find(s => quote[s]?.price != null && Number.isFinite(Number(quote[s].price)));
+    if (matched) {
+      target = matched;
+      isCurrent = (matched === active);
+    } else if (active === SESSION_TYPES.PRE || active === SESSION_TYPES.POST || active === SESSION_TYPES.OVERNIGHT) {
+      target = active;
       isCurrent = true;
     } else {
-      // In regular hours or closed: fallback to most recent completed EXT with price
-      if (quote.post?.price != null) {
-        target = SESSION_TYPES.POST;
-        isCurrent = false;
-      } else if (quote.overnight?.price != null) {
-        target = SESSION_TYPES.OVERNIGHT;
-        isCurrent = false;
-      } else if (quote.pre?.price != null) {
-        target = SESSION_TYPES.PRE;
-        isCurrent = false;
-      } else {
-        target = SESSION_TYPES.POST;
-        isCurrent = false;
-      }
+      target = SESSION_TYPES.POST;
+      isCurrent = false;
     }
   }
 

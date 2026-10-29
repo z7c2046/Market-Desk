@@ -188,3 +188,81 @@ test('Server API route /api/news/ai-search responds with standardized schema', a
   assert.equal(data.items[0].sourceType, 'reddit');
   assert.equal(data.items[1].sourceType, 'authority');
 });
+
+test('AiSearchService filters out 2022/2023 stale articles, junk domains, homepages, deduplicates headlines, and sorts strictly by publishedAt descending', async () => {
+  const mockFetch = async (url) => {
+    if (url.includes('tavily')) {
+      return new Response(JSON.stringify({
+        results: [
+          {
+            title: 'Wall Street ends down as investors eye slowing economy | Reuters',
+            url: 'https://www.reuters.com/video/watch/wall-street-ends-down-as-investors-eye-s-idOV023723082022RP1/?chan=aoiq7v2k',
+            content: 'August 24, 2022 - Wall Street ended down on Tuesday as investors focused on Jackson Hole.'
+          },
+          {
+            title: 'Wall Street Stock Market',
+            url: 'https://distil.src.online.wsj.com/wall-street',
+            content: 'Welcome to a comprehensive exploration of the renowned Wall Street stock market'
+          },
+          {
+            title: 'The Wall Street Journal - Breaking News, Business, Financial & Economic News',
+            url: 'https://www.wsj.com/',
+            content: 'DJIA Futures S&P 500 Futures'
+          },
+          {
+            title: 'Wall Street Is Making Bullish Bets on the Economy - WSJ',
+            url: 'https://www.wsj.com/economy/wall-street-bullish-bets-1?mod=hp_lead_pos1',
+            content: 'Older duplicate without clock time',
+            published_date: '2026-10-28T00:00:00.000Z'
+          },
+          {
+            title: 'Fed Holds Rates Steady After October Meeting - Reuters',
+            url: 'https://www.reuters.com/markets/us/fed-holds-rates-steady-october',
+            content: 'Federal Reserve keeps rates unchanged.',
+            published_date: '2026-10-28T18:30:00.000Z'
+          }
+        ]
+      }), { status: 200 });
+    }
+    if (url.includes('exa')) {
+      return new Response(JSON.stringify({
+        results: [
+          {
+            title: 'Wall Street Is Making Bullish Bets on the Economy',
+            url: 'https://www.wsj.com/economy/wall-street-bullish-bets-2',
+            highlights: ['Investors pile into bets that economic growth will keep powering forward.'],
+            publishedDate: '2026-10-29T10:15:00.000Z'
+          },
+          {
+            title: 'U.S. Q3 GDP Growth Exceeds Expectations at 3.4% - WSJ',
+            url: 'https://www.wsj.com/economy/us-gdp-q3-growth',
+            highlights: ['Third-quarter GDP accelerated amid strong consumer spending.'],
+            publishedDate: '2026-10-29T13:50:00.000Z'
+          }
+        ]
+      }), { status: 200 });
+    }
+    if (url.includes('firecrawl')) {
+      return new Response(JSON.stringify({ data: [] }), { status: 200 });
+    }
+    throw new Error('Unexpected url: ' + url);
+  };
+
+  const svc = new AiSearchService({
+    keys: { tavily: 'tvly-test', firecrawl: 'fc-test', exa: 'exa-test' },
+    fetchImpl: mockFetch,
+    enableLiveFeeds: false
+  });
+
+  const res = await svc.search({ query: 'Wall Street economy', engine: 'all', source: 'wsj_reuters', limit: 10 });
+  assert.equal(res.ok, true);
+  assert.equal(res.sortOrder, 'publishedAt_desc');
+  assert.equal(res.items.length, 3);
+  assert.equal(res.items[0].title, 'U.S. Q3 GDP Growth Exceeds Expectations at 3.4% - WSJ');
+  assert.equal(res.items[0].publishedAt, '2026-10-29T13:50:00.000Z');
+  assert.match(res.items[1].title, /Wall Street Is Making Bullish Bets on the Economy/);
+  assert.equal(res.items[1].publishedAt, '2026-10-29T10:15:00.000Z');
+  assert.equal(res.items[2].title, 'Fed Holds Rates Steady After October Meeting - Reuters');
+  assert.equal(res.items[2].publishedAt, '2026-10-28T18:30:00.000Z');
+});
+

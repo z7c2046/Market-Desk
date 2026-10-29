@@ -137,6 +137,8 @@ export function createMarketWorkspace({ fetchImpl = fetch, now = () => new Date(
     return cache.get(`news:${symbol}`, 300000, async () => {
       const feeds = symbol ? [{ source: `Yahoo Finance · ${symbol}`, url: `https://feeds.finance.yahoo.com/rss/2.0/headline?s=${encodeURIComponent(symbol)}&region=US&lang=en-US` }]
         : [
+            { source: 'Wall Street Journal', url: 'https://feeds.content.dowjones.io/public/rss/RSSMarketsMain' },
+            { source: 'Wall Street Journal · 宏观经济', url: 'https://feeds.content.dowjones.io/public/rss/socialeconomyfeed' },
             { source: 'MarketWatch', url: 'https://feeds.content.dowjones.io/public/rss/mw_topstories' },
             { source: 'CNBC', url: 'https://www.cnbc.com/id/100003114/device/rss/rss.html' },
             { source: 'CNBC World · 地缘国际', url: 'https://www.cnbc.com/id/100727362/device/rss/rss.html' },

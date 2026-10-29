@@ -25,48 +25,142 @@ export async function fetchYahooQuote(rawSymbol) {
   try {
     const yahooSymbol = normalizeYahooSymbol(sym);
 
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=1d&range=1d&includePrePost=true`;
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=5m&range=2d&includePrePost=true`;
     const res = await fetch(url, {
       headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
       signal: AbortSignal.timeout(6000)
     });
     if (!res.ok) return null;
     const json = await res.json();
-    const meta = json.chart?.result?.[0]?.meta;
+    const result0 = json.chart?.result?.[0];
+    const meta = result0?.meta;
     if (!meta || meta.regularMarketPrice == null) return null;
 
     const regularPrice = meta.regularMarketPrice;
-    const prevClose = meta.chartPreviousClose ?? null;
     const regularTime = meta.regularMarketTime ? new Date(meta.regularMarketTime * 1000).toISOString() : null;
     const regularVolume = meta.regularMarketVolume ?? null;
+    const regTimeSec = meta.regularMarketTime || 0;
+
+    const timestamps = result0?.timestamp || [];
+    const quoteInd = result0?.indicators?.quote?.[0] || {};
+    const closes = quoteInd.close || [];
+    const opens = quoteInd.open || [];
+    const volumes = quoteInd.volume || [];
+    const tp = meta.tradingPeriods || {};
+    const regWindows = (tp.regular || []).flat();
+    const preWindows = (tp.pre || []).flat();
+    const postWindows = (tp.post || []).flat();
+
+    let w0LastClose = null;
+    if (regWindows.length >= 2) {
+      for (let i = 0; i < timestamps.length; i++) {
+        const t = timestamps[i];
+        if (t >= regWindows[0].start && t < regWindows[0].end && closes[i] != null) {
+          w0LastClose = closes[i];
+        }
+      }
+    }
+    const prevClose = meta.previousClose ?? w0LastClose ?? meta.chartPreviousClose ?? null;
+    const latestRegStart = regWindows.at(-1)?.start || 0;
+
+    // Extract latest post-market session bars
+    let latestPostBars = [];
+    for (const w of postWindows) {
+      const bars = [];
+      for (let i = 0; i < timestamps.length; i++) {
+        const t = timestamps[i];
+        if (t >= w.start && t < w.end && closes[i] != null) {
+          bars.push({ t, open: opens[i], close: closes[i], vol: volumes[i] });
+        }
+      }
+      if (bars.length) latestPostBars = bars;
+    }
+
+    // Extract latest pre-market session bars
+    let latestPreBars = [];
+    for (const w of preWindows) {
+      const bars = [];
+      for (let i = 0; i < timestamps.length; i++) {
+        const t = timestamps[i];
+        if (t >= w.start && t < w.end && closes[i] != null) {
+          bars.push({ t, open: opens[i], close: closes[i], vol: volumes[i] });
+        }
+      }
+      if (bars.length) latestPreBars = bars;
+    }
 
     const currentSess = getCurrentSession();
-    let prePrice = meta.preMarketPrice ?? null;
-    let preTime = meta.preMarketTime ? new Date(meta.preMarketTime * 1000).toISOString() : null;
 
-    let postPrice = meta.postMarketPrice ?? null;
-    let postTime = meta.postMarketTime ? new Date(meta.postMarketTime * 1000).toISOString() : null;
+    let prePrice = meta.preMarketPrice ?? (latestPreBars.length ? latestPreBars.at(-1).close : null);
+    let preTime = meta.preMarketTime
+      ? new Date(meta.preMarketTime * 1000).toISOString()
+      : (latestPreBars.length ? new Date(latestPreBars.at(-1).t * 1000).toISOString() : null);
+    let preVolume = latestPreBars.length
+      ? (latestPreBars.reduce((acc, b) => acc + (b.vol || 0), 0) || null)
+      : null;
+    let preBarSec = latestPreBars.length ? latestPreBars.at(-1).t : 0;
+
+    let postPrice = meta.postMarketPrice ?? (latestPostBars.length ? latestPostBars.at(-1).close : null);
+    let postTime = meta.postMarketTime
+      ? new Date(meta.postMarketTime * 1000).toISOString()
+      : (latestPostBars.length ? new Date(latestPostBars.at(-1).t * 1000).toISOString() : null);
+    let postVolume = latestPostBars.length
+      ? (latestPostBars.reduce((acc, b) => acc + (b.vol || 0), 0) || null)
+      : null;
+    let postBarSec = latestPostBars.length ? latestPostBars.at(-1).t : 0;
+
+    let overnightPrice = meta.overnightMarketPrice ?? null;
+    let overnightTime = meta.overnightMarketTime ? new Date(meta.overnightMarketTime * 1000).toISOString() : null;
+    let overnightVolume = null;
+    let overnightBarSec = 0;
 
     // Yahoo Finance v8 chart API:
-    // In pre-market or post-market, live/delayed extended trading price is provided in meta.fulldayPrice
+    // In active pre/post/overnight, live/delayed extended trading price is provided in meta.fulldayPrice
     if (currentSess.session === 'pre') {
       if (meta.fulldayPrice != null && meta.fulldayPrice !== regularPrice) {
         prePrice = meta.fulldayPrice;
         preTime = new Date().toISOString();
-      } else if (meta.preMarketPrice != null) {
-        prePrice = meta.preMarketPrice;
+        preBarSec = Math.floor(Date.now() / 1000);
       }
     } else if (currentSess.session === 'post') {
       if (meta.fulldayPrice != null && meta.fulldayPrice !== regularPrice) {
         postPrice = meta.fulldayPrice;
         postTime = new Date().toISOString();
-      } else if (meta.postMarketPrice != null) {
-        postPrice = meta.postMarketPrice;
+        postBarSec = Math.floor(Date.now() / 1000);
       }
-    } else {
-      if (meta.preMarketPrice != null) prePrice = meta.preMarketPrice;
-      if (meta.postMarketPrice != null) postPrice = meta.postMarketPrice;
+    } else if (currentSess.session === 'overnight') {
+      if (meta.fulldayPrice != null && meta.fulldayPrice !== regularPrice) {
+        overnightPrice = meta.fulldayPrice;
+        overnightTime = new Date().toISOString();
+        overnightBarSec = Math.floor(Date.now() / 1000);
+      }
     }
+
+    // Derive overnight quote from 04:00 ET pre-market opening handoff bar (or post-market close) if not directly provided
+    if (overnightPrice == null) {
+      if (latestPreBars.length > 0) {
+        const firstPre = latestPreBars[0];
+        overnightPrice = firstPre.open ?? firstPre.close;
+        overnightTime = new Date(firstPre.t * 1000).toISOString();
+        overnightBarSec = firstPre.t;
+      } else if (postPrice != null) {
+        overnightPrice = postPrice;
+        overnightTime = postTime;
+        overnightBarSec = postBarSec;
+      }
+    }
+
+    // Determine accurate RTH reference close for each extended session window
+    const resolveBarRef = (barSec) => {
+      if (barSec && latestRegStart && regTimeSec >= latestRegStart && barSec < latestRegStart) {
+        return prevClose ?? regularPrice;
+      }
+      return regularPrice;
+    };
+
+    const preRefClose = resolveBarRef(preBarSec);
+    const postRefClose = resolveBarRef(postBarSec);
+    const overnightRefClose = resolveBarRef(overnightBarSec);
 
     const quote = buildMultiSessionQuote({
       symbol: sym,
@@ -77,11 +171,17 @@ export async function fetchYahooQuote(rawSymbol) {
       regularTime,
       todayRthClose: regularPrice,
       prePrice,
-      preVolume: null,
+      preVolume,
       preTime,
+      preRefClose,
       postPrice,
-      postVolume: null,
+      postVolume,
       postTime,
+      postRefClose,
+      overnightPrice,
+      overnightVolume,
+      overnightTime,
+      overnightRefClose,
       provider: 'Yahoo Finance',
       coverage: '公开延迟',
       delayStatus: 'delayed',
@@ -265,7 +365,7 @@ export class WatchlistQuoteService {
     });
 
     if (missingSymbols.length > 0) {
-      const chunkSize = 8;
+      const chunkSize = 14;
       for (let i = 0; i < missingSymbols.length; i += chunkSize) {
         const chunk = missingSymbols.slice(i, i + chunkSize);
         await Promise.all(chunk.map(async sym => {

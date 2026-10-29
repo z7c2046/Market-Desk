@@ -224,6 +224,22 @@ export function parseYahoo(payload, symbol) {
   };
 }
 
+function decodeEntities(str) {
+  return String(str || '')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&#x2019;|&#8217;|&rsquo;/gi, '’')
+    .replace(/&#x2018;|&#8216;|&lsquo;/gi, '‘')
+    .replace(/&#x201c;|&#8220;|&ldquo;/gi, '“')
+    .replace(/&#x201d;|&#8221;|&rdquo;/gi, '”')
+    .replace(/&#x2014;|&#8212;|&mdash;/gi, '—')
+    .replace(/&#x2013;|&#8211;|&ndash;/gi, '–')
+    .replace(/&apos;|&#39;|&#x27;/gi, "'")
+    .replace(/&quot;|&#34;|&#x22;/gi, '"')
+    .replace(/&nbsp;|&#160;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .trim();
+}
+
 export function parseNews(xml, source) {
   if (/<!DOCTYPE|<!ENTITY/i.test(xml)) throw new Error('不支持带实体声明的新闻源。');
   const parsed = new XMLParser({ ignoreAttributes: false, processEntities: false, parseTagValue: false }).parse(xml);
@@ -231,7 +247,7 @@ export function parseNews(xml, source) {
   const list = Array.isArray(raw) ? raw : [raw];
   return list.map(item => {
     const url = safeUrl(typeof item.link === 'string' ? item.link : '');
-    const title = String(item.title || '').replace(/<[^>]*>/g, '').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+    const title = decodeEntities(item.title);
     const date = Date.parse(item.pubDate);
     let image = null;
     if (item.enclosure && item.enclosure['@_url']) {
@@ -246,7 +262,7 @@ export function parseNews(xml, source) {
     if (typeof item.description === 'string') {
       const imgMatch = item.description.match(/<img[^>]+src=["']([^"']+)["']/i);
       if (!image && imgMatch) image = safeUrl(imgMatch[1]);
-      summary = item.description.replace(/<[^>]*>/g, '').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").trim();
+      summary = decodeEntities(item.description);
     }
     return { title, url, source, publishedAt: Number.isFinite(date) ? new Date(date).toISOString() : null, image, summary };
   }).filter(x => x.url && x.title);
