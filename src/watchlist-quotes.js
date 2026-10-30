@@ -12,7 +12,8 @@ export function normalizeYahooSymbol(sym) {
     const padded = rawNum.length < 4 ? rawNum.padStart(4, '0') : rawNum;
     return `${padded}.HK`;
   }
-  return sym.replace(/-/g, '.');
+  // Yahoo Finance uses hyphen for US dual-class shares (e.g. BRK-B, BF-B) instead of dot (BRK.B returns 404)
+  return sym.replace(/\./g, '-');
 }
 
 export async function fetchYahooQuote(rawSymbol) {

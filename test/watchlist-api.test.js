@@ -9,7 +9,9 @@ test('normalizeYahooSymbol correctly pads HK stock tickers to 4 digits and norma
   assert.equal(normalizeYahooSymbol('00005.HK'), '0005.HK');
   assert.equal(normalizeYahooSymbol('09988.HK'), '9988.HK');
   assert.equal(normalizeYahooSymbol('07709.HK'), '7709.HK');
-  assert.equal(normalizeYahooSymbol('BRK-B'), 'BRK.B');
+  assert.equal(normalizeYahooSymbol('BRK-B'), 'BRK-B');
+  assert.equal(normalizeYahooSymbol('BRK.B'), 'BRK-B');
+  assert.equal(normalizeYahooSymbol('BF.B'), 'BF-B');
   assert.equal(normalizeYahooSymbol('AAPL'), 'AAPL');
 });
 

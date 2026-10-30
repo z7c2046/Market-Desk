@@ -72,6 +72,10 @@
   --apple-red: var(--semantic-down);
   --apple-orange: var(--semantic-warning);
 
+  /* 4.5 Financial Terminal Skeleton Tokens (Light Mode) */
+  --skeleton-base: #e6eaf0;
+  --skeleton-high: #f2f5f9;
+
   /* 5. Shadows & Dynamic Environmental Ambient Lighting */
   --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.03);
   --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.05), 0 1px 3px rgba(15, 23, 42, 0.03);
@@ -108,51 +112,51 @@ html:lang(en), [data-script='en'] {
 
 :root.dark,
 [data-theme='dark'] {
-  color-scheme: light;
+  color-scheme: dark;
 
-  /* 1. Four-Tier Surface Elevation (Eye-Care Neutral Gray Background + Deep Black Font) */
-  --surface-canvas: #E6E8EC;   /* Soothing paper/ink neutral gray canvas (non-glare, non-black) */
-  --surface-card: #F0F2F5;     /* Soft light-gray card surface */
-  --surface-raised: #F7F8FA;   /* Elevated active pills & headers */
-  --surface-hover: #E9ECF1;    /* Interactive hover state */
-  --surface-sunken: #DADDE3;   /* Sunken inputs & pill troughs */
+  /* 1. Four-Tier Surface Elevation (Ember Dashboard Final 1:1 Minimal Dark Palette) */
+  --surface-canvas: #111111;   /* Ember --page: #111111 (Deep matte obsidian canvas) */
+  --surface-card: #191919;     /* Ember --surface: #191919 (Card & panel surface) */
+  --surface-raised: #292929;   /* Ember --active: #292929 (Active pill, button & header) */
+  --surface-hover: #222222;    /* Interactive hover state */
+  --surface-sunken: #1b1b1b;   /* Ember --input: #1b1b1b (Input & track troughs) */
 
   /* 2. Borders & Dividers */
-  --border-subtle: rgba(20, 20, 20, 0.08);
-  --border-strong: #C8CDD6;
-  --control-border: #C8CDD6;
+  --border-subtle: #262626;    /* Ember --divider: #262626 */
+  --border-strong: #2a2a2a;    /* Ember --border: #2a2a2a */
+  --control-border: #2c2c2c;   /* Ember --input-border: #2c2c2c */
 
-  /* 3. Typography Ink Tokens (Deep Black Font on Gray Surface) */
-  --text-main: #141414;
-  --text-strong: #0A0A0A;
-  --text-primary: #141414;
-  --text-secondary: #4B5563;
-  --text-muted: #6B7280;
-  --text-tertiary: #7E8694;
+  /* 3. Typography Ink Tokens (Ember Text Hierarchy) */
+  --text-main: #f4f4f4;        /* Ember --main-text: #f4f4f4 */
+  --text-strong: #ffffff;
+  --text-primary: #f4f4f4;     /* Ember --main-text: #f4f4f4 */
+  --text-secondary: #969696;   /* Ember --secondary: #969696 */
+  --text-muted: #858585;       /* Ember --heading-year: #858585 */
+  --text-tertiary: #696969;    /* Ember --tertiary: #696969 */
 
-  /* 4. Brand & Financial Semantics */
-  --accent-primary: #141414;
-  --accent-secondary: #374151;
-  --accent-fill: #141414;
-  --accent-text: #141414;
-  --accent-soft: rgba(20, 20, 20, 0.08);
-  --accent-ink: #FFFFFF;
+  /* 4. Brand & Financial Semantics (Ember Precision Palette) */
+  --accent-primary: #f4f4f4;
+  --accent-secondary: #969696;
+  --accent-fill: #292929;      /* Ember --active: #292929 */
+  --accent-text: #f4f4f4;
+  --accent-soft: rgba(255, 255, 255, 0.08);
+  --accent-ink: #111111;
 
-  --semantic-up: #00994C;
-  --semantic-up-soft: rgba(0, 153, 76, 0.12);
-  --semantic-up-chart: #00994C;
-  --semantic-down: #D92118;
-  --semantic-down-soft: rgba(217, 33, 24, 0.12);
-  --semantic-warning: #B45309;
-  --semantic-warning-soft: rgba(180, 83, 9, 0.12);
+  --semantic-up: #53cb9b;      /* Ember --trend: #53cb9b (Emerald Green) */
+  --semantic-up-soft: rgba(83, 203, 155, 0.14);
+  --semantic-up-chart: #53cb9b;
+  --semantic-down: #ff5c5c;    /* Balanced High-Contrast Coral Red */
+  --semantic-down-soft: rgba(255, 92, 92, 0.14);
+  --semantic-warning: #f4b72b; /* Ember Enterprise Gold #f4b72b */
+  --semantic-warning-soft: rgba(244, 183, 43, 0.14);
 
-  /* 向下兼容别名 */
+  /* 向下兼容别名 (Backward-compatible Aliases) */
   --canvas: var(--surface-canvas);
   --surface: var(--surface-card);
   --bg: var(--surface-canvas);
-  --sidebar-bg: var(--surface-canvas);
-  --border: var(--border-subtle);
-  --input-bg: var(--surface-raised);
+  --sidebar-bg: #0e0e0e;       /* Ember --sidebar: #0e0e0e */
+  --border: var(--border-strong);
+  --input-bg: var(--surface-sunken);
   --card-bg: var(--surface-card);
   --card-bg-hover: var(--surface-hover);
   --accent-bg: var(--accent-soft);
@@ -162,27 +166,31 @@ html:lang(en), [data-script='en'] {
   --down-soft: var(--semantic-down-soft);
   --warning-text: var(--semantic-warning);
   --warning-soft: var(--semantic-warning-soft);
-  --apple-blue: var(--accent-primary);
-  --apple-blue-lt: #374151;
+  --apple-blue: #5598f2;       /* Ember Pro Blue #5598f2 */
+  --apple-blue-lt: #67a3ef;
   --apple-green: var(--semantic-up);
   --apple-red: var(--semantic-down);
   --apple-orange: var(--semantic-warning);
 
+  /* 4.5 Financial Terminal Skeleton Tokens (Dark Mode) */
+  --skeleton-base: #24282e;
+  --skeleton-high: #353a42;
+
   /* 5. Shadows & Dynamic Environmental Ambient Lighting */
-  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.05);
-  --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.07);
-  --shadow-card: 0 2px 6px rgba(15, 23, 42, 0.05);
-  --shadow-float: 0 16px 24px -4px rgba(15, 23, 42, 0.12);
-  --glow-focus: 0 0 0 2px rgba(20, 20, 20, 0.16);
-  --wash-1: rgba(20, 20, 20, 0.06);
-  --wash-2: rgba(180, 83, 9, 0.08);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+  --shadow-card: 0 27px 67px rgba(0, 0, 0, 0.33), 0 80px 100px rgba(0, 0, 0, 0.08); /* Ember App Shadow */
+  --shadow-float: 0 27px 67px rgba(0, 0, 0, 0.5);
+  --glow-focus: 0 0 0 2px rgba(255, 255, 255, 0.2);
+  --wash-1: rgba(255, 255, 255, 0.04);
+  --wash-2: rgba(244, 183, 43, 0.06);
 
   /* Group Header Tokens */
-  --group-header-bg: #F0F2F5;
-  --group-header-bg-hover: #E6E9EF;
-  --group-header-border: rgba(20, 20, 20, 0.08);
-  --group-badge-bg: rgba(20, 20, 20, 0.08);
-  --group-badge-text: #141414;
+  --group-header-bg: #191919;
+  --group-header-bg-hover: #222222;
+  --group-header-border: #262626;
+  --group-badge-bg: #292929;
+  --group-badge-text: #f4f4f4;
 }
 /* Custom refined scrollbars */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -2071,7 +2079,7 @@ main { min-width: 0; }
 .heatmap-footer {
   padding: 12px 20px;
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
   gap: 12px;
   border-top: 1px solid var(--border);
@@ -6522,6 +6530,60 @@ td { color: var(--text-primary); }
   display: inline-block;
 }
 
+/* Heatmap Mini Preview in Preferences Modal */
+.heatmap-mini-preview {
+  height: 72px;
+  background: #000000;
+  border-radius: var(--radius-sm);
+  padding: 6px;
+  display: flex;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+.mini-hm-grid {
+  display: flex;
+  gap: 4px;
+  width: 100%;
+  height: 100%;
+}
+
+.mini-hm-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.mini-hm-block {
+  border-radius: 3px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 4px;
+  color: #FFFFFF;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  line-height: 1.1;
+  transition: transform 0.15s ease;
+}
+
+.mini-hm-block:hover {
+  transform: scale(1.02);
+}
+
+.hm-mini-symbol {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+.hm-mini-val {
+  font-size: 9px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  opacity: 0.95;
+}
+
 /* Default Launch Page Options in Preferences Modal */
 .pref-default-page-grid {
   display: grid;
@@ -7950,10 +8012,6 @@ td { color: var(--text-primary); }
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
   border-color: var(--border-subtle);
 }
-  font-weight: 600;
-  box-shadow: 0 3px 10px rgba(26, 86, 219, 0.35);
-  border-color: #1a56db;
-}
 
 /* More Dropdown */
 .news-proto-more-wrap {
@@ -9330,7 +9388,6 @@ td { color: var(--text-primary); }
   background: var(--surface-raised) !important;
   color: var(--text-main) !important;
 }
-}
 
 .heatmap-chart {
   width: 100%;
@@ -9981,19 +10038,37 @@ td { color: var(--text-primary); }
   color: var(--text-tertiary);
 }
 
-/* In-Group Column Header: 股票 | 收盘价 | Chg% ↓ */
+.rw-all-flat-block {
+  background: var(--surface-card);
+  border-radius: 16px;
+  border: 1px solid var(--border-subtle);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+:root.dark .rw-all-flat-block {
+  background: var(--surface-card);
+  border-color: var(--border-subtle);
+}
+
+/* In-Group Column Header: 标的 | 收盘价格 | Chg% [| EXT%] */
 .rw-group-col-header {
   display: grid;
-  grid-template-columns: minmax(0, 1.25fr) 78px 88px;
-  column-gap: 8px;
+  grid-template-columns: minmax(0, 1.25fr) 88px 84px;
+  column-gap: 6px;
   align-items: center;
-  padding: 10px 16px;
+  padding: 10px 14px;
   font-size: 11.5px;
   font-weight: 500;
   color: var(--text-tertiary);
   background: transparent;
   border-bottom: 1px solid var(--border-subtle);
   box-sizing: border-box;
+}
+
+.rw-group-col-header.with-ext {
+  grid-template-columns: minmax(0, 1.05fr) 76px 66px 68px;
 }
 
 :root.dark .rw-group-col-header {
@@ -10091,14 +10166,18 @@ td { color: var(--text-primary); }
 .rw-stock-row {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1.25fr) 78px 88px;
-  column-gap: 8px;
+  grid-template-columns: minmax(0, 1.25fr) 88px 84px;
+  column-gap: 6px;
   align-items: center;
-  padding: 11px 16px;
+  padding: 10px 14px;
   cursor: pointer;
   transition: background 0.12s ease;
   box-sizing: border-box;
   border-bottom: 1px solid var(--border-subtle);
+}
+
+.rw-stock-row.with-ext {
+  grid-template-columns: minmax(0, 1.05fr) 76px 66px 68px;
 }
 
 :root.dark .rw-stock-row {
@@ -10138,7 +10217,6 @@ td { color: var(--text-primary); }
   min-width: 0;
   overflow: hidden;
   text-align: left;
-  gap: 2px;
 }
 
 .rw-sym {
@@ -10150,20 +10228,9 @@ td { color: var(--text-primary); }
   white-space: nowrap;
 }
 
-.rw-name-sub {
-  font-size: 10.5px;
-  font-weight: 400;
-  color: #94A3B8;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  line-height: 1.2;
-  display: block;
-}
-
 .rw-cell-price {
   text-align: right;
-  font-size: 14.5px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--text-main);
   font-family: var(--font-mono, monospace);
@@ -10173,17 +10240,9 @@ td { color: var(--text-primary); }
   text-overflow: ellipsis;
 }
 
-.rw-cell-chg-stack {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  justify-content: center;
-  gap: 2px;
-}
-
 .rw-cell-change {
   text-align: right;
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 700;
   font-family: var(--font-mono, monospace);
   font-variant-numeric: tabular-nums;
@@ -10193,15 +10252,15 @@ td { color: var(--text-primary); }
 
 .rw-cell-ext {
   text-align: right;
-  font-size: 10px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 700;
   font-family: var(--font-mono, monospace);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 3px;
+  gap: 2px;
   line-height: 1.2;
 }
 
@@ -11272,4 +11331,179 @@ td { color: var(--text-primary); }
 .wl-stock-row:hover td {
   background: var(--surface-hover);
 }
+
+/* ============================================================
+   Loading Indicator & Financial Terminal Skeleton System
+   Ported 1:1 from market_desk_skeleton_demo.html
+   ============================================================ */
+
+/* 1. Top 2px Pulse Blue Bar (方案三 / 最轻量 / 脉冲蓝条) */
+.top-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.22s ease;
+  z-index: 100;
+}
+.top-progress::before {
+  content: "";
+  display: block;
+  width: 35%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, #487eea, #7aa9ff, transparent);
+  transform: translateX(-120%);
+  animation: top-progress-pulse 1.35s ease-in-out infinite;
+}
+body.is-loading .top-progress,
+.top-progress.is-active {
+  opacity: 1;
+}
+@keyframes top-progress-pulse {
+  0% { transform: translateX(-120%); }
+  60% { transform: translateX(140%); }
+  100% { transform: translateX(310%); }
+}
+
+/* 2. Financial Terminal Skeleton (方案一 / 深色骨架屏) */
+.sk {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  background: var(--skeleton-base, #24282e);
+  border-radius: 5px;
+  isolation: isolate;
+}
+.sk::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 20%, rgba(210, 225, 241, 0.065) 47%, rgba(210, 225, 241, 0.09) 52%, transparent 75%);
+  transform: translateX(-110%);
+  animation: sk-shimmer 1.6s ease-in-out infinite;
+}
+.sk-line { height: 9px; }
+.sk-strong { height: 23px; border-radius: 6px; }
+.sk-small { height: 7px; }
+.sk-pill { height: 15px; border-radius: 4px; }
+
+.sk-chart-grid {
+  position: absolute;
+  inset: 22px 14px 32px 42px;
+  background: repeating-linear-gradient(to bottom, rgba(139, 149, 160, 0.13) 0 1px, transparent 1px calc(25% - 0.25px));
+  border-bottom: 1px solid rgba(139, 149, 160, 0.16);
+  pointer-events: none;
+}
+.skeleton-y {
+  position: absolute;
+  left: 0;
+  top: 16px;
+  bottom: 32px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 27px;
+  pointer-events: none;
+}
+.skeleton-x {
+  position: absolute;
+  left: 42px;
+  right: 14px;
+  bottom: 7px;
+  display: flex;
+  justify-content: space-between;
+  gap: 9px;
+  pointer-events: none;
+}
+.skeleton-bars {
+  position: absolute;
+  inset: 23px 15px 33px 46px;
+  display: flex;
+  gap: 5px;
+  align-items: end;
+  pointer-events: none;
+}
+.skeleton-bars .sk {
+  flex: 1;
+  min-width: 1px;
+  background: var(--skeleton-base, #24282e);
+  border-radius: 3px 3px 0 0;
+}
+.skeleton-bars .sk:nth-child(2n) {
+  background: var(--skeleton-high, #353a42);
+}
+.sk-floating {
+  position: absolute;
+  top: 4px;
+  left: 49px;
+  width: 105px;
+  height: 12px;
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+@keyframes sk-shimmer {
+  to { transform: translateX(110%); }
+}
+
+/* Card Skeleton & Viewport Wrappers */
+.chart-viewport {
+  position: relative;
+  min-height: 440px;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.chart-skeleton {
+  position: absolute;
+  inset: 0;
+  transition: opacity 0.3s ease, transform 0.38s ease;
+  pointer-events: none;
+  background: var(--surface-card, #191919);
+  z-index: 2;
+}
+.kpi-card.metric-skeleton-card,
+.index-card.metric-skeleton-card {
+  pointer-events: none;
+  position: relative;
+}
+.options-skeleton-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.heatmap-skeleton-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 16px;
+  min-height: 380px;
+  background: var(--surface-card, #191919);
+  border-radius: 8px;
+}
+.sk-treemap-tile {
+  border-radius: 6px;
+  background: var(--skeleton-base, #24282e);
+}
+.heatmap-shimmer-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: 8px;
+  overflow: hidden;
+  z-index: 3;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .top-progress::before,
+  .sk::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
 

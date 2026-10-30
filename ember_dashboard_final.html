@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="theme-color" content="#111111" />
+<title>Ember — Reports · Dark / Neon</title>
+<style>
+:root {
+  font-family: Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,Helvetica,sans-serif;
+  font-synthesis:none;
+  font-smooth:always;
+  -webkit-font-smoothing:antialiased;
+  color-scheme:dark;
+  --duration:1050ms;
+  --ease:cubic-bezier(.22,1,.36,1);
+}
+*{box-sizing:border-box}
+html,body{min-height:100%;margin:0}
+body{background:#353535}
+button,input{font:inherit}
+button{cursor:pointer}
+button:focus-visible,input:focus-visible{outline:2px solid #a888ff;outline-offset:3px}
+.stage{min-height:100vh;position:relative;isolation:isolate;overflow-x:auto;overflow-y:hidden;padding:43px 30px 96px max(30px,calc((100vw - 1388px)/2));}
+.stage::before,.stage::after{content:"";position:absolute;z-index:-1;inset:0;pointer-events:none;transition:opacity 1450ms var(--ease)}
+.stage::before{background:radial-gradient(ellipse 83% 95% at 21% 0%,#676767 0%,#545454 51%,#363636 100%);opacity:1}
+.stage::after{background:radial-gradient(ellipse 93% 110% at 13% -3%,#7545c2 0%,#5020a1 44%,#2a0b60 100%);opacity:0}
+.stage[data-theme="neon"]::before{opacity:0}
+.stage[data-theme="neon"]::after{opacity:1}
+.app {
+  --page:#111111;--sidebar:#0e0e0e;--surface:#191919;
+  --border:#2a2a2a;--divider:#262626;--main-text:#f4f4f4;
+  --secondary:#969696;--tertiary:#696969;--heading-year:#858585;
+  --input:#1b1b1b;--input-border:#2c2c2c;--input-text:#8e8e8e;
+  --active:#292929;--active-border:#343434;--active-overlay:0;
+  --trend:#53cb9b;--plot-grid:#303030;--plot-ticks:#6b6b6b;
+  --ring:rgba(0,0,0,.32);--neon-overlay:0;--line-glow:1;
+  width:1268px;height:875px;max-width:none;display:flex;position:relative;
+  border-radius:13px;overflow:hidden;background:var(--page);
+  border:1px solid #292929;
+  box-shadow:0 27px 67px rgba(0,0,0,.33),0 80px 100px rgba(0,0,0,.08);
+  color:var(--main-text);
+  transition:background-color var(--duration) var(--ease),border-color var(--duration) var(--ease),box-shadow var(--duration) var(--ease),color var(--duration) var(--ease);
+}
+.app[data-theme="neon"]{
+  --page:#100b28;--sidebar:#140a31;--surface:#29205d;
+  --border:#56418d;--divider:#38235e;--main-text:#f4edff;
+  --secondary:#b9a6d7;--tertiary:#9682ba;--heading-year:#aa8cd9;
+  --input:#241444;--input-border:#6845a3;--input-text:#c2a8ec;
+  --active:#332361;--active-border:#7840bf;--active-overlay:1;
+  --trend:#63e9aa;--plot-grid:#59417e;--plot-ticks:#b39bce;
+  --ring:rgba(110,60,219,.3);--neon-overlay:1;--line-glow:2.5;
+  border-color:#6d3ca3;
+  box-shadow:0 26px 80px rgba(12,0,40,.42),0 0 55px rgba(116,59,222,.21);
+}
+/* THE KEY BEHAVIOR: The layout never changes; every theme effect is a palette transition. */
+.sidebar{position:relative;display:flex;flex-direction:column;flex:0 0 244px;width:244px;height:100%;background:var(--sidebar);border-right:1px solid var(--divider);transition:background-color var(--duration) var(--ease),border-color var(--duration) var(--ease)}
+.side-head{height:115px;flex:none;border-bottom:1px solid var(--divider);padding:20px 15px 0;transition:border-color var(--duration) var(--ease)}
+.brand{height:25px;display:flex;align-items:center;gap:7px}
+.ember-mark{width:19px;height:18px;display:block;flex:none;position:relative}
+.ember-mark span{position:absolute;top:1px;width:8px;height:16px;border-radius:5px;transform:rotate(-29deg);background:#f5f5f5;transition:background-color var(--duration) var(--ease),box-shadow var(--duration) var(--ease)}
+.ember-mark span:first-child{left:3px}
+.ember-mark span:last-child{left:11px}
+.app[data-theme="neon"] .ember-mark span{background:#ded0ff;box-shadow:0 0 10px #8a62ff60}
+.brand-name{font-size:14px;letter-spacing:-.46px;font-weight:760;color:var(--main-text);transition:color var(--duration) var(--ease)}
+.collapse{margin-left:auto;border:0;padding:3px 0 3px 5px;color:#6c6c6c;background:none;display:flex;align-items:center;justify-content:center;transition:color var(--duration) var(--ease)}
+.app[data-theme="neon"] .collapse{color:#a38ad8}
+.collapse svg{width:13px;height:13px}
+.search{margin-top:13px;height:34px;width:213px;display:flex;align-items:center;gap:8px;padding:0 10px;background:var(--input);border:1px solid var(--input-border);border-radius:10px;transition:background-color var(--duration) var(--ease),border-color var(--duration) var(--ease),box-shadow var(--duration) var(--ease)}
+.app[data-theme="neon"] .search{box-shadow:0 0 12px #7642e144,inset 0 0 9px #7844cd1e}
+.search svg{height:14px;width:14px;flex:none;color:var(--tertiary);transition:color var(--duration) var(--ease)}
+.search input{background:transparent;color:var(--main-text);border:0;outline:0;min-width:0;width:100%;font-size:11px;line-height:1}
+.search input::placeholder{color:var(--input-text);opacity:1;transition:color var(--duration) var(--ease)}
+.hotkey{display:flex;align-items:center;gap:3px}
+.hotkey kbd{height:22px;min-width:19px;padding:4px 4px 3px;line-height:1.1;text-align:center;background:#2c2c2c;border:1px solid #3b3b3b;border-radius:5px;color:#9b9b9b;font-size:11px;transition:background var(--duration) var(--ease),border-color var(--duration) var(--ease),color var(--duration) var(--ease)}
+.app[data-theme="neon"] .hotkey kbd{background:#4c2d8a;border-color:#8059c1;color:#e0caff}
+.nav-section{height:270px;flex:none;padding:20px 15px 16px;border-bottom:1px solid var(--divider);transition:border-color var(--duration) var(--ease)}
+.section-title{margin:0 0 13px;font-size:10px;font-weight:450;letter-spacing:.3px;color:var(--tertiary);transition:color var(--duration) var(--ease)}
+.nav-section .section-title{text-transform:uppercase;font-size:10px;letter-spacing:.15px}
+.nav-list{display:flex;flex-direction:column;gap:1px}
+.nav-item{display:flex;position:relative;align-items:center;gap:11px;width:100%;height:34px;padding:0 9px;border-radius:6px;color:var(--secondary);background:transparent;border:1px solid transparent;text-align:left;font-size:12px;font-weight:420;transition:color .55s var(--ease),background-color .3s ease,border-color var(--duration) var(--ease)}
+.nav-item svg{width:14px;height:14px;flex:none;color:var(--tertiary);transition:color var(--duration) var(--ease)}
+.nav-item .label{flex:1;position:relative;z-index:1}
+.nav-item .nav-aux{position:relative;z-index:1;font-size:11px;color:var(--tertiary)}
+.nav-item:hover:not(.selected){background:rgba(134,134,134,.12);color:var(--main-text)}
+.nav-item.selected{background:var(--active);border-color:var(--active-border);font-weight:610;color:var(--main-text)}
+.nav-item.selected::before{content:"";inset:-1px;position:absolute;pointer-events:none;opacity:var(--active-overlay);border-radius:6px;background:linear-gradient(108deg,#8d37e9,#2d61ed);box-shadow:0 4px 24px #6a3ce255;transition:opacity var(--duration) var(--ease)}
+.nav-item.selected .label,.nav-item.selected .nav-aux{isolation:isolate}
+.nav-item.selected svg{color:var(--main-text);position:relative;z-index:1}
+.plan-section{flex:1;padding:22px 15px 0;}
+.plan-section .section-title{margin-bottom:11px}
+.plan{display:flex;align-items:center;height:31px;padding:0 6px;gap:12px;font-size:12px;color:var(--secondary);transition:color var(--duration) var(--ease)}
+.plan-name{flex:1}
+.plan-count{font-size:11px;color:var(--tertiary);transition:color var(--duration) var(--ease)}
+.dot{width:8px;height:8px;flex:none;border-radius:50%;background:var(--dot);box-shadow:0 0 6px 1px var(--dot-glow);transition:box-shadow var(--duration) var(--ease)}
+.app[data-theme="neon"] .dot{box-shadow:0 0 11px 2px var(--dot-glow)}
+.sidebar-bottom{padding:0 15px 19px;margin-top:auto}
+.theme-switch{width:100%;min-height:41px;display:flex;align-items:center;gap:10px;position:relative;overflow:hidden;border:1px solid var(--divider);background:var(--input);color:var(--secondary);border-radius:9px;padding:0 11px;text-align:left;transition:background var(--duration) var(--ease),border-color var(--duration) var(--ease),color var(--duration) var(--ease),box-shadow .45s ease}
+.theme-switch:hover{border-color:var(--active-border);box-shadow:0 0 0 3px var(--ring)}
+.theme-switch:active{transform:scale(.985)}
+.theme-glyph{width:18px;height:18px;display:grid;place-items:center;flex:none;position:relative}
+.theme-glyph svg{position:absolute;width:17px;height:17px;transition:opacity .6s var(--ease),transform .8s var(--ease)}
+.theme-glyph .moon{opacity:1;transform:rotate(0deg) scale(1)}
+.theme-glyph .spark{opacity:0;transform:rotate(-55deg) scale(.65);color:#c391ff}
+.app[data-theme="neon"] .theme-glyph .moon{opacity:0;transform:rotate(52deg) scale(.65)}
+.app[data-theme="neon"] .theme-glyph .spark{opacity:1;transform:rotate(0) scale(1)}
+.theme-text{font-size:11px;font-weight:550;flex:1;white-space:nowrap}
+.theme-right{color:var(--tertiary);font-size:10px;white-space:nowrap;transition:color var(--duration) var(--ease)}
+.switch-swatch{width:8px;height:8px;border-radius:50%;background:linear-gradient(145deg,#ae62f8,#436cf9);box-shadow:0 0 7px #9c4bf988;transition:background .8s,box-shadow .8s}
+.app[data-theme="neon"] .switch-swatch{background:#9c9c9c;box-shadow:none}
+/* content */
+.main{flex:1;background:var(--page);padding:26px 25px;position:relative;min-width:0;transition:background-color var(--duration) var(--ease)}
+.breadcrumb{height:17px;display:flex;align-items:center;gap:10px;color:var(--secondary);font-size:12px;font-weight:550;transition:color var(--duration) var(--ease)}
+.breadcrumb svg{height:12px;width:12px;color:var(--tertiary);transition:color var(--duration) var(--ease)}
+h1{margin:20px 0 16px;font-size:30px;line-height:37px;letter-spacing:-1.25px;font-weight:400;color:var(--main-text);transition:color var(--duration) var(--ease),text-shadow var(--duration) var(--ease)}
+h1 span{font-weight:310;color:var(--heading-year);transition:color var(--duration) var(--ease)}
+.app[data-theme="neon"] h1{text-shadow:0 0 22px rgba(173,113,255,.16)}
+.stats{display:flex;gap:14px;white-space:nowrap}
+.stat-card{height:111px;position:relative;border:1px solid var(--border);border-radius:14px;overflow:hidden;background-color:var(--surface);transition:border-color var(--duration) var(--ease),background-color var(--duration) var(--ease),box-shadow var(--duration) var(--ease)}
+.stat-card::before{content:"";position:absolute;inset:0;background:linear-gradient(112deg,#54348e 0%,#33266f 57%,#172c69 100%);opacity:var(--neon-overlay);pointer-events:none;transition:opacity var(--duration) var(--ease)}
+.app[data-theme="neon"] .stat-card{box-shadow:inset 0 1px #ffffff24,0 5px 25px rgba(113,59,226,.27)}
+.paid{width:286px;padding:16px 17px}
+.overdue{width:224px;padding:16px 16px}
+.invoices{width:204px;padding:16px 16px}
+.card-label,.revenue-label{position:relative;z-index:1;font-size:11px;font-weight:500;letter-spacing:0;color:var(--secondary);transition:color var(--duration) var(--ease)}
+.invoices .card-label{text-transform:uppercase;font-size:10px}
+.card-amount{position:relative;z-index:1;font-size:30px;line-height:34px;letter-spacing:-.8px;font-weight:630;margin-top:7px;color:var(--main-text);transition:color var(--duration) var(--ease)}
+.card-detail{position:relative;z-index:1;font-size:10px;margin-top:8px;color:var(--secondary);letter-spacing:.08px;transition:color var(--duration) var(--ease)}
+.card-detail b{font-weight:680;color:var(--trend);transition:color var(--duration) var(--ease)}
+/* Credit card drawn with HTML, it remains present in both themes */
+.bank-cards{position:absolute;right:-14px;top:7px;width:132px;height:103px;z-index:1;pointer-events:none}
+.bank-card{position:absolute;border-radius:10px;border:1px solid #666;box-shadow:0 9px 20px #0008;transition:border-color var(--duration) var(--ease),box-shadow var(--duration) var(--ease)}
+.bank-card.back{right:0;top:2px;width:86px;height:64px;background:linear-gradient(126deg,#383838,#161616 80%);transform:rotate(16deg);opacity:.86}
+.bank-card.front{width:102px;height:64px;left:0;top:36px;transform:rotate(-13deg);background:linear-gradient(132deg,#505050 0%,#2b2b2b 26%,#0a0a0a 100%);padding:12px 10px}
+.chip{height:13px;width:18px;border-radius:3px;background:linear-gradient(135deg,#d3d3d3,#858585);display:block}
+.cc-numbers{position:absolute;bottom:13px;left:10px;color:#cacaca;font-family:monospace;font-size:6px;white-space:nowrap}
+.cc-icon{position:absolute;top:7px;right:8px;width:11px;height:11px;border-radius:50%;background:conic-gradient(#fff 0 22%,#57acdd 22% 50%,#fff 50% 74%,#e2e2e2 74% 100%);border:2px solid #0b0b0b}
+.app[data-theme="neon"] .bank-card{border-color:#a17bcc;box-shadow:0 9px 18px #12063699,0 0 14px #8a4cf43a}
+/* Revenue card exactly matches the reference's fixed dimensions and graph geometry */
+.revenue{width:659px;height:353px;margin-top:16px;border:1px solid var(--border);border-radius:13px;position:relative;overflow:hidden;background:var(--surface);padding:16px 17px;transition:background-color var(--duration) var(--ease),border-color var(--duration) var(--ease),box-shadow var(--duration) var(--ease)}
+.revenue::before{content:"";position:absolute;inset:0;background:linear-gradient(120deg,#4b347f 0%,#32226c 57%,#21235d 100%);opacity:var(--neon-overlay);pointer-events:none;transition:opacity var(--duration) var(--ease)}
+.app[data-theme="neon"] .revenue{box-shadow:inset 0 1px #ffffff21,0 0 30px #834ff02e,0 8px 26px #250b6b43}
+.revenue .revenue-label{position:relative;z-index:1}
+.revenue .revenue-amount{position:relative;z-index:1;font-size:27px;font-weight:620;letter-spacing:-.8px;line-height:34px;margin-top:6px;color:var(--main-text);transition:color var(--duration) var(--ease)}
+.revenue .revenue-sub{position:relative;z-index:1;margin-top:5px;font-size:10px;color:var(--secondary);transition:color var(--duration) var(--ease)}
+.revenue-sub b{color:var(--trend);font-weight:660;transition:color var(--duration) var(--ease)}
+.modern-chart{position:absolute;left:11px;right:13px;top:113px;bottom:9px;z-index:1}
+.modern-chart svg{display:block;width:100%;height:100%;overflow:visible}
+.modern-chart .chart-grid{stroke:var(--plot-grid);stroke-width:1;transition:stroke var(--duration) var(--ease)}
+.modern-chart .chart-text{fill:var(--plot-ticks);font-size:10px;letter-spacing:.12px;font-weight:500;transition:fill var(--duration) var(--ease)}
+.modern-chart .colored-line{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 0 2px currentColor);transition:filter var(--duration) var(--ease),stroke-width var(--duration) var(--ease),opacity var(--duration) var(--ease)}
+.modern-chart .reflected-line{fill:none;stroke:#5a5a5a;stroke-width:1.25;opacity:.76;stroke-linecap:round;transition:stroke var(--duration) var(--ease),opacity var(--duration) var(--ease)}
+.app[data-theme="neon"] .modern-chart .colored-line{filter:drop-shadow(0 0 5px currentColor);stroke-width:2.5}
+.app[data-theme="neon"] .modern-chart .reflected-line{stroke:#9275b7;opacity:.6}
+/* tiny feedback is layered and moves independently, no page reflow */
+.switch-ripple{position:absolute;pointer-events:none;z-index:5;opacity:0;right:0;bottom:0;width:550px;height:550px;border-radius:50%;background:radial-gradient(circle,rgba(157,79,255,.10),transparent 69%);transform:translate(34%,39%) scale(.5)}
+.app[data-theme="neon"].switching .switch-ripple{animation:ripple 1150ms cubic-bezier(.2,.6,.2,1) both}
+@keyframes ripple{0%{opacity:0;transform:translate(34%,39%) scale(.52)}42%{opacity:.7}100%{opacity:0;transform:translate(34%,39%) scale(1.6)}}
+/* Desktop is the fidelity target. Smaller screens scroll horizontally without scrambling the layout. */
+@media(max-width:1300px){.stage{padding-left:clamp(22px,4.5vw,60px)}.app{width:1268px}}
+@media(max-width:700px){.stage{padding:18px 18px 58px}.app{height:875px}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:0.01ms!important;transition-duration:0.01ms!important}}
+</style>
+</head>
+<body>
+<svg aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden" xmlns="http://www.w3.org/2000/svg"><defs>
+<symbol id="ic-overview" viewbox="0 0 24 24"><rect fill="currentColor" height="7" rx="1.5" width="7" x="3" y="3"></rect><rect fill="currentColor" height="7" rx="1.5" width="7" x="14" y="3"></rect><rect fill="currentColor" height="7" rx="1.5" width="7" x="3" y="14"></rect><rect fill="currentColor" height="7" rx="1.5" width="7" x="14" y="14"></rect></symbol>
+<symbol id="ic-inbox" viewbox="0 0 24 24"><rect fill="none" height="16" rx="4" stroke="currentColor" stroke-width="2" width="18" x="3" y="4"></rect><path d="M3 14h5l2 3h4l2-3h5" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="2"></path></symbol>
+<symbol id="ic-layers" viewbox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="2"></path></symbol>
+<symbol id="ic-customers" viewbox="0 0 24 24"><circle cx="10" cy="8" fill="none" r="3.2" stroke="currentColor" stroke-width="2"></circle><path d="M3.5 20v-1c0-3.3 2.4-5.5 6.5-5.5s6.5 2.2 6.5 5.5v1M17 5.1c2.6.2 4 2.4 4 4.6s-1.3 4.3-3.5 4.7M19 15.3c1.9.7 2.7 2.2 2.7 4.6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2"></path></symbol>
+<symbol id="ic-invoices" viewbox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="2"></path><path d="M9 8h6M9 12h6" stroke="currentColor" stroke-linecap="round" stroke-width="2"></path></symbol>
+<symbol id="ic-reports" viewbox="0 0 24 24"><path d="M3 20h18M4 15l5-5 4 3 7-8M15 5h5v5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></symbol>
+<symbol id="ic-search" viewbox="0 0 24 24"><circle cx="11" cy="11" fill="none" r="7.2" stroke="currentColor" stroke-width="2.4"></circle><path d="m16.5 16.5 4.5 4.5" stroke="currentColor" stroke-linecap="round" stroke-width="2.4"></path></symbol>
+<symbol id="ic-chevron" viewbox="0 0 24 24"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2"></path></symbol>
+<symbol id="ic-collapse" viewbox="0 0 24 24"><rect fill="none" height="16" rx="3" stroke="currentColor" stroke-width="1.8" width="18" x="3" y="4"></rect><path d="M13 4v16" stroke="currentColor" stroke-width="1.8"></path></symbol>
+</defs></svg>
+<div class="stage" id="stage" data-theme="dark">
+  <div class="app" id="app" data-theme="dark">
+    <aside class="sidebar" aria-label="Main navigation">
+      <div class="side-head">
+        <div class="brand"><span class="ember-mark" aria-hidden="true"><span></span><span></span></span><span class="brand-name">Ember</span><button class="collapse" aria-label="Sidebar panel" title="Sidebar panel"><svg><use href="#ic-collapse"/></svg></button></div>
+        <label class="search"><svg><use href="#ic-search"/></svg><input id="search" type="search" aria-label="Search navigation" placeholder="Search" autocomplete="off"/><span class="hotkey"><kbd>⌘</kbd><kbd>K</kbd></span></label>
+      </div>
+      <section class="nav-section" aria-label="Navigation">
+        <h2 class="section-title">NAVIGATION</h2>
+        <nav class="nav-list" id="nav">
+          <button class="nav-item" data-page="Overview"><svg><use href="#ic-overview"/></svg><span class="label">Overview</span></button>
+          <button class="nav-item" data-page="Inbox"><svg><use href="#ic-inbox"/></svg><span class="label">Inbox</span><span class="nav-aux">12</span></button>
+          <button class="nav-item" data-page="Projects"><svg><use href="#ic-layers"/></svg><span class="label">Projects</span><svg class="nav-aux"><use href="#ic-chevron"/></svg></button>
+          <button class="nav-item" data-page="Customers"><svg><use href="#ic-customers"/></svg><span class="label">Customers</span><svg class="nav-aux"><use href="#ic-chevron"/></svg></button>
+          <button class="nav-item" data-page="Invoices"><svg><use href="#ic-invoices"/></svg><span class="label">Invoices</span><svg class="nav-aux"><use href="#ic-chevron"/></svg></button>
+          <button class="nav-item selected" data-page="Reports" aria-current="page"><svg><use href="#ic-reports"/></svg><span class="label">Reports</span></button>
+        </nav>
+      </section>
+      <section class="plan-section" aria-label="Plans">
+        <h2 class="section-title">Plans</h2>
+        <div class="plan"><span class="dot" style="--dot:#f4b72b;--dot-glow:#f4b72b88"></span><span class="plan-name">Enterprise</span><span class="plan-count">18</span></div>
+        <div class="plan"><span class="dot" style="--dot:#31d095;--dot-glow:#31d09588"></span><span class="plan-name">Business</span><span class="plan-count">64</span></div>
+        <div class="plan"><span class="dot" style="--dot:#5598f2;--dot-glow:#5598f288"></span><span class="plan-name">Pro</span><span class="plan-count">210</span></div>
+        <div class="plan"><span class="dot" style="--dot:#e855ac;--dot-glow:#e855ac88"></span><span class="plan-name">Starter</span><span class="plan-count">480</span></div>
+        <div class="plan"><span class="dot" style="--dot:#a77ae9;--dot-glow:#a77ae988"></span><span class="plan-name">Free</span><span class="plan-count">1.2k</span></div>
+      </section>
+      <div class="sidebar-bottom">
+        <button class="theme-switch" id="themeSwitch" type="button" aria-label="Switch to neon theme" aria-pressed="false" title="Switch between original neon and minimal dark palette">
+          <span class="theme-glyph" aria-hidden="true">
+            <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M19.6 15.4A8.6 8.6 0 0 1 8.6 4.4 8.7 8.7 0 1 0 19.6 15.4Z"/></svg>
+            <svg class="spark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="m12 2 1.7 6.3L20 10l-6.3 1.7L12 18l-1.7-6.3L4 10l6.3-1.7L12 2Zm6 14 .8 2.2L21 19l-2.2.8L18 22l-.8-2.2L15 19l2.2-.8L18 16Z"/></svg>
+          </span>
+          <span class="theme-text">Appearance</span><span class="switch-swatch" aria-hidden="true"></span><span class="theme-right" id="nextTheme">Neon</span>
+        </button>
+      </div>
+    </aside>
+    <main class="main">
+      <div class="breadcrumb"><svg><use href="#ic-overview"/></svg><span id="breadcrumbLabel">Reports</span></div>
+      <h1>October <span>2026</span></h1>
+      <div class="stats" aria-label="Statistics">
+        <article class="stat-card paid"><div class="card-label">Paid This Month</div><div class="card-amount">$48,210</div><div class="card-detail"><b>+12%</b> &nbsp;vs last month</div>
+          <div class="bank-cards" aria-hidden="true"><div class="bank-card back"></div><div class="bank-card front"><span class="chip"></span><span class="cc-numbers">•••• •••• •••• &nbsp;4821</span><span class="cc-icon"></span></div></div>
+        </article>
+        <article class="stat-card overdue"><div class="card-label">Overdue</div><div class="card-amount">07</div><div class="card-detail"><b>3 fewer</b> &nbsp;than before</div></article>
+        <article class="stat-card invoices"><div class="card-label">TOTAL INVOICES</div><div class="card-amount">168</div><div class="card-detail"><b>+6.8%</b></div></article>
+      </div>
+      <section class="revenue" aria-label="Revenue chart">
+        <div class="revenue-label">Revenue</div><div class="revenue-amount">$124,860.40</div><div class="revenue-sub"><b>4.2% ↑</b> &nbsp;vs September</div>
+        <div class="modern-chart" aria-label="Multi-series revenue distribution chart"><svg preserveaspectratio="none" viewbox="0 0 510 198" xmlns="http://www.w3.org/2000/svg">
+<g><line class="chart-grid" x1="40" x2="505" y1="5" y2="5"></line><line class="chart-grid" x1="40" x2="505" y1="28" y2="28"></line><line class="chart-grid" x1="40" x2="505" y1="51" y2="51"></line><line class="chart-grid" x1="40" x2="505" y1="74" y2="74"></line><line class="chart-grid" x1="40" x2="505" y1="97" y2="97"></line><line class="chart-grid" x1="40" x2="505" y1="116" y2="116"></line><line class="chart-grid" x1="40" x2="505" y1="156" y2="156"></line></g>
+<g class="chart-text"><text x="4" y="8">160k</text><text x="4" y="31">120k</text><text x="8" y="54">80k</text><text x="8" y="77">40k</text><text x="29" y="100">0</text><text x="29" y="119">0</text><text x="8" y="159">40k</text><text x="8" y="191">80k</text></g>
+<g class="chart-text"><text x="30" y="110">Aug</text><text x="79" y="110">Sep</text><text x="128" y="110">Oct</text><text x="177" y="110">Nov</text><text x="226" y="110">Dec</text><text x="275" y="110">Jan</text></g>
+<g stroke-linecap="round" stroke-linejoin="round">
+<path class="colored-line" d="M42 97 C75 97 92 26 135 27 C177 27 198 97 235 97" pathlength="100" stroke="#f3bd42" style="color:#f3bd42"></path>
+<path class="colored-line" d="M42 97 C75 97 92 43 135 44 C177 44 198 97 235 97" pathlength="100" stroke="#44c88f" style="color:#44c88f"></path>
+<path class="colored-line" d="M42 97 C75 97 92 59 135 61 C177 62 198 97 235 97" pathlength="100" stroke="#67a3ef" style="color:#67a3ef"></path>
+<path class="colored-line" d="M42 97 C75 97 92 75 135 76 C177 77 198 97 235 97" pathlength="100" stroke="#de66b0" style="color:#de66b0"></path>
+<path class="colored-line" d="M42 97 C75 97 92 89 135 89 C177 89 198 97 235 97" pathlength="100" stroke="#aa7dee" style="color:#aa7dee"></path>
+<path class="reflected-line" d="M90 116 C119 116 132 127 162 127 C192 127 206 116 233 116" pathlength="100"></path>
+<path class="reflected-line" d="M90 116 C119 116 132 140 162 141 C192 141 206 116 233 116" pathlength="100"></path>
+<path class="reflected-line" d="M90 116 C119 116 132 151 162 155 C192 155 206 116 233 116" pathlength="100"></path>
+<path class="reflected-line" d="M90 116 C119 116 132 167 162 171 C192 171 206 116 233 116" pathlength="100"></path>
+</g>
+</svg></div>
+      </section>
+    </main>
+    <div class="switch-ripple" aria-hidden="true"></div>
+  </div>
+</div>
+<script>
+(() => {
+ const stage=document.getElementById('stage'),app=document.getElementById('app'),toggle=document.getElementById('themeSwitch'),next=document.getElementById('nextTheme');
+ let neon=false,cleanup;
+ function setTheme(value){
+   neon=value;
+   app.dataset.theme=stage.dataset.theme=neon?'neon':'dark';
+   next.textContent=neon?'Dark':'Neon';
+   toggle.setAttribute('aria-label','Switch to '+(neon?'dark':'neon')+' theme');
+   toggle.setAttribute('aria-pressed',String(neon));
+   document.querySelector('meta[name="theme-color"]').content=neon?'#100b28':'#111111';
+   app.classList.remove('switching');
+   void app.offsetWidth;
+   app.classList.add('switching');
+   clearTimeout(cleanup);
+   cleanup=setTimeout(()=>app.classList.remove('switching'),1200);
+ }
+ toggle.addEventListener('click',()=>setTheme(!neon));
+ document.addEventListener('keydown',(e)=>{
+   if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){e.preventDefault();document.getElementById('search').focus();}
+   if(e.key==='Escape' && e.target instanceof HTMLInputElement)e.target.blur();
+ });
+ const navItems=[...document.querySelectorAll('[data-page]')];
+ navItems.forEach(item=>item.addEventListener('click',()=>{
+   navItems.forEach(b=>{b.classList.toggle('selected',b===item);b.removeAttribute('aria-current')});
+   item.setAttribute('aria-current','page');
+   document.getElementById('breadcrumbLabel').textContent=item.dataset.page;
+ }));
+ document.getElementById('search').addEventListener('input',e=>{
+   const q=e.target.value.toLowerCase().trim();
+   navItems.forEach(b=>b.style.display=b.dataset.page.toLowerCase().includes(q)?'':'none');
+ });
+ document.querySelector('.collapse').addEventListener('click',()=>document.getElementById('search').focus());
+})();
+</script>
+</body>
+</html>

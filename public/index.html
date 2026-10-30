@@ -530,6 +530,7 @@
     </button>
     <button class="topbar-btn mobile-only icon-btn" @click="openPreferencesModal" title="K 线配色与设置" aria-label="K 线配色与设置">⚙️</button>
   </div>
+  <div class="top-progress" :class="{ 'is-active': isPageLoading }" aria-hidden="true"></div>
 </header>
 <div class="workspace-body">
   <div class="workspace-main-wrapper">
@@ -542,8 +543,34 @@
 <div :key="page" class="page-container">
 
 <template v-if="page==='overview'">
-  <div v-if="states.overview.loading&&!overview" class="loading-block">正在汇集指数、板块与精选美股行情…</div>
   <div v-if="states.overview.error" class="error-box" role="alert">{{states.overview.error}} <button @click="loadOverview">重试</button></div>
+  <div v-if="states.overview.loading && !overview" class="overview-skeleton-wrap" aria-hidden="true">
+    <div class="overview-header-bar">
+      <div class="overview-title-group">
+        <h2 class="overview-main-title">市场概览</h2>
+      </div>
+    </div>
+    <div class="index-grid">
+      <div v-for="i in 10" :key="i" class="index-card metric-skeleton-card">
+        <div class="index-card-head"><span class="sk sk-line" style="width: 45%;"></span><span class="sk sk-pill" style="width: 50px;"></span></div>
+        <div class="index-price-row" style="margin: 10px 0;"><span class="sk sk-strong" style="width: 60%;"></span></div>
+        <div class="index-card-foot"><span class="sk sk-small" style="width: 70%;"></span></div>
+      </div>
+    </div>
+    <div class="panel heatmap-panel" style="margin-top: 14px;">
+      <div class="panel-heading"><div class="heatmap-title-group"><h2>美股核心热力图</h2></div></div>
+      <div class="heatmap-skeleton-grid">
+        <div class="sk-treemap-tile sk" style="flex: 2 1 35%; height: 160px;"></div>
+        <div class="sk-treemap-tile sk" style="flex: 1 1 25%; height: 160px;"></div>
+        <div class="sk-treemap-tile sk" style="flex: 1 1 20%; height: 160px;"></div>
+        <div class="sk-treemap-tile sk" style="flex: 1 1 15%; height: 160px;"></div>
+        <div class="sk-treemap-tile sk" style="flex: 1 1 22%; height: 120px;"></div>
+        <div class="sk-treemap-tile sk" style="flex: 2 1 38%; height: 120px;"></div>
+        <div class="sk-treemap-tile sk" style="flex: 1 1 20%; height: 120px;"></div>
+        <div class="sk-treemap-tile sk" style="flex: 1 1 18%; height: 120px;"></div>
+      </div>
+    </div>
+  </div>
   <template v-if="overview">
     <!-- Overview Header Strip -->
     <div class="overview-header-bar">
@@ -751,18 +778,9 @@
         </div>
         <div id="heatmap-chart" class="heatmap-chart" role="img" aria-label="精选美股涨跌热力图，点击股票查看详情"></div>
         <div class="heatmap-footer">
-          <div class="footer-meta-block">
-            <div class="footer-tip">点击方块 ➔ 进入个股详情 / 资金挂单剖析</div>
-            <div class="footer-sub">
-              当前展示：{{ heatmapScope === 'watchlist' ? '我的自选列表 · 共 ' + (activeHeatmapStocks?.length || 0) + ' 只正股标的 (已自动剔除杠杆ETF) · 动态映射板块' :
-                          heatmapScope === 'nasdaq100' ? '纳斯达克 100 核心成分股 · 共 ' + (activeHeatmapStocks?.length || 0) + ' 只标的' :
-                          heatmapScope === 'sp500' ? '标普 500 核心成分股 · 共 ' + (activeHeatmapStocks?.length || 0) + ' 只标的' :
-                          '精选 18 只核心样本' }} · 正常开盘常规交易时段 · 面积按当日估算成交额 · 缓存 60s
-            </div>
-          </div>
           <div class="heatmap-scale-wrap">
             <span class="scale-label">-3.0%及以下</span>
-            <div class="heatmap-gradient-bar"></div>
+            <div class="heatmap-gradient-bar" :style="{ background: heatmapGradientStyle }"></div>
             <span class="scale-label">+3.0%及以上</span>
           </div>
         </div>
@@ -1125,7 +1143,39 @@
           <span class="ma-switch-label">{{ m.label === 'VOL' ? '成交量' : m.label }}</span>
         </button>
       </div>
-    </div><div v-if="states.chart.loading" class="loading-block">正在获取 {{symbol}} 行情…</div><div v-if="states.chart.error" class="error-box">{{states.chart.error}} <button @click="loadChart">重试</button></div><div v-show="chart&&!states.chart.loading" id="price-chart" class="price-chart" role="img" :aria-label="symbol+'价格与成交量图'"></div><div v-if="chart" class="panel-note">{{chart.source}} · {{chart.delay}} · 最新交易 {{time(chart.asOf)}} · {{chart.bars.length}} 根 K 线 · 最新一根可能尚未收盘 <strong v-if="chart.stale" class="warning">· 旧快照</strong></div></section></template>
+    </div>
+    <div v-if="states.chart.error" class="error-box">{{states.chart.error}} <button @click="loadChart">重试</button></div>
+    <div class="chart-viewport" style="position: relative; min-height: 480px;">
+      <div v-if="states.chart.loading || !chart" class="chart-skeleton" style="opacity: 1;" aria-hidden="true">
+        <div class="skeleton-y">
+          <span class="sk sk-small" style="width:20px"></span>
+          <span class="sk sk-small" style="width:25px"></span>
+          <span class="sk sk-small" style="width:22px"></span>
+          <span class="sk sk-small" style="width:26px"></span>
+          <span class="sk sk-small" style="width:20px"></span>
+          <span class="sk sk-small" style="width:24px"></span>
+        </div>
+        <div class="sk-chart-grid"></div>
+        <div class="sk-floating sk" style="width: 120px;"></div>
+        <div class="skeleton-bars">
+          <span v-for="(h, i) in skeletonPattern" :key="i" class="sk" :style="{ height: h + '%', opacity: (0.72 + (i % 6) * 0.045) }"></span>
+        </div>
+        <div class="skeleton-x">
+          <span class="sk sk-small" style="width:26px"></span>
+          <span class="sk sk-small" style="width:22px"></span>
+          <span class="sk sk-small" style="width:28px"></span>
+          <span class="sk sk-small" style="width:25px"></span>
+          <span class="sk sk-small" style="width:24px"></span>
+          <span class="sk sk-small" style="width:26px"></span>
+          <span class="sk sk-small" style="width:22px"></span>
+          <span class="sk sk-small" style="width:24px"></span>
+        </div>
+      </div>
+      <div v-show="chart&&!states.chart.loading" id="price-chart" class="price-chart" role="img" :aria-label="symbol+'价格与成交量图'"></div>
+    </div>
+    <div v-if="chart" class="panel-note">{{chart.source}} · {{chart.delay}} · 最新交易 {{time(chart.asOf)}} · {{chart.bars.length}} 根 K 线 · 最新一根可能尚未收盘 <strong v-if="chart.stale" class="warning">· 旧快照</strong></div>
+  </section>
+</template>
 
 <template v-if="page==='crypto'">
   <div class="crypto-dashboard-view">
@@ -1575,8 +1625,46 @@
       </form>
     </div>
 
-    <div v-if="states.options.loading" class="loading-block">正在加载 {{optionSymbol.toUpperCase()}} 期权链…</div>
     <div v-if="states.options.error" class="error-box" role="alert">{{states.options.error}} <button @click="loadOptions(true)">重试</button></div>
+
+    <!-- Financial Terminal Skeleton for Options (When loading or initializing) -->
+    <div v-if="states.options.loading || !options" class="options-skeleton-container" aria-hidden="true">
+      <div class="kpi-grid-5">
+        <div v-for="i in 5" :key="i" class="kpi-card metric-skeleton-card">
+          <div class="kpi-head"><span class="sk sk-line" style="width: 50%;"></span><span class="sk sk-pill" style="width: 60px;"></span></div>
+          <div class="kpi-body" style="margin: 12px 0 8px;"><span class="sk sk-strong" style="width: 65%;"></span></div>
+          <div class="kpi-foot"><span class="sk sk-small" style="width: 40%;"></span></div>
+        </div>
+      </div>
+      <div class="options-butterfly-card" style="margin-top: 16px;">
+        <div class="chart-skeleton" style="opacity: 1; min-height: 380px; position: relative;">
+          <div class="skeleton-y">
+            <span class="sk sk-small" style="width:20px"></span>
+            <span class="sk sk-small" style="width:24px"></span>
+            <span class="sk sk-small" style="width:18px"></span>
+            <span class="sk sk-small" style="width:22px"></span>
+            <span class="sk sk-small" style="width:20px"></span>
+            <span class="sk sk-small" style="width:24px"></span>
+            <span class="sk sk-small" style="width:19px"></span>
+          </div>
+          <div class="sk-chart-grid"></div>
+          <div class="sk-floating sk"></div>
+          <div class="skeleton-bars">
+            <span v-for="(h, i) in skeletonPattern" :key="i" class="sk" :style="{ height: h + '%', opacity: (0.72 + (i % 6) * 0.045) }"></span>
+          </div>
+          <div class="skeleton-x">
+            <span class="sk sk-small" style="width:24px"></span>
+            <span class="sk sk-small" style="width:21px"></span>
+            <span class="sk sk-small" style="width:29px"></span>
+            <span class="sk sk-small" style="width:27px"></span>
+            <span class="sk sk-small" style="width:22px"></span>
+            <span class="sk sk-small" style="width:25px"></span>
+            <span class="sk sk-small" style="width:22px"></span>
+            <span class="sk sk-small" style="width:24px"></span>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <template v-if="options&&!states.options.loading">
       <!-- 5 Institutional Key Metric Cards -->
@@ -2587,7 +2675,7 @@
         <h3 id="pref-modal-title" class="pref-title">
           <span class="pref-icon">⚙️</span> 工作台与图表偏好设置
         </h3>
-        <p class="pref-subtitle">定制 K 线走势色彩、昼夜模式与网格线视觉规范</p>
+        <p class="pref-subtitle">定制 K 线与热力图配色方案、默认启动页面与网格线视觉规范</p>
       </div>
       <button class="pref-close-btn" @click="closePreferencesModal" aria-label="关闭设置">×</button>
     </div>
@@ -2724,6 +2812,130 @@
             <div class="scheme-palette-badges">
               <span class="color-badge"><i style="background: #00D2FF"></i> 阳线 #00D2FF</span>
               <span class="color-badge"><i style="background: #FF3377"></i> 阴线 #FF3377</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 模块 1.2: 美股核心热力图配色方案 (经典绿红 / 荧光极光 / 赛博霓虹) -->
+      <section class="pref-section">
+        <div class="pref-section-header">
+          <div class="pref-section-title-wrap">
+            <h4 class="pref-section-title">热力图配色方案</h4>
+            <span class="pref-badge">图一 / 图二 / 图三 规范</span>
+          </div>
+          <span class="pref-section-desc">支持实时切换并持久化保存，美股核心市场热力图与跌涨梯度色板独立配置</span>
+        </div>
+
+        <div class="kline-schemes-grid heatmap-schemes-grid">
+          <!-- 方案 1: 图一 默认经典绿红 -->
+          <div
+            class="kline-scheme-card heatmap-scheme-card"
+            :class="{ active: heatmapScheme === 'classic' }"
+            @click="setHeatmapScheme('classic')"
+            role="radio"
+            :aria-checked="heatmapScheme === 'classic'"
+            tabindex="0"
+            @keydown.enter.space.prevent="setHeatmapScheme('classic')"
+          >
+            <div class="scheme-radio-indicator">
+              <span class="radio-circle"></span>
+              <span class="scheme-order-tag">图一 · 默认</span>
+            </div>
+            <div class="scheme-info">
+              <div class="scheme-title">经典绿红 (默认)</div>
+              <div class="scheme-desc">翡翠绿与珊瑚红，沉稳清晰，层次丰富，全球交易所通用标配</div>
+            </div>
+            <!-- 迷你热力图区块示意 -->
+            <div class="heatmap-mini-preview preview-classic">
+              <div class="mini-hm-grid">
+                <div class="mini-hm-col">
+                  <div class="mini-hm-block" style="background: #10B981; flex: 1.2;"><span class="hm-mini-symbol">NVDA</span><span class="hm-mini-val">+2.4%</span></div>
+                  <div class="mini-hm-block" style="background: #059669; flex: 0.8;"><span class="hm-mini-symbol">AAPL</span><span class="hm-mini-val">+3.6%</span></div>
+                </div>
+                <div class="mini-hm-col">
+                  <div class="mini-hm-block" style="background: #F43F5E; flex: 1;"><span class="hm-mini-symbol">MSFT</span><span class="hm-mini-val">-1.8%</span></div>
+                  <div class="mini-hm-block" style="background: #E11D48; flex: 1;"><span class="hm-mini-symbol">TSLA</span><span class="hm-mini-val">-4.2%</span></div>
+                </div>
+              </div>
+            </div>
+            <div class="scheme-palette-badges">
+              <span class="color-badge"><i style="background: #10B981"></i> 上涨 #10B981</span>
+              <span class="color-badge"><i style="background: #F43F5E"></i> 下跌 #F43F5E</span>
+            </div>
+          </div>
+
+          <!-- 方案 2: 图二 荧光极光亮绿与芭比玫粉 -->
+          <div
+            class="kline-scheme-card heatmap-scheme-card"
+            :class="{ active: heatmapScheme === 'neon' }"
+            @click="setHeatmapScheme('neon')"
+            role="radio"
+            :aria-checked="heatmapScheme === 'neon'"
+            tabindex="0"
+            @keydown.enter.space.prevent="setHeatmapScheme('neon')"
+          >
+            <div class="scheme-radio-indicator">
+              <span class="radio-circle"></span>
+              <span class="scheme-order-tag highlight-neon">图二 · 荧光</span>
+            </div>
+            <div class="scheme-info">
+              <div class="scheme-title">荧光极光 (亮绿 / 玫粉)</div>
+              <div class="scheme-desc">鲜亮荧光黄绿与鲜亮芭比玫粉，高对比度视觉冲击，多空瞬间洞察</div>
+            </div>
+            <!-- 迷你热力图区块示意 -->
+            <div class="heatmap-mini-preview preview-neon">
+              <div class="mini-hm-grid">
+                <div class="mini-hm-col">
+                  <div class="mini-hm-block" style="background: #65BA26; flex: 1.2;"><span class="hm-mini-symbol">NVDA</span><span class="hm-mini-val">+2.4%</span></div>
+                  <div class="mini-hm-block" style="background: #7CE138; flex: 0.8;"><span class="hm-mini-symbol">AAPL</span><span class="hm-mini-val">+3.6%</span></div>
+                </div>
+                <div class="mini-hm-col">
+                  <div class="mini-hm-block" style="background: #FF4D82; flex: 1;"><span class="hm-mini-symbol">MSFT</span><span class="hm-mini-val">-1.8%</span></div>
+                  <div class="mini-hm-block" style="background: #D9004C; flex: 1;"><span class="hm-mini-symbol">TSLA</span><span class="hm-mini-val">-4.2%</span></div>
+                </div>
+              </div>
+            </div>
+            <div class="scheme-palette-badges">
+              <span class="color-badge"><i style="background: #7CE138"></i> 上涨 #7CE138</span>
+              <span class="color-badge"><i style="background: #FF4D82"></i> 下跌 #FF4D82</span>
+            </div>
+          </div>
+
+          <!-- 方案 3: 图三 赛博霓虹青蓝与品红 -->
+          <div
+            class="kline-scheme-card heatmap-scheme-card"
+            :class="{ active: heatmapScheme === 'cyberpunk' }"
+            @click="setHeatmapScheme('cyberpunk')"
+            role="radio"
+            :aria-checked="heatmapScheme === 'cyberpunk'"
+            tabindex="0"
+            @keydown.enter.space.prevent="setHeatmapScheme('cyberpunk')"
+          >
+            <div class="scheme-radio-indicator">
+              <span class="radio-circle"></span>
+              <span class="scheme-order-tag highlight-cyber">图三 · 赛博</span>
+            </div>
+            <div class="scheme-info">
+              <div class="scheme-title">赛博霓虹 (青蓝 / 品红)</div>
+              <div class="scheme-desc">电光青蓝与炫彩品红，赛博朋克极客风尚，暗夜视觉拔群</div>
+            </div>
+            <!-- 迷你热力图区块示意 -->
+            <div class="heatmap-mini-preview preview-cyber">
+              <div class="mini-hm-grid">
+                <div class="mini-hm-col">
+                  <div class="mini-hm-block" style="background: #00AEE6; flex: 1.2;"><span class="hm-mini-symbol">NVDA</span><span class="hm-mini-val">+2.4%</span></div>
+                  <div class="mini-hm-block" style="background: #00D2FF; flex: 0.8;"><span class="hm-mini-symbol">AAPL</span><span class="hm-mini-val">+3.6%</span></div>
+                </div>
+                <div class="mini-hm-col">
+                  <div class="mini-hm-block" style="background: #FF3377; flex: 1;"><span class="hm-mini-symbol">MSFT</span><span class="hm-mini-val">-1.8%</span></div>
+                  <div class="mini-hm-block" style="background: #D6004F; flex: 1;"><span class="hm-mini-symbol">TSLA</span><span class="hm-mini-val">-4.2%</span></div>
+                </div>
+              </div>
+            </div>
+            <div class="scheme-palette-badges">
+              <span class="color-badge"><i style="background: #00D2FF"></i> 上涨 #00D2FF</span>
+              <span class="color-badge"><i style="background: #FF3377"></i> 下跌 #FF3377</span>
             </div>
           </div>
         </div>
@@ -3536,11 +3748,12 @@
     <div class="rw-session-seg">
       <button type="button"
               class="rw-seg-btn"
-              :class="{ active: rwSessionTab === 'regular' }"
+              :class="{ active: rwSessionTab === 'regular' || isMarketOpen }"
               @click="setRwSessionTab('regular')">
-        常规
+        {{ isMarketOpen ? '常规开盘中' : '常规' }}
       </button>
       <button type="button"
+              v-if="!isMarketOpen"
               class="rw-seg-btn"
               :class="{ active: rwSessionTab === 'ext' }"
               @click="setRwSessionTab('ext')">
@@ -3549,84 +3762,163 @@
     </div>
   </div>
 
-  <!-- 5. Scrollable Group Cards -->
+  <!-- 5. Scrollable Group Cards / All Flat List -->
   <div class="rw-groups-scrollable">
-    <div v-for="sec in filteredSidebarGroupSections" :key="sec.id" class="rw-group-block">
-      <!-- Group Header Row: ⌄ 存储 8 | -1.06% 常规均涨 -->
-      <div class="rw-group-row" @click="toggleGroupCollapse(sec.id)">
-        <div class="rw-group-left">
-          <span class="rw-chevron" :class="{ collapsed: sec.collapsed }">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-          </span>
-          <span class="rw-group-name">{{ sec.name }}</span>
-          <span class="rw-group-count">{{ sec.count }}</span>
-        </div>
-        <div v-if="sec.avgChange !== null"
-             class="rw-group-avg-wrap"
-             @click.stop="toggleGroupOrderSort"
-             title="点击按整组平均涨幅排序分组">
-          <span class="rw-group-avg" :class="tone(sec.avgChange)">{{ pct(sec.avgChange) }}</span>
-          <span class="rw-group-avg-lbl">{{ rwSessionTab === 'ext' ? currentExtSessionShortLabel + '均涨' : '常规均涨' }}</span>
-        </div>
-      </div>
-
-      <!-- In-Group Column Header: 股票 | 收盘价 | Chg% ↓ -->
-      <div v-show="!sec.collapsed" class="rw-group-col-header" aria-label="分组内排序栏">
+    <!-- 5.1 全部视图 (Flat List): 切换到全部时不显示股票分组，直接平铺显示全量自选标的 (包括杠杆 ETF) -->
+    <div v-if="sidebarActiveGroup === 'all'" class="rw-all-flat-block">
+      <!-- 统一表头: 标的 | 收盘价格 | Chg% | EXT% (开盘后不显示 EXT%) -->
+      <div class="rw-group-col-header" :class="{ 'with-ext': showExtColumn }" aria-label="全量自选排序栏">
         <span class="rw-col-code"
-              :class="{ 'is-sorted': isGroupSortedBy(sec.id, 'symbol') }"
-              @click.stop="toggleGroupColumnSort(sec.id, 'symbol')"
+              :class="{ 'is-sorted': sidebarSortField === 'symbol' }"
+              @click.stop="toggleSidebarSort('symbol')"
               role="button"
               tabindex="0"
-              title="本组内按股票代码排序">
-          股票
-          <span v-if="isGroupSortedBy(sec.id, 'symbol')" class="rw-sort-indicator">{{ getGroupColumnSortDir(sec.id, 'symbol') === 'asc' ? '↑' : '↓' }}</span>
+              title="按标的代码排序">
+          标的
+          <span v-if="sidebarSortField === 'symbol'" class="rw-sort-indicator">{{ sidebarSortDirection === 'asc' ? '↑' : '↓' }}</span>
         </span>
         <span class="rw-col-price"
-              :class="{ 'is-sorted': isGroupSortedBy(sec.id, 'regularPrice') }"
-              @click.stop="toggleGroupColumnSort(sec.id, 'regularPrice')"
+              :class="{ 'is-sorted': sidebarSortField === 'regularPrice' }"
+              @click.stop="toggleSidebarSort('regularPrice')"
               role="button"
               tabindex="0"
-              title="本组内按收盘价排序">
-          收盘价
-          <span v-if="isGroupSortedBy(sec.id, 'regularPrice')" class="rw-sort-indicator">{{ getGroupColumnSortDir(sec.id, 'regularPrice') === 'asc' ? '↑' : '↓' }}</span>
+              title="按收盘价格排序">
+          收盘价格
+          <span v-if="sidebarSortField === 'regularPrice'" class="rw-sort-indicator">{{ sidebarSortDirection === 'asc' ? '↑' : '↓' }}</span>
         </span>
         <span class="rw-col-change"
-              :class="{ 'is-sorted': isGroupSortedBy(sec.id, rwSessionTab === 'ext' ? 'extChange' : 'regularChange') || isGroupSortedBy(sec.id, 'regularChange') || isGroupSortedBy(sec.id, 'extChange') }"
-              @click.stop="toggleGroupColumnSort(sec.id, rwSessionTab === 'ext' ? 'extChange' : 'regularChange')"
+              :class="{ 'is-sorted': sidebarSortField === 'regularChange' }"
+              @click.stop="toggleSidebarSort('regularChange')"
               role="button"
               tabindex="0"
-              title="本组内按涨跌幅排序">
+              title="按常规涨跌幅排序">
           Chg%
-          <span class="rw-sort-indicator">{{ (isGroupSortedBy(sec.id, 'extChange') ? getGroupColumnSortDir(sec.id, 'extChange') : getGroupColumnSortDir(sec.id, 'regularChange')) === 'asc' ? '↑' : '↓' }}</span>
+          <span v-if="sidebarSortField === 'regularChange'" class="rw-sort-indicator">{{ sidebarSortDirection === 'asc' ? '↑' : '↓' }}</span>
+        </span>
+        <span v-if="showExtColumn"
+              class="rw-col-ext"
+              :class="{ 'is-sorted': sidebarSortField === 'extChange' }"
+              @click.stop="toggleSidebarSort('extChange')"
+              role="button"
+              tabindex="0"
+              title="按延长时段涨跌幅排序">
+          EXT%
+          <span v-if="sidebarSortField === 'extChange'" class="rw-sort-indicator">{{ sidebarSortDirection === 'asc' ? '↑' : '↓' }}</span>
         </span>
       </div>
 
-      <!-- Stock Rows inside Card -->
-      <div v-show="!sec.collapsed" class="rw-stock-list">
-        <div v-for="r in sec.rows" :key="r.symbol"
+      <!-- 全量标的单行列表 (无公司名称，仅显示股票代码，包括杠杆 ETF) -->
+      <div class="rw-stock-list">
+        <div v-for="r in filteredSidebarFlatRows" :key="r.symbol"
              class="rw-stock-row"
-             :class="{ active: symbol === r.symbol }"
+             :class="{ active: symbol === r.symbol, 'with-ext': showExtColumn }"
              @click="selectSymbol(r.symbol)">
           <span v-if="symbol === r.symbol" class="rw-selected-bar"></span>
           <div class="rw-cell-code">
             <strong class="rw-sym">{{ r.symbol }}</strong>
-            <span class="rw-name-sub">{{ r.name }}</span>
           </div>
           <span class="rw-cell-price">{{ num(r.regularPrice) }}</span>
-          <div class="rw-cell-chg-stack">
-            <span class="rw-cell-change" :class="tone(r.regularChange)">{{ pct(r.regularChange) }}</span>
-            <span class="rw-cell-ext"
-                  :class="r.extChange !== null ? tone(r.extChange) : 'rw-muted-empty'"
-                  @click.stop="toggleGroupColumnSort(sec.id, 'extChange')"
-                  title="点击按延长时段涨跌幅排序">
-              <span class="rw-ext-sess-icon" :class="{ 'is-mobile-visible': isMobile }" :title="getExtSessionTitle(r)">{{ getExtSessionIcon(r) }}</span><span class="rw-ext-sess-lbl">{{ getRowExtSessionLabel(r) }}</span>
-              <span class="rw-ext-pct-val">{{ r.extChange !== null ? pct(r.extChange) : '—' }}</span>
-            </span>
-          </div>
+          <span class="rw-cell-change" :class="tone(r.regularChange)">{{ pct(r.regularChange) }}</span>
+          <span v-if="showExtColumn"
+                class="rw-cell-ext"
+                :class="r.extChange !== null ? tone(r.extChange) : 'rw-muted-empty'"
+                @click.stop="toggleSidebarSort('extChange')"
+                :title="getRowExtSessionLabel(r) + ': ' + (r.extChange !== null ? pct(r.extChange) : '—')">
+            <span class="rw-ext-sess-icon" :class="{ 'is-mobile-visible': isMobile }" :title="getExtSessionTitle(r)">{{ getExtSessionIcon(r) }}</span><span class="rw-ext-sess-lbl">{{ getRowExtSessionLabel(r) }}</span>
+            <span class="rw-ext-pct-val">{{ r.extChange !== null ? pct(r.extChange) : '—' }}</span>
+          </span>
           <button v-if="isDeleteMode" class="rw-del-icon-btn" @click.stop="deleteStockDirect(r.symbol)" title="移出自选">×</button>
         </div>
       </div>
     </div>
+
+    <!-- 5.2 具体分组视图: 用户在上方 Pills 选中了某个具体分组 (如“存储”、“芯片”) -->
+    <template v-else>
+      <div v-for="sec in filteredSidebarGroupSections" :key="sec.id" class="rw-group-block">
+        <!-- Group Header Row: ⌄ 存储 8 | -1.06% 常规均涨 -->
+        <div class="rw-group-row" @click="toggleGroupCollapse(sec.id)">
+          <div class="rw-group-left">
+            <span class="rw-chevron" :class="{ collapsed: sec.collapsed }">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </span>
+            <span class="rw-group-name">{{ sec.name }}</span>
+            <span class="rw-group-count">{{ sec.count }}</span>
+          </div>
+          <div v-if="sec.avgChange !== null"
+               class="rw-group-avg-wrap"
+               @click.stop="toggleGroupOrderSort"
+               title="点击按整组平均涨幅排序分组">
+            <span class="rw-group-avg" :class="tone(sec.avgChange)">{{ pct(sec.avgChange) }}</span>
+            <span class="rw-group-avg-lbl">{{ rwSessionTab === 'ext' ? currentExtSessionShortLabel + '均涨' : '常规均涨' }}</span>
+          </div>
+        </div>
+
+        <!-- In-Group Column Header: 标的 | 收盘价格 | Chg% | EXT% (若开盘则不显示 EXT%) -->
+        <div v-show="!sec.collapsed" class="rw-group-col-header" :class="{ 'with-ext': showExtColumn }" aria-label="分组内排序栏">
+          <span class="rw-col-code"
+                :class="{ 'is-sorted': isGroupSortedBy(sec.id, 'symbol') }"
+                @click.stop="toggleGroupColumnSort(sec.id, 'symbol')"
+                role="button"
+                tabindex="0"
+                title="本组内按标的代码排序">
+            标的
+            <span v-if="isGroupSortedBy(sec.id, 'symbol')" class="rw-sort-indicator">{{ getGroupColumnSortDir(sec.id, 'symbol') === 'asc' ? '↑' : '↓' }}</span>
+          </span>
+          <span class="rw-col-price"
+                :class="{ 'is-sorted': isGroupSortedBy(sec.id, 'regularPrice') }"
+                @click.stop="toggleGroupColumnSort(sec.id, 'regularPrice')"
+                role="button"
+                tabindex="0"
+                title="本组内按收盘价格排序">
+            收盘价格
+            <span v-if="isGroupSortedBy(sec.id, 'regularPrice')" class="rw-sort-indicator">{{ getGroupColumnSortDir(sec.id, 'regularPrice') === 'asc' ? '↑' : '↓' }}</span>
+          </span>
+          <span class="rw-col-change"
+                :class="{ 'is-sorted': isGroupSortedBy(sec.id, 'regularChange') }"
+                @click.stop="toggleGroupColumnSort(sec.id, 'regularChange')"
+                role="button"
+                tabindex="0"
+                title="本组内按常规涨跌幅排序">
+            Chg%
+            <span v-if="isGroupSortedBy(sec.id, 'regularChange')" class="rw-sort-indicator">{{ getGroupColumnSortDir(sec.id, 'regularChange') === 'asc' ? '↑' : '↓' }}</span>
+          </span>
+          <span v-if="showExtColumn"
+                class="rw-col-ext"
+                :class="{ 'is-sorted': isGroupSortedBy(sec.id, 'extChange') }"
+                @click.stop="toggleGroupColumnSort(sec.id, 'extChange')"
+                role="button"
+                tabindex="0"
+                title="本组内按延长时段涨跌幅排序">
+            EXT%
+            <span v-if="isGroupSortedBy(sec.id, 'extChange')" class="rw-sort-indicator">{{ getGroupColumnSortDir(sec.id, 'extChange') === 'asc' ? '↑' : '↓' }}</span>
+          </span>
+        </div>
+
+        <!-- Stock Rows inside Card: 单行紧凑排列，仅显示股票代码，无公司名 -->
+        <div v-show="!sec.collapsed" class="rw-stock-list">
+          <div v-for="r in sec.rows" :key="r.symbol"
+               class="rw-stock-row"
+               :class="{ active: symbol === r.symbol, 'with-ext': showExtColumn }"
+               @click="selectSymbol(r.symbol)">
+            <span v-if="symbol === r.symbol" class="rw-selected-bar"></span>
+            <div class="rw-cell-code">
+              <strong class="rw-sym">{{ r.symbol }}</strong>
+            </div>
+            <span class="rw-cell-price">{{ num(r.regularPrice) }}</span>
+            <span class="rw-cell-change" :class="tone(r.regularChange)">{{ pct(r.regularChange) }}</span>
+            <span v-if="showExtColumn"
+                  class="rw-cell-ext"
+                  :class="r.extChange !== null ? tone(r.extChange) : 'rw-muted-empty'"
+                  @click.stop="toggleGroupColumnSort(sec.id, 'extChange')"
+                  :title="getRowExtSessionLabel(r) + ': ' + (r.extChange !== null ? pct(r.extChange) : '—')">
+              <span class="rw-ext-sess-icon" :class="{ 'is-mobile-visible': isMobile }" :title="getExtSessionTitle(r)">{{ getExtSessionIcon(r) }}</span><span class="rw-ext-sess-lbl">{{ getRowExtSessionLabel(r) }}</span>
+              <span class="rw-ext-pct-val">{{ r.extChange !== null ? pct(r.extChange) : '—' }}</span>
+            </span>
+            <button v-if="isDeleteMode" class="rw-del-icon-btn" @click.stop="deleteStockDirect(r.symbol)" title="移出自选">×</button>
+          </div>
+        </div>
+      </div>
+    </template>
   </div>
 </aside>
 

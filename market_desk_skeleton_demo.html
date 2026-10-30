@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0b0d10">
+<title>Market Desk · 金融终端骨架屏原型</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0b0d10;
+    --sidebar: #0d0f12;
+    --surface: #14171b;
+    --surface-2: #191d22;
+    --surface-3: #20252b;
+    --border: #262b31;
+    --border-soft: #20252b;
+    --text: #eef1f4;
+    --muted: #8b949f;
+    --dim: #59636e;
+    --blue: #548afa;
+    --blue-soft: rgba(84,138,250,.12);
+    --green: #31c39a;
+    --red: #f06e75;
+    --skeleton-base: #24282e;
+    --skeleton-high: #353a42;
+    --rad: 13px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font:13px/1.55 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;}
+  button,input,select{font:inherit}
+  button{cursor:pointer}
+  button:focus-visible, input:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+  .app{min-height:100vh;display:grid;grid-template-columns:66px minmax(0,1fr) 318px;grid-template-rows:62px minmax(calc(100vh - 62px),auto);}
+  .rail{grid-row:1/-1;background:var(--sidebar);border-right:1px solid var(--border-soft);display:flex;flex-direction:column;align-items:center;padding:13px 6px 16px;gap:5px;z-index:5;}
+  .rail-mark{height:38px;width:43px;border-bottom:1px solid var(--border-soft);display:flex;align-items:flex-start;justify-content:center;margin-bottom:15px;padding-top:3px}
+  .rail-mark svg{width:20px;height:20px;color:#9da5ae}
+  .nav-item{width:50px;height:54px;border:1px solid transparent;background:transparent;color:#7f8791;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:2px;font-size:10px;transition:background .18s,border-color .18s,color .18s}
+  .nav-item svg{height:17px;width:17px;stroke-width:1.75}
+  .nav-item:hover{color:#d5dae0;background:#191c21}
+  .nav-item.active{background:#1b1f25;border-color:#2a313a;color:#f3f5f8}
+  .nav-spacer{flex:1}
+  .topbar{grid-column:2/-1;min-width:0;position:relative;display:flex;align-items:center;gap:16px;padding:0 19px;border-bottom:1px solid var(--border);background:#111316;z-index:3}
+  .brand{min-width:260px;display:flex;align-items:center;gap:10px}
+  .logo{display:grid;place-items:center;width:32px;height:32px;border-radius:9px;background:linear-gradient(130deg,#4d89f2,#2052b7);font-size:12px;font-weight:850;box-shadow:0 3px 12px rgba(38,90,186,.15)}
+  .brand-name{font-size:14px;font-weight:780;letter-spacing:-.2px;line-height:1.2}
+  .brand-name small{border:1px solid #27529e;color:#75a5ff;border-radius:3px;font-size:9px;margin-left:5px;padding:1px 4px;vertical-align:2px;letter-spacing:0}
+  .brand-sub{font-size:10px;color:var(--dim);white-space:nowrap;margin-top:1px}
+  .search{margin:0 auto;width:min(355px,29vw);min-width:110px;background:#212429;border:1px solid #23272c;color:#767f8a;border-radius:999px;display:flex;align-items:center;gap:9px;height:32px;padding:0 13px;white-space:nowrap;overflow:hidden;font-size:11px}
+  .search svg{width:14px;height:14px;flex:none}
+  .top-actions{display:flex;align-items:center;gap:10px;white-space:nowrap}
+  .time{font:11px/1.4 ui-monospace,SFMono-Regular,Consolas,monospace;color:#b1b8c0;text-align:right}
+  .live-dot{width:7px;height:7px;background:#33c994;border-radius:50%;display:inline-block;margin-right:5px;box-shadow:0 0 0 3px rgba(51,201,148,.09)}
+  .time span{display:block;text-align:right;color:#636e79;font-size:10px}
+  .toolbar-btn{color:#c7cdd3;background:#1b1e22;border:1px solid #2b3036;border-radius:8px;min-height:31px;padding:5px 10px;display:inline-flex;align-items:center;gap:6px;transition:background .18s,border .18s}
+  .toolbar-btn:hover{background:#252a31;border-color:#3b4552}
+  .toolbar-btn svg{width:14px;height:14px}
+  .toolbar-btn.icon-only{width:33px;padding:0;justify-content:center}
+  .toolbar-btn[aria-busy="true"] svg{animation:spin 1.2s linear infinite}
+  .top-progress{position:absolute;bottom:-1px;left:0;width:100%;height:2px;overflow:hidden;pointer-events:none;opacity:0;transition:opacity .22s}
+  .top-progress::before{content:"";display:block;width:35%;height:100%;background:linear-gradient(90deg,transparent,#487eea,#7aa9ff,transparent);transform:translateX(-120%);animation:progress 1.35s ease-in-out infinite}
+  body.is-loading .top-progress{opacity:1}
+  .main{grid-column:2;min-width:0;padding:16px 18px 24px 22px;overflow:hidden}
+  .main-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin:2px 0 17px}
+  .breadcrumbs{font-size:10px;color:#68727d;margin-bottom:7px}
+  h1{font-size:19px;line-height:1.22;letter-spacing:-.5px;margin:0;font-weight:790}
+  .subtitle{font-size:11px;color:#75808b;margin-top:7px}
+  .heading-controls{display:flex;gap:7px;align-items:center;justify-content:flex-end;padding-top:9px}
+  .ticker-select{appearance:none;background:#181c21;border:1px solid #415579;border-radius:9px;color:#e8f0fc;min-width:105px;height:35px;padding:0 33px 0 12px;font-weight:740;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23a4b0c0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 9px center}
+  .pill{padding:5px 8px;background:#1a202a;border:1px solid #2e3b50;color:#9fb9e5;border-radius:7px;font-size:10px;white-space:nowrap}
+  .metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:13px}
+  .metric{position:relative;min-height:108px;border:1px solid var(--border);background:linear-gradient(170deg,#1b1e23,#15171b);border-radius:var(--rad);padding:14px 15px;overflow:hidden}
+  .metric-label{font-size:11px;color:#8f98a3;display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .metric-label svg{height:16px;width:16px;color:#79838e}
+  .metric-value{font:700 23px/1.2 ui-monospace,"SFMono-Regular",Consolas,monospace;letter-spacing:-1px;margin-top:16px;white-space:nowrap}
+  .metric-bottom{margin-top:4px;color:#777f8b;font-size:10px}
+  .positive{color:var(--green)}.negative{color:var(--red)}
+  .panel{border:1px solid var(--border);background:#15181c;border-radius:var(--rad);overflow:hidden;margin-top:12px}
+  .panel-header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 18px 12px}
+  .panel-title{font-weight:750;font-size:13px}
+  .panel-sub{font-size:10px;color:#7f8993;margin-top:3px}
+  .panel-tools{display:flex;gap:6px}
+  .tiny-btn{border:1px solid #30363e;background:#1b2026;color:#aeb7c0;border-radius:7px;padding:5px 9px;font-size:10px;white-space:nowrap}
+  .tiny-btn.active{color:#b0c9ff;background:#24324a;border-color:#344d7c}
+  .chart-viewport{position:relative;height:340px;margin:0 18px 10px;border-radius:8px;overflow:hidden}
+  .chart-live,.chart-skeleton{position:absolute;inset:0;transition:opacity .30s ease, transform .38s ease}
+  .chart-live{opacity:1;transform:translateY(0)}
+  .chart-skeleton{opacity:0;pointer-events:none;background:#15181c}
+  body.is-loading .chart-live{opacity:0;transform:translateY(5px);pointer-events:none}
+  body.is-loading .chart-skeleton{opacity:1}
+  .chart-legend{display:flex;align-items:center;gap:16px;font-size:10px;color:#949da7;padding:0 19px 15px}
+  .legend-item{display:flex;align-items:center;gap:6px}
+  .legend-dot{width:8px;height:8px;border-radius:3px;background:#60a3fb}
+  .legend-dot.put{background:#996ee2}
+  .data-note{margin-left:auto;color:#66707c;font-size:10px}
+  .activity-row{padding:15px 18px;display:flex;align-items:center;gap:10px;justify-content:space-between;min-height:55px}
+  .activity-row + .activity-row{border-top:1px solid var(--border-soft)}
+  .activity-title{color:#ccd3db;font-size:11px}
+  .activity-sub{color:#66717c;font-size:10px;margin-top:3px}
+  .activity-meta{color:#a8b2be;font:11px ui-monospace,SFMono-Regular,Consolas,monospace}
+  .summary-wrap{position:relative;min-height:129px}
+  .summary-real,.summary-skeleton{transition:opacity .28s ease;position:absolute;inset:0}
+  .summary-skeleton{opacity:0;pointer-events:none;padding:8px 18px}
+  body.is-loading .summary-real{opacity:0;pointer-events:none}
+  body.is-loading .summary-skeleton{opacity:1}
+  .rightbar{grid-column:3;min-width:0;border-left:1px solid var(--border);background:#101215;padding:16px 13px;overflow:hidden}
+  .right-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+  .right-title{font-size:18px;font-weight:740;letter-spacing:-.3px}
+  .right-title span{font-size:11px;font-weight:500;color:#66717d;margin-left:6px}
+  .right-icons{display:flex;gap:7px}.right-icons button{border:none;background:transparent;color:#7e8791;font-size:16px}
+  .right-search{border:1px solid #292e35;background:#191c20;color:#6f7984;border-radius:999px;padding:8px 12px;font-size:11px}
+  .sector-tabs{display:flex;gap:5px;margin-top:12px;overflow-x:auto;scrollbar-width:none}.sector-tabs::-webkit-scrollbar{display:none}
+  .sector-tabs button{background:transparent;border:0;color:#858f9c;padding:5px 8px;border-radius:6px;font-size:11px;white-space:nowrap}
+  .sector-tabs button.active{background:#2e3238;color:#f0f3f7;font-weight:650}
+  .right-meta{display:flex;align-items:center;justify-content:space-between;color:#788493;font-size:10px;margin:10px 2px 12px}
+  .right-meta strong{background:#2a2e35;color:#dadde1;font-weight:500;border-radius:8px;padding:3px 8px}
+  .sector-card{background:#171a1e;border:1px solid #262b31;border-radius:12px;padding:11px 11px 10px;margin-bottom:10px}
+  .sector-head{display:flex;align-items:center;justify-content:space-between;gap:5px;font-size:12px;font-weight:700}
+  .sector-name{display:flex;gap:7px;align-items:center}.chev{font-size:11px;color:#798491}
+  .sector-count{color:#6a7581;font-size:10px;font-weight:400}
+  .sector-change{font:700 11px ui-monospace,Consolas,monospace}
+  .stock-row{display:flex;justify-content:space-between;gap:10px;padding:10px 1px;border-top:1px solid #252a30;align-items:center}
+  .stock-name{font-size:11px;font-weight:780;color:#dbe1e7}.stock-desc{color:#748396;font-size:9px;white-space:nowrap;max-width:124px;text-overflow:ellipsis;overflow:hidden}
+  .stock-val{text-align:right;font:650 11px/1.6 ui-monospace,Consolas,monospace}.stock-val .change{font-size:10px;color:var(--red)}
+  .right-footer{font-size:10px;color:#5f6b75;text-align:center;padding-top:8px}
+  .demo-hint{display:flex;gap:7px;align-items:center;color:#747e89;font-size:11px;padding:15px 3px 0}
+  .demo-hint svg{width:14px;height:14px;color:#6c97ec}
+  /* Skeleton only replaces data slots. Cards, titles, borders and grid stay still. */
+  .metric-real,.metric-skeleton{transition:opacity .26s ease}
+  .metric-skeleton{position:absolute;inset:13px 15px;opacity:0;pointer-events:none;display:flex;flex-direction:column;gap:16px;justify-content:flex-start}
+  body.is-loading .metric-real{opacity:0;pointer-events:none}
+  body.is-loading .metric-skeleton{opacity:1}
+  .sk{position:relative;display:block;overflow:hidden;background:var(--skeleton-base);border-radius:5px;isolation:isolate}
+  .sk::after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 20%,rgba(210,225,241,.065) 47%,rgba(210,225,241,.09) 52%,transparent 75%);transform:translateX(-110%);animation:shimmer 1.6s ease-in-out infinite}
+  .sk-line{height:9px}.sk-strong{height:23px;border-radius:6px}.sk-small{height:7px}
+  .sk-pill{height:15px;border-radius:4px}
+  .sk-chart-grid{position:absolute;inset:22px 14px 32px 42px;background:repeating-linear-gradient(to bottom,rgba(139,149,160,.13) 0 1px, transparent 1px calc(25% - .25px));border-bottom:1px solid rgba(139,149,160,.16)}
+  .skeleton-y{position:absolute;left:0;top:16px;bottom:32px;display:flex;flex-direction:column;justify-content:space-between;width:27px}
+  .skeleton-x{position:absolute;left:42px;right:14px;bottom:7px;display:flex;justify-content:space-between;gap:9px}
+  .skeleton-bars{position:absolute;inset:23px 15px 33px 46px;display:flex;gap:5px;align-items:end}
+  .skeleton-bars .sk{flex:1;min-width:1px;background:#292f38;border-radius:3px 3px 0 0}
+  .skeleton-bars .sk:nth-child(2n){background:#272d38}
+  .sk-floating{position:absolute;top:4px;left:49px;width:105px;height:12px;border-radius:4px}
+  .fade-in{animation:reveal .32s ease both}
+  .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+  @keyframes shimmer{to{transform:translateX(110%)}}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @keyframes progress{0%{transform:translateX(-120%)}60%{transform:translateX(140%)}100%{transform:translateX(310%)}}
+  @keyframes reveal{from{opacity:.35;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+  @media(max-width:1250px){.app{grid-template-columns:62px minmax(0,1fr) 274px}.brand{min-width:230px}.main{padding-left:15px;padding-right:14px}.topbar{gap:9px;padding:0 13px}.time{display:none}.search{width:180px}}
+  @media(max-width:1000px){.app{grid-template-columns:62px minmax(0,1fr);grid-template-rows:62px 1fr}.rightbar{display:none}.topbar{grid-column:2}.brand{min-width:auto}.search{min-width:120px;width:min(250px,28vw)}.metrics{gap:9px}}
+  @media(max-width:640px){.app{grid-template-columns:52px minmax(0,1fr)}.rail{padding-left:2px;padding-right:2px}.nav-item{width:43px;height:49px}.brand-sub,.search,.top-actions .aux{display:none}.topbar{padding:0 12px}.brand-name{font-size:12px}.main{padding:12px 10px 24px}.main-heading{display:block}.heading-controls{justify-content:flex-start;padding-top:12px}.metrics{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.metric{min-height:96px}.metric-value{font-size:20px}.chart-viewport{height:260px;margin:0 8px 12px}.panel-header{padding:12px 10px}.chart-legend{padding-left:10px;padding-right:10px}.panel-title{font-size:12px}.pill{display:none}}
+  @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}}
+</style>
+</head>
+<body class="is-loading">
+<div class="app">
+  <nav class="rail" aria-label="主导航">
+    <div class="rail-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="5" y="4" width="14" height="16" rx="2"/><path d="M9 8h6M9 12h6M9 16h3"/></svg></div>
+    <button class="nav-item" data-nav="市场" aria-label="市场"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 18V8m5 10V4m5 14v-7m5 7V6"/></svg><span>市场</span></button>
+    <button class="nav-item" data-nav="自选" aria-label="自选"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m12 2 3.1 6.6 7.2 1-5.2 5.1 1.3 7.1L12 18.3l-6.4 3.5 1.3-7.1-5.2-5.1 7.2-1z"/></svg><span>自选</span></button>
+    <button class="nav-item" data-nav="个股" aria-label="个股"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 17l6-6 4 4 8-9"/><path d="M16 6h5v5"/></svg><span>个股</span></button>
+    <button class="nav-item" data-nav="加密" aria-label="加密"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2v20M8 6h7a4 4 0 0 1 0 8H8m0 0h8a4 4 0 0 1 0 8H7M5 6h13"/></svg><span>加密</span></button>
+    <button class="nav-item" data-nav="资金" aria-label="资金"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m16 3 5 5-5 5M21 8H4M8 21l-5-5 5-5M3 16h17"/></svg><span>资金</span></button>
+    <button class="nav-item active" data-nav="期权" aria-label="期权" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="5" y="5" width="14" height="14" rx="3"/><path d="m8 12 3 3 5-6"/></svg><span>期权</span></button>
+    <button class="nav-item" data-nav="新闻" aria-label="新闻"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="5" y="4" width="14" height="16" rx="1"/><path d="M8 9h8M8 12h8M8 15h5"/></svg><span>新闻</span></button>
+    <div class="nav-spacer"></div>
+    <button class="nav-item" aria-label="说明" id="infoBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/></svg><span>说明</span></button>
+    <button class="nav-item" aria-label="设置" id="settingsBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19 13l2-1-2-1-1-3-3-1-1-3h-4L9 7 6 8l-1 3-2 1 2 1 1 3 3 1 1 3h4l1-3 3-1z"/></svg><span>设置</span></button>
+  </nav>
+
+  <header class="topbar">
+    <div class="brand"><div class="logo">MD</div><div><div class="brand-name">Market Desk<small>PRO</small> <span id="headerPage">期权枢纽</span></div><div class="brand-sub">美股实时行情观察工作台 · 骨架屏交互演示</div></div></div>
+    <div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg>搜索股票代码 / 名称 ⌘K</div>
+    <div class="top-actions">
+      <div class="time"><i class="live-dot"></i><span id="clockTop" style="display:inline;color:#c4ccd6;font-size:11px">10/30 23:11 北京</span><span>模拟行情 · 非实时</span></div>
+      <button id="refreshBtn" class="toolbar-btn" title="刷新并预览骨架屏" aria-busy="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 7V3h-4M4 17v4h4"/><path d="M19 9a8 8 0 0 0-13.6-3L4 8M5 15a8 8 0 0 0 13.6 3L20 16"/></svg><span>刷新</span></button>
+      <button class="toolbar-btn aux" id="watchBtn">自选 ▣</button>
+      <button class="toolbar-btn aux" id="themeBtn"><span style="color:#eac156">☼</span> 深色</button>
+    </div>
+    <div class="top-progress" aria-hidden="true"></div>
+  </header>
+
+  <main class="main">
+    <div class="main-heading">
+      <div><div class="breadcrumbs">市场数据 <span style="color:#3e4753">/</span> <span id="crumb">期权分析</span></div>
+        <h1 id="pageTitle">期权持仓地图 <span style="color:#aeb6bf;font-weight:550;font-size:13px">(Strike vs Open Interest)</span></h1>
+        <div class="subtitle" id="pageSub">Call / Put 持仓量分布 · 重点行权价 · 期权结构参考</div></div>
+      <div class="heading-controls"><span class="pill">静态演示数据</span>
+        <select class="ticker-select" id="ticker" aria-label="选择股票代码"><option value="SNDK">SNDK</option><option value="NVDA">NVDA</option><option value="MU">MU</option><option value="TSM">TSM</option><option value="AVGO">AVGO</option></select>
+      </div>
+    </div>
+
+    <section class="metrics" aria-label="关键指标">
+      <div class="metric"><div class="metric-real"><div class="metric-label">看涨持仓 Call OI <span>↗</span></div><div class="metric-value" id="callOI">182.6K</div><div class="metric-bottom">示例总合约数</div></div><div class="metric-skeleton" aria-hidden="true"><span class="sk sk-line" style="width:48%"></span><span class="sk sk-strong" style="width:68%"></span><span class="sk sk-small" style="width:39%"></span></div></div>
+      <div class="metric"><div class="metric-real"><div class="metric-label">看跌持仓 Put OI <span>↘</span></div><div class="metric-value" id="putOI">134.2K</div><div class="metric-bottom">示例总合约数</div></div><div class="metric-skeleton" aria-hidden="true"><span class="sk sk-line" style="width:56%"></span><span class="sk sk-strong" style="width:61%"></span><span class="sk sk-small" style="width:43%"></span></div></div>
+      <div class="metric"><div class="metric-real"><div class="metric-label">Put / Call Ratio <span>◈</span></div><div class="metric-value" id="pcRatio">0.73</div><div class="metric-bottom">持仓量口径</div></div><div class="metric-skeleton" aria-hidden="true"><span class="sk sk-line" style="width:52%"></span><span class="sk sk-strong" style="width:45%"></span><span class="sk sk-small" style="width:34%"></span></div></div>
+      <div class="metric"><div class="metric-real"><div class="metric-label">最大持仓行权价 <span>◎</span></div><div class="metric-value" id="maxStrike">$250</div><div class="metric-bottom">演示数据 · 非交易信号</div></div><div class="metric-skeleton" aria-hidden="true"><span class="sk sk-line" style="width:66%"></span><span class="sk sk-strong" style="width:48%"></span><span class="sk sk-small" style="width:55%"></span></div></div>
+    </section>
+
+    <section class="panel" aria-label="主图表">
+      <div class="panel-header"><div><div class="panel-title" id="chartTitle">持仓量分布 · <span id="chartTicker">SNDK</span></div><div class="panel-sub">按行权价汇总的模拟 Call / Put OI · 仅用于展示动效</div></div><div class="panel-tools"><button class="tiny-btn active" data-range="1W">1W</button><button class="tiny-btn" data-range="1M">1M</button><button class="tiny-btn" data-range="3M">3M</button></div></div>
+      <div class="chart-viewport">
+        <div class="chart-live" id="chartLive" aria-hidden="true"><svg id="chart" width="100%" height="100%" viewBox="0 0 1000 340" preserveAspectRatio="none" role="img" aria-label="期权持仓量分布示意图"></svg></div>
+        <div class="chart-skeleton" aria-hidden="true"><div class="skeleton-y"><span class="sk sk-small" style="width:20px"></span><span class="sk sk-small" style="width:22px"></span><span class="sk sk-small" style="width:18px"></span><span class="sk sk-small" style="width:24px"></span><span class="sk sk-small" style="width:19px"></span></div><div class="sk-chart-grid"></div><div class="sk-floating sk"></div><div class="skeleton-bars" id="skeletonBars"></div><div class="skeleton-x"><span class="sk sk-small" style="width:24px"></span><span class="sk sk-small" style="width:21px"></span><span class="sk sk-small" style="width:29px"></span><span class="sk sk-small" style="width:27px"></span><span class="sk sk-small" style="width:22px"></span><span class="sk sk-small" style="width:25px"></span><span class="sk sk-small" style="width:22px"></span><span class="sk sk-small" style="width:24px"></span></div></div>
+      </div>
+      <div class="chart-legend"><span class="legend-item"><i class="legend-dot"></i>Call OI</span><span class="legend-item"><i class="legend-dot put"></i>Put OI</span><span class="data-note">DEMO / SAMPLE DATA</span></div>
+    </section>
+
+    <section class="panel" aria-label="观察摘要"><div class="panel-header" style="padding-bottom:0"><div><div class="panel-title">结构观察</div><div class="panel-sub">与图表同步加载的摘要模块</div></div><button class="tiny-btn" id="reloadSummary">刷新模块</button></div>
+      <div class="summary-wrap"><div class="summary-real"><div class="activity-row"><div><div class="activity-title">重点行权价区间</div><div class="activity-sub">演示性的高持仓密集区</div></div><div class="activity-meta" id="focusRange">$240 — $260</div></div><div class="activity-row"><div><div class="activity-title">持仓分布倾向</div><div class="activity-sub">仅展示排版，不构成行情分析</div></div><div class="activity-meta" id="focusBias">CALL > PUT</div></div></div>
+        <div class="summary-skeleton"><div class="activity-row" style="padding:9px 0"><div style="width:56%;display:flex;flex-direction:column;gap:8px"><span class="sk sk-line" style="width:62%"></span><span class="sk sk-small" style="width:86%"></span></div><span class="sk sk-line" style="width:21%"></span></div><div class="activity-row" style="padding:9px 0"><div style="width:56%;display:flex;flex-direction:column;gap:8px"><span class="sk sk-line" style="width:54%"></span><span class="sk sk-small" style="width:72%"></span></div><span class="sk sk-line" style="width:24%"></span></div></div>
+      </div>
+    </section>
+    <div class="demo-hint"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"/><path d="M12 10v7m0-10v1"/></svg>点击顶部「刷新」、切换股票或左侧菜单，即可再次播放骨架屏。浏览器 F5 也会触发。</div>
+  </main>
+
+  <aside class="rightbar" aria-label="自选股票">
+    <div class="right-head"><div class="right-title">自选<span>54</span></div><div class="right-icons"><button title="筛选">▽</button><button title="更多">···</button></div></div>
+    <div class="right-search">⌕ &nbsp;搜索股票代码或名称</div>
+    <div class="sector-tabs"><button class="active">全部</button><button>存储</button><button>芯片</button><button>光</button><button>ETF</button><button>数据</button></div>
+    <div class="right-meta"><span>10/30 · 北京时间</span><strong>常规 &nbsp; 盘后</strong></div>
+    <div class="sector-card"><div class="sector-head"><span class="sector-name"><span class="chev">›</span>万亿市值<span class="sector-count">11</span></span><span class="sector-change negative">-1.02%</span></div></div>
+    <div class="sector-card"><div class="sector-head"><span class="sector-name"><span class="chev">›</span>数据中心<span class="sector-count">12</span></span><span class="sector-change negative">-7.28%</span></div></div>
+    <div class="sector-card"><div class="sector-head"><span class="sector-name"><span class="chev">›</span>存储<span class="sector-count">8</span></span><span class="sector-change negative">-7.90%</span></div></div>
+    <div class="sector-card"><div class="sector-head" style="padding-bottom:12px"><span class="sector-name"><span class="chev">⌄</span>芯片<span class="sector-count">10</span></span><span class="sector-change negative">-8.14%</span></div>
+      <div style="display:flex;justify-content:space-between;color:#65717e;font-size:9px;padding:0 1px 5px"><span>股票</span><span>收盘价 &nbsp; Chg%</span></div>
+      <div class="stock-row"><div><div class="stock-name">NVDA</div><div class="stock-desc">NVIDIA Corporation</div></div><div class="stock-val">206.56<div class="change">-3.32%</div></div></div>
+      <div class="stock-row"><div><div class="stock-name">TSM</div><div class="stock-desc">Taiwan Semiconductor</div></div><div class="stock-val">411.62<div class="change">-4.68%</div></div></div>
+      <div class="stock-row"><div><div class="stock-name">AVGO</div><div class="stock-desc">Broadcom Inc.</div></div><div class="stock-val">327.39<div class="change">-5.10%</div></div></div>
+      <div class="stock-row"><div><div class="stock-name">ASML</div><div class="stock-desc">ASML Holding N.V.</div></div><div class="stock-val">1,589.87<div class="change">-5.12%</div></div></div>
+      <div class="stock-row"><div><div class="stock-name">LRCX</div><div class="stock-desc">Lam Research Corp.</div></div><div class="stock-val">239.61<div class="change">-5.81%</div></div></div>
+    </div>
+    <div class="right-footer">右侧自选列表保持显示，避免整屏闪烁</div>
+  </aside>
+</div>
+<div class="sr-only" role="status" aria-live="polite" id="loadStatus">数据加载中</div>
+<script>
+(() => {
+  'use strict';
+  // Offline-only demo: all values are synthetic; no API calls are made.
+  const $ = id => document.getElementById(id);
+  const root = document.body;
+  const select = $('ticker');
+  const refresh = $('refreshBtn');
+  const skeletonBars = $('skeletonBars');
+  const status = $('loadStatus');
+  const navBtns = [...document.querySelectorAll('[data-nav]')];
+  const labels = {
+    市场:['美股市场总览','主要指数 · 市场宽度 · 板块表现','市场总览'],
+    自选:['自选标的分析','分组观察 · 重点股票 · 资金热度','自选分析'],
+    个股:['个股数据透视','股票结构 · 趋势指标 · 交易量分析','个股分析'],
+    加密:['加密市场观察','数字资产 · 波动统计 · 市场结构','加密分析'],
+    资金:['资金流向分析','主动买卖 · 成交分布 · 流动性','资金分析'],
+    期权:['期权持仓地图','Call / Put 持仓量分布 · 重点行权价 · 期权结构参考','期权分析'],
+    新闻:['市场资讯概览','热点主题 · 行业动态 · 事件追踪','资讯分析']
+  };
+  const sample = {
+    SNDK:['182.6K','134.2K','0.73','$250','$240 — $260','CALL > PUT',250,4],
+    NVDA:['395.2K','338.4K','0.86','$210','$200 — $220','CALL > PUT',210,5],
+    MU:['221.1K','181.3K','0.82','$180','$170 — $190','CALL > PUT',180,6],
+    TSM:['167.3K','198.1K','1.18','$410','$400 — $420','PUT > CALL',410,7],
+    AVGO:['318.7K','279.9K','0.88','$330','$320 — $340','CALL > PUT',330,8]
+  };
+  // A fixed pattern ensures the skeleton is calm and visually stable.
+  const pattern = [24,31,38,43,49,62,55,76,89,67,56,43,35,51,64,77,61,53,46,39,34,42,63,70,55,40,35,27,20,30,39,48,55,42,33,29,23,18,22,28,24,19,15,12];
+  pattern.forEach((h,i) => {const s=document.createElement('span');s.className='sk';s.style.height=h+'%';s.style.opacity=(.72+(i%6)*.045).toFixed(2);skeletonBars.appendChild(s)});
+  let timer=null;
+  let version=0;
+  let range='1W';
+  function escapeSvg(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+  function rand(seed){let x = Math.sin(seed*12.9898)*43758.5453;return x-Math.floor(x)}
+  function chartRender(symbol){
+    const data = sample[symbol];
+    const central = data[6], seed=data[7];
+    const W=1000,H=340, padL=43,padR=15,padT=16,padB=35;
+    const plotW=W-padL-padR,plotH=H-padT-padB;
+    const n=38,barW=plotW/n*.30;
+    let svg='';
+    for(let i=0;i<5;i++){
+      const y=padT+i*plotH/4;
+      svg+=`<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="#313843" stroke-width="1" opacity=".65"/>`;
+      svg+=`<text x="6" y="${y+4}" font-size="11" fill="#66717d" font-family="monospace">${80-i*20}K</text>`;
+    }
+    let pts=[],dots='';
+    const spacing=plotW/n;
+    const mid=padL+plotW*.53;
+    const midStrike=central;
+    const strikeStep = symbol === 'TSM' ? 10 : 5;
+    for(let i=0;i<n;i++){
+      const x=padL+(i+.5)*spacing;
+      const cluster=Math.exp(-Math.pow((i-19)/9.5,2));
+      const a=8+53*cluster+31*rand(i+seed*42)+11*Math.sin(i*.54+seed);
+      const b=8+39*cluster+38*rand(i*.9+seed*97)+8*Math.cos(i*.41+seed);
+      const call=Math.min(88, Math.max(6,a));
+      const put=Math.min(86, Math.max(5,b));
+      const yCall=padT+plotH*(1-call/100),yPut=padT+plotH*(1-put/100);
+      svg+=`<rect x="${(x-barW-1).toFixed(1)}" y="${yCall.toFixed(1)}" width="${barW.toFixed(1)}" height="${(H-padB-yCall).toFixed(1)}" rx="2" fill="#5191f6" opacity="${(.52+cluster*.37).toFixed(2)}"/>`;
+      svg+=`<rect x="${(x+1).toFixed(1)}" y="${yPut.toFixed(1)}" width="${barW.toFixed(1)}" height="${(H-padB-yPut).toFixed(1)}" rx="2" fill="#8f72d5" opacity="${(.48+cluster*.36).toFixed(2)}"/>`;
+      if(i%4===0) svg+=`<text x="${x.toFixed(1)}" y="${H-13}" text-anchor="middle" font-size="10" fill="#7a8591" font-family="monospace">${midStrike+(i-19)*strikeStep}</text>`;
+      pts.push([x,yCall]);
+    }
+    const path=pts.map((p,i)=>(i===0?'M':'L')+p.map(v=>v.toFixed(1)).join(',')).join(' ');
+    svg+=`<path d="${path}" fill="none" stroke="#94baf7" stroke-width="1.5" opacity=".60"/>`;
+    svg+=`<line x1="${mid}" y1="${padT}" x2="${mid}" y2="${H-padB}" stroke="#c6d2df" stroke-dasharray="4 5" opacity=".38"/>`;
+    svg+=`<rect x="${mid-52}" y="${padT+4}" width="104" height="21" rx="5" fill="#2c3440" stroke="#3f4b5c"/><text x="${mid}" y="${padT+19}" text-anchor="middle" font-size="11" fill="#b4c3d7" font-family="monospace">ATM ${escapeSvg(midStrike)}</text>`;
+    $('chart').innerHTML=svg;
+  }
+  function render(){
+    const ticker=select.value, d=sample[ticker];
+    $('callOI').textContent=d[0]; $('putOI').textContent=d[1]; $('pcRatio').textContent=d[2]; $('maxStrike').textContent=d[3];
+    $('focusRange').textContent=d[4];$('focusBias').textContent=d[5];$('chartTicker').textContent=ticker;
+    chartRender(ticker);
+  }
+  function triggerLoading(duration=1500){
+    version++;const current=version;
+    clearTimeout(timer);
+    root.classList.add('is-loading');
+    refresh.setAttribute('aria-busy','true');
+    status.textContent='数据加载中';
+    timer=setTimeout(()=>{
+      if(current!==version)return;
+      render();
+      root.classList.remove('is-loading');
+      refresh.setAttribute('aria-busy','false');
+      status.textContent='数据已加载';
+    },duration);
+  }
+  refresh.addEventListener('click',()=>triggerLoading(1600));
+  select.addEventListener('change',()=>triggerLoading(1400));
+  navBtns.forEach(btn=>btn.addEventListener('click',()=>{
+    const nav=btn.dataset.nav;
+    navBtns.forEach(b=>{b.classList.toggle('active',b===btn); b.removeAttribute('aria-current')});
+    btn.setAttribute('aria-current','page');
+    const [title,desc,crumb]=labels[nav];
+    $('pageTitle').innerHTML=escapeSvg(title)+(nav==='期权'?' <span style="color:#aeb6bf;font-weight:550;font-size:13px">(Strike vs Open Interest)</span>':'');
+    $('pageSub').textContent=desc;
+    $('crumb').textContent=crumb;
+    $('headerPage').textContent=nav==='期权'?'期权枢纽':nav+'中心';
+    $('chartTitle').innerHTML=escapeSvg(nav==='期权'?'持仓量分布':nav+'图表')+' · <span id="chartTicker">'+escapeSvg(select.value)+'</span>';
+    triggerLoading(1350);
+  }));
+  document.querySelectorAll('[data-range]').forEach(btn=>btn.addEventListener('click',()=>{
+    range=btn.dataset.range;
+    document.querySelectorAll('[data-range]').forEach(b=>b.classList.toggle('active',b===btn));
+    triggerLoading(1000);
+  }));
+  $('reloadSummary').addEventListener('click',()=>triggerLoading(1100));
+  $('watchBtn').addEventListener('click',()=>{const b=navBtns.find(x=>x.dataset.nav==='自选');b?.click()});
+  $('infoBtn').addEventListener('click',()=>alert('操作说明：点击刷新、股票下拉框、左侧菜单或图表时间段，会显示深色骨架屏。浏览器 F5 刷新也会自动触发。\n\n本页面全部是离线演示数据，没有连接真实行情。'));
+  $('settingsBtn').addEventListener('click',()=>alert('演示版使用 1.6 秒低对比度流光。实际项目建议：数据切换低于 150–200ms 不展示骨架，较长请求保留上一次图表直到新数据就绪。'));
+  $('themeBtn').addEventListener('click',()=>triggerLoading(950));
+  document.querySelectorAll('.sector-tabs button').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.sector-tabs button').forEach(x=>x.classList.remove('active'));b.classList.add('active');triggerLoading(1050)}));
+  // On initial page load (including F5), show skeleton immediately. Render synthetic chart first for accessibility.
+  render();
+  triggerLoading(1550);
+})();
+</script>
+</body>
+</html>

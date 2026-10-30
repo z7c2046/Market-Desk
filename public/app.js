@@ -139,16 +139,68 @@ const KLINE_SCHEMES = {
 };
 const klineSchemeOptions = Object.values(KLINE_SCHEMES);
 
+const HEATMAP_SCHEMES = {
+  classic: {
+    id: 'classic',
+    name: '经典绿红 (默认)',
+    shortName: '经典绿红',
+    tag: '图一 · 默认',
+    description: '翡翠绿与珊瑚红，沉稳清晰，层次丰富，全球标配热力视觉',
+    up: '#10B981',
+    down: '#F43F5E',
+    upLabel: '上涨 #10B981',
+    downLabel: '下跌 #F43F5E',
+    title: '图一：经典绿红 (翡翠绿 #10B981 / 珊瑚红 #F43F5E)'
+  },
+  neon: {
+    id: 'neon',
+    name: '荧光极光 (亮绿 / 玫粉)',
+    shortName: '亮绿玫粉',
+    tag: '图二 · 荧光',
+    description: '鲜艳荧光黄绿与鲜亮芭比玫粉，高对比度视觉冲击，多空瞬间洞察',
+    up: '#7CE138',
+    down: '#FF4D82',
+    upLabel: '上涨 #7CE138',
+    downLabel: '下跌 #FF4D82',
+    title: '图二：荧光极光 (亮绿 #7CE138 / 芭比玫粉 #FF4D82)'
+  },
+  cyberpunk: {
+    id: 'cyberpunk',
+    name: '赛博霓虹 (青蓝 / 品红)',
+    shortName: '青蓝品红',
+    tag: '图三 · 赛博',
+    description: '电光青蓝与炫彩品红，赛博朋克未来科技美学，暗夜沉浸视觉拔群',
+    up: '#00D2FF',
+    down: '#FF3377',
+    upLabel: '上涨 #00D2FF',
+    downLabel: '下跌 #FF3377',
+    title: '图三：赛博霓虹 (青蓝 #00D2FF / 炫彩品红 #FF3377)'
+  }
+};
+const heatmapSchemeOptions = Object.values(HEATMAP_SCHEMES);
+
 createApp({ setup() {
   const systemTheme = window.matchMedia?.('(prefers-color-scheme: dark)');
   const savedTheme = readStorage('market-desk-theme', null);
   const isDark = ref(savedTheme === 'dark' || (savedTheme !== 'light' && Boolean(systemTheme?.matches)));
   const savedKlineScheme = readStorage('market-desk-kline-scheme', 'classic');
   const klineScheme = ref(['classic', 'neon', 'cyberpunk'].includes(savedKlineScheme) ? savedKlineScheme : 'classic');
+  const savedHeatmapScheme = readStorage('market-desk-heatmap-scheme', 'classic');
+  const heatmapScheme = ref(['classic', 'neon', 'cyberpunk'].includes(savedHeatmapScheme) ? savedHeatmapScheme : 'classic');
   const savedKlineGrid = readStorage('market-desk-kline-grid', 'dashed');
   const klineGridStyle = ref(['dashed', 'solid', 'none'].includes(savedKlineGrid) ? savedKlineGrid : 'dashed');
   const showPreferencesModal = ref(false);
   const activeKlineScheme = computed(() => KLINE_SCHEMES[klineScheme.value] || KLINE_SCHEMES.classic);
+  const activeHeatmapScheme = computed(() => HEATMAP_SCHEMES[heatmapScheme.value] || HEATMAP_SCHEMES.classic);
+  const heatmapGradientStyle = computed(() => {
+    if (heatmapScheme.value === 'neon') {
+      return 'linear-gradient(90deg, #D9004C 0%, #FF4D82 28%, #6B7280 50%, #65BA26 72%, #7CE138 100%)';
+    }
+    if (heatmapScheme.value === 'cyberpunk') {
+      return 'linear-gradient(90deg, #D6004F 0%, #FF3377 28%, #6B7280 50%, #00AEE6 72%, #00D2FF 100%)';
+    }
+    return 'linear-gradient(90deg, #E11D48 0%, #F43F5E 28%, #6B7280 50%, #10B981 72%, #059669 100%)';
+  });
 
   const DEFAULT_MA_VISIBILITY = {
     ma5: true,
@@ -298,6 +350,16 @@ createApp({ setup() {
     persist('market-desk-kline-grid', style);
     render();
   }
+  function setHeatmapScheme(scheme) {
+    if (HEATMAP_SCHEMES[scheme]) {
+      heatmapScheme.value = scheme;
+      persist('market-desk-heatmap-scheme', scheme);
+      toast.value = `已切换热力图配色为「${HEATMAP_SCHEMES[scheme].name}」`;
+      if (page.value === 'overview') {
+        renderHeatmap();
+      }
+    }
+  }
 
   const isMobile = ref(window.innerWidth < 768);
   const isWide = ref(window.innerWidth >= 1600);
@@ -345,12 +407,29 @@ createApp({ setup() {
   }
   async function openSettings() { showSettings.value = true; await nextTick(); document.querySelector('#workspace-settings .bottom-sheet-handle')?.focus(); }
   async function closeSettings() { if (!showSettings.value) return; showSettings.value = false; await nextTick(); document.querySelector('.settings-trigger')?.focus(); }
+
+  // Financial Terminal Skeleton & Top Pulse Progress State (from market_desk_skeleton_demo.html)
+  const skeletonPattern = [24, 31, 38, 43, 49, 62, 55, 76, 89, 67, 56, 43, 35, 51, 64, 77, 61, 53, 46, 39, 34, 42, 63, 70, 55, 40, 35, 27, 20, 30, 39, 48, 55, 42, 33, 29, 23, 18, 22, 28, 24, 19, 15, 12];
+  const isNavigating = ref(false);
+  const isInitialLoading = ref(true);
+  let navTimer = null;
+  let initialTimer = null;
+
+  function triggerPageLoadingPulse(duration = 600) {
+    if (navTimer) clearTimeout(navTimer);
+    isNavigating.value = true;
+    navTimer = setTimeout(() => {
+      isNavigating.value = false;
+    }, duration);
+  }
+
   function navigate(id) {
     if (page.value !== id) {
       if (typeof history !== 'undefined' && history.pushState) {
         history.pushState({ page: id, symbol: symbol.value }, '', '#' + id);
       }
       page.value = id;
+      triggerPageLoadingPulse(500);
     }
     closeSettings();
   }
@@ -364,6 +443,7 @@ createApp({ setup() {
     if (e.state?.symbol) {
       symbol.value = e.state.symbol;
     }
+    triggerPageLoadingPulse(500);
   }
   function getSparkline(sym, chg) {
     const isUp = (chg || 0) >= 0;
@@ -868,6 +948,13 @@ createApp({ setup() {
   const sessionStatusText = computed(() => currentSession.value?.desc || '正常交易中');
   const dateLabel = computed(() => new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }).format(clock.value));
   const refreshing = computed(() => Object.values(states).some(s => s.loading));
+  const isPageLoading = computed(() => refreshing.value || isNavigating.value || isInitialLoading.value);
+
+  watch(isPageLoading, (loading) => {
+    if (typeof document !== 'undefined' && document.body) {
+      document.body.classList.toggle('is-loading', !!loading);
+    }
+  }, { immediate: true });
   const nonLeveragedWatchlist = computed(() => {
     return (watchlist.value || []).filter(sym => !isLeveragedEtf(sym, SYMBOL_NAMES[sym]));
   });
@@ -2325,7 +2412,7 @@ createApp({ setup() {
     MU: 0.80, WDC: 0.70, STX: 0.40, NTAP: 0.20, SNDK: -0.12,
     NVDA: 0.82, AMD: 0.31, AVGO: -0.22, ASML: -0.45, TSM: 0.84,
     AAPL: 0.15, MSFT: 0.35, GOOGL: -0.18, AMZN: 0.44, META: -0.25,
-    TSLA: 1.12, LLY: 0.28, BRK_B: 0.05, DE: 0.18, DELL: 0.65
+    TSLA: 1.12, LLY: 0.28, 'BRK-B': 0.05, 'BRK.B': 0.05, BRK_B: 0.05, DE: 0.18, DELL: 0.65
   };
 
   function getDisplayExtChange(r) {
@@ -2508,7 +2595,23 @@ createApp({ setup() {
   // Whole-group average change sort order ('desc' | 'asc' | 'manual')
   const groupOrderSortDir = ref(readStorage('market-desk-group-order-sort-dir', 'desc'));
   // Right Watchlist Session Tab ('regular' | 'ext')
-  const rwSessionTab = ref(readStorage('market-desk-rw-session-tab', 'regular'));
+  const storedRwTab = readStorage('market-desk-rw-session-tab', null);
+  const rwSessionTab = ref(
+    storedRwTab 
+      ? storedRwTab 
+      : ((currentSession.value?.session === 'regular') ? 'regular' : 'ext')
+  );
+
+  const isMarketOpen = computed(() => {
+    return currentSession.value?.session === 'regular';
+  });
+
+  const showExtColumn = computed(() => {
+    // 开盘之后（美股常规交易时段），延长时段不要显示
+    if (isMarketOpen.value) return false;
+    // 非开盘时段（盘前、盘后、隔夜、闭市），仅在用户未主动切换为“常规”时显示
+    return rwSessionTab.value !== 'regular';
+  });
 
   const currentExtSessionShortLabel = computed(() => {
     const s = currentSession.value?.session;
@@ -2673,13 +2776,10 @@ createApp({ setup() {
   function toggleGroupOrderSort() {
     if (groupOrderSortDir.value === 'desc') {
       groupOrderSortDir.value = 'asc';
-      toast.value = '已切换：整组按组均涨幅升序排列';
     } else if (groupOrderSortDir.value === 'asc') {
       groupOrderSortDir.value = 'manual';
-      toast.value = '已切换：整组按默认分组顺序排列';
     } else {
       groupOrderSortDir.value = 'desc';
-      toast.value = '已切换：整组按组均涨幅降序排列';
     }
     persist('market-desk-group-order-sort-dir', groupOrderSortDir.value);
   }
@@ -2833,15 +2933,6 @@ createApp({ setup() {
 
     groupSortStates[groupId] = nextSpec;
     persistGroupSortStates();
-
-    const grp = watchlistMgr.getGroup(groupId);
-    const grpName = grp?.name || '分组';
-    const colLabel =
-      field === 'regularPrice' ? '收盘价格' :
-      field === 'regularChange' ? 'Chg% (常规涨跌)' :
-      field === 'extChange' ? 'EXT% (延长涨跌)' :
-      field === 'symbol' ? '标的代码' : field;
-    toast.value = `「${grpName}」组内已按 ${colLabel} ${nextSpec.dir === 'desc' ? '降序' : '升序'}排列`;
   }
 
   function cycleGroupSort(groupId) {
@@ -2854,17 +2945,6 @@ createApp({ setup() {
       delete groupSortStates[groupId];
     }
     persistGroupSortStates();
-
-    const grp = watchlistMgr.getGroup(groupId);
-    const grpName = grp?.name || '分组';
-    const after = resolveGroupSortSpec(groupId);
-    if (after?.dir === 'desc') {
-      toast.value = `「${grpName}」已按涨跌幅降序排列`;
-    } else if (after?.dir === 'asc') {
-      toast.value = `「${grpName}」已按涨跌幅升序排列`;
-    } else {
-      toast.value = `「${grpName}」已恢复默认排序（支持手动拖拽）`;
-    }
   }
 
   function getGroupSortTitle(groupId) {
@@ -2990,6 +3070,16 @@ createApp({ setup() {
       : 'regularChange';
     const dir = sidebarSortDirection.value || 'desc';
     return sortWatchlistRows(rows, activeField, dir);
+  });
+
+  const filteredSidebarFlatRows = computed(() => {
+    const q = (sidebarSearchQuery.value || '').trim().toLowerCase();
+    const rows = sidebarFlatRows.value;
+    if (!q) return rows;
+    return rows.filter(r =>
+      r.symbol.toLowerCase().includes(q) ||
+      (r.name && r.name.toLowerCase().includes(q))
+    );
   });
 
   const sidebarWatchlistRows = computed(() => {
@@ -3556,6 +3646,7 @@ createApp({ setup() {
     }
     symbol.value = s;
     navigate('chart');
+    triggerPageLoadingPulse(600);
   }
   function search() { const s = searchInput.value.trim().toUpperCase(); if (!validSymbol(s)) { toast.value = '请输入有效代码，例如 AAPL、SPY 或 BRK-B。'; return; } selectSymbol(s); }
 
@@ -3603,6 +3694,7 @@ createApp({ setup() {
   }
 
   function refresh() {
+    triggerPageLoadingPulse(700);
     if (page.value === 'overview' || page.value === 'flows') loadOverview();
     if (page.value === 'overview' || page.value === 'news') loadNews();
     if (page.value === 'overview' || page.value === 'crypto') loadCrypto();
@@ -3686,15 +3778,15 @@ createApp({ setup() {
   }
 
   function updateChartTheme() {
-    muted = isDark.value ? '#6B7280' : '#8E95A2';
-    gridColor = isDark.value ? '#C8CDD6' : '#E2E8F0';
-    chartText = '#141414';
-    chartSurface = isDark.value ? '#F0F2F5' : '#FFFFFF';
-    green = '#00A854';
-    red = '#E1251B';
-    blue = '#2563EB';
+    muted = isDark.value ? '#6b6b6b' : '#8E95A2';
+    gridColor = isDark.value ? '#303030' : '#E2E8F0';
+    chartText = isDark.value ? '#f4f4f4' : '#141414';
+    chartSurface = isDark.value ? '#191919' : '#FFFFFF';
+    green = isDark.value ? '#53cb9b' : '#00A854';
+    red = isDark.value ? '#ff5c5c' : '#E1251B';
+    blue = isDark.value ? '#5598f2' : '#2563EB';
     axis = { axisLine: { lineStyle: { color: gridColor } }, axisTick: { show: false }, axisLabel: { color: muted }, splitLine: { lineStyle: { color: gridColor, type: 'dashed' } } };
-    tooltip = { renderMode: 'richText', backgroundColor: isDark.value ? '#F0F2F5' : '#FFFFFF', borderColor: isDark.value ? 'rgba(20,20,20,0.12)' : '#E2E8F0', textStyle: { color: chartText }, confine: true };
+    tooltip = { renderMode: 'richText', backgroundColor: isDark.value ? '#191919' : '#FFFFFF', borderColor: isDark.value ? '#2a2a2a' : '#E2E8F0', textStyle: { color: chartText }, confine: true };
   }
 
   const STOCK_ROLES = {
@@ -3709,6 +3801,8 @@ createApp({ setup() {
     NFLX: { tag: '流媒体', subtag: '订阅龙头' },
     AMZN: { tag: '电商与AWS', subtag: '云计算' },
     TSLA: { tag: '智能电动车', subtag: 'FSD/Robotaxi' },
+    'BRK-B': { tag: '多元金融/投资', subtag: '巴菲特旗舰' },
+    'BRK.B': { tag: '多元金融/投资', subtag: '巴菲特旗舰' },
     JPM: { tag: '核心商行', subtag: '全能投行' },
     V: { tag: '支付网络', subtag: '清算网络' },
     WMT: { tag: '零售巨头', subtag: '消费必需' },
@@ -3718,70 +3812,47 @@ createApp({ setup() {
     NEE: { tag: '清洁电力', subtag: '绿电公用' }
   };
 
-  // Google Stitch Design System: Luminous & Vibrant Financial Palette
-  // Primary #2563EB | Secondary #10B981 | Tertiary #F43F5E | Neutral #64748B
+  // Heatmap Palette Schemes: Classic (OKX绿红) / Neon (荧光极光) / Cyberpunk (赛博霓虹)
   function getHeatmapBracketStyle(change, dark) {
+    const scheme = heatmapScheme.value || 'classic';
+    const isDarkTheme = Boolean(dark);
+    const fallbackBg = isDarkTheme ? '#292929' : '#64748B';
+    const border = isDarkTheme ? '#111111' : '#FFFFFF';
+
     if (change === null || change === undefined || !Number.isFinite(change)) {
-      return {
-        bg: dark ? '#334155' : '#64748B',
-        text: '#FFFFFF',
-        border: dark ? '#0B0F19' : '#FFFFFF'
-      };
+      return { bg: fallbackBg, text: '#FFFFFF', border };
     }
-    // High Drop: <= -3.0% (Deep Vibrant Rose/Crimson)
-    if (change <= -3.0) {
-      return {
-        bg: '#E11D48',
-        text: '#FFFFFF',
-        border: dark ? '#0B0F19' : '#FFFFFF'
-      };
-    }
-    // Moderate Drop: -1.5% ~ -3.0%
-    if (change <= -1.5) {
-      return {
-        bg: '#F43F5E',
-        text: '#FFFFFF',
-        border: dark ? '#0B0F19' : '#FFFFFF'
-      };
-    }
-    // Mild Drop: < 0% (Vibrant Rose/Coral like AAPL -0.05% in prototype)
-    if (change < 0) {
-      return {
-        bg: '#F43F5E',
-        text: '#FFFFFF',
-        border: dark ? '#0B0F19' : '#FFFFFF'
-      };
-    }
-    // Flat / Zero: 0.00%
     if (change === 0) {
-      return {
-        bg: dark ? '#334155' : '#64748B',
-        text: '#FFFFFF',
-        border: dark ? '#0B0F19' : '#FFFFFF'
-      };
+      return { bg: fallbackBg, text: '#FFFFFF', border };
     }
-    // Mild Gain: > 0% ~ +1.5% (Luminous Emerald like NVDA +0.23%, MSFT +0.07% in prototype)
-    if (change < 1.5) {
-      return {
-        bg: '#10B981',
-        text: '#FFFFFF',
-        border: dark ? '#0B0F19' : '#FFFFFF'
-      };
+
+    // 方案 2: 荧光极光 (亮绿 #7CE138 / 芭比玫粉 #FF4D82)
+    if (scheme === 'neon') {
+      if (change <= -3.0) return { bg: '#D9004C', text: '#FFFFFF', border };
+      if (change <= -1.5) return { bg: '#FF1464', text: '#FFFFFF', border };
+      if (change < 0) return { bg: '#FF4D82', text: '#FFFFFF', border };
+      if (change < 1.5) return { bg: '#65BA26', text: '#FFFFFF', border };
+      if (change < 3.0) return { bg: '#54A81E', text: '#FFFFFF', border };
+      return { bg: '#438A15', text: '#FFFFFF', border };
     }
-    // Moderate Gain: +1.5% ~ +3.0%
-    if (change < 3.0) {
-      return {
-        bg: '#10B981',
-        text: '#FFFFFF',
-        border: dark ? '#0B0F19' : '#FFFFFF'
-      };
+
+    // 方案 3: 赛博霓虹 (电光青蓝 #00D2FF / 炫彩品红 #FF3377)
+    if (scheme === 'cyberpunk') {
+      if (change <= -3.0) return { bg: '#D6004F', text: '#FFFFFF', border };
+      if (change <= -1.5) return { bg: '#FF145E', text: '#FFFFFF', border };
+      if (change < 0) return { bg: '#FF3377', text: '#FFFFFF', border };
+      if (change < 1.5) return { bg: '#00AEE6', text: '#FFFFFF', border };
+      if (change < 3.0) return { bg: '#0095C4', text: '#FFFFFF', border };
+      return { bg: '#007AA3', text: '#FFFFFF', border };
     }
-    // High Gain: >= +3.0% (Deep Rich Emerald like MU +3.16% in prototype)
-    return {
-      bg: '#059669',
-      text: '#FFFFFF',
-      border: dark ? '#0B0F19' : '#FFFFFF'
-    };
+
+    // 方案 1: 经典绿红 (默认: 翡翠绿 #10B981 / 珊瑚红 #F43F5E)
+    if (change <= -3.0) return { bg: '#E11D48', text: '#FFFFFF', border };
+    if (change <= -1.5) return { bg: '#F43F5E', text: '#FFFFFF', border };
+    if (change < 0) return { bg: '#F43F5E', text: '#FFFFFF', border };
+    if (change < 1.5) return { bg: '#10B981', text: '#FFFFFF', border };
+    if (change < 3.0) return { bg: '#10B981', text: '#FFFFFF', border };
+    return { bg: '#059669', text: '#FFFFFF', border };
   }
 
   function renderHeatmap() {
@@ -3802,7 +3873,7 @@ createApp({ setup() {
         quote: q,
         itemStyle: {
           color: st.bg,
-          borderColor: isDarkTheme ? '#0B0F19' : '#FFFFFF',
+          borderColor: isDarkTheme ? '#111111' : '#FFFFFF',
           borderWidth: 3,
           gapWidth: 4
         },
@@ -3841,7 +3912,7 @@ createApp({ setup() {
         top: 0,
         bottom: 0,
         itemStyle: {
-          borderColor: isDarkTheme ? '#0B0F19' : '#FFFFFF',
+          borderColor: isDarkTheme ? '#111111' : '#FFFFFF',
           borderWidth: 3,
           gapWidth: 4,
           borderRadius: 8
@@ -4536,6 +4607,7 @@ createApp({ setup() {
     refresh();
     fetchWatchlistQuotes();
     setupEventSource();
+    initialTimer = setTimeout(() => { isInitialLoading.value = false; }, 800);
     window.addEventListener('resize', resizeLayout);
     window.addEventListener('keydown', handleGlobalKeyDown);
     window.addEventListener('popstate', onPopState);
@@ -4545,6 +4617,8 @@ createApp({ setup() {
   });
 
   onUnmounted(() => {
+    if (navTimer) clearTimeout(navTimer);
+    if (initialTimer) clearTimeout(initialTimer);
     clearInterval(clockTimer);
     stopShortPolling();
     clearTimeout(sseReconnectTimer);
@@ -4569,8 +4643,9 @@ createApp({ setup() {
   return {
     nav, mobileNav, isDark, isMobile, isWide, showSettings, toggleTheme, openSettings, closeSettings, navigate, handleDrawerKey,
     RANGE_OPTIONS, openMobileSearch, mobileTitleInfo,
-    // K-Line Color Schemes & Preferences Modal
+    // K-Line & Heatmap Color Schemes & Preferences Modal
     klineScheme, klineGridStyle, showPreferencesModal, openPreferencesModal, closePreferencesModal, setKlineScheme, setKlineGrid, klineSchemeOptions, activeKlineScheme, KLINE_SCHEMES,
+    heatmapScheme, activeHeatmapScheme, heatmapSchemeOptions, setHeatmapScheme, heatmapGradientStyle, HEATMAP_SCHEMES,
     klineMaVisibility, MA_CONFIGS, toggleMa, setAllMaVisibility,
     defaultPage, defaultPageOptions, setDefaultPage,
     page, currentNav, onPageEntered,
@@ -4596,7 +4671,7 @@ createApp({ setup() {
     sidebarViewMode, setSidebarViewMode, toggleSidebarViewMode, toggleSidebarSort, resetSidebarSort, isSortedByChange,
     groupOrderSortDir, toggleGroupOrderSort, rwSessionTab, setRwSessionTab, currentExtSessionShortLabel, getRowExtSessionLabel,
     activeSessionKey, activeSessionShortLabel, activeSessionPriceLabel, activeSessionChangeLabel,
-    toggleGroupCollapse, toggleAllGroupsCollapse, areAllGroupsCollapsed, openAddStockToGroup, sidebarGroupSections, filteredSidebarGroupSections, sidebarFlatRows,
+    toggleGroupCollapse, toggleAllGroupsCollapse, areAllGroupsCollapsed, openAddStockToGroup, sidebarGroupSections, filteredSidebarGroupSections, sidebarFlatRows, filteredSidebarFlatRows, isMarketOpen, showExtColumn,
     groupSortStates, resolveGroupSortSpec, getGroupEffectiveSort, isGroupSortedBy, getGroupColumnSortDir, toggleGroupColumnSort, cycleGroupSort, getGroupSortTitle,
     draggedStock, dragOverTarget, dragOverGroup,
     draggedGroup, dragOverGroupOrderTarget, onGroupDragStart, onGroupDragEnd, onGroupHeaderDragLeave, moveGroupUp, moveGroupDown,
@@ -4609,6 +4684,7 @@ createApp({ setup() {
     stockModal, openHeatmapStockModal, closeStockModal, viewStockFromModal,
     undoAction, isInteractingWithTable,
     toast, importing, nyClock, nyClockDetailed, nyClockInfo, sessionStatusText, dateLabel, refreshing,
+    isPageLoading, skeletonPattern, triggerPageLoadingPulse,
     isDeleteMode, pendingDeleteSymbol, toggleDeleteMode, handleChipClick,
     breadcrumbLabel, upSectorsCount, downSectorsCount, upSectorsRatio, isStockGainer, getSparkline,
     stockSectors, rankedSectors, quoteWindow, breadth, findQuote, barWidth, getSectorBarHeight, walls, num, compact, pct, tone, time,

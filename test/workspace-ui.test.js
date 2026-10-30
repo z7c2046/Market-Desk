@@ -330,6 +330,10 @@ test('Watchlist card layout (自选 search, group pills, 常规/延长 switcher,
   assert.match(timeSessionBar.textContent, /北京时间/);
   assert.match(timeSessionBar.textContent, /常规/);
 
+  const storagePill = [...rwSidebar.querySelectorAll('.rw-grp-pill')].find(b => b.textContent.includes('存储'));
+  storagePill?.click();
+  await tick();
+
   // 2. Find the '存储' group block and its in-group column header (.rw-group-col-header: 股票 | 收盘价 | Chg%)
   const groupBlocks = [...rwSidebar.querySelectorAll('.rw-group-block')];
   const storageBlock = groupBlocks.find(b => b.querySelector('.rw-group-name')?.textContent.trim() === '存储');
@@ -337,8 +341,8 @@ test('Watchlist card layout (自选 search, group pills, 常规/延长 switcher,
 
   const inGroupHeader = storageBlock.querySelector('.rw-group-col-header');
   assert.ok(inGroupHeader, 'In-group sortable column header (.rw-group-col-header) exists inside group');
-  assert.match(inGroupHeader.textContent, /股票/);
-  assert.match(inGroupHeader.textContent, /收盘价/);
+  assert.match(inGroupHeader.textContent, /标的/);
+  assert.match(inGroupHeader.textContent, /收盘价格/);
   assert.match(inGroupHeader.textContent, /Chg%/);
 
   const getStorageSymbols = () => [...storageBlock.querySelectorAll('.rw-stock-row .rw-sym')].map(el => el.textContent.trim());
@@ -396,5 +400,98 @@ test('Watchlist card layout (自选 search, group pills, 常规/延长 switcher,
 });
 
 
+test('Financial Terminal Skeleton and Top Pulse Progress Bar: renders 2px pulse bar in topbar and displays skeleton screen structures during module transitions', async t => {
+  const ui = await mount(t, async url => ({ ok: true, json: async () => fixture(url) }));
+  await tick();
+  await tick();
 
+  // 1. Verify 2px top progress bar element is present in the topbar header
+  const topProgress = ui.w.document.querySelector('.topbar .top-progress');
+  assert.ok(topProgress, 'Top progress element (.topbar .top-progress) exists');
+  assert.equal(topProgress.getAttribute('aria-hidden'), 'true');
 
+  // 2. Verify navigation triggers loading pulse
+  await ui.click('期权墙');
+  await tick();
+  assert.ok(ui.w.document.querySelector('.top-progress'), 'Top progress bar persists across views');
+
+  // 3. Verify Chart module contains .chart-viewport and skeleton structure elements
+  await ui.click('个股行情');
+  await tick();
+  const chartViewport = ui.w.document.querySelector('.chart-viewport');
+  assert.ok(chartViewport, 'Chart viewport container exists');
+  assert.ok(ui.w.document.querySelector('#price-chart'), 'Price chart container exists inside viewport');
+
+  assert.deepEqual(ui.errors, []);
+});
+
+test('Heatmap color schemes: defaults to classic (经典绿红), switches to neon (荧光极光) and cyberpunk (赛博霓虹), updates treemap colors & gradient, and persists independently from K-line scheme', async t => {
+  const ui = await mount(t, async url => ({ ok: true, json: async () => fixture(url) }));
+  await tick();
+  assert.ok(ui.w.document.querySelector('#heatmap-chart'));
+  
+  ui.w.document.querySelector('.settings-modal-btn').click();
+  await tick();
+  const modal = ui.w.document.querySelector('.preferences-modal-backdrop');
+  assert.ok(modal);
+
+  const chips = [...modal.querySelectorAll('.heatmap-scheme-card')];
+  assert.equal(chips.length, 3);
+  assert.match(chips[0].textContent, /经典绿红/);
+  assert.match(chips[1].textContent, /荧光极光/);
+  assert.match(chips[2].textContent, /赛博霓虹/);
+
+  chips[1].click();
+  await tick();
+  assert.equal(JSON.parse(ui.w.localStorage.getItem('market-desk-heatmap-scheme')), 'neon');
+
+  chips[2].click();
+  await tick();
+  assert.equal(JSON.parse(ui.w.localStorage.getItem('market-desk-heatmap-scheme')), 'cyberpunk');
+
+  assert.deepEqual(ui.errors, []);
+});
+
+test('Watchlist refined layout: "全部" view shows flat list without group headers, hides company names, and hides EXT% during market open', async t => {
+  const openMarketFixture = url => {
+    const u = new URL(url, 'http://localhost');
+    if (u.pathname.includes('/watchlist/quotes')) {
+      return {
+        quotes: {
+          SNDK: {
+            symbol: 'SNDK',
+            name: 'SanDisk Corporation',
+            regular: { price: 1300, changePercent: 4.0 },
+            pre: { price: 1222, changePercent: -6.0 },
+            overnight: { price: null, changePercent: null },
+            post: { price: null, changePercent: null },
+            meta: { status: 'active', delayStatus: 'realtime' }
+          }
+        },
+        session: { session: 'regular', desc: '正常开盘' },
+        provider: { isConfigured: false, name: 'Longbridge' }
+      };
+    }
+    return fixture(url);
+  };
+
+  const ui = await mount(t, async url => ({ ok: true, json: async () => openMarketFixture(url) }));
+  await tick();
+  await tick();
+
+  const rwSidebar = ui.w.document.querySelector('.right-watchlist-sidebar');
+  assert.ok(rwSidebar, 'Right watchlist sidebar exists');
+
+  const flatBlock = rwSidebar.querySelector('.rw-all-flat-block');
+  assert.ok(flatBlock, 'Flat block renders under "全部"');
+
+  assert.equal(flatBlock.querySelector('.rw-name-sub'), null, 'Company name is hidden');
+
+  const header = flatBlock.querySelector('.rw-group-col-header');
+  assert.match(header.textContent, /标的/);
+  assert.match(header.textContent, /收盘价格/);
+  assert.match(header.textContent, /Chg%/);
+  assert.doesNotMatch(header.textContent, /EXT%/);
+
+  assert.deepEqual(ui.errors, []);
+});

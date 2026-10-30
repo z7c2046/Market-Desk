@@ -1,11 +1,13 @@
 import { BENCHMARKS, SECTORS, STOCKS, MACRO_INDICATORS, CRYPTO_CURRENCIES, getFearGreedIndex, fetchCnnFearGreed, DataCache, ticker, remote, parseYahoo, parseNews, mapLimit } from './workspace-data.js';
 import { buildOptionsWall } from './options-wall.js';
+import { normalizeYahooSymbol } from './watchlist-quotes.js';
 
 export function createMarketWorkspace({ fetchImpl = fetch, now = () => new Date(), cache = new DataCache() } = {}) {
   const read = (url, options) => remote(url, { ...options, fetchImpl });
   async function quote(symbol, range = '5d', interval = '1d') {
-    return cache.get(`chart:${symbol}:${range}:${interval}`, 60000, async () => {
-      const url = new URL(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}`);
+    const querySymbol = normalizeYahooSymbol(symbol);
+    return cache.get(`chart:${querySymbol}:${range}:${interval}`, 60000, async () => {
+      const url = new URL(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(querySymbol)}`);
       url.search = new URLSearchParams({ interval, range, includePrePost: 'false' }).toString();
       return { ...parseYahoo(await read(url), symbol), fetchedAt: now().toISOString() };
     });
