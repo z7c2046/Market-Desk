@@ -10493,6 +10493,13 @@ td { color: var(--text-primary); }
   text-align: right;
 }
 
+.rw-ext-pct-val.rw-muted-empty {
+  font-size: 13px;
+  font-family: var(--font-mono, monospace);
+  font-weight: 600;
+  color: #94a3b8;
+}
+
 .rw-del-icon-btn {
   position: absolute;
   right: 6px;

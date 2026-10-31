@@ -3976,18 +3976,18 @@
             <strong class="rw-sym">{{ r.symbol }}</strong>
           </div>
           <span class="rw-cell-price">{{ num(r.regularPrice) }}</span>
-          <span class="rw-cell-change" :class="tone(r.regularChange)">{{ pct(r.regularChange) }}</span>
+          <span class="rw-cell-change" :class="tone(r.regularChange)">{{ pctNoPlus(r.regularChange) }}</span>
           <span v-if="showExtColumn"
                 class="rw-cell-ext"
                 :class="isMarketOpen ? 'rw-muted-empty' : (r.extChange !== null ? tone(r.extChange) : 'rw-muted-empty')"
                 @click.stop="toggleSidebarSort('extChange')"
-                :title="isMarketOpen ? '盘中交易时段隐去延长数值' : (getRowExtSessionLabel(r) + ': ' + (r.extChange !== null ? pct(r.extChange) : '—'))">
+                :title="isMarketOpen ? '盘中交易时段隐去延长数值' : ('EXT: ' + (r.extChange !== null ? pctNoPlus(r.extChange) : '/'))">
             <template v-if="isMarketOpen">
               <span class="rw-ext-pct-val rw-muted-empty">--</span>
             </template>
             <template v-else>
-              <span class="rw-ext-sess-icon" :class="{ 'is-mobile-visible': isMobile }" :title="getExtSessionTitle(r)">{{ getExtSessionIcon(r) }}</span><span class="rw-ext-sess-lbl">{{ getRowExtSessionLabel(r) }}</span>
-              <span class="rw-ext-pct-val">{{ r.extChange !== null ? pct(r.extChange) : '—' }}</span>
+              <span v-if="r.extChange !== null" class="rw-ext-pct-val">{{ pctNoPlus(r.extChange) }}</span>
+              <span v-else class="rw-ext-pct-val rw-muted-empty">/</span>
             </template>
           </span>
           <button v-if="isDeleteMode" class="rw-del-icon-btn" @click.stop="deleteStockDirect(r.symbol)" title="移出自选">×</button>
@@ -4068,18 +4068,18 @@
               <strong class="rw-sym">{{ r.symbol }}</strong>
             </div>
             <span class="rw-cell-price">{{ num(r.regularPrice) }}</span>
-            <span class="rw-cell-change" :class="tone(r.regularChange)">{{ pct(r.regularChange) }}</span>
+            <span class="rw-cell-change" :class="tone(r.regularChange)">{{ pctNoPlus(r.regularChange) }}</span>
             <span v-if="showExtColumn"
                   class="rw-cell-ext"
                   :class="isMarketOpen ? 'rw-muted-empty' : (r.extChange !== null ? tone(r.extChange) : 'rw-muted-empty')"
                   @click.stop="toggleGroupColumnSort(sec.id, 'extChange')"
-                  :title="isMarketOpen ? '盘中交易时段隐去延长数值' : (getRowExtSessionLabel(r) + ': ' + (r.extChange !== null ? pct(r.extChange) : '—'))">
+                  :title="isMarketOpen ? '盘中交易时段隐去延长数值' : ('EXT: ' + (r.extChange !== null ? pctNoPlus(r.extChange) : '/'))">
               <template v-if="isMarketOpen">
                 <span class="rw-ext-pct-val rw-muted-empty">--</span>
               </template>
               <template v-else>
-                <span class="rw-ext-sess-icon" :class="{ 'is-mobile-visible': isMobile }" :title="getExtSessionTitle(r)">{{ getExtSessionIcon(r) }}</span><span class="rw-ext-sess-lbl">{{ getRowExtSessionLabel(r) }}</span>
-                <span class="rw-ext-pct-val">{{ r.extChange !== null ? pct(r.extChange) : '—' }}</span>
+                <span v-if="r.extChange !== null" class="rw-ext-pct-val">{{ pctNoPlus(r.extChange) }}</span>
+                <span v-else class="rw-ext-pct-val rw-muted-empty">/</span>
               </template>
             </span>
             <button v-if="isDeleteMode" class="rw-del-icon-btn" @click.stop="deleteStockDirect(r.symbol)" title="移出自选">×</button>

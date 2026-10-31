@@ -339,8 +339,11 @@ test('Heatmap tiles: displays only change% and volume centered in 2 rows, remove
   const muLabel = formatter({ data: muTile });
   const amdLabel = formatter({ data: amdTile });
 
-  // 2. NVDA has highest turnover ($50M), so NVDA gets Rank #1 badge
-  assert.match(nvdaLabel, /\{rank\|Rank #1 资金热度\}/, 'NVDA receives Rank #1 badge because it has highest turnover');
+  // 2. NVDA has highest turnover ($50M), so NVDA gets Rank #1 badge directly above ticker symbol
+  const nvdaLines = nvdaLabel.split('\n');
+  assert.doesNotMatch(nvdaLines[0], /Rank #1/, 'First line has only the top sector tag, not Rank #1');
+  assert.equal(nvdaLines[1], '{rank|Rank #1 资金热度}', 'Rank #1 badge is placed directly above symbol');
+  assert.equal(nvdaLines[2], '{sym|NVDA}', 'Symbol is directly below Rank #1 badge');
   assert.doesNotMatch(muLabel, /\{rank\|Rank #1 资金热度\}/, 'MU does NOT have Rank #1 badge when turnover is not #1');
   assert.match(muLabel, /\{badge\|存储芯片\}/, 'MU falls back to standard subtag');
 
@@ -392,6 +395,15 @@ test('Watchlist card layout (自选 search, group pills, 常规/延长 switcher,
             name: 'SK hynix Inc.',
             regular: { price: 162, changePercent: 8.5 },
             pre: { price: 160, changePercent: -1.2 },
+            overnight: { price: null, changePercent: null },
+            post: { price: null, changePercent: null },
+            meta: { status: 'active', delayStatus: 'realtime' }
+          },
+          KXIAY: {
+            symbol: 'KXIAY',
+            name: 'Kioxia Holdings',
+            regular: { price: 7.51, changePercent: -17.11 },
+            pre: { price: null, changePercent: null },
             overnight: { price: null, changePercent: null },
             post: { price: null, changePercent: null },
             meta: { status: 'active', delayStatus: 'realtime' }
@@ -470,29 +482,23 @@ test('Watchlist card layout (自选 search, group pills, 常规/延长 switcher,
   syms = getStorageSymbols();
   assert.equal(syms[0], 'MU', 'Highest extChange (MU +2.6% overnight) is first');
 
-  // Verify SNDK row displays 1,300.00 | +4.00% | 盘前 -6.00%
+  // Verify SNDK row displays 1,300.00 | 4.00% | -6.00% (positive change has no plus sign, no 盘前/盘后 text, negative ext has minus sign)
   const sndkRow = [...storageBlock.querySelectorAll('.rw-stock-row')].find(r => r.querySelector('.rw-sym')?.textContent.trim() === 'SNDK');
   assert.ok(sndkRow, 'SNDK row exists');
   assert.equal(sndkRow.querySelector('.rw-cell-price').textContent.trim(), '1,300.00');
-  assert.equal(sndkRow.querySelector('.rw-cell-change').textContent.trim(), '+4.00%');
-  assert.match(sndkRow.querySelector('.rw-cell-ext').textContent.trim(), /盘前/);
-  assert.match(sndkRow.querySelector('.rw-cell-ext').textContent.trim(), /-6\.00%/);
+  assert.equal(sndkRow.querySelector('.rw-cell-change').textContent.trim(), '4.00%', 'Positive regular change omits plus sign');
+  assert.doesNotMatch(sndkRow.querySelector('.rw-cell-ext').textContent.trim(), /盘前|盘后/, 'No 盘前 or 盘后 text displayed in EXT cell');
+  assert.equal(sndkRow.querySelector('.rw-cell-ext').textContent.trim(), '-6.00%', 'Negative EXT% preserves minus sign');
 
-  // 6. Verify mobile / narrow screen icon rule:
-  // On desktop (innerWidth >= 768), .rw-ext-sess-icon does not have .is-mobile-visible
-  assert.equal(sndkRow.querySelector('.rw-ext-sess-icon').classList.contains('is-mobile-visible'), false);
-
-  // Switch to mobile narrow screen (innerWidth = 390)
-  ui.w.innerWidth = 390;
-  ui.w.dispatchEvent(new ui.w.Event('resize'));
-  await tick();
-
-  // On mobile: SNDK (pre-market) has sunrise icon 🌅, MU (overnight) has moon icon 🌙
+  // Verify MU row displays positive EXT% without plus sign (2.60%)
   const muRow = [...storageBlock.querySelectorAll('.rw-stock-row')].find(r => r.querySelector('.rw-sym')?.textContent.trim() === 'MU');
-  assert.ok(sndkRow.querySelector('.rw-ext-sess-icon').classList.contains('is-mobile-visible'));
-  assert.equal(sndkRow.querySelector('.rw-ext-sess-icon').textContent.trim(), '🌅');
-  assert.ok(muRow.querySelector('.rw-ext-sess-icon').classList.contains('is-mobile-visible'));
-  assert.equal(muRow.querySelector('.rw-ext-sess-icon').textContent.trim(), '🌙');
+  assert.ok(muRow, 'MU row exists');
+  assert.equal(muRow.querySelector('.rw-cell-ext').textContent.trim(), '2.60%', 'Green positive EXT% omits plus sign');
+
+  // Verify KXIAY (no extended hours data) displays grey slash /
+  const kxiayRow = [...storageBlock.querySelectorAll('.rw-stock-row')].find(r => r.querySelector('.rw-sym')?.textContent.trim() === 'KXIAY');
+  assert.ok(kxiayRow, 'KXIAY row exists');
+  assert.equal(kxiayRow.querySelector('.rw-cell-ext').textContent.trim(), '/', 'Missing extended hours data renders single slash /');
 
   assert.deepEqual(ui.errors, []);
 });

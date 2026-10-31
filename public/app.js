@@ -77,6 +77,7 @@ const DEFAULT_CRYPTOS = [
 const num = v => Number.isFinite(v) ? v.toLocaleString('en-US', { maximumFractionDigits: 2, minimumFractionDigits: 2 }) : '—';
 const compact = v => Number.isFinite(v) ? new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 2 }).format(v) : '—';
 const pct = v => Number.isFinite(v) ? `${v > 0 ? '+' : ''}${v.toFixed(2)}%` : '—';
+const pctNoPlus = v => Number.isFinite(v) ? `${v.toFixed(2)}%` : '/';
 const tone = v => !Number.isFinite(v) || v === 0 ? 'muted' : v > 0 ? 'positive' : 'negative';
 const time = v => v && Number.isFinite(Date.parse(v)) ? new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(v)) + ' 北京' : '时间未提供';
 function readStorage(key, fallback) { try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; } }
@@ -3847,18 +3848,34 @@ createApp({ setup() {
       }
     }
 
+    // Include Rank #1 badge in center group if placed directly above sym
+    let centerStartIndex = symIndex;
+    if (symIndex > 0) {
+      for (let j = symIndex - 1; j >= 0; j--) {
+        const c = children[j];
+        const txt = (c.style?.text || '').trim();
+        if (txt.includes('Rank #1')) {
+          centerStartIndex = j;
+          if (j > 0 && children[j - 1].type === 'rect') {
+            centerStartIndex = j - 1;
+          }
+          break;
+        }
+      }
+    }
+
     // If tile is small, hide header tokens to prevent overlapping
-    if (symIndex > 0 && (H < 65 || W < 55)) {
-      for (let i = 0; i < symIndex; i++) {
+    if (centerStartIndex > 0 && (H < 65 || W < 55)) {
+      for (let i = 0; i < centerStartIndex; i++) {
         children[i].ignore = true;
       }
-    } else if (symIndex > 0) {
-      for (let i = 0; i < symIndex; i++) {
+    } else if (centerStartIndex > 0) {
+      for (let i = 0; i < centerStartIndex; i++) {
         children[i].ignore = false;
       }
     }
 
-    const centerTokens = symIndex >= 0 ? children.slice(symIndex) : children;
+    const centerTokens = centerStartIndex >= 0 ? children.slice(centerStartIndex) : children;
     if (!centerTokens.length) return;
 
     const firstToken = centerTokens[0];
@@ -4105,19 +4122,27 @@ createApp({ setup() {
             const volStr = (q.turnover !== null && Number.isFinite(q.turnover) && q.turnover > 0) ? `成交 $${compact(q.turnover)}` : '';
 
             // Dynamic badge: Rank #1 资金热度 is given ONLY to the #1 turnover stock
+            // Placed directly above the #1 stock's ticker (NVDA), NOT next to the sector tag in the top-left corner
             const isTop1 = (q.symbol === topTurnoverSymbol);
-            const badgeText = isTop1 ? '{rank|Rank #1 资金热度}' : (role.subtag ? `{badge|${role.subtag}}` : '');
+            const subtagText = (!isTop1 && role.subtag) ? `{badge|${role.subtag}}` : '';
             const topText = role.tag ? `{top|${role.tag}}` : '';
-            const header = (topText && badgeText)
-              ? `${topText}  ${badgeText}`
-              : (topText || badgeText);
+            const header = (topText && subtagText)
+              ? `${topText}  ${subtagText}`
+              : (topText || subtagText);
 
             // Stacked layout:
-            // Top-left: header tags / badges
-            // Center: Symbol, Row 1 (波动的幅度), Row 2 (成交量)
+            // Top-left: header tags / subtag
+            // Center:
+            // - If Rank #1: {rank|Rank #1 资金热度} directly above the ticker
+            // - Symbol: {sym|...}
+            // - Row 1: 波动的幅度 {pct|...}
+            // - Row 2: 成交量 {vol|...}
             const lines = [];
             if (header) {
               lines.push(header);
+            }
+            if (isTop1) {
+              lines.push('{rank|Rank #1 资金热度}');
             }
             lines.push(`{sym|${q.symbol}}`);
             lines.push(`{pct|${pctStr}}`);
@@ -4129,7 +4154,7 @@ createApp({ setup() {
           rich: {
             top: { fontSize: 11, color: 'rgba(255, 255, 255, 0.92)', align: 'left', fontWeight: '500', lineHeight: 18 },
             badge: { fontSize: 9, color: 'rgba(255, 255, 255, 0.98)', backgroundColor: 'rgba(0, 0, 0, 0.24)', padding: [2, 5], borderRadius: 4, fontWeight: 'bold', align: 'left' },
-            rank: { fontSize: 9, color: '#FEF08A', backgroundColor: 'rgba(0, 0, 0, 0.35)', padding: [2, 6], borderRadius: 4, fontWeight: 'bold', align: 'left' },
+            rank: { fontSize: 9, color: '#FEF08A', backgroundColor: 'rgba(0, 0, 0, 0.35)', padding: [2, 6], borderRadius: 4, fontWeight: 'bold', align: 'center', lineHeight: 20 },
             sym: { fontSize: 20, fontWeight: '800', color: '#FFFFFF', align: 'center', lineHeight: 28, fontFamily: 'Hanken Grotesk, sans-serif' },
             pct: { fontSize: 14, fontWeight: '700', color: '#FFFFFF', align: 'center', lineHeight: 20, fontFamily: 'JetBrains Mono, monospace' },
             vol: { fontSize: 11, color: 'rgba(255, 255, 255, 0.88)', align: 'center', lineHeight: 16, fontFamily: 'JetBrains Mono, monospace' },
@@ -4878,7 +4903,7 @@ createApp({ setup() {
     isPageLoading, skeletonPattern, butterflySkeletonRows, klineCandleSkeletons, flowsBubbleSkeletons, triggerPageLoadingPulse,
     isDeleteMode, pendingDeleteSymbol, toggleDeleteMode, handleChipClick,
     breadcrumbLabel, upSectorsCount, downSectorsCount, upSectorsRatio, isStockGainer, getSparkline,
-    stockSectors, rankedSectors, quoteWindow, breadth, findQuote, barWidth, getSectorBarHeight, walls, num, compact, pct, tone, time,
+    stockSectors, rankedSectors, quoteWindow, breadth, findQuote, barWidth, getSectorBarHeight, walls, num, compact, pct, pctNoPlus, tone, time,
     SECTOR_LEADERS, topGainerSector, topLoserSector, mostActiveSector, totalSectorTurnover, avgSectorTurnover, sectorBullBearRatio,
     newsCategory, newsCategories, filteredNews, getNewsSentiment, getNewsTags, getDayRange, getDayRangeWidth, missingTurnoverCount,
     savedNewsUrls, isBookmarked, toggleBookmark, showNewsMoreMenu, formatRelativeTime, getSourceMeta, getNewsImage, getTagColorClass, handleImgError, openNewsUrl, onNewsSearchSubmit,
