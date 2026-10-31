@@ -347,11 +347,13 @@ test('Heatmap tiles: displays only change% and volume centered in 2 rows, remove
   assert.doesNotMatch(muLabel, /\{rank\|Rank #1 资金热度\}/, 'MU does NOT have Rank #1 badge when turnover is not #1');
   assert.match(muLabel, /\{badge\|存储芯片\}/, 'MU falls back to standard subtag');
 
-  // 3. All tiles display only symbol, change percentage (row 1) and volume (row 2)
+  // 3. All tiles display only symbol, change percentage (row 1, no plus sign for positive) and volume (row 2, no 成交 word)
   for (const [tile, label] of [[nvdaTile, nvdaLabel], [muTile, muLabel], [amdTile, amdLabel]]) {
     assert.match(label, new RegExp(`\\{sym\\|${tile.name}\\}`));
-    assert.match(label, /\{pct\|[+-]?\d+\.\d{2}%\}/);
-    assert.match(label, /\{vol\|成交 \$[\d\w.]+\}/);
+    assert.match(label, /\{pct\|-?\d+\.\d{2}%\}/);
+    assert.doesNotMatch(label, /\{pct\|\+/);
+    assert.match(label, /\{vol\|\$[\d\w.]+\}/);
+    assert.doesNotMatch(label, /\{vol\|成交/);
 
     // No stock price (e.g. $123.45, $87.65, $145.67)
     assert.doesNotMatch(label, /\$123\.45/);

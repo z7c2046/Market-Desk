@@ -3856,11 +3856,11 @@ createApp({ setup() {
         const txt = (c.style?.text || '').trim();
         if (txt.includes('Rank #1')) {
           centerStartIndex = j;
-          if (j > 0 && children[j - 1].type === 'rect') {
-            centerStartIndex = j - 1;
-          }
           break;
         }
+      }
+      if (centerStartIndex > 0 && children[centerStartIndex - 1].type === 'rect') {
+        centerStartIndex = centerStartIndex - 1;
       }
     }
 
@@ -3878,14 +3878,44 @@ createApp({ setup() {
     const centerTokens = centerStartIndex >= 0 ? children.slice(centerStartIndex) : children;
     if (!centerTokens.length) return;
 
-    const firstToken = centerTokens[0];
-    const lastToken = centerTokens[centerTokens.length - 1];
-    const firstY = firstToken.style?.y ?? 0;
-    const lastY = lastToken.style?.y ?? firstY;
-    const lastH = lastToken.getBoundingRect ? lastToken.getBoundingRect().height : 16;
-    const currentCenterH = (lastY + lastH) - firstY;
+    // Calculate bottom boundary of top-left header tag to achieve true visual vertical centering
+    let headerBottom = el.shape.y;
+    for (let i = 0; i < centerStartIndex; i++) {
+      const t = children[i];
+      if (!t.ignore && t.getBoundingRect) {
+        const r = t.getBoundingRect();
+        if (r && r.height > 0) {
+          headerBottom = Math.max(headerBottom, r.y + r.height);
+        }
+      }
+    }
 
-    const targetStartY = el.shape.y + (H - currentCenterH) / 2;
+    // Accurately compute center group bounding box across both Rect and TSpan elements
+    let firstY = Infinity;
+    let lastBottom = -Infinity;
+    for (const t of centerTokens) {
+      if (t.getBoundingRect) {
+        const r = t.getBoundingRect();
+        if (r && r.height > 0) {
+          firstY = Math.min(firstY, r.y);
+          lastBottom = Math.max(lastBottom, r.y + r.height);
+        }
+      }
+    }
+
+    if (!Number.isFinite(firstY) || !Number.isFinite(lastBottom) || lastBottom <= firstY) {
+      const firstToken = centerTokens[0];
+      const lastToken = centerTokens[centerTokens.length - 1];
+      firstY = firstToken.style?.y ?? (firstToken.shape?.y ?? 0);
+      lastBottom = (lastToken.style?.y ?? firstY) + 16;
+    }
+
+    const currentCenterH = lastBottom - firstY;
+    const tileBottom = el.shape.y + H;
+    const availableH = tileBottom - headerBottom;
+
+    // Visual vertical centering: center symmetrically between headerBottom and tileBottom
+    const targetStartY = headerBottom + (availableH - currentCenterH) / 2;
     const dy = targetStartY - firstY;
 
     if (Math.abs(dy) > 0.5) {
@@ -3894,7 +3924,16 @@ createApp({ setup() {
           t.style.y += dy;
         }
         if (t.shape && typeof t.shape.y === 'number') {
-          t.shape.y += dy;
+          if (typeof t.setShape === 'function') {
+            t.setShape({ y: t.shape.y + dy });
+          } else {
+            t.shape.y += dy;
+            if (typeof t.dirtyShape === 'function') t.dirtyShape();
+            if (typeof t.dirty === 'function') t.dirty();
+          }
+        }
+        if (t._rect && typeof t._rect.y === 'number') {
+          t._rect.y += dy;
         }
       }
     }
@@ -4117,9 +4156,8 @@ createApp({ setup() {
             const q = p.data?.quote;
             if (!q) return p.name;
             const role = STOCK_ROLES[q.symbol] || { tag: q.sector || '美股', subtag: '' };
-            const sign = (q.changePercent || 0) > 0 ? '+' : '';
-            const pctStr = Number.isFinite(q.changePercent) ? `${sign}${q.changePercent.toFixed(2)}%` : '—';
-            const volStr = (q.turnover !== null && Number.isFinite(q.turnover) && q.turnover > 0) ? `成交 $${compact(q.turnover)}` : '';
+            const pctStr = Number.isFinite(q.changePercent) ? `${q.changePercent.toFixed(2)}%` : '—';
+            const volStr = (q.turnover !== null && Number.isFinite(q.turnover) && q.turnover > 0) ? `$${compact(q.turnover)}` : '';
 
             // Dynamic badge: Rank #1 资金热度 is given ONLY to the #1 turnover stock
             // Placed directly above the #1 stock's ticker (NVDA), NOT next to the sector tag in the top-left corner
