@@ -436,9 +436,9 @@ test('Watchlist card layout (自选 search, group pills, 常规/延长 switcher,
   assert.ok(arrowRight, 'Right scroll arrow button exists for sliding to subsequent groups');
 
   const timeSessionBar = rwSidebar.querySelector('.rw-time-session-bar');
-  assert.ok(timeSessionBar, 'Time and session switcher bar exists');
+  assert.ok(timeSessionBar, 'Time bar exists');
   assert.match(timeSessionBar.textContent, /北京时间/);
-  assert.match(timeSessionBar.textContent, /常规/);
+  assert.equal(timeSessionBar.querySelector('.rw-session-seg'), null, 'Redundant 常规/盘后 buttons are removed');
 
   const storagePill = [...rwSidebar.querySelectorAll('.rw-grp-pill')].find(b => b.textContent.includes('存储'));
   storagePill?.click();
@@ -474,10 +474,10 @@ test('Watchlist card layout (自选 search, group pills, 常规/延长 switcher,
   assert.equal(syms[0], 'SKHY', 'Highest regularChange (SKHY +8.5%) is first');
   assert.equal(syms[1], 'SNDK', 'Second highest regularChange (SNDK +4.0%) is second');
 
-  // 5. Click extended-hours cell or session switcher -> sorts in-group by extChange descending (MU +2.6% > SKHY -1.2% > SNDK -6.0%)
+  // 5. Click EXT% column header -> sorts in-group by extChange descending (MU +2.6% > SKHY -1.2% > SNDK -6.0%)
   // Notice MU's quote is in overnight (+2.6%) while SNDK's is in pre (-6.0%) — both display directly in .rw-cell-ext!
-  const extSegBtn = timeSessionBar.querySelectorAll('.rw-seg-btn')[1];
-  extSegBtn.click();
+  const extSortBtn = inGroupHeader.querySelector('.rw-col-ext');
+  extSortBtn.click();
   await tick();
   syms = getStorageSymbols();
   assert.equal(syms[0], 'MU', 'Highest extChange (MU +2.6% overnight) is first');

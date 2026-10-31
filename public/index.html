@@ -3900,24 +3900,9 @@
             aria-label="向右滚动查看更多分组">›</button>
   </div>
 
-  <!-- 4. Time & Session Switcher Bar: 10/29 22:39 · 北京时间 | 常规 | 盘后 -->
+  <!-- 4. Time Bar: 10/29 22:39 · 北京时间 -->
   <div class="rw-time-session-bar">
     <span class="rw-bj-time">{{ nyClockInfo.bjTime.replace(' 北京', '') }} · 北京时间</span>
-    <div class="rw-session-seg">
-      <button type="button"
-              class="rw-seg-btn"
-              :class="{ active: rwSessionTab === 'regular' || isMarketOpen }"
-              @click="setRwSessionTab('regular')">
-        {{ isMarketOpen ? '常规开盘中' : '常规' }}
-      </button>
-      <button type="button"
-              v-if="!isMarketOpen"
-              class="rw-seg-btn"
-              :class="{ active: rwSessionTab === 'ext' }"
-              @click="setRwSessionTab('ext')">
-        {{ currentExtSessionShortLabel }}
-      </button>
-    </div>
   </div>
 
   <!-- 5. Scrollable Group Cards / All Flat List -->
