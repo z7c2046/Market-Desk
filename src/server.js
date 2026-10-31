@@ -34,6 +34,14 @@ export function createServer({ workspace = createMarketWorkspace(), watchlist = 
       }
       const routes = {
         '/api/health': () => ({ ok: true, product: 'Market Desk', version: '1.0.0' }),
+        '/api/ibkr/status': () => (quoteService.provider?.getStatus ? quoteService.provider.getStatus() : { ok: false, status: 'unconfigured', reason: '当前数据源非 IBKR' }),
+        '/api/ibkr/reconnect': async () => {
+          if (quoteService.provider?.reconnect) {
+            const ok = await quoteService.provider.reconnect();
+            return { ok, status: quoteService.provider.status, reason: quoteService.provider.statusReason };
+          }
+          return { ok: false, error: '当前数据源不支持重连' };
+        },
         '/api/market/overview': () => workspace.overview(), '/api/market/chart': () => workspace.chart(params),
         '/api/macro': () => (workspace.macro ? workspace.macro() : { items: [] }),
         '/api/crypto': () => (workspace.crypto ? workspace.crypto() : { items: [] }),

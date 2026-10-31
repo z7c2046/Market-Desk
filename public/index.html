@@ -80,7 +80,7 @@
       <span class="action-arrow">➔</span>
     </button>
     <div class="sidebar-status-card">
-      <span class="status-left"><i class="status-dot-pulse"></i>{{ providerInfo?.isConfigured ? '长桥实时 (US LV1)' : '公开行情数据源' }}</span>
+      <span class="status-left"><i class="status-dot-pulse"></i>{{ providerInfo?.isConfigured ? (providerInfo?.name?.includes('IB') ? 'IB Gateway 实时直连' : (providerInfo?.name || '实时行情')) : '公开行情数据源' }}</span>
       <span class="status-delay">{{ providerInfo?.isConfigured ? '实时' : '延迟行情' }}</span>
     </div>
     <div class="sidebar-divider"></div>
@@ -480,9 +480,6 @@
       <div class="clock-line-bj">
         <i class="clock-live-dot"></i>
         <strong>{{ nyClockInfo.bjTime }}</strong>
-      </div>
-      <div class="clock-line-ny">
-        <span>{{ nyClockInfo.nyTime }} {{ nyClockInfo.nyTz }}</span>
       </div>
     </div>
     <button class="topbar-btn mobile-only icon-btn" @click="openMobileSearch" title="搜索美股代码" aria-label="搜索美股代码">🔍</button>
@@ -912,7 +909,7 @@
         </thead>
 
         <!-- Loading Skeleton Rows -->
-        <tbody v-if="states.watchlist.loading && !watchlist.length" aria-hidden="true">
+        <tbody v-if="isWatchlistSkeleton" aria-hidden="true">
           <tr v-for="i in 8" :key="i" class="wl-stock-row" style="pointer-events:none;">
             <td class="wl-cell-symbol">
               <div class="wl-symbol-wrapper">
@@ -931,7 +928,7 @@
         </tbody>
 
         <!-- Grouped View -->
-        <template v-if="viewMode === 'grouped'">
+        <template v-else-if="viewMode === 'grouped'">
           <tbody v-for="g in groups" :key="g.id" :id="'wl-group-' + g.id">
             <tr class="group-header-row wl-group-row">
               <td colspan="8">
@@ -1083,10 +1080,10 @@
   <section class="panel chart-panel">
     <div class="panel-heading">
       <div>
-        <h2>
-          {{symbol}}
+        <h2 class="chart-header-title">
+          <span class="chart-symbol-text">{{symbol}}</span>
           <span v-if="chartDelayStatus === 'delayed'" class="tv-delay-badge" title="行情延迟 15 分钟 (Delayed) · 来自公开市场备用源">D</span>
-          <span class="muted">{{chart?.name}}</span>
+          <span class="muted chart-company-name">{{chart?.name}}</span>
         </h2>
         <div v-if="chart" class="stock-price">
           <span class="stock-reg-quote">
@@ -1103,17 +1100,19 @@
           </span>
         </div>
       </div>
-      <div class="controls">
-        <button @click="addWatch(symbol)">{{watchlist.includes(symbol)?'✓ 已在自选':'+ 加入自选'}}</button>
-        <button class="topbar-btn" style="height:32px;padding:0 10px;" @click="resetPriceChartZoom" title="复位视角 (也可双击图表)">⟲ 复位</button>
-        <select class="desktop-only" v-model="chartRange" aria-label="行情周期">
-          <option value="1d">日内 · 5 分钟</option>
-          <option value="1mo">1 个月</option>
-          <option value="3mo">3 个月</option>
-          <option value="6mo">6 个月</option>
-          <option value="1y">1 年</option>
-          <option value="2y">2 年</option>
-        </select>
+      <div class="controls chart-controls-group">
+        <div class="chart-actions-row">
+          <button class="chart-watch-btn" @click="addWatch(symbol)">{{watchlist.includes(symbol)?'✓ 已在自选':'+ 加入自选'}}</button>
+          <button class="topbar-btn chart-reset-btn" @click="resetPriceChartZoom" title="复位视角 (也可双击图表)">⟲ 复位</button>
+          <select class="desktop-only chart-range-select" v-model="chartRange" aria-label="行情周期">
+            <option value="1d">日内 · 5 分钟</option>
+            <option value="1mo">1 个月</option>
+            <option value="3mo">3 个月</option>
+            <option value="6mo">6 个月</option>
+            <option value="1y">1 年</option>
+            <option value="2y">2 年</option>
+          </select>
+        </div>
         <div class="kline-palette-quick-selector desktop-only" title="K 线走势配色方案">
           <button v-for="item in klineSchemeOptions" :key="item.id" class="kline-palette-chip" :class="{ active: klineScheme === item.id }" :title="item.title" @click="setKlineScheme(item.id)">
             <span class="chip-dot" :style="{ backgroundColor: item.up }"></span>
@@ -2768,7 +2767,7 @@
   </section>
 </template>
 
-<template v-if="page==='sources'"><section class="panel documentation"><h2>每一个图表，都有明确的数据口径</h2><div class="table-wrap"><table><thead><tr><th>模块</th><th>来源与刷新</th><th>如何阅读</th></tr></thead><tbody><tr><td>行情 / 热力图</td><td>Yahoo Finance · 60 秒缓存</td><td>可能延迟；显示源站最近交易时间。18 只精选股不代表全市场。</td></tr><tr><td>资金观察</td><td>11 个板块 ETF / 用户 CSV</td><td>成交活跃度与 ETF 净申赎分别显示，不推算主力净流入。</td></tr><tr><td>期权墙</td><td>Cboe · 15 分钟缓存</td><td>延迟快照；OI 通常每日更新。GEX 是带符号假设的估算。</td></tr><tr><td>新闻</td><td>CNBC、MarketWatch、Yahoo RSS · 5 分钟缓存</td><td>标题、来源、发布时间与原文链接。</td></tr><tr><td>自选与多时段</td><td>长桥 (Longbridge) OpenAPI US LV1 / 本地分组模型</td><td>覆盖常规、盘前、盘后与隔夜时段；基准收盘相对最近真实 RTH。</td></tr></tbody></table></div><h2>开源融合</h2><p><a href="https://github.com/aaguiar10/gflows" target="_blank" rel="noopener">G|Flows · MIT</a>：移植 Cboe 接入和按行权价计算的逻辑，补充校验、缺失值处理和明确单位。</p><p><a href="https://github.com/apache/echarts" target="_blank" rel="noopener">Apache ECharts · Apache-2.0</a>：热力图、K 线、板块轮动及期权分布图。</p><p><a href="https://github.com/Open-Dev-Society/OpenStock" target="_blank" rel="noopener">OpenStock</a>、<a href="https://github.com/openbq-org/OpenBB" target="_blank" rel="noopener">OpenBB</a>：产品与数据分层参考，未复制其应用代码。</p><h2>产品定位</h2><p>Market Desk 是美股信息与分析辅助工作台。旧版拐点策略、买卖标记和胜率回测入口已停用，历史代码保留归档。网络失败会显示明确状态，已有缓存会标注为旧快照。</p></section></template>
+<template v-if="page==='sources'"><section class="panel documentation"><h2>每一个图表，都有明确的数据口径</h2><div class="table-wrap"><table><thead><tr><th>模块</th><th>来源与刷新</th><th>如何阅读</th></tr></thead><tbody><tr><td>行情 / 热力图</td><td>Yahoo Finance · 60 秒缓存</td><td>可能延迟；显示源站最近交易时间。18 只精选股不代表全市场。</td></tr><tr><td>资金观察</td><td>11 个板块 ETF / 用户 CSV</td><td>成交活跃度与 ETF 净申赎分别显示，不推算主力净流入。</td></tr><tr><td>期权墙</td><td>Cboe · 15 分钟缓存</td><td>延迟快照；OI 通常每日更新。GEX 是带符号假设的估算。</td></tr><tr><td>新闻</td><td>CNBC、MarketWatch、Yahoo RSS · 5 分钟缓存</td><td>标题、来源、发布时间与原文链接。</td></tr><tr><td>自选与多时段</td><td>Interactive Brokers (IB Gateway) 本地直连 / 长桥 (Longbridge) / 公开备用源</td><td>支持本地 IB Gateway 原生 TCP 直连（端口 4002/4001/7497/7496），全时段毫秒级推送覆盖常规、盘前、盘后与隔夜。</td></tr></tbody></table></div><h2>开源融合</h2><p><a href="https://github.com/aaguiar10/gflows" target="_blank" rel="noopener">G|Flows · MIT</a>：移植 Cboe 接入和按行权价计算的逻辑，补充校验、缺失值处理和明确单位。</p><p><a href="https://github.com/apache/echarts" target="_blank" rel="noopener">Apache ECharts · Apache-2.0</a>：热力图、K 线、板块轮动及期权分布图。</p><p><a href="https://github.com/Open-Dev-Society/OpenStock" target="_blank" rel="noopener">OpenStock</a>、<a href="https://github.com/openbq-org/OpenBB" target="_blank" rel="noopener">OpenBB</a>：产品与数据分层参考，未复制其应用代码。</p><h2>产品定位</h2><p>Market Desk 是美股信息与分析辅助工作台。旧版拐点策略、买卖标记和胜率回测入口已停用，历史代码保留归档。网络失败会显示明确状态，已有缓存会标注为旧快照。</p></section></template>
 
 </div>
 </transition>
@@ -3806,7 +3805,8 @@
 </div><!-- /.workspace-main-wrapper -->
 
 <!-- Pinned Right Watchlist Sidebar matching proto_01_overview.png, proto_03_chart.png, proto_07_options.png -->
-<aside v-if="page !== 'watchlist' && compactPanelOpen" class="right-watchlist-sidebar desktop-only" aria-label="右侧自选列表">
+<aside v-if="page !== 'watchlist'" class="right-watchlist-sidebar desktop-only" :class="{ 'is-collapsed': !compactPanelOpen }" :aria-hidden="!compactPanelOpen" aria-label="右侧自选列表">
+  <div class="rw-sidebar-inner">
   <!-- 1. Top Header: 自选 54 | Filter & More Actions -->
   <div class="rw-header">
     <div class="rw-title-group">
@@ -3907,8 +3907,38 @@
 
   <!-- 5. Scrollable Group Cards / All Flat List -->
   <div class="rw-groups-scrollable">
-    <!-- 5.1 全部视图 (Flat List): 切换到全部时不显示股票分组，直接平铺显示全量自选标的 (包括杠杆 ETF) -->
-    <div v-if="sidebarActiveGroup === 'all'" class="rw-all-flat-block">
+    <!-- 5.0 自选列表骨架屏加载态 (页面开始刷新 / 初始化加载时呈现) -->
+    <div v-if="isWatchlistSkeleton" class="rw-all-flat-block rw-skeleton-wrap" aria-hidden="true">
+      <div class="rw-group-col-header" :class="{ 'with-ext': showExtColumn }" aria-label="全量自选排序栏骨架">
+        <span class="rw-col-code">标的</span>
+        <span class="rw-col-price">收盘价格</span>
+        <span class="rw-col-change">Chg%</span>
+        <span v-if="showExtColumn" class="rw-col-ext">EXT%</span>
+      </div>
+      <div class="rw-stock-list">
+        <div v-for="(sk, idx) in rwSkeletonRows" :key="idx" 
+             class="rw-stock-row rw-skeleton-row" 
+             :class="{ 'with-ext': showExtColumn }">
+          <div class="rw-cell-code">
+            <span class="sk sk-line" :style="{ width: sk.symWidth, height: '14px', borderRadius: '3px' }"></span>
+          </div>
+          <span class="rw-cell-price" style="display:flex;justify-content:flex-end;">
+            <span class="sk sk-line" :style="{ width: sk.priceWidth, height: '13px', borderRadius: '3px' }"></span>
+          </span>
+          <span class="rw-cell-change" style="display:flex;justify-content:flex-end;">
+            <span class="sk sk-pill" :style="{ width: sk.chgWidth, height: '18px', borderRadius: '4px' }"></span>
+          </span>
+          <span v-if="showExtColumn" class="rw-cell-ext" style="display:flex;justify-content:flex-end;">
+            <span class="sk sk-line" :style="{ width: sk.extWidth, height: '13px', borderRadius: '3px' }"></span>
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 真实自选列表内容 (v-else) -->
+    <template v-else>
+      <!-- 5.1 全部视图 (Flat List): 切换到全部时不显示股票分组，直接平铺显示全量自选标的 (包括杠杆 ETF) -->
+      <div v-if="sidebarActiveGroup === 'all'" class="rw-all-flat-block">
       <!-- 统一表头: 标的 | 收盘价格 | Chg% | EXT% (开盘后不显示 EXT%) -->
       <div class="rw-group-col-header" :class="{ 'with-ext': showExtColumn }" aria-label="全量自选排序栏">
         <span class="rw-col-code"
@@ -4072,16 +4102,20 @@
         </div>
       </div>
     </template>
+    </template>
   </div>
+  </div><!-- /.rw-sidebar-inner -->
 </aside>
 
 <!-- Floating Expand Button when Right Watchlist is Collapsed -->
-<button v-if="page !== 'watchlist' && !compactPanelOpen" 
-        class="floating-expand-rw-btn desktop-only" 
-        @click="compactPanelOpen = true" 
-        title="展开自选看板">
-  <span class="rw-floating-text">自选 ▸</span>
-</button>
+<transition name="rw-floating-tab">
+  <button v-if="page !== 'watchlist' && !compactPanelOpen" 
+          class="floating-expand-rw-btn desktop-only" 
+          @click="compactPanelOpen = true" 
+          title="展开自选看板">
+    <span class="rw-floating-text">自选 ▸</span>
+  </button>
+</transition>
 
 </div><!-- /.workspace-body -->
 </div><!-- /.workspace -->

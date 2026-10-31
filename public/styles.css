@@ -6222,6 +6222,58 @@ td { color: var(--text-primary); }
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
 }
 
+/* Chart Header Controls & Actions Row */
+.chart-controls-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 7px;
+}
+
+.chart-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+
+.chart-actions-row .chart-watch-btn {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
+.chart-actions-row .chart-reset-btn {
+  height: 32px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
+.chart-actions-row .chart-range-select {
+  height: 32px;
+  padding: 0 8px;
+  font-size: 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
 /* Quick Palette Selector in Chart Toolbars */
 .kline-palette-quick-selector {
   display: inline-flex;
@@ -8636,40 +8688,76 @@ td { color: var(--text-primary); }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 14px;
-  min-width: 14px;
-  padding: 0 3px;
-  border-radius: 3px;
-  background: #F97316;
-  background: linear-gradient(135deg, #FB923C, #EA580C);
-  color: #FFFFFF !important;
+  height: 15px;
+  width: 15px;
+  min-width: 15px;
+  padding: 0;
+  border-radius: 4px;
+  background: #281B08;
+  border: 1px solid rgba(245, 158, 11, 0.38);
+  color: #F59E0B !important;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  font-size: 9px;
-  font-weight: 900;
+  font-size: 9.5px;
+  font-weight: 800;
   line-height: 1;
-  letter-spacing: -0.2px;
-  margin-left: 5px;
+  letter-spacing: 0;
   vertical-align: middle;
   cursor: help;
   user-select: none;
-  box-shadow: 0 1px 2px rgba(249, 115, 22, 0.4);
+  box-sizing: border-box;
   flex-shrink: 0;
   transition: transform 0.12s ease, filter 0.12s ease;
 }
 
-.tv-delay-badge:hover {
-  transform: scale(1.1);
-  filter: brightness(1.1);
+:root:not(.dark) .tv-delay-badge {
+  background: #FEF3C7;
+  border-color: #FCD34D;
+  color: #B45309 !important;
 }
 
+:root.dark .tv-delay-badge {
+  background: #281B08;
+  border-color: rgba(245, 158, 11, 0.38);
+  color: #F59E0B !important;
+}
+
+.tv-delay-badge:hover {
+  transform: scale(1.08);
+  filter: brightness(1.15);
+}
+
+/* Stock Chart Header Title: Symbol, Delay [D], Company Name evenly spaced */
+.chart-header-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.chart-symbol-text {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text-main);
+  letter-spacing: -0.2px;
+}
+
+.chart-header-title .tv-delay-badge,
 .panel-heading h2 .tv-delay-badge {
-  height: 16px;
-  min-width: 16px;
+  height: 17px;
+  width: 17px;
+  min-width: 17px;
   font-size: 10px;
-  padding: 0 4px;
-  border-radius: 3.5px;
-  margin-left: 7px;
-  box-shadow: 0 1px 3px rgba(249, 115, 22, 0.45);
+  border-radius: 4px;
+  margin: 0;
+}
+
+.chart-company-name {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--text-muted);
+  letter-spacing: 0.1px;
 }
 
 /* ================= CHART PRE-MARKET / EXTENDED HOURS QUOTE STRIP ================= */
@@ -8953,10 +9041,8 @@ td { color: var(--text-primary); }
 
 .topbar-clock-group {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 1px;
-  font-size: 11px;
+  align-items: center;
+  font-size: 12px;
   line-height: 1.2;
   margin-right: 4px;
 }
@@ -8965,12 +9051,13 @@ td { color: var(--text-primary); }
   color: var(--text-main);
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
 }
 
 .clock-line-bj strong {
   font-family: var(--font-mono);
-  font-weight: 700;
+  font-weight: 600;
+  font-size: 12px;
 }
 
 .clock-live-dot {
@@ -8978,12 +9065,6 @@ td { color: var(--text-primary); }
   height: 6px;
   border-radius: 50%;
   background: #10B981;
-}
-
-.clock-line-ny {
-  color: var(--text-tertiary);
-  font-size: 10.5px;
-  font-family: var(--font-mono);
 }
 
 .topbar-icon-btn {
@@ -9647,7 +9728,15 @@ td { color: var(--text-primary); }
 }
 
 .toggle-rw-btn.is-collapsed {
-  opacity: 0.85;
+  opacity: 0.75;
+  background: var(--surface-subtle);
+  border-color: var(--border-subtle);
+}
+
+.toggle-rw-btn.is-collapsed:hover {
+  opacity: 1;
+  background: var(--surface-hover);
+  border-color: var(--text-main);
 }
 
 /* Floating Expand Watchlist Tab pinned to right screen edge when collapsed */
@@ -9655,7 +9744,7 @@ td { color: var(--text-primary); }
   position: fixed;
   right: 0;
   top: 50%;
-  transform: translateY(-50%);
+  transform: translateY(-50%) translateX(0);
   z-index: 45;
   background: var(--surface-card);
   border: 1px solid var(--border-strong);
@@ -9668,9 +9757,25 @@ td { color: var(--text-primary); }
   gap: 8px;
   color: var(--text-main);
   cursor: pointer;
-  box-shadow: -3px 0 12px rgba(0, 0, 0, 0.08);
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: -4px 0 16px rgba(0, 0, 0, 0.12);
+  transition:
+    transform 0.36s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.28s ease,
+    background 0.15s ease,
+    padding 0.15s ease;
   user-select: none;
+}
+
+.rw-floating-tab-enter-active {
+  transition: transform 0.36s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
+}
+.rw-floating-tab-leave-active {
+  transition: transform 0.24s cubic-bezier(0.4, 0, 1, 1), opacity 0.2s ease;
+}
+.rw-floating-tab-enter-from,
+.rw-floating-tab-leave-to {
+  transform: translateY(-50%) translateX(100%);
+  opacity: 0;
 }
 
 :root.dark .floating-expand-rw-btn {
@@ -9737,6 +9842,7 @@ td { color: var(--text-primary); }
 /* ================= RIGHT WATCHLIST SIDEBAR (Card Style Mockup) ================= */
 .right-watchlist-sidebar {
   width: 348px;
+  min-width: 0;
   flex-shrink: 0;
   background: var(--surface-canvas);
   border-left: 1px solid var(--border-subtle);
@@ -9748,10 +9854,58 @@ td { color: var(--text-primary); }
   z-index: 20;
   padding: 16px 14px 12px 14px;
   box-sizing: border-box;
+  opacity: 1;
+  transition:
+    width 0.36s cubic-bezier(0.16, 1, 0.3, 1),
+    padding 0.36s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.25s ease,
+    opacity 0.25s ease;
+  will-change: width, padding;
 }
 
 :root.dark .right-watchlist-sidebar {
   background: var(--surface-canvas);
+}
+
+.right-watchlist-sidebar.is-collapsed {
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  border-left-color: transparent !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  visibility: hidden;
+  transition:
+    width 0.36s cubic-bezier(0.16, 1, 0.3, 1),
+    padding 0.36s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.2s ease,
+    opacity 0.2s ease,
+    visibility 0s linear 0.36s;
+}
+
+/* Inner content wrapper keeping rigid width so text and rows glide softly without wrapping */
+.rw-sidebar-inner {
+  width: 320px;
+  min-width: 320px;
+  max-width: 320px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  transform: translateX(0);
+  opacity: 1;
+  transition:
+    transform 0.36s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform, opacity;
+}
+
+.right-watchlist-sidebar.is-collapsed .rw-sidebar-inner {
+  transform: translateX(32px);
+  opacity: 0;
+  pointer-events: none;
 }
 
 .rw-header {
@@ -11810,6 +11964,21 @@ body.is-loading .top-progress,
 .crypto-kpi-skeleton-card {
   pointer-events: none;
   min-height: 170px;
+}
+
+/* Watchlist Sidebar & Table Skeletons */
+.rw-skeleton-wrap {
+  pointer-events: none;
+}
+.rw-skeleton-row {
+  pointer-events: none;
+  cursor: default;
+}
+.rw-skeleton-row:hover {
+  background: transparent !important;
+}
+.rw-skeleton-row .sk {
+  display: inline-block;
 }
 
 @media (prefers-reduced-motion: reduce) {

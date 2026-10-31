@@ -8,7 +8,7 @@
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
     "test": "node --test test/*.test.js",
-    "check": "node --check src/server.js && node --check src/market-sessions.js && node --check src/watchlist-quotes.js && node --check src/quote-providers/longbridge.js && node --check src/workspace-data.js && node --check src/market-workspace.js && node --check src/options-wall.js && node --check public/watchlist-model.js && node --check public/app.js && node --check public/flows.js && node --check public/earnings-calendar-model.js",
+    "check": "node --check src/server.js && node --check src/market-sessions.js && node --check src/watchlist-quotes.js && node --check src/quote-providers/longbridge.js && node --check src/quote-providers/ibkr.js && node --check src/workspace-data.js && node --check src/market-workspace.js && node --check src/options-wall.js && node --check public/watchlist-model.js && node --check public/app.js && node --check public/flows.js && node --check public/earnings-calendar-model.js",
     "test:workspace": "node --test test/market-sessions.test.js test/watchlist-model.test.js test/watchlist-api.test.js test/workspace.test.js test/workspace-http.test.js test/workspace-ui.test.js"
   },
   "dependencies": {

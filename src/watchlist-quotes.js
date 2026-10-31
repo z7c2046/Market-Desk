@@ -2,7 +2,31 @@
 // Merges multi-session quotes, handles deduplication, throttling (100-250ms batching), and SSE streams.
 
 import { LongbridgeProvider } from './quote-providers/longbridge.js';
+import { IbkrProvider } from './quote-providers/ibkr.js';
 import { getCurrentSession, calcChangePercent, resolveExtReferenceClose, SESSION_TYPES, buildMultiSessionQuote } from './market-sessions.js';
+
+export function createQuoteProvider(options = {}) {
+  const env = process.env;
+  const preferred = (env.QUOTE_PROVIDER || '').toLowerCase();
+  if (preferred === 'longbridge') {
+    return new LongbridgeProvider(options.longbridge);
+  }
+  if (preferred === 'ibkr') {
+    return new IbkrProvider(options.ibkr);
+  }
+  // Auto mode: If Longbridge credentials are explicitly provided, use LongbridgeProvider
+  const hasLongbridgeCreds = Boolean(
+    options.longbridge || env.LONGBRIDGE_APP_KEY || env.LONGPORT_APP_KEY
+  );
+  const hasIbkrConfig = Boolean(
+    options.ibkr || env.IB_GATEWAY_PORT || env.IB_GATEWAY_HOST || env.IB_CLIENT_ID
+  );
+  if (hasLongbridgeCreds && !hasIbkrConfig) {
+    return new LongbridgeProvider(options.longbridge);
+  }
+  // Default to local IB Gateway provider
+  return new IbkrProvider(options.ibkr);
+}
 
 const yahooCache = new Map(); // symbol -> { quote, expiresAt }
 
@@ -198,7 +222,7 @@ export async function fetchYahooQuote(rawSymbol) {
 }
 
 export class WatchlistQuoteService {
-  constructor({ provider = new LongbridgeProvider(), batchIntervalMs = 150 } = {}) {
+  constructor({ provider = createQuoteProvider(), batchIntervalMs = 150 } = {}) {
     this.provider = provider;
     this.batchIntervalMs = batchIntervalMs;
     this.quotes = new Map(); // symbol -> MultiSessionQuote
@@ -345,7 +369,7 @@ export class WatchlistQuoteService {
         quotes: {},
         session: sessionInfo,
         provider: {
-          name: 'Longbridge',
+          name: this.provider.name || 'Longbridge',
           status: this.provider.status,
           reason: this.provider.statusReason,
           isConfigured: this.provider.isConfigured()
@@ -391,7 +415,7 @@ export class WatchlistQuoteService {
       quotes: result,
       session: sessionInfo,
       provider: {
-        name: isConfigured ? 'Longbridge' : 'Yahoo Finance (备用源)',
+        name: isConfigured ? (this.provider.name || 'Longbridge') : 'Yahoo Finance (备用源)',
         status: isConfigured ? this.provider.status : 'active',
         reason: isConfigured ? this.provider.statusReason : '已启用公开市场备用源',
         isConfigured

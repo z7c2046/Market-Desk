@@ -703,3 +703,114 @@ test('CNN Fear & Greed score: font has color without background pill box', async
 });
 
 
+
+
+test('Options page: syncs with selected watchlist symbol (e.g. SNDK) instead of staying stuck on NVDA', async t => {
+  const requestedOptionsSymbols = [];
+  const customFixture = url => {
+    const u = new URL(url, 'http://localhost');
+    if (u.pathname.includes('/watchlist/quotes')) {
+      return {
+        quotes: {
+          SNDK: { symbol: 'SNDK', name: 'SanDisk', regular: { price: 1150, changePercent: -13.4 } },
+          NVDA: { symbol: 'NVDA', name: 'NVIDIA', regular: { price: 100, changePercent: 2 } }
+        },
+        session: { session: 'regular', desc: '常规交易' }
+      };
+    }
+    if (u.pathname === '/api/options') {
+      const sym = u.searchParams.get('symbol') || 'SPY';
+      requestedOptionsSymbols.push(sym);
+      return {
+        symbol: sym,
+        spot: sym === 'SNDK' ? 1155.5 : 100,
+        expiration: '2026-11-06',
+        expirations: ['2026-11-06'],
+        callWall: [1160],
+        putWall: [1140],
+        callOi: 1200,
+        putOi: 900,
+        putCallRatio: 0.75,
+        netGex: 5000,
+        missingOi: 0,
+        missingGamma: 0,
+        contracts: 10,
+        rows: [{ strike: 1160, callOi: 1200, putOi: 900, callGex: 5000, putGex: -3000 }],
+        asOf: '2026-10-31 20:00:00'
+      };
+    }
+    return fixture(url);
+  };
+
+  const ui = await mount(t, async url => ({ ok: true, json: async () => customFixture(url) }));
+  await tick();
+
+  const optNavBtn = [...ui.w.document.querySelectorAll('.nav-item')].find(el => el.dataset.id === 'options');
+  assert.ok(optNavBtn, 'Options nav button exists');
+
+  const sndkRow = [...ui.w.document.querySelectorAll('.rw-stock-row')].find(el => el.textContent.includes('SNDK'));
+  if (sndkRow) {
+    sndkRow.click();
+    await tick();
+  }
+
+  optNavBtn.click();
+  await tick();
+  await tick();
+
+  const optInput = ui.w.document.querySelector('input[aria-label="期权标的"]');
+  assert.ok(optInput, 'Options symbol input exists');
+  assert.ok(requestedOptionsSymbols.length > 0, 'Options API was requested');
+
+  const lastRequested = requestedOptionsSymbols[requestedOptionsSymbols.length - 1];
+  assert.equal(optInput.value, 'SNDK');
+  assert.equal(lastRequested, 'SNDK', 'Options loaded selected SNDK');
+
+  assert.deepEqual(ui.errors, []);
+});
+
+test('Watchlist skeleton: renders shimmering skeleton rows during page refresh / loading and smoothly reveals real quotes', async t => {
+  let resolveQuotes;
+  const delayedFixture = url => {
+    const u = new URL(url, 'http://localhost');
+    if (u.pathname.includes('/watchlist/quotes')) {
+      return new Promise(resolve => {
+        resolveQuotes = () => resolve({
+          quotes: {
+            AAPL: { symbol: 'AAPL', name: 'Apple', regular: { price: 230, changePercent: 1.5, volume: 5000000 } }
+          },
+          session: { session: 'regular', desc: '常规交易' }
+        });
+      });
+    }
+    return fixture(url);
+  };
+
+  const ui = await mount(t, async url => ({ ok: true, json: async () => delayedFixture(url) }));
+  await tick();
+
+  // 1. While quotes request is in flight (states.watchlist.loading && no quotes yet), skeleton is active
+  const rwSidebar = ui.w.document.querySelector('.right-watchlist-sidebar');
+  assert.ok(rwSidebar, 'Right watchlist sidebar exists');
+  const skeletonWrap = rwSidebar.querySelector('.rw-skeleton-wrap');
+  assert.ok(skeletonWrap, 'Watchlist skeleton wrap is rendered during loading');
+  const skeletonRows = skeletonWrap.querySelectorAll('.rw-skeleton-row');
+  assert.equal(skeletonRows.length, 14, 'Renders 14 realistic skeleton rows');
+
+  // Verify skeleton elements contain .sk shimmering elements
+  const firstSkRow = skeletonRows[0];
+  assert.ok(firstSkRow.querySelector('.rw-cell-code .sk'), 'Symbol cell has sk bar');
+  assert.ok(firstSkRow.querySelector('.rw-cell-price .sk'), 'Price cell has sk bar');
+  assert.ok(firstSkRow.querySelector('.rw-cell-change .sk'), 'Change cell has sk pill');
+
+  // 2. Resolve delayed quotes
+  resolveQuotes();
+  await tick();
+  await tick();
+
+  // Skeleton disappears and real data is revealed
+  assert.equal(rwSidebar.querySelector('.rw-skeleton-wrap'), null, 'Skeleton wrap disappears after quotes arrive');
+  assert.ok(rwSidebar.querySelector('.rw-stock-row:not(.rw-skeleton-row)'), 'Real stock rows are displayed');
+
+  assert.deepEqual(ui.errors, []);
+});

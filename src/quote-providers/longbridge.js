@@ -55,6 +55,7 @@ function toMs(ts) {
 export class LongbridgeProvider {
   constructor(options = {}) {
     this.options = options;
+    this.name = 'Longbridge';
     this.ctx = null;
     this.status = 'unconfigured'; // 'unconfigured' | 'connecting' | 'connected' | 'error'
     this.statusReason = '';

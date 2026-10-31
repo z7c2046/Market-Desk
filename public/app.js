@@ -430,6 +430,24 @@ createApp({ setup() {
     { putWidth: 6,  callWidth: 10, isSpot: false }
   ];
 
+  // Right Watchlist Sidebar Skeleton Rows (Symbol, Price, Chg%, EXT%)
+  const rwSkeletonRows = [
+    { symWidth: '58px', priceWidth: '62px', chgWidth: '56px', extWidth: '46px' },
+    { symWidth: '44px', priceWidth: '54px', chgWidth: '52px', extWidth: '42px' },
+    { symWidth: '68px', priceWidth: '70px', chgWidth: '58px', extWidth: '50px' },
+    { symWidth: '50px', priceWidth: '58px', chgWidth: '54px', extWidth: '44px' },
+    { symWidth: '62px', priceWidth: '66px', chgWidth: '50px', extWidth: '48px' },
+    { symWidth: '46px', priceWidth: '52px', chgWidth: '56px', extWidth: '40px' },
+    { symWidth: '74px', priceWidth: '68px', chgWidth: '60px', extWidth: '52px' },
+    { symWidth: '52px', priceWidth: '60px', chgWidth: '52px', extWidth: '46px' },
+    { symWidth: '48px', priceWidth: '56px', chgWidth: '54px', extWidth: '42px' },
+    { symWidth: '64px', priceWidth: '72px', chgWidth: '58px', extWidth: '48px' },
+    { symWidth: '56px', priceWidth: '50px', chgWidth: '50px', extWidth: '44px' },
+    { symWidth: '70px', priceWidth: '64px', chgWidth: '56px', extWidth: '50px' },
+    { symWidth: '42px', priceWidth: '58px', chgWidth: '52px', extWidth: '40px' },
+    { symWidth: '60px', priceWidth: '66px', chgWidth: '54px', extWidth: '46px' }
+  ];
+
   // Candlestick K-Line Skeleton wicks & bodies layout
   const klineCandleSkeletons = [
     { left: 3,  top: 48, wickHeight: 46, bodyHeight: 24, bodyOffset: 10 },
@@ -500,6 +518,8 @@ createApp({ setup() {
     }
     if (e.state?.symbol) {
       symbol.value = e.state.symbol;
+      const opt = toOptionSymbol(e.state.symbol);
+      if (opt) optionSymbol.value = opt;
     }
     triggerPageLoadingPulse(500);
   }
@@ -548,6 +568,27 @@ createApp({ setup() {
     }
   }
 
+  function toOptionSymbol(sym) {
+    if (!sym || typeof sym !== 'string') return null;
+    const s = sym.trim().toUpperCase();
+    if (s === '^GSPC' || s === 'SPX') return 'SPY';
+    if (s === '^NDX' || s === '^IXIC' || s === 'NDX') return 'QQQ';
+    if (s === '^DJI' || s === 'DJI' || s === 'DJX') return 'DIA';
+    if (s === '^RUT' || s === 'RUT') return 'IWM';
+    if (s === '^VIX' || s === 'VIX') return 'VIX';
+
+    // Exclude futures, forex, treasury yields, crypto
+    if (s.includes('=') || s.endsWith('.NYB') || s.startsWith('^T') || s.endsWith('-USD') || s.includes('/') || s.includes(':')) {
+      return null;
+    }
+
+    const cleaned = s.replace(/^\^/, '');
+    if (/^[A-Z0-9.]{1,10}$/.test(cleaned)) {
+      return cleaned;
+    }
+    return null;
+  }
+
   const initial = location.hash.slice(1);
   if (initial === 'settings' || initial === 'preferences') {
     openPreferencesModal();
@@ -557,7 +598,7 @@ createApp({ setup() {
   const overview = ref(null), chart = ref(null), options = ref(null), news = ref(null);
   const states = reactive(Object.fromEntries(['overview', 'chart', 'options', 'news', 'watchlist', 'crypto'].map(k => [k, { loading: false, error: '' }])));
   const searchInput = ref(''), symbol = ref('SPY'), chartRange = ref('3mo');
-  const optionSymbol = ref('NVDA'), optionExpiry = ref(''), optionMetric = ref('oi'), strikeRange = ref('0.15');
+  const optionSymbol = ref(toOptionSymbol(symbol.value) || 'SPY'), optionExpiry = ref(''), optionMetric = ref('oi'), strikeRange = ref('0.15');
   const newsSymbol = ref(''), newsSearch = ref(''), heatSize = ref('turnover'), sectorFilter = ref('全部');
   const heatmapScope = ref(readStorage('market-desk-heatmap-scope', 'watchlist'));
   if (heatmapScope.value === 'core') {
@@ -1011,6 +1052,10 @@ createApp({ setup() {
   const dateLabel = computed(() => new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }).format(clock.value));
   const refreshing = computed(() => Object.values(states).some(s => s.loading));
   const isPageLoading = computed(() => refreshing.value || isNavigating.value || isInitialLoading.value);
+  const isWatchlistSkeleton = computed(() => {
+    return (states.watchlist.loading && refreshing.value) ||
+           (states.watchlist.loading && !Object.keys(quoteStore.value || {}).length);
+  });
 
   watch(isPageLoading, (loading) => {
     if (typeof document !== 'undefined' && document.body) {
@@ -1348,9 +1393,16 @@ createApp({ setup() {
   const optionsSpotQuote = computed(() => {
     const sym = (options.value?.symbol || optionSymbol.value || '').toUpperCase();
     if (!sym) return null;
-    return overview.value?.stocks?.find(s => s.symbol === sym) ||
-           watchlist.value?.find(w => w.symbol === sym) ||
-           null;
+    const q = quoteStore.value?.[sym];
+    const reg = q?.regular;
+    if (reg && reg.price != null) {
+      return {
+        symbol: sym,
+        price: reg.price,
+        changePercent: reg.changePercent
+      };
+    }
+    return overview.value?.stocks?.find(s => s.symbol === sym) || null;
   });
 
   function formatExpiryLabel(dateStr) {
@@ -2305,6 +2357,15 @@ createApp({ setup() {
       compactPanelOpen: compactPanelOpen.value
     };
     watchlistMgr.save();
+  });
+
+  // Dispatch window resize when watchlist sidebar finishes expanding/collapsing
+  watch(compactPanelOpen, () => {
+    setTimeout(() => {
+      try {
+        window.dispatchEvent(new Event('resize'));
+      } catch (_) {}
+    }, 380);
   });
 
   // Watchlist Row Data Projection (Separate source trade time vs client receive time)
@@ -3703,6 +3764,22 @@ createApp({ setup() {
   }
 
   function selectSymbol(s) {
+    const optSym = toOptionSymbol(s);
+    if (optSym) {
+      optionSymbol.value = optSym;
+    }
+
+    if (page.value === 'options') {
+      if (!optSym) {
+        toast.value = `${s} 属于非标的/宏观品种，暂无可用的期权链。`;
+        return;
+      }
+      symbol.value = s;
+      loadOptions(true);
+      triggerPageLoadingPulse(600);
+      return;
+    }
+
     if (symbol.value === s && page.value === 'chart') {
       resetPriceChartZoom();
       return;
@@ -3749,10 +3826,17 @@ createApp({ setup() {
     }
   };
   async function loadOptions(reset = false) {
-    const s = optionSymbol.value.trim().toUpperCase();
-    if (!validSymbol(s)) { toast.value = '请输入有效的期权标的代码。'; return; }
+    const raw = optionSymbol.value.trim().toUpperCase();
+    if (!validSymbol(raw)) { toast.value = '请输入有效的期权标的代码。'; return; }
+    const s = toOptionSymbol(raw) || raw;
     optionSymbol.value = s;
-    const data = await request('options', '/api/options', { symbol: s, expiration: reset ? '' : optionExpiry.value }, options);
+    symbol.value = s;
+    const isNewSymbol = !options.value || options.value.symbol !== s;
+    const shouldReset = reset || isNewSymbol;
+    if (shouldReset) {
+      optionExpiry.value = '';
+    }
+    const data = await request('options', '/api/options', { symbol: s, expiration: shouldReset ? '' : optionExpiry.value }, options);
     if (data) optionExpiry.value = data.expiration;
   }
 
@@ -3763,7 +3847,7 @@ createApp({ setup() {
     if (page.value === 'overview' || page.value === 'crypto') loadCrypto();
     if (page.value === 'chart') loadChart();
     if (page.value === 'options') loadOptions();
-    if (page.value === 'watchlist' || page.value === 'overview') fetchWatchlistQuotes();
+    if (page.value === 'watchlist' || page.value === 'overview' || compactPanelOpen.value) fetchWatchlistQuotes();
   }
 
   async function importNotion() {
@@ -4809,7 +4893,13 @@ createApp({ setup() {
     if (['overview', 'flows'].includes(value) && !overview.value && !states.overview.loading) loadOverview();
     if (value === 'crypto' && !states.crypto.loading) loadCrypto();
     if (value === 'chart') loadChart();
-    if (value === 'options') loadOptions(options.value?.symbol !== optionSymbol.value);
+    if (value === 'options') {
+      const opt = toOptionSymbol(symbol.value);
+      if (opt && optionSymbol.value !== opt) {
+        optionSymbol.value = opt;
+      }
+      loadOptions(options.value?.symbol !== optionSymbol.value);
+    }
     if (value === 'news' || value === 'overview') loadNews();
     if (value === 'watchlist') fetchWatchlistQuotes();
     render();
@@ -4938,7 +5028,7 @@ createApp({ setup() {
     stockModal, openHeatmapStockModal, closeStockModal, viewStockFromModal,
     undoAction, isInteractingWithTable,
     toast, importing, nyClock, nyClockDetailed, nyClockInfo, sessionStatusText, dateLabel, refreshing,
-    isPageLoading, skeletonPattern, butterflySkeletonRows, klineCandleSkeletons, flowsBubbleSkeletons, triggerPageLoadingPulse,
+    isPageLoading, isWatchlistSkeleton, rwSkeletonRows, skeletonPattern, butterflySkeletonRows, klineCandleSkeletons, flowsBubbleSkeletons, triggerPageLoadingPulse,
     isDeleteMode, pendingDeleteSymbol, toggleDeleteMode, handleChipClick,
     breadcrumbLabel, upSectorsCount, downSectorsCount, upSectorsRatio, isStockGainer, getSparkline,
     stockSectors, rankedSectors, quoteWindow, breadth, findQuote, barWidth, getSectorBarHeight, walls, num, compact, pct, pctNoPlus, tone, time,
