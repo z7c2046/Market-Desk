@@ -46,27 +46,27 @@ export function getFearGreedIndex(vixPrice = 19.22) {
   const score = baseScore || 28;
   let rating = '中性';
   let ratingEn = 'Neutral';
-  let toneClass = 'kpi-pill-blue';
+  let toneClass = 'fg-tone-neutral';
   if (score <= 25) {
     rating = '极度恐慌';
     ratingEn = 'Extreme Fear';
-    toneClass = 'kpi-pill-red';
+    toneClass = 'fg-tone-extreme-fear';
   } else if (score <= 45) {
     rating = '恐慌';
     ratingEn = 'Fear';
-    toneClass = 'kpi-pill-amber';
+    toneClass = 'fg-tone-fear';
   } else if (score <= 55) {
     rating = '中性';
     ratingEn = 'Neutral';
-    toneClass = 'kpi-pill-blue';
+    toneClass = 'fg-tone-neutral';
   } else if (score <= 75) {
     rating = '贪婪';
     ratingEn = 'Greed';
-    toneClass = 'kpi-pill-green';
+    toneClass = 'fg-tone-greed';
   } else {
     rating = '极度贪婪';
     ratingEn = 'Extreme Greed';
-    toneClass = 'kpi-pill-green';
+    toneClass = 'fg-tone-extreme-greed';
   }
   return {
     score,
@@ -97,27 +97,27 @@ export async function fetchCnnFearGreed({ fetchImpl = fetch } = {}) {
       const score = Math.round(fg.score);
       let rating = '中性';
       let ratingEn = 'Neutral';
-      let toneClass = 'kpi-pill-blue';
+      let toneClass = 'fg-tone-neutral';
       if (score <= 25) {
         rating = '极度恐慌';
         ratingEn = 'Extreme Fear';
-        toneClass = 'kpi-pill-red';
+        toneClass = 'fg-tone-extreme-fear';
       } else if (score <= 45) {
         rating = '恐慌';
         ratingEn = 'Fear';
-        toneClass = 'kpi-pill-amber';
+        toneClass = 'fg-tone-fear';
       } else if (score <= 55) {
         rating = '中性';
         ratingEn = 'Neutral';
-        toneClass = 'kpi-pill-blue';
+        toneClass = 'fg-tone-neutral';
       } else if (score <= 75) {
         rating = '贪婪';
         ratingEn = 'Greed';
-        toneClass = 'kpi-pill-green';
+        toneClass = 'fg-tone-greed';
       } else {
         rating = '极度贪婪';
         ratingEn = 'Extreme Greed';
-        toneClass = 'kpi-pill-green';
+        toneClass = 'fg-tone-extreme-greed';
       }
       return {
         score,

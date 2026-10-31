@@ -890,15 +890,17 @@ export class WatchlistManager {
 }
 
 export const NASDAQ100_STOCKS = [
-  // 科技
+  // 科技 (Information Technology) - 44
   { symbol: 'NVDA', name: '英伟达 (NVIDIA)', sector: '科技', price: 142.80, changePercent: 2.15, volume: 48000000 },
   { symbol: 'AAPL', name: '苹果 (Apple)', sector: '科技', price: 231.40, changePercent: -0.14, volume: 38000000 },
   { symbol: 'MSFT', name: '微软 (Microsoft)', sector: '科技', price: 428.15, changePercent: 0.66, volume: 22000000 },
   { symbol: 'AVGO', name: '博通 (Broadcom)', sector: '科技', price: 178.60, changePercent: -0.48, volume: 16000000 },
   { symbol: 'AMD', name: '超微半导体 (AMD)', sector: '科技', price: 156.30, changePercent: 1.74, volume: 26000000 },
+  { symbol: 'CSCO', name: '思科 (Cisco)', sector: '科技', price: 58.20, changePercent: 0.45, volume: 18000000 },
   { symbol: 'QCOM', name: '高通 (Qualcomm)', sector: '科技', price: 168.40, changePercent: 0.82, volume: 12000000 },
   { symbol: 'TXN', name: '德州仪器 (TI)', sector: '科技', price: 202.10, changePercent: -0.35, volume: 8000000 },
   { symbol: 'INTC', name: '英特尔 (Intel)', sector: '科技', price: 22.80, changePercent: -1.20, volume: 35000000 },
+  { symbol: 'INTU', name: '财捷 (Intuit)', sector: '科技', price: 652.30, changePercent: 0.85, volume: 2200000 },
   { symbol: 'AMAT', name: '应用材料 (AMAT)', sector: '科技', price: 208.50, changePercent: 0.44, volume: 9000000 },
   { symbol: 'MU', name: '美光科技 (Micron)', sector: '科技', price: 108.90, changePercent: 2.46, volume: 24000000 },
   { symbol: 'LRCX', name: '泛林集团 (Lam)', sector: '科技', price: 812.40, changePercent: 0.95, volume: 6000000 },
@@ -914,17 +916,40 @@ export const NASDAQ100_STOCKS = [
   { symbol: 'FTNT', name: 'Fortinet', sector: '科技', price: 78.40, changePercent: -0.85, volume: 8500000 },
   { symbol: 'WDAY', name: 'Workday', sector: '科技', price: 254.20, changePercent: 0.65, volume: 4100000 },
   { symbol: 'ADBE', name: 'Adobe', sector: '科技', price: 505.30, changePercent: -0.55, volume: 5200000 },
+  { symbol: 'PYPL', name: '贝宝 (PayPal)', sector: '科技', price: 82.40, changePercent: 1.15, volume: 12000000 },
+  { symbol: 'ARM', name: '安谋 (Arm)', sector: '科技', price: 152.60, changePercent: 3.25, volume: 14000000 },
+  { symbol: 'PLTR', name: 'Palantir', sector: '科技', price: 44.50, changePercent: 3.80, volume: 42000000 },
+  { symbol: 'MSTR', name: '微策略 (MicroStrategy)', sector: '科技', price: 245.80, changePercent: 6.20, volume: 18000000 },
+  { symbol: 'WDC', name: '西部数据 (Western Digital)', sector: '科技', price: 72.80, changePercent: 1.85, volume: 8500000 },
+  { symbol: 'STX', name: '希捷科技 (Seagate)', sector: '科技', price: 104.50, changePercent: 1.62, volume: 4200000 },
+  { symbol: 'MDB', name: 'MongoDB', sector: '科技', price: 288.40, changePercent: 2.10, volume: 2800000 },
+  { symbol: 'DDOG', name: 'Datadog', sector: '科技', price: 128.60, changePercent: 1.45, volume: 3900000 },
+  { symbol: 'ZS', name: 'Zscaler', sector: '科技', price: 198.50, changePercent: 1.75, volume: 3100000 },
+  { symbol: 'TEAM', name: 'Atlassian', sector: '科技', price: 192.40, changePercent: 0.95, volume: 2400000 },
+  { symbol: 'TTD', name: 'The Trade Desk', sector: '科技', price: 118.20, changePercent: 2.40, volume: 4800000 },
+  { symbol: 'ROP', name: '罗珀科技 (Roper)', sector: '科技', price: 554.80, changePercent: 0.35, volume: 1200000 },
+  { symbol: 'CDW', name: 'CDW Corp', sector: '科技', price: 218.40, changePercent: 0.45, volume: 1500000 },
+  { symbol: 'MCHP', name: '微芯科技 (Microchip)', sector: '科技', price: 78.50, changePercent: 0.65, volume: 5800000 },
+  { symbol: 'ON', name: '安森美 (onsemi)', sector: '科技', price: 72.40, changePercent: 1.15, volume: 6200000 },
+  { symbol: 'MPWR', name: '芯源系统 (Monolithic)', sector: '科技', price: 890.50, changePercent: 1.40, volume: 900000 },
+  { symbol: 'ANSS', name: 'ANSYS', sector: '科技', price: 328.60, changePercent: 0.25, volume: 800000 },
+  { symbol: 'FSLR', name: '第一太阳能 (First Solar)', sector: '科技', price: 204.20, changePercent: 2.80, volume: 2900000 },
+  { symbol: 'APP', name: 'AppLovin', sector: '科技', price: 168.50, changePercent: 4.80, volume: 8200000 },
 
-  // 通信服务
-  { symbol: 'GOOGL', name: '谷歌 (Alphabet)', sector: '通信服务', price: 168.20, changePercent: -1.24, volume: 28000000 },
+  // 通信服务 (Communication Services) - 11
+  { symbol: 'GOOGL', name: '谷歌 A (Alphabet A)', sector: '通信服务', price: 168.20, changePercent: -1.24, volume: 28000000 },
+  { symbol: 'GOOG', name: '谷歌 C (Alphabet C)', sector: '通信服务', price: 170.10, changePercent: -1.18, volume: 22000000 },
   { symbol: 'META', name: 'Meta (Facebook)', sector: '通信服务', price: 588.60, changePercent: -0.96, volume: 18000000 },
   { symbol: 'NFLX', name: '奈飞 (Netflix)', sector: '通信服务', price: 742.30, changePercent: 1.85, volume: 9500000 },
   { symbol: 'TMUS', name: 'T-Mobile US', sector: '通信服务', price: 214.50, changePercent: 0.35, volume: 6200000 },
   { symbol: 'CMCSA', name: '康卡斯特 (Comcast)', sector: '通信服务', price: 42.10, changePercent: -0.62, volume: 15000000 },
   { symbol: 'CHTR', name: '特许通讯 (Charter)', sector: '通信服务', price: 345.80, changePercent: -1.45, volume: 2200000 },
   { symbol: 'DASH', name: 'DoorDash', sector: '通信服务', price: 152.40, changePercent: 2.25, volume: 4600000 },
+  { symbol: 'WBD', name: '华纳兄弟探索 (WBD)', sector: '通信服务', price: 8.45, changePercent: -0.85, volume: 24000000 },
+  { symbol: 'TTWO', name: 'Take-Two', sector: '通信服务', price: 158.40, changePercent: 0.65, volume: 2100000 },
+  { symbol: 'SIRI', name: '天狼星XM (SiriusXM)', sector: '通信服务', price: 26.80, changePercent: -0.45, volume: 6800000 },
 
-  // 可选消费
+  // 可选消费 (Consumer Discretionary) - 14
   { symbol: 'AMZN', name: '亚马逊 (Amazon)', sector: '可选消费', price: 186.40, changePercent: -0.95, volume: 32000000 },
   { symbol: 'TSLA', name: '特斯拉 (Tesla)', sector: '可选消费', price: 218.50, changePercent: -0.63, volume: 45000000 },
   { symbol: 'COST', name: '好市多 (Costco)', sector: '可选消费', price: 898.20, changePercent: 0.48, volume: 5500000 },
@@ -935,8 +960,12 @@ export const NASDAQ100_STOCKS = [
   { symbol: 'LULU', name: '露露乐蒙 (Lululemon)', sector: '可选消费', price: 312.40, changePercent: -1.10, volume: 3200000 },
   { symbol: 'ORLY', name: '奥莱利汽车 (O\'Reilly)', sector: '可选消费', price: 1180.00, changePercent: 0.35, volume: 1100000 },
   { symbol: 'MAR', name: '万豪国际 (Marriott)', sector: '可选消费', price: 258.40, changePercent: 0.82, volume: 2400000 },
+  { symbol: 'PDD', name: '拼多多 (PDD)', sector: '可选消费', price: 122.40, changePercent: 1.85, volume: 9200000 },
+  { symbol: 'ROST', name: '罗斯百货 (Ross)', sector: '可选消费', price: 142.80, changePercent: 0.45, volume: 3100000 },
+  { symbol: 'CPRT', name: '科帕特 (Copart)', sector: '可选消费', price: 54.20, changePercent: 0.35, volume: 4200000 },
+  { symbol: 'EXPE', name: '亿客行 (Expedia)', sector: '可选消费', price: 152.60, changePercent: 1.15, volume: 2500000 },
 
-  // 医疗保健
+  // 医疗保健 (Health Care) - 9
   { symbol: 'ISRG', name: '直觉外科 (Intuitive)', sector: '医疗保健', price: 512.30, changePercent: 2.10, volume: 4200000 },
   { symbol: 'AMGN', name: '安进 (Amgen)', sector: '医疗保健', price: 315.60, changePercent: -0.45, volume: 5100000 },
   { symbol: 'GILD', name: '吉利德科学 (Gilead)', sector: '医疗保健', price: 86.40, changePercent: 0.65, volume: 7800000 },
@@ -944,19 +973,41 @@ export const NASDAQ100_STOCKS = [
   { symbol: 'REGN', name: '再生元 (Regeneron)', sector: '医疗保健', price: 985.40, changePercent: -0.72, volume: 1800000 },
   { symbol: 'IDXX', name: '爱德士生物 (IDEXX)', sector: '医疗保健', price: 420.50, changePercent: 0.40, volume: 1500000 },
   { symbol: 'DXCM', name: '德康医疗 (DexCom)', sector: '医疗保健', price: 74.80, changePercent: -1.65, volume: 4800000 },
+  { symbol: 'ALNY', name: '奥尼兰姆 (Alnylam)', sector: '医疗保健', price: 278.40, changePercent: 1.25, volume: 1400000 },
+  { symbol: 'GEHC', name: '通用医疗 (GE HealthCare)', sector: '医疗保健', price: 88.50, changePercent: 0.65, volume: 3200000 },
 
-  // 必需消费
+  // 必需消费 (Consumer Staples) - 6
   { symbol: 'PEP', name: '百事可乐 (PepsiCo)', sector: '必需消费', price: 172.50, changePercent: 0.18, volume: 7200000 },
   { symbol: 'MDLZ', name: '亿滋国际 (Mondelez)', sector: '必需消费', price: 68.20, changePercent: -0.28, volume: 8500000 },
   { symbol: 'KDP', name: 'Keurig Dr Pepper', sector: '必需消费', price: 36.40, changePercent: 0.15, volume: 9200000 },
+  { symbol: 'MNST', name: '怪物饮料 (Monster)', sector: '必需消费', price: 52.40, changePercent: 0.25, volume: 5400000 },
+  { symbol: 'KHC', name: '卡夫亨氏 (Kraft Heinz)', sector: '必需消费', price: 34.80, changePercent: -0.15, volume: 7800000 },
+  { symbol: 'CCEP', name: '可口可乐欧太 (CCEP)', sector: '必需消费', price: 74.20, changePercent: 0.42, volume: 2100000 },
 
-  // 工业与公用
+  // 工业 (Industrials) - 10
   { symbol: 'HON', name: '霍尼韦尔 (Honeywell)', sector: '工业', price: 208.40, changePercent: 0.35, volume: 5400000 },
   { symbol: 'ADP', name: '自动数据处理 (ADP)', sector: '工业', price: 288.60, changePercent: 0.52, volume: 3200000 },
   { symbol: 'CSX', name: 'CSX 运输', sector: '工业', price: 34.50, changePercent: -0.42, volume: 11000000 },
   { symbol: 'PCAR', name: '帕卡汽车 (PACCAR)', sector: '工业', price: 104.20, changePercent: 0.85, volume: 3100000 },
+  { symbol: 'CTAS', name: '信达思 (Cintas)', sector: '工业', price: 198.40, changePercent: 0.65, volume: 2800000 },
+  { symbol: 'FAST', name: '快扣 (Fastenal)', sector: '工业', price: 76.50, changePercent: 0.55, volume: 3400000 },
+  { symbol: 'PAYX', name: '沛齐 (Paychex)', sector: '工业', price: 136.20, changePercent: 0.35, volume: 2200000 },
+  { symbol: 'ODFL', name: '奥德多明尼恩 (ODFL)', sector: '工业', price: 194.80, changePercent: 0.75, volume: 1500000 },
+  { symbol: 'VRSK', name: '威瑞斯克 (Verisk)', sector: '工业', price: 268.20, changePercent: 0.40, volume: 1200000 },
+  { symbol: 'AXON', name: '阿克松 (Axon)', sector: '工业', price: 420.50, changePercent: 3.10, volume: 1800000 },
+
+  // 公用事业 (Utilities) - 4
   { symbol: 'CEG', name: '星座能源 (Constellation)', sector: '公用事业', price: 268.40, changePercent: 3.40, volume: 6800000 },
-  { symbol: 'XEL', name: '埃克西尔能源 (Xcel)', sector: '公用事业', price: 62.80, changePercent: 0.22, volume: 4500000 }
+  { symbol: 'XEL', name: '埃克西尔能源 (Xcel)', sector: '公用事业', price: 62.80, changePercent: 0.22, volume: 4500000 },
+  { symbol: 'AEP', name: '美国电力 (AEP)', sector: '公用事业', price: 102.40, changePercent: 0.15, volume: 3800000 },
+  { symbol: 'EXC', name: '爱索伦电力 (Exelon)', sector: '公用事业', price: 38.60, changePercent: 0.25, volume: 6400000 },
+
+  // 能源 (Energy) - 2
+  { symbol: 'BKR', name: '贝克休斯 (Baker Hughes)', sector: '能源', price: 36.80, changePercent: 1.45, volume: 7200000 },
+  { symbol: 'FANG', name: '响尾蛇能源 (Diamondback)', sector: '能源', price: 182.40, changePercent: 1.65, volume: 2900000 },
+
+  // 原材料 (Materials) - 1
+  { symbol: 'LIN', name: '林德气体 (Linde)', sector: '原材料', price: 462.50, changePercent: 0.35, volume: 2600000 }
 ];
 
 export const SP500_STOCKS = [

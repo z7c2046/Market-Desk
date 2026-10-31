@@ -570,6 +570,16 @@
         <div class="sk-treemap-tile sk" style="flex: 1 1 18%; height: 120px;"></div>
       </div>
     </div>
+    <!-- Sector Temperature Strip Skeleton (11 Sector ETFs) -->
+    <div class="sector-temp-panel" style="margin-top: 14px;">
+      <div class="sector-temp-grid">
+        <div v-for="i in 11" :key="i" class="sector-temp-card sk-sector-temp-card">
+          <span class="sk sk-line" style="width: 55%; margin-bottom: 6px;"></span>
+          <span class="sk sk-strong" style="width: 70%; height: 18px; margin-bottom: 4px;"></span>
+          <span class="sk sk-small" style="width: 40%;"></span>
+        </div>
+      </div>
+    </div>
   </div>
   <template v-if="overview">
     <!-- Overview Header Strip -->
@@ -614,7 +624,7 @@
         </div>
         <div class="index-price-row">
           <div class="macro-compact-val">
-            <span class="price-val" :class="fearGreedIndex.toneClass">{{ fearGreedIndex.score }}</span>
+            <span class="price-val fg-score-val" :class="fearGreedIndex.toneClass">{{ fearGreedIndex.score }}</span>
             <span class="price-val-unit">/ 100</span>
           </div>
           <div class="fg-mini-track-inline" :title="'恐慌贪婪评分: ' + fearGreedIndex.score">
@@ -646,11 +656,12 @@
             {{ pct(goldContract.changePercent) }}
           </span>
         </div>
-        <div class="gold-cny-row" v-if="goldCnyPerGram" :title="'国际金衡盎司经实时汇率换算：1 oz t ≈ 31.1035 g，当前汇率：' + goldCnyPerGram.rate">
+        <div class="index-card-foot gold-card-foot" v-if="goldCnyPerGram" :title="'国际金衡盎司经实时汇率换算：1 oz t ≈ 31.1035 g，当前汇率：' + goldCnyPerGram.rate">
           <span class="gold-cny-val">折合 <strong>¥{{ goldCnyPerGram.price }}</strong>/克</span>
           <span class="gold-cny-rate">汇率 {{ goldCnyPerGram.rateShort }}</span>
+          <span class="gold-foot-sub">· 24h 避险中枢</span>
         </div>
-        <div class="index-card-foot">
+        <div class="index-card-foot" v-else>
           <span>COMEX 黄金连续 · 24h 避险中枢</span>
         </div>
       </button>
@@ -754,9 +765,8 @@
               <label>热力池:</label>
               <select v-model="heatmapScope" @change="onHeatmapScopeChange" aria-label="热力图数据范围">
                 <option value="watchlist">★ 我的自选 (已剔除杠杆ETF · {{ nonLeveragedWatchlist?.length || 0 }} 支)</option>
-                <option value="nasdaq100">🚀 纳斯达克 100 (Nasdaq 100 核心)</option>
+                <option value="nasdaq100">🚀 纳斯达克 100 (Nasdaq 100)</option>
                 <option value="sp500">🏛️ 标普 500 (S&P 500 核心蓝筹)</option>
-                <option value="core">💎 精选样本 (18 核心)</option>
               </select>
             </div>
             <div class="heatmap-weight-control">
@@ -900,6 +910,25 @@
             </th>
           </tr>
         </thead>
+
+        <!-- Loading Skeleton Rows -->
+        <tbody v-if="states.watchlist.loading && !watchlist.length" aria-hidden="true">
+          <tr v-for="i in 8" :key="i" class="wl-stock-row" style="pointer-events:none;">
+            <td class="wl-cell-symbol">
+              <div class="wl-symbol-wrapper">
+                <span class="sk sk-strong" style="width: 55px; height: 18px;"></span>
+                <span class="sk sk-small" style="width: 85px;"></span>
+              </div>
+            </td>
+            <td class="num"><span class="sk sk-line" style="width: 65px; margin-left: auto;"></span></td>
+            <td class="num"><span class="sk sk-pill" style="width: 52px; height: 20px; margin-left: auto;"></span></td>
+            <td class="num"><span class="sk sk-line" style="width: 65px; margin-left: auto;"></span></td>
+            <td class="num"><span class="sk sk-pill" style="width: 52px; height: 20px; margin-left: auto;"></span></td>
+            <td><span class="sk" style="width: 100%; height: 8px; border-radius: 999px;"></span></td>
+            <td style="text-align:center;"><span class="sk sk-pill" style="width: 55px; height: 18px; margin: 0 auto;"></span></td>
+            <td class="num"><span class="sk sk-small" style="width: 45px; margin-left: auto;"></span></td>
+          </tr>
+        </tbody>
 
         <!-- Grouped View -->
         <template v-if="viewMode === 'grouped'">
@@ -1065,8 +1094,7 @@
             <small>{{chart.currency}}</small>
             <span :class="tone(chart.changePercent)">{{pct(chart.changePercent)}}</span>
           </span>
-          <!-- TradingView-style Pre-market / Post-market EXT inline pill -->
-          <span v-if="activeChartExtQuote?.price != null" class="stock-ext-inline-pill" :class="activeChartExtQuote.session">
+          <span v-if="!isMarketOpen && showExtColumn && activeChartExtQuote?.price != null" class="stock-ext-inline-pill" :class="activeChartExtQuote.session">
             <span class="ext-tag-name">
               {{ activeChartExtQuote.session === 'pre' ? '🌅 盘前' : activeChartExtQuote.session === 'post' ? '🌇 盘后' : '🌙 隔夜' }}
             </span>
@@ -1148,17 +1176,27 @@
     <div class="chart-viewport" style="position: relative; min-height: 480px;">
       <div v-if="states.chart.loading || !chart" class="chart-skeleton" style="opacity: 1;" aria-hidden="true">
         <div class="skeleton-y">
-          <span class="sk sk-small" style="width:20px"></span>
-          <span class="sk sk-small" style="width:25px"></span>
-          <span class="sk sk-small" style="width:22px"></span>
+          <span class="sk sk-small" style="width:24px"></span>
           <span class="sk sk-small" style="width:26px"></span>
+          <span class="sk sk-small" style="width:22px"></span>
+          <span class="sk sk-small" style="width:25px"></span>
           <span class="sk sk-small" style="width:20px"></span>
           <span class="sk sk-small" style="width:24px"></span>
         </div>
         <div class="sk-chart-grid"></div>
-        <div class="sk-floating sk" style="width: 120px;"></div>
+        <div class="sk-floating sk" style="width: 140px;"></div>
+        
+        <!-- Candlesticks Silhouette in Price Area -->
+        <div class="sk-candlesticks-area">
+          <div v-for="(c, i) in klineCandleSkeletons" :key="i" class="sk-candle-item" :style="{ left: c.left + '%', top: c.top + '%' }">
+            <span class="sk-candle-wick sk" :style="{ height: c.wickHeight + 'px' }"></span>
+            <span class="sk-candle-body sk" :style="{ height: c.bodyHeight + 'px', marginTop: c.bodyOffset + 'px' }"></span>
+          </div>
+        </div>
+
+        <!-- Volume Sub-chart Bars Area -->
         <div class="skeleton-bars">
-          <span v-for="(h, i) in skeletonPattern" :key="i" class="sk" :style="{ height: h + '%', opacity: (0.72 + (i % 6) * 0.045) }"></span>
+          <span v-for="(h, i) in skeletonPattern" :key="i" class="sk" :style="{ height: (h * 0.38) + '%', opacity: (0.72 + (i % 6) * 0.045) }"></span>
         </div>
         <div class="skeleton-x">
           <span class="sk sk-small" style="width:26px"></span>
@@ -1178,7 +1216,52 @@
 </template>
 
 <template v-if="page==='crypto'">
-  <div class="crypto-dashboard-view">
+  <!-- Crypto Dashboard Skeleton -->
+  <div v-if="states.crypto.loading && !cryptoList.length" class="crypto-skeleton-wrap" aria-hidden="true">
+    <div class="crypto-kpi-grid">
+      <div v-for="i in 4" :key="i" class="crypto-kpi-card crypto-kpi-skeleton-card">
+        <div class="kpi-top">
+          <span class="sk sk-pill" style="width: 32px; height: 32px; border-radius: 9px;"></span>
+          <div style="flex:1;"><span class="sk sk-line" style="width: 80px; margin-bottom: 4px;"></span><span class="sk sk-strong" style="width: 90px; height: 16px;"></span></div>
+          <span class="sk sk-pill" style="width: 65px; height: 20px;"></span>
+        </div>
+        <div class="kpi-price-row" style="margin: 14px 0 10px;">
+          <span class="sk sk-strong" style="width: 140px; height: 26px;"></span>
+          <span class="sk sk-pill" style="width: 55px; height: 20px;"></span>
+        </div>
+        <div class="kpi-range-wrap" style="margin-bottom: 12px;">
+          <div class="range-text-row" style="margin-bottom: 4px;"><span class="sk sk-small" style="width: 70px;"></span><span class="sk sk-small" style="width: 70px;"></span></div>
+          <span class="sk" style="width: 100%; height: 6px; border-radius: 999px;"></span>
+        </div>
+        <div class="kpi-foot-stats"><span class="sk sk-small" style="width: 85px;"></span><span class="sk sk-small" style="width: 85px;"></span></div>
+      </div>
+    </div>
+    <div class="crypto-workspace-grid" style="margin-top: 16px;">
+      <section class="panel crypto-table-panel">
+        <div class="panel-heading">
+          <span class="sk sk-strong" style="width: 200px; height: 20px;"></span>
+        </div>
+        <div style="padding: 12px 16px;">
+          <div v-for="i in 6" :key="i" style="display:flex; align-items:center; gap:12px; padding: 12px 0; border-bottom: 1px solid var(--border-subtle);">
+            <span class="sk sk-pill" style="width: 24px; height: 24px; border-radius: 6px;"></span>
+            <div style="flex:1;"><span class="sk sk-line" style="width: 70px; margin-bottom: 4px;"></span><span class="sk sk-small" style="width: 100px;"></span></div>
+            <span class="sk sk-strong" style="width: 75px; height: 18px;"></span>
+            <span class="sk sk-pill" style="width: 50px; height: 20px;"></span>
+          </div>
+        </div>
+      </section>
+      <section class="panel crypto-chart-panel">
+        <div class="panel-heading"><span class="sk sk-strong" style="width: 160px; height: 20px;"></span></div>
+        <div class="chart-viewport" style="min-height: 400px; position: relative;">
+          <div class="sk-chart-grid"></div>
+          <div class="skeleton-bars">
+            <span v-for="(h, i) in skeletonPattern.slice(0, 24)" :key="i" class="sk" :style="{ height: (h * 0.5) + '%' }"></span>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+  <div v-else class="crypto-dashboard-view">
     <!-- 4 大核心 KPI 指标卡 -->
     <div class="crypto-kpi-grid">
       <!-- 1. Bitcoin BTC -->
@@ -1535,9 +1618,19 @@
       </div>
 
       <div v-if="states.overview.error" class="error-box">{{states.overview.error}} <button @click="loadOverview">重试</button></div>
-      <div v-if="!overview" class="loading-block">正在加载板块行情…</div>
-      <div id="rotation-chart" class="wide-chart" role="img" aria-label="板块涨跌幅与成交额散点图"></div>
-      <div class="panel-note">估算成交额 = 最新价 × 当日成交股数，用于比较活跃度。交易有买有卖，不能由此推断净流入、主力买卖或 ETF 净申赎。Yahoo Finance · 可能延迟。</div>
+      <div v-if="states.overview.loading || !overview" class="flows-skeleton-wrap" aria-hidden="true">
+        <!-- Quadrant Rotation Chart Skeleton -->
+        <div class="panel" style="padding: 20px; background: var(--surface-card); border-radius: 8px;">
+          <div class="chart-skeleton" style="opacity: 1; height: 320px; position: relative;">
+            <div class="sk-chart-grid" style="inset: 10px 20px;"></div>
+            <div class="sk-quadrant-cross-x"></div>
+            <div class="sk-quadrant-cross-y"></div>
+            <div v-for="(b, idx) in flowsBubbleSkeletons" :key="idx" class="sk sk-bubble" :style="{ left: b.x + '%', top: b.y + '%', width: b.size + 'px', height: b.size + 'px' }"></div>
+          </div>
+        </div>
+      </div>
+      <div v-show="overview && !states.overview.loading" id="rotation-chart" class="wide-chart" role="img" aria-label="板块涨跌幅与成交额散点图"></div>
+      <div v-if="overview" class="panel-note">估算成交额 = 最新价 × 当日成交股数，用于比较活跃度。交易有买有卖，不能由此推断净流入、主力买卖或 ETF 净申赎。Yahoo Finance · 可能延迟。</div>
     </div>
 
     <!-- 11 Sectors Breakdown Table -->
@@ -1558,7 +1651,17 @@
               <th style="text-align:right;">操作</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody v-if="states.overview.loading || !overview" aria-hidden="true">
+            <tr v-for="i in 11" :key="i">
+              <td><span class="sk sk-line" style="width: 75px;"></span></td>
+              <td><span class="sk sk-pill" style="width: 44px; height: 18px;"></span></td>
+              <td style="text-align:right;"><span class="sk sk-line" style="width: 48px; margin-left: auto;"></span></td>
+              <td style="text-align:right;"><span class="sk sk-line" style="width: 65px; margin-left: auto;"></span></td>
+              <td><span class="sk sk-small" style="width: 120px;"></span></td>
+              <td style="text-align:right;"><span class="sk sk-pill" style="width: 60px; height: 22px; margin-left: auto;"></span></td>
+            </tr>
+          </tbody>
+          <tbody v-else>
             <tr v-for="q in rankedSectors" :key="q.symbol">
               <td style="font-weight:700;display:flex;align-items:center;gap:8px;">
                 <span class="quadrant-dot" :style="{background: q.changePercent >= 0 ? 'var(--apple-green)' : 'var(--apple-red)'}"></span>
@@ -1627,8 +1730,9 @@
 
     <div v-if="states.options.error" class="error-box" role="alert">{{states.options.error}} <button @click="loadOptions(true)">重试</button></div>
 
-    <!-- Financial Terminal Skeleton for Options (When loading or initializing) -->
+    <!-- Financial Terminal Skeleton for Options (Tailored to Butterfly Distribution Board) -->
     <div v-if="states.options.loading || !options" class="options-skeleton-container" aria-hidden="true">
+      <!-- 5 Institutional Key Metric Cards Skeleton -->
       <div class="kpi-grid-5">
         <div v-for="i in 5" :key="i" class="kpi-card metric-skeleton-card">
           <div class="kpi-head"><span class="sk sk-line" style="width: 50%;"></span><span class="sk sk-pill" style="width: 60px;"></span></div>
@@ -1636,31 +1740,45 @@
           <div class="kpi-foot"><span class="sk sk-small" style="width: 40%;"></span></div>
         </div>
       </div>
-      <div class="options-butterfly-card" style="margin-top: 16px;">
-        <div class="chart-skeleton" style="opacity: 1; min-height: 380px; position: relative;">
-          <div class="skeleton-y">
-            <span class="sk sk-small" style="width:20px"></span>
-            <span class="sk sk-small" style="width:24px"></span>
-            <span class="sk sk-small" style="width:18px"></span>
-            <span class="sk sk-small" style="width:22px"></span>
-            <span class="sk sk-small" style="width:20px"></span>
-            <span class="sk sk-small" style="width:24px"></span>
-            <span class="sk sk-small" style="width:19px"></span>
-          </div>
-          <div class="sk-chart-grid"></div>
-          <div class="sk-floating sk"></div>
-          <div class="skeleton-bars">
-            <span v-for="(h, i) in skeletonPattern" :key="i" class="sk" :style="{ height: h + '%', opacity: (0.72 + (i % 6) * 0.045) }"></span>
-          </div>
-          <div class="skeleton-x">
-            <span class="sk sk-small" style="width:24px"></span>
-            <span class="sk sk-small" style="width:21px"></span>
-            <span class="sk sk-small" style="width:29px"></span>
-            <span class="sk sk-small" style="width:27px"></span>
-            <span class="sk sk-small" style="width:22px"></span>
-            <span class="sk sk-small" style="width:25px"></span>
-            <span class="sk sk-small" style="width:22px"></span>
-            <span class="sk sk-small" style="width:24px"></span>
+
+      <!-- Options Toolbar Skeleton matching live layout -->
+      <div class="options-toolbar skeleton-options-toolbar" style="margin-top: 16px;">
+        <div class="tabs">
+          <span class="sk sk-pill" style="width: 175px; height: 32px; border-radius: 8px;"></span>
+          <span class="sk sk-pill" style="width: 145px; height: 32px; border-radius: 8px;"></span>
+        </div>
+        <div class="options-legend-group">
+          <span class="sk sk-pill" style="width: 190px; height: 22px; border-radius: 6px;"></span>
+          <span class="sk sk-pill" style="width: 190px; height: 22px; border-radius: 6px;"></span>
+        </div>
+      </div>
+
+      <!-- Institutional Butterfly Strike Distribution Skeleton Card -->
+      <div class="options-butterfly-card">
+        <div class="options-butterfly-board">
+          <div v-for="(row, idx) in butterflySkeletonRows" :key="idx" 
+               class="butterfly-row" 
+               :class="{ 'is-spot-row': row.isSpot }">
+            <!-- Left Side: Put OI (Red bar extends from center to left) -->
+            <div class="butterfly-side butterfly-side-put">
+              <span class="sk sk-small" style="width: 28px; margin-right: 8px;"></span>
+              <div class="butterfly-bar-wrap">
+                <div class="sk sk-butterfly-bar sk-butterfly-put" :style="{ width: row.putWidth + '%' }"></div>
+              </div>
+            </div>
+
+            <!-- Center Column: Strike Price -->
+            <div class="butterfly-strike-center">
+              <span class="sk sk-strike-pill" :style="{ width: row.isSpot ? '110px' : '58px', height: '22px' }"></span>
+            </div>
+
+            <!-- Right Side: Call OI (Green bar extends from center to right) -->
+            <div class="butterfly-side butterfly-side-call">
+              <div class="butterfly-bar-wrap">
+                <div class="sk sk-butterfly-bar sk-butterfly-call" :style="{ width: row.callWidth + '%' }"></div>
+              </div>
+              <span class="sk sk-small" style="width: 28px; margin-left: 8px;"></span>
+            </div>
           </div>
         </div>
       </div>
@@ -2065,7 +2183,27 @@
     </div>
 
     <!-- Loading & Error States -->
-    <div v-if="states.news.loading && !filteredNews.length" class="loading-block">正在获取最新资讯…</div>
+    <div v-if="states.news.loading && !filteredNews.length" class="news-skeleton-grid" aria-hidden="true">
+      <div v-for="i in 8" :key="i" class="news-proto-card news-skeleton-card" style="padding: 16px; background: var(--surface-card); border: 1px solid var(--border-subtle); border-radius: 10px;">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom: 12px;">
+          <span class="sk sk-pill" style="width: 68px; height: 20px;"></span>
+          <span class="sk sk-pill" style="width: 48px; height: 20px;"></span>
+          <span class="sk sk-small" style="width: 60px; margin-left: auto;"></span>
+        </div>
+        <div style="margin: 10px 0;">
+          <span class="sk sk-line" style="width: 92%; height: 16px; margin-bottom: 6px;"></span>
+          <span class="sk sk-line" style="width: 68%; height: 16px;"></span>
+        </div>
+        <div style="margin-bottom: 12px;">
+          <span class="sk sk-small" style="width: 100%; margin-bottom: 4px;"></span>
+          <span class="sk sk-small" style="width: 78%;"></span>
+        </div>
+        <div style="display:flex; align-items:center;">
+          <span class="sk sk-small" style="width: 75px;"></span>
+          <span class="sk sk-pill" style="width: 22px; height: 22px; border-radius: 6px; margin-left: auto;"></span>
+        </div>
+      </div>
+    </div>
     <div v-if="states.news.error && !filteredNews.length" class="error-box">
       {{ states.news.error }} <button @click="loadNews">重试</button>
     </div>
@@ -3683,12 +3821,32 @@
               aria-label="按整组平均涨幅排序分组">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
       </button>
-      <button class="rw-action-btn"
-              @click="showAddStockModal = true"
-              title="添加股票 / 管理分组"
-              aria-label="添加股票或管理分组">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1.2"></circle><circle cx="19" cy="12" r="1.2"></circle><circle cx="5" cy="12" r="1.2"></circle></svg>
-      </button>
+      <div class="rw-more-wrap">
+        <button class="rw-action-btn"
+                :class="{ active: showRwMoreMenu }"
+                @click.stop="showRwMoreMenu = !showRwMoreMenu"
+                title="自选设置与更多操作"
+                aria-label="自选设置与更多操作">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1.2"></circle><circle cx="19" cy="12" r="1.2"></circle><circle cx="5" cy="12" r="1.2"></circle></svg>
+        </button>
+        <!-- 3-Dots Dropdown Settings Menu -->
+        <div v-if="showRwMoreMenu" class="rw-more-dropdown" @click.stop>
+          <div class="rw-dropdown-item rw-dropdown-setting" @click="toggleShowExtSessionSetting">
+            <div class="rw-dropdown-item-left">
+              <span class="rw-setting-title">显示延长时段 (EXT%)</span>
+              <span class="rw-setting-desc">盘后/盘前时段展示涨跌幅</span>
+            </div>
+            <div class="rw-toggle-switch" :class="{ active: showExtSessionSetting }">
+              <span class="rw-toggle-knob"></span>
+            </div>
+          </div>
+          <div class="rw-dropdown-divider"></div>
+          <button class="rw-dropdown-item rw-dropdown-action" @click="showAddStockModal = true; showRwMoreMenu = false;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            添加股票 / 管理分组
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -3821,11 +3979,16 @@
           <span class="rw-cell-change" :class="tone(r.regularChange)">{{ pct(r.regularChange) }}</span>
           <span v-if="showExtColumn"
                 class="rw-cell-ext"
-                :class="r.extChange !== null ? tone(r.extChange) : 'rw-muted-empty'"
+                :class="isMarketOpen ? 'rw-muted-empty' : (r.extChange !== null ? tone(r.extChange) : 'rw-muted-empty')"
                 @click.stop="toggleSidebarSort('extChange')"
-                :title="getRowExtSessionLabel(r) + ': ' + (r.extChange !== null ? pct(r.extChange) : '—')">
-            <span class="rw-ext-sess-icon" :class="{ 'is-mobile-visible': isMobile }" :title="getExtSessionTitle(r)">{{ getExtSessionIcon(r) }}</span><span class="rw-ext-sess-lbl">{{ getRowExtSessionLabel(r) }}</span>
-            <span class="rw-ext-pct-val">{{ r.extChange !== null ? pct(r.extChange) : '—' }}</span>
+                :title="isMarketOpen ? '盘中交易时段隐去延长数值' : (getRowExtSessionLabel(r) + ': ' + (r.extChange !== null ? pct(r.extChange) : '—'))">
+            <template v-if="isMarketOpen">
+              <span class="rw-ext-pct-val rw-muted-empty">--</span>
+            </template>
+            <template v-else>
+              <span class="rw-ext-sess-icon" :class="{ 'is-mobile-visible': isMobile }" :title="getExtSessionTitle(r)">{{ getExtSessionIcon(r) }}</span><span class="rw-ext-sess-lbl">{{ getRowExtSessionLabel(r) }}</span>
+              <span class="rw-ext-pct-val">{{ r.extChange !== null ? pct(r.extChange) : '—' }}</span>
+            </template>
           </span>
           <button v-if="isDeleteMode" class="rw-del-icon-btn" @click.stop="deleteStockDirect(r.symbol)" title="移出自选">×</button>
         </div>
@@ -3908,11 +4071,16 @@
             <span class="rw-cell-change" :class="tone(r.regularChange)">{{ pct(r.regularChange) }}</span>
             <span v-if="showExtColumn"
                   class="rw-cell-ext"
-                  :class="r.extChange !== null ? tone(r.extChange) : 'rw-muted-empty'"
+                  :class="isMarketOpen ? 'rw-muted-empty' : (r.extChange !== null ? tone(r.extChange) : 'rw-muted-empty')"
                   @click.stop="toggleGroupColumnSort(sec.id, 'extChange')"
-                  :title="getRowExtSessionLabel(r) + ': ' + (r.extChange !== null ? pct(r.extChange) : '—')">
-              <span class="rw-ext-sess-icon" :class="{ 'is-mobile-visible': isMobile }" :title="getExtSessionTitle(r)">{{ getExtSessionIcon(r) }}</span><span class="rw-ext-sess-lbl">{{ getRowExtSessionLabel(r) }}</span>
-              <span class="rw-ext-pct-val">{{ r.extChange !== null ? pct(r.extChange) : '—' }}</span>
+                  :title="isMarketOpen ? '盘中交易时段隐去延长数值' : (getRowExtSessionLabel(r) + ': ' + (r.extChange !== null ? pct(r.extChange) : '—'))">
+              <template v-if="isMarketOpen">
+                <span class="rw-ext-pct-val rw-muted-empty">--</span>
+              </template>
+              <template v-else>
+                <span class="rw-ext-sess-icon" :class="{ 'is-mobile-visible': isMobile }" :title="getExtSessionTitle(r)">{{ getExtSessionIcon(r) }}</span><span class="rw-ext-sess-lbl">{{ getRowExtSessionLabel(r) }}</span>
+                <span class="rw-ext-pct-val">{{ r.extChange !== null ? pct(r.extChange) : '—' }}</span>
+              </template>
             </span>
             <button v-if="isDeleteMode" class="rw-del-icon-btn" @click.stop="deleteStockDirect(r.symbol)" title="移出自选">×</button>
           </div>

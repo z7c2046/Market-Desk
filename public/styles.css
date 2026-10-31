@@ -335,8 +335,13 @@ p { color: var(--text-secondary); line-height: 1.6; margin-bottom: 0; }
   display: flex;
   flex-direction: column;
   gap: 16px;
-  scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.sidebar-scrollable-content::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 .sidebar-primary-action {
   position: relative;
@@ -1516,11 +1521,14 @@ main { min-width: 0; }
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  padding: 14px 16px;
+  padding: 13px 16px;
   text-align: left;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  justify-content: space-between;
+  min-height: 104px;
+  height: 104px;
+  box-sizing: border-box;
   transition: transform .22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow .22s ease, border-color .2s ease;
   box-shadow: var(--shadow-sm);
   cursor: pointer;
@@ -1631,6 +1639,64 @@ main { min-width: 0; }
   align-items: baseline;
   gap: 3px;
 }
+/* Fear & Greed Score Text Colors (pure text font color, absolutely NO background) */
+.fg-score-val,
+.price-val.fg-score-val {
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+.fg-tone-extreme-fear,
+.price-val.fg-tone-extreme-fear,
+.price-val.kpi-pill-red {
+  color: #ef4444 !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+}
+.fg-tone-fear,
+.price-val.fg-tone-fear,
+.price-val.kpi-pill-amber {
+  color: #d97706 !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+}
+:root.dark .fg-tone-fear,
+:root.dark .price-val.fg-tone-fear,
+:root.dark .price-val.kpi-pill-amber,
+.dark .fg-tone-fear,
+.dark .price-val.fg-tone-fear,
+.dark .price-val.kpi-pill-amber {
+  color: #fbbf24 !important;
+  background: transparent !important;
+  background-color: transparent !important;
+}
+.fg-tone-neutral,
+.price-val.fg-tone-neutral,
+.price-val.kpi-pill-blue {
+  color: var(--apple-blue, #3b82f6) !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+}
+.fg-tone-greed,
+.price-val.fg-tone-greed,
+.price-val.kpi-pill-green {
+  color: var(--apple-green, #10b981) !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+}
+.fg-tone-extreme-greed,
+.price-val.fg-tone-extreme-greed {
+  color: #059669 !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+}
 .price-val-unit {
   font-size: 11px;
   color: var(--text-tertiary);
@@ -1656,36 +1722,30 @@ main { min-width: 0; }
   color: #ca8a04;
   border: 1px solid rgba(234, 179, 8, 0.3);
 }
-.gold-cny-row {
+.gold-card-foot {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 4px;
-  font-size: 11px;
-  line-height: 1.2;
-  padding: 1px 0;
-  margin-top: 1px;
-  color: var(--text-secondary);
+  gap: 5px;
   white-space: nowrap;
 }
-.gold-cny-val {
+.gold-card-foot .gold-cny-val {
   display: inline-flex;
   align-items: baseline;
   gap: 2px;
   color: var(--text-secondary);
   font-size: 11px;
 }
-.gold-cny-val strong {
+.gold-card-foot .gold-cny-val strong {
   font-family: var(--font-numeric, 'Inter', monospace);
   font-weight: 700;
   color: #d97706;
   font-size: 11.5px;
 }
-:root.dark .gold-cny-val strong,
-.dark .gold-cny-val strong {
+:root.dark .gold-card-foot .gold-cny-val strong,
+.dark .gold-card-foot .gold-cny-val strong {
   color: #fbbf24;
 }
-.gold-cny-rate {
+.gold-card-foot .gold-cny-rate {
   font-size: 9.5px;
   color: var(--text-tertiary);
   font-family: var(--font-numeric, 'Inter', monospace);
@@ -1694,6 +1754,13 @@ main { min-width: 0; }
   border-radius: 3px;
   border: 1px solid var(--border-subtle);
   flex-shrink: 0;
+}
+.gold-card-foot .gold-foot-sub {
+  font-size: 10.5px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .macro-asset-tag.crypto-tag {
   background: rgba(249, 115, 22, 0.12);
@@ -1722,8 +1789,8 @@ main { min-width: 0; }
   pointer-events: none;
 }
 .macro-sparkline {
-  width: 44px;
-  height: 16px;
+  width: 48px;
+  height: 18px;
   flex-shrink: 0;
 }
 
@@ -2363,7 +2430,7 @@ td { color: var(--text-primary); }
   .page-heading { margin-bottom: 10px; }
   .page-heading p { font-size: 11px; }
   .index-grid { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; margin-bottom: 10px; }
-  .index-card { min-height: 80px; padding: 10px 12px; }
+  .index-card { height: auto; min-height: 80px; padding: 10px 12px; }
   .index-name { font-size: 10px; }
   .index-price { font-size: 20px; margin: 6px 0 4px; gap: 8px; }
   .index-price small, .index-foot { font-size: 10px; }
@@ -9743,6 +9810,124 @@ td { color: var(--text-primary); }
   color: var(--text-main);
 }
 
+/* Right Watchlist 3-Dots More Settings Dropdown */
+.rw-more-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.rw-more-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 236px;
+  background: var(--surface-card, #1e222d);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12));
+  border-radius: 10px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+  padding: 6px;
+  z-index: 100;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  animation: rwDropdownFadeIn 0.15s ease-out;
+}
+
+@keyframes rwDropdownFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.rw-dropdown-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: transparent;
+  border: none;
+  color: var(--text-main, #ffffff);
+  font-size: 12.5px;
+  cursor: pointer;
+  box-sizing: border-box;
+  text-align: left;
+  transition: background 0.12s ease;
+}
+
+.rw-dropdown-item:hover {
+  background: var(--surface-hover, rgba(255, 255, 255, 0.08));
+}
+
+.rw-dropdown-item-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rw-setting-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-main, #e2e8f0);
+}
+
+.rw-setting-desc {
+  font-size: 10.5px;
+  color: var(--text-tertiary, #94a3b8);
+}
+
+/* iOS-style Smooth Switch */
+.rw-toggle-switch {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  background: var(--border-medium, #334155);
+  border-radius: 999px;
+  transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  flex-shrink: 0;
+}
+
+.rw-toggle-switch.active {
+  background: var(--brand-accent, #38bdf8);
+}
+
+.rw-toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.rw-toggle-switch.active .rw-toggle-knob {
+  transform: translateX(16px);
+}
+
+.rw-dropdown-divider {
+  height: 1px;
+  background: var(--border-subtle, rgba(255, 255, 255, 0.08));
+  margin: 5px 0;
+}
+
+.rw-dropdown-action {
+  color: var(--text-secondary, #cbd5e1);
+  font-weight: 500;
+}
+
+.rw-dropdown-action:hover {
+  color: var(--text-main, #ffffff);
+}
+
 /* Search Input Pill */
 .rw-search-wrap {
   padding: 0 0 12px 0;
@@ -9940,11 +10125,18 @@ td { color: var(--text-primary); }
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  scrollbar-width: thin;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
   display: flex;
   flex-direction: column;
   gap: 12px;
   padding-bottom: 12px;
+}
+
+.rw-groups-scrollable::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .rw-group-block {
@@ -11495,6 +11687,122 @@ body.is-loading .top-progress,
   border-radius: 8px;
   overflow: hidden;
   z-index: 3;
+}
+
+/* 3. Module-Specific Real Layout Skeletons */
+
+/* Options Butterfly Board Skeleton */
+.sk-butterfly-bar {
+  height: 20px;
+  border-radius: 4px;
+}
+.sk-butterfly-put {
+  margin-left: auto;
+  background: rgba(240, 110, 117, 0.28);
+}
+.sk-butterfly-call {
+  margin-right: auto;
+  background: rgba(49, 195, 154, 0.28);
+}
+.sk-strike-pill {
+  border-radius: 9999px;
+  display: inline-block;
+  background: var(--skeleton-base, #24282e);
+}
+.butterfly-row.is-spot-row .sk-strike-pill {
+  background: rgba(59, 130, 246, 0.45);
+}
+.skeleton-options-toolbar {
+  pointer-events: none;
+}
+
+/* K-Line Candlesticks Silhouette Skeleton */
+.sk-candlesticks-area {
+  position: absolute;
+  inset: 24px 30px 115px 46px;
+  pointer-events: none;
+}
+.sk-candle-item {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 14px;
+}
+.sk-candle-wick {
+  width: 2px;
+  background: var(--skeleton-base, #24282e);
+  border-radius: 1px;
+}
+.sk-candle-body {
+  position: absolute;
+  width: 10px;
+  background: var(--skeleton-high, #353a42);
+  border-radius: 2px;
+}
+
+/* Sector Temperature Strip Skeleton */
+.sk-sector-temp-card {
+  pointer-events: none;
+  min-height: 76px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 10px 14px;
+}
+
+/* Sector Flows Quadrant Scatter & Table Skeleton */
+.flows-skeleton-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.sk-quadrant-cross-x {
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  top: 50%;
+  height: 1px;
+  background: rgba(139, 149, 160, 0.16);
+  pointer-events: none;
+}
+.sk-quadrant-cross-y {
+  position: absolute;
+  top: 10px;
+  bottom: 25px;
+  left: 50%;
+  width: 1px;
+  background: rgba(139, 149, 160, 0.16);
+  pointer-events: none;
+}
+.sk-bubble {
+  position: absolute;
+  border-radius: 50%;
+  background: var(--skeleton-base, #24282e);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+/* News Cards Skeleton Grid */
+.news-skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+.news-proto-card.news-skeleton-card {
+  pointer-events: none;
+}
+
+/* Crypto Dashboard Skeletons */
+.crypto-skeleton-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.crypto-kpi-skeleton-card {
+  pointer-events: none;
+  min-height: 170px;
 }
 
 @media (prefers-reduced-motion: reduce) {

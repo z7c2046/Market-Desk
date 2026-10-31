@@ -262,6 +262,104 @@ test('Heatmap: strictly displays regular trading hours (正常开盘交易时段
   assert.equal(nvda.quote.sessionKey, 'regular');
   assert.equal(nvda.quote.sessionLabel, '常规');
 
+  // 3. Verify all overview cards across Row 1 and Row 2 have consistent 3-part layout (head, price, foot)
+  const allCards = [...ui.w.document.querySelectorAll('.index-grid .index-card')];
+  assert.ok(allCards.length > 0, 'Overview renders benchmark & macro cards');
+  for (const card of allCards) {
+    assert.ok(card.querySelector('.index-card-head'), 'Card has header');
+    assert.ok(card.querySelector('.index-price-row'), 'Card has price row');
+    assert.ok(card.querySelector('.index-card-foot'), 'Card has foot row');
+    assert.equal(card.children.length, 3, 'Card has exactly 3 lines of content without extra height rows');
+  }
+
+  assert.deepEqual(ui.errors, []);
+});
+
+test('Heatmap tiles: displays only change% and volume centered in 2 rows, removes price/PE/inflow, and gives Rank #1 badge only to top turnover stock', async t => {
+  const stockNvda = { symbol: 'NVDA', name: 'NVIDIA', sector: '科技', price: 123.45, changePercent: 2.5, turnover: 50000000, asOf: '2026-10-21T20:00:00Z' };
+  const stockMu = { symbol: 'MU', name: 'Micron', sector: '科技', price: 87.65, changePercent: -3.2, turnover: 20000000, asOf: '2026-10-21T20:00:00Z' };
+  const stockAmd = { symbol: 'AMD', name: 'AMD', sector: '科技', price: 145.67, changePercent: -1.5, turnover: 30000000, asOf: '2026-10-21T20:00:00Z' };
+
+  const customFixture = url => {
+    const u = new URL(url, 'http://localhost');
+    if (u.pathname.includes('/watchlist/quotes')) {
+      return {
+        quotes: {
+          NVDA: {
+            symbol: 'NVDA',
+            name: 'NVIDIA',
+            regular: { price: 100, changePercent: 2, volume: 300000000 }
+          }
+        },
+        session: { session: 'regular', desc: '常规交易' }
+      };
+    }
+    if (u.pathname.endsWith('overview')) {
+      return {
+        benchmarks: [{ ...stockNvda, symbol: 'SPY' }],
+        stocks: [stockNvda, stockMu, stockAmd],
+        sectors: [{ ...stockNvda, symbol: 'XLK' }],
+        unavailable: [],
+        note: 'Fixture for automated tests'
+      };
+    }
+    return fixture(url);
+  };
+
+  const ui = await mount(t, async url => ({ ok: true, json: async () => customFixture(url) }), {
+    'market-desk-heatmap-scope': 'watchlist',
+    'market-desk-watchlist-v2': { groups: [{ id: 'default', name: '默认', symbolIds: ['NVDA', 'MU', 'AMD'] }] }
+  });
+  await tick();
+
+  // Verify 'core' (精选样本) option is completely removed
+  const coreOption = ui.w.document.querySelector('option[value="core"]');
+  assert.equal(coreOption, null, '精选样本 (core) option is removed from DOM');
+  assert.equal(ui.w.NASDAQ100_STOCKS.length, 101, 'Nasdaq 100 contains full 101 constituent listings');
+
+  const cfg = ui.configs.get('heatmap-chart');
+  assert.ok(cfg, 'Heatmap chart initialized');
+  const series = cfg.series[0];
+  const formatter = series.label.formatter;
+  const rich = series.label.rich;
+
+  // 1. Verify rich styles & label positions: top tags/badges placed at top-left, sym/pct/vol centered
+  assert.equal(series.label.position, 'insideTopLeft');
+  assert.equal(rich.top.align, 'left');
+  assert.equal(rich.sym.align, 'center');
+  assert.equal(rich.pct.align, 'center');
+  assert.equal(rich.vol.align, 'center');
+
+  const nvdaTile = series.data.find(d => d.name === 'NVDA');
+  const muTile = series.data.find(d => d.name === 'MU');
+  const amdTile = series.data.find(d => d.name === 'AMD');
+  assert.ok(nvdaTile && muTile && amdTile);
+
+  const nvdaLabel = formatter({ data: nvdaTile });
+  const muLabel = formatter({ data: muTile });
+  const amdLabel = formatter({ data: amdTile });
+
+  // 2. NVDA has highest turnover ($50M), so NVDA gets Rank #1 badge
+  assert.match(nvdaLabel, /\{rank\|Rank #1 资金热度\}/, 'NVDA receives Rank #1 badge because it has highest turnover');
+  assert.doesNotMatch(muLabel, /\{rank\|Rank #1 资金热度\}/, 'MU does NOT have Rank #1 badge when turnover is not #1');
+  assert.match(muLabel, /\{badge\|存储芯片\}/, 'MU falls back to standard subtag');
+
+  // 3. All tiles display only symbol, change percentage (row 1) and volume (row 2)
+  for (const [tile, label] of [[nvdaTile, nvdaLabel], [muTile, muLabel], [amdTile, amdLabel]]) {
+    assert.match(label, new RegExp(`\\{sym\\|${tile.name}\\}`));
+    assert.match(label, /\{pct\|[+-]?\d+\.\d{2}%\}/);
+    assert.match(label, /\{vol\|成交 \$[\d\w.]+\}/);
+
+    // No stock price (e.g. $123.45, $87.65, $145.67)
+    assert.doesNotMatch(label, /\$123\.45/);
+    assert.doesNotMatch(label, /\$87\.65/);
+    assert.doesNotMatch(label, /\$145\.67/);
+
+    // No PE or net inflow
+    assert.doesNotMatch(label, /PE:/);
+    assert.doesNotMatch(label, /净流入/);
+  }
+
   assert.deepEqual(ui.errors, []);
 });
 
@@ -452,7 +550,7 @@ test('Heatmap color schemes: defaults to classic (经典绿红), switches to neo
   assert.deepEqual(ui.errors, []);
 });
 
-test('Watchlist refined layout: "全部" view shows flat list without group headers, hides company names, and hides EXT% during market open', async t => {
+test('Watchlist refined layout: "全部" view shows flat list without group headers, hides company names, and masks EXT% numeric value during market open', async t => {
   const openMarketFixture = url => {
     const u = new URL(url, 'http://localhost');
     if (u.pathname.includes('/watchlist/quotes')) {
@@ -491,7 +589,109 @@ test('Watchlist refined layout: "全部" view shows flat list without group head
   assert.match(header.textContent, /标的/);
   assert.match(header.textContent, /收盘价格/);
   assert.match(header.textContent, /Chg%/);
+  assert.match(header.textContent, /EXT%/);
+
+  const extCell = flatBlock.querySelector('.rw-cell-ext');
+  assert.ok(extCell, 'EXT% element exists during market open');
+  assert.match(extCell.textContent, /--/);
+  assert.doesNotMatch(extCell.textContent, /-6\.00%/);
+
+  const moreBtn = rwSidebar.querySelector('.rw-more-wrap .rw-action-btn');
+  assert.ok(moreBtn, '3-dots more action button exists');
+  moreBtn.click();
+  await tick();
+
+  const dropdown = rwSidebar.querySelector('.rw-more-dropdown');
+  assert.ok(dropdown, '3-dots settings dropdown opens');
+  assert.match(dropdown.textContent, /显示延长时段/);
+
+  const toggleSetting = dropdown.querySelector('.rw-dropdown-setting');
+  toggleSetting.click();
+  await tick();
+
   assert.doesNotMatch(header.textContent, /EXT%/);
+  assert.equal(flatBlock.querySelector('.rw-cell-ext'), null);
 
   assert.deepEqual(ui.errors, []);
 });
+
+test('Watchlist refined layout: displays extended hours move (EXT%) when market is closed/post-market', async t => {
+  const closedMarketFixture = url => {
+    const u = new URL(url, 'http://localhost');
+    if (u.pathname.includes('/watchlist/quotes')) {
+      return {
+        quotes: {
+          SNDK: {
+            symbol: 'SNDK',
+            name: 'SanDisk Corporation',
+            regular: { price: 1300, changePercent: 4.0 },
+            pre: { price: null, changePercent: null },
+            overnight: { price: null, changePercent: null },
+            post: { price: 1222, changePercent: -6.0 },
+            meta: { status: 'active', delayStatus: 'realtime' }
+          }
+        },
+        session: { session: 'post', desc: '盘后交易' },
+        provider: { isConfigured: false, name: 'Longbridge' }
+      };
+    }
+    return fixture(url);
+  };
+
+  const ui = await mount(t, async url => ({ ok: true, json: async () => closedMarketFixture(url) }));
+  await tick();
+  await tick();
+
+  const rwSidebar = ui.w.document.querySelector('.right-watchlist-sidebar');
+  const flatBlock = rwSidebar.querySelector('.rw-all-flat-block');
+  const extCell = flatBlock.querySelector('.rw-cell-ext');
+  assert.ok(extCell, 'EXT% element exists');
+  assert.match(extCell.textContent, /-6\.00%/);
+
+  assert.deepEqual(ui.errors, []);
+});
+
+test('Right watchlist sidebar: scrollbar is hidden while preserving scrolling capability', async () => {
+  const css = await fs.readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
+  assert.match(css, /\.rw-groups-scrollable\s*\{[^}]*scrollbar-width:\s*none;/);
+  assert.match(css, /\.rw-groups-scrollable\s*\{[^}]*-ms-overflow-style:\s*none;/);
+  assert.match(css, /\.rw-groups-scrollable::-webkit-scrollbar\s*\{[^}]*display:\s*none;/);
+});
+
+test('CNN Fear & Greed score: font has color without background pill box', async t => {
+  const fgScoreFixture = url => {
+    const u = new URL(url, 'http://localhost');
+    if (u.pathname.endsWith('overview')) {
+      return {
+        benchmarks: [],
+        stocks: [],
+        sectors: [],
+        fearGreed: {
+          score: 26,
+          rating: '恐慌',
+          ratingEn: 'Fear',
+          toneClass: 'fg-tone-fear',
+          previousClose: 25,
+          previousWeek: 30,
+          previousMonth: 40
+        },
+        unavailable: []
+      };
+    }
+    return fixture(url);
+  };
+
+  const ui = await mount(t, async url => ({ ok: true, json: async () => fgScoreFixture(url) }));
+  await tick();
+
+  const scoreEl = ui.w.document.querySelector('.fg-score-val');
+  assert.ok(scoreEl, 'Fear & greed score element renders');
+  assert.equal(scoreEl.textContent.trim(), '26');
+  assert.ok(scoreEl.classList.contains('fg-tone-fear'));
+
+  const css = await fs.readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
+  assert.match(css, /\.fg-score-val[^{]*\{[^}]*background:\s*transparent\s*!important/);
+  assert.match(css, /\.fg-tone-fear[^{]*\{[^}]*color:\s*#d97706/);
+});
+
+

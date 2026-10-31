@@ -57,7 +57,7 @@ const DEFAULT_FEAR_GREED = {
   score: 28,
   rating: '恐慌',
   ratingEn: 'Fear',
-  toneClass: 'kpi-pill-amber',
+  toneClass: 'fg-tone-fear',
   previousClose: 29,
   previousWeek: 34,
   previousMonth: 42,
@@ -410,6 +410,63 @@ createApp({ setup() {
 
   // Financial Terminal Skeleton & Top Pulse Progress State (from market_desk_skeleton_demo.html)
   const skeletonPattern = [24, 31, 38, 43, 49, 62, 55, 76, 89, 67, 56, 43, 35, 51, 64, 77, 61, 53, 46, 39, 34, 42, 63, 70, 55, 40, 35, 27, 20, 30, 39, 48, 55, 42, 33, 29, 23, 18, 22, 28, 24, 19, 15, 12];
+  
+  // Real Butterfly Option Board Bilateral Strike Skeletons (Left Put OI, Center Strike, Right Call OI)
+  const butterflySkeletonRows = [
+    { putWidth: 14, callWidth: 8,  isSpot: false },
+    { putWidth: 26, callWidth: 15, isSpot: false },
+    { putWidth: 42, callWidth: 28, isSpot: false },
+    { putWidth: 60, callWidth: 40, isSpot: false },
+    { putWidth: 78, callWidth: 54, isSpot: false },
+    { putWidth: 92, callWidth: 70, isSpot: false },
+    { putWidth: 85, callWidth: 88, isSpot: true },  // Spot ATM highlighted row
+    { putWidth: 64, callWidth: 96, isSpot: false },
+    { putWidth: 48, callWidth: 82, isSpot: false },
+    { putWidth: 35, callWidth: 65, isSpot: false },
+    { putWidth: 22, callWidth: 45, isSpot: false },
+    { putWidth: 16, callWidth: 30, isSpot: false },
+    { putWidth: 10, callWidth: 18, isSpot: false },
+    { putWidth: 6,  callWidth: 10, isSpot: false }
+  ];
+
+  // Candlestick K-Line Skeleton wicks & bodies layout
+  const klineCandleSkeletons = [
+    { left: 3,  top: 48, wickHeight: 46, bodyHeight: 24, bodyOffset: 10 },
+    { left: 8,  top: 42, wickHeight: 52, bodyHeight: 28, bodyOffset: 12 },
+    { left: 13, top: 38, wickHeight: 60, bodyHeight: 34, bodyOffset: 14 },
+    { left: 18, top: 45, wickHeight: 48, bodyHeight: 22, bodyOffset: 12 },
+    { left: 23, top: 50, wickHeight: 56, bodyHeight: 30, bodyOffset: 15 },
+    { left: 28, top: 40, wickHeight: 64, bodyHeight: 36, bodyOffset: 16 },
+    { left: 33, top: 32, wickHeight: 70, bodyHeight: 42, bodyOffset: 15 },
+    { left: 38, top: 25, wickHeight: 75, bodyHeight: 45, bodyOffset: 16 },
+    { left: 43, top: 30, wickHeight: 62, bodyHeight: 32, bodyOffset: 14 },
+    { left: 48, top: 36, wickHeight: 58, bodyHeight: 28, bodyOffset: 14 },
+    { left: 53, top: 28, wickHeight: 72, bodyHeight: 40, bodyOffset: 18 },
+    { left: 58, top: 22, wickHeight: 78, bodyHeight: 44, bodyOffset: 16 },
+    { left: 63, top: 26, wickHeight: 65, bodyHeight: 35, bodyOffset: 14 },
+    { left: 68, top: 34, wickHeight: 60, bodyHeight: 30, bodyOffset: 15 },
+    { left: 73, top: 42, wickHeight: 54, bodyHeight: 26, bodyOffset: 14 },
+    { left: 78, top: 38, wickHeight: 66, bodyHeight: 36, bodyOffset: 16 },
+    { left: 83, top: 30, wickHeight: 74, bodyHeight: 42, bodyOffset: 18 },
+    { left: 88, top: 35, wickHeight: 68, bodyHeight: 34, bodyOffset: 16 },
+    { left: 93, top: 28, wickHeight: 76, bodyHeight: 40, bodyOffset: 18 }
+  ];
+
+  // Sector Flows Quadrant Scatter Chart Skeleton Bubbles
+  const flowsBubbleSkeletons = [
+    { x: 18, y: 28, size: 48 },
+    { x: 32, y: 38, size: 36 },
+    { x: 26, y: 62, size: 40 },
+    { x: 42, y: 22, size: 54 },
+    { x: 58, y: 30, size: 62 },
+    { x: 72, y: 24, size: 44 },
+    { x: 65, y: 55, size: 38 },
+    { x: 80, y: 45, size: 50 },
+    { x: 86, y: 68, size: 34 },
+    { x: 48, y: 72, size: 42 },
+    { x: 76, y: 78, size: 32 }
+  ];
+
   const isNavigating = ref(false);
   const isInitialLoading = ref(true);
   let navTimer = null;
@@ -502,6 +559,10 @@ createApp({ setup() {
   const optionSymbol = ref('NVDA'), optionExpiry = ref(''), optionMetric = ref('oi'), strikeRange = ref('0.15');
   const newsSymbol = ref(''), newsSearch = ref(''), heatSize = ref('turnover'), sectorFilter = ref('全部');
   const heatmapScope = ref(readStorage('market-desk-heatmap-scope', 'watchlist'));
+  if (heatmapScope.value === 'core') {
+    heatmapScope.value = 'watchlist';
+    persist('market-desk-heatmap-scope', 'watchlist');
+  }
   const heatmapSession = ref(readStorage('market-desk-heatmap-session', 'auto'));
   function onHeatmapScopeChange() {
     persist('market-desk-heatmap-scope', heatmapScope.value);
@@ -991,7 +1052,7 @@ createApp({ setup() {
       ? (regVolume * basePrice)
       : (reg.turnover ?? q.turnover ?? overviewStock?.turnover ?? null);
 
-    if ((turnover === null || !Number.isFinite(turnover) || turnover <= 0) && heatmapScope.value !== 'core') {
+    if (turnover === null || !Number.isFinite(turnover) || turnover <= 0) {
       const mcap = STOCK_MARKET_CAPS[sym]?.value;
       if (mcap) {
         turnover = mcap * 0.005;
@@ -1019,7 +1080,7 @@ createApp({ setup() {
     if (heatmapScope.value === 'watchlist') {
       const symbols = nonLeveragedWatchlist.value;
       if (!symbols.length) {
-        return (overview.value?.stocks || []).map(s => buildHeatmapStockItem({ symbol: s.symbol, name: s.name, sector: s.sector, fallbackStock: s }));
+        return NASDAQ100_STOCKS.map(def => buildHeatmapStockItem({ symbol: def.symbol, name: def.name, sector: def.sector, fallbackStock: def }));
       }
       return symbols.map(sym => {
         const overviewStock = (overview.value?.stocks || []).find(s => s.symbol === sym);
@@ -1029,16 +1090,12 @@ createApp({ setup() {
       });
     }
 
-    if (heatmapScope.value === 'nasdaq100') {
-      return NASDAQ100_STOCKS.map(def => buildHeatmapStockItem({ symbol: def.symbol, name: def.name, sector: def.sector, fallbackStock: def }));
-    }
-
     if (heatmapScope.value === 'sp500') {
       return SP500_STOCKS.map(def => buildHeatmapStockItem({ symbol: def.symbol, name: def.name, sector: def.sector, fallbackStock: def }));
     }
 
-    // fallback: core 18
-    return (overview.value?.stocks || []).map(s => buildHeatmapStockItem({ symbol: s.symbol, name: s.name, sector: s.sector, fallbackStock: s }));
+    // default / fallback: nasdaq100 (101 constituents)
+    return NASDAQ100_STOCKS.map(def => buildHeatmapStockItem({ symbol: def.symbol, name: def.name, sector: def.sector, fallbackStock: def }));
   });
 
   const missingTurnoverCount = computed(() => {
@@ -2134,11 +2191,9 @@ createApp({ setup() {
     if (page.value === 'overview') {
       const scopeLabel = heatmapScope.value === 'watchlist'
         ? `自选池 (${activeHeatmapStocks.value?.length || 0}支)`
-        : heatmapScope.value === 'nasdaq100'
-          ? `纳指100核心 (${activeHeatmapStocks.value?.length || 0}支)`
-          : heatmapScope.value === 'sp500'
-            ? `标普500核心 (${activeHeatmapStocks.value?.length || 0}支)`
-            : '精选样本 (18支)';
+        : heatmapScope.value === 'sp500'
+          ? `标普500核心 (${activeHeatmapStocks.value?.length || 0}支)`
+          : `纳指100 (${activeHeatmapStocks.value?.length || 0}支)`;
       return `市场总览 · ${scopeLabel}`;
     }
     if (page.value === 'watchlist') return '美股自选看板 · 多时段价格与涨跌比较';
@@ -2190,6 +2245,9 @@ createApp({ setup() {
   });
 
   const activeChartExtQuote = computed(() => {
+    if (currentSession.value?.session === 'regular' || isMarketOpen.value) {
+      return null;
+    }
     const q = quoteStore.value[symbol.value];
     if (q) {
       const ext = getSelectedExtQuote(q, extMode.value, currentSession.value);
@@ -2602,15 +2660,21 @@ createApp({ setup() {
       : ((currentSession.value?.session === 'regular') ? 'regular' : 'ext')
   );
 
+  // 3-dots Watchlist Menu & Extended Session Settings
+  const showRwMoreMenu = ref(false);
+  const showExtSessionSetting = ref(readStorage('market-desk-show-ext-session', true));
+  function toggleShowExtSessionSetting() {
+    showExtSessionSetting.value = !showExtSessionSetting.value;
+    persist('market-desk-show-ext-session', showExtSessionSetting.value);
+  }
+
   const isMarketOpen = computed(() => {
     return currentSession.value?.session === 'regular';
   });
 
   const showExtColumn = computed(() => {
-    // 开盘之后（美股常规交易时段），延长时段不要显示
-    if (isMarketOpen.value) return false;
-    // 非开盘时段（盘前、盘后、隔夜、闭市），仅在用户未主动切换为“常规”时显示
-    return rwSessionTab.value !== 'regular';
+    // 由自选上方 3 个点设置中的“显示延长时段”总控
+    return Boolean(showExtSessionSetting.value);
   });
 
   const currentExtSessionShortLabel = computed(() => {
@@ -3411,9 +3475,7 @@ createApp({ setup() {
       ? NASDAQ100_STOCKS.map(d => d.symbol)
       : heatmapScope.value === 'sp500'
         ? SP500_STOCKS.map(d => d.symbol)
-        : heatmapScope.value === 'core'
-          ? (overview.value?.stocks || []).map(s => s.symbol)
-          : [];
+        : [];
     const symbols = [...new Set([...(watchlist.value || []), ...scopeSymbols])];
     if (!symbols.length) return;
     try {
@@ -3758,13 +3820,110 @@ createApp({ setup() {
     entry.chart.dispatchAction({ type: 'dataZoom', dataZoomIndex: 2, start: 0, end: 100 });
   }
 
+  function shiftTreemapCenterTokens(el, textEl) {
+    if (!el || !el.shape || !textEl || !textEl._children) return;
+    const children = textEl._children;
+    if (!children.length) return;
+    const H = el.shape.height || 0;
+    const W = el.shape.width || 0;
+    if (H <= 0 || W <= 0) return;
+
+    // Locate the symbol token which marks the start of the centered lines
+    let symIndex = -1;
+    for (let i = 0; i < children.length; i++) {
+      const txt = (children[i].style?.text || '').trim();
+      if (el.name && txt === el.name) {
+        symIndex = i;
+        break;
+      }
+    }
+    if (symIndex === -1) {
+      for (let i = 0; i < children.length; i++) {
+        const txt = (children[i].style?.text || '').trim();
+        if (/^[A-Z0-9^.-]{1,6}$/.test(txt)) {
+          symIndex = i;
+          break;
+        }
+      }
+    }
+
+    // If tile is small, hide header tokens to prevent overlapping
+    if (symIndex > 0 && (H < 65 || W < 55)) {
+      for (let i = 0; i < symIndex; i++) {
+        children[i].ignore = true;
+      }
+    } else if (symIndex > 0) {
+      for (let i = 0; i < symIndex; i++) {
+        children[i].ignore = false;
+      }
+    }
+
+    const centerTokens = symIndex >= 0 ? children.slice(symIndex) : children;
+    if (!centerTokens.length) return;
+
+    const firstToken = centerTokens[0];
+    const lastToken = centerTokens[centerTokens.length - 1];
+    const firstY = firstToken.style?.y ?? 0;
+    const lastY = lastToken.style?.y ?? firstY;
+    const lastH = lastToken.getBoundingRect ? lastToken.getBoundingRect().height : 16;
+    const currentCenterH = (lastY + lastH) - firstY;
+
+    const targetStartY = el.shape.y + (H - currentCenterH) / 2;
+    const dy = targetStartY - firstY;
+
+    if (Math.abs(dy) > 0.5) {
+      for (const t of centerTokens) {
+        if (t.style && typeof t.style.y === 'number') {
+          t.style.y += dy;
+        }
+        if (t.shape && typeof t.shape.y === 'number') {
+          t.shape.y += dy;
+        }
+      }
+    }
+  }
+
+  function centerTreemapLabels(chart) {
+    if (!chart || typeof chart.getZr !== 'function') return;
+    const zr = chart.getZr();
+    if (!zr || !zr.storage) return;
+    const list = typeof zr.storage.getDisplayList === 'function' ? zr.storage.getDisplayList() : [];
+    let shifted = false;
+    for (const el of list) {
+      const textEl = el.getTextContent && el.getTextContent();
+      if (!textEl) continue;
+      if (!textEl._treemapCenterPatched) {
+        textEl._treemapCenterPatched = true;
+        const origUpdate = textEl._updateRichTexts;
+        if (typeof origUpdate === 'function') {
+          textEl._updateRichTexts = function () {
+            origUpdate.apply(this, arguments);
+            shiftTreemapCenterTokens(el, this);
+          };
+        }
+      }
+      shiftTreemapCenterTokens(el, textEl);
+      shifted = true;
+    }
+    if (shifted && zr.refresh) {
+      zr.refresh();
+    }
+  }
+
   function makeChart(id, config, onClick) {
     const el = document.getElementById(id); if (!el || !el.clientWidth) return;
     let entry = charts.get(id);
     if (entry && entry.el !== el) { entry.observer.disconnect(); entry.chart.dispose(); charts.delete(id); entry = null; }
     if (!entry) {
       const instance = echarts.init(el, null, { renderer: 'canvas' });
-      const observer = new ResizeObserver(() => instance.resize()); observer.observe(el);
+      const observer = new ResizeObserver(() => {
+        instance.resize();
+        if (id === 'heatmap-chart') centerTreemapLabels(instance);
+      });
+      observer.observe(el);
+      if (id === 'heatmap-chart') {
+        instance.on('rendered', () => centerTreemapLabels(instance));
+      }
       if (id === 'price-chart') {
         el.addEventListener('wheel', e => {
           if (!e.ctrlKey) e.preventDefault();
@@ -3775,6 +3934,9 @@ createApp({ setup() {
     }
     entry.chart.setOption({ animation: false, textStyle: { fontFamily: 'Inter, Segoe UI, PingFang SC, Microsoft YaHei, sans-serif', color: muted }, ...config }, true);
     entry.chart.off('click'); if (onClick) entry.chart.on('click', onClick); entry.chart.resize();
+    if (id === 'heatmap-chart') {
+      centerTreemapLabels(entry.chart);
+    }
   }
 
   function updateChartTheme() {
@@ -3791,7 +3953,7 @@ createApp({ setup() {
 
   const STOCK_ROLES = {
     NVDA: { tag: '算力龙头', subtag: 'AI GPU' },
-    MU: { tag: '半导体存储', subtag: 'Rank #1 资金热度', pe: '24.2', flow: '+$342M' },
+    MU: { tag: '半导体存储', subtag: '存储芯片' },
     AAPL: { tag: '消费电子', subtag: '硬件' },
     MSFT: { tag: '软件/云', subtag: 'AI SaaS' },
     AMD: { tag: '芯片', subtag: 'CPU/GPU' },
@@ -3883,6 +4045,18 @@ createApp({ setup() {
       };
     }).filter(d => heatSize.value === 'equal' || d.value > 0);
 
+    // Find the stock with highest turnover dynamically across visible heatmap items
+    let topTurnoverSymbol = null;
+    let maxTurnover = -1;
+    for (const d of data) {
+      const q = d.quote;
+      const t = (q && q.turnover !== null && Number.isFinite(q.turnover)) ? q.turnover : 0;
+      if (t > maxTurnover && t > 0) {
+        maxTurnover = t;
+        topTurnoverSymbol = q.symbol;
+      }
+    }
+
     makeChart('heatmap-chart', {
       tooltip: {
         ...tooltip,
@@ -3919,6 +4093,8 @@ createApp({ setup() {
         },
         label: {
           show: true,
+          position: 'insideTopLeft',
+          padding: [8, 10, 8, 10],
           color: '#FFFFFF',
           formatter: p => {
             const q = p.data?.quote;
@@ -3926,32 +4102,38 @@ createApp({ setup() {
             const role = STOCK_ROLES[q.symbol] || { tag: q.sector || '美股', subtag: '' };
             const sign = (q.changePercent || 0) > 0 ? '+' : '';
             const pctStr = Number.isFinite(q.changePercent) ? `${sign}${q.changePercent.toFixed(2)}%` : '—';
-            const priceStr = q.price !== null && Number.isFinite(q.price) ? `$${q.price.toFixed(2)}` : '—';
-            const volStr = q.turnover ? `成交 $${compact(q.turnover)}` : '';
+            const volStr = (q.turnover !== null && Number.isFinite(q.turnover) && q.turnover > 0) ? `成交 $${compact(q.turnover)}` : '';
 
-            // Rich card layout matching Stitch Prototype (Image 1)
-            if (q.symbol === 'MU') {
-              return `{top|半导体存储  }{rank|Rank #1 资金热度}\n\n{sym|MU}\n{pct|${pctStr}}\n{sub|${priceStr} · ${volStr}}\n\n{bot|PE: 24.2     净流入: +$342M}`;
+            // Dynamic badge: Rank #1 资金热度 is given ONLY to the #1 turnover stock
+            const isTop1 = (q.symbol === topTurnoverSymbol);
+            const badgeText = isTop1 ? '{rank|Rank #1 资金热度}' : (role.subtag ? `{badge|${role.subtag}}` : '');
+            const topText = role.tag ? `{top|${role.tag}}` : '';
+            const header = (topText && badgeText)
+              ? `${topText}  ${badgeText}`
+              : (topText || badgeText);
+
+            // Stacked layout:
+            // Top-left: header tags / badges
+            // Center: Symbol, Row 1 (波动的幅度), Row 2 (成交量)
+            const lines = [];
+            if (header) {
+              lines.push(header);
             }
-            if (['NVDA', 'AAPL', 'AVGO'].includes(q.symbol)) {
-              const subline = volStr ? `${priceStr}    ${volStr}` : priceStr;
-              const badgeText = role.subtag ? `{badge|${role.subtag}}` : '';
-              return `{top|${role.tag}}  ${badgeText}\n\n{sym|${q.symbol}}\n{pct|${pctStr}}\n\n{sub|${subline}}`;
+            lines.push(`{sym|${q.symbol}}`);
+            lines.push(`{pct|${pctStr}}`);
+            if (volStr) {
+              lines.push(`{vol|${volStr}}`);
             }
-            if (['AMD', 'MSFT', 'AMZN', 'GOOGL', 'META', 'TSLA', 'WDC', 'SOXX'].includes(q.symbol)) {
-              const badgeText = role.subtag ? ` {badge|${role.subtag}}` : '';
-              return `{top|${role.tag}}${badgeText}\n\n{sym|${q.symbol}}\n{pct|${pctStr}}\n\n{sub|${priceStr}}`;
-            }
-            return `{top|${role.tag}}\n{sym|${q.symbol}}\n{pct|${pctStr}}`;
+            return lines.join('\n');
           },
           rich: {
-            top: { fontSize: 11, color: 'rgba(255, 255, 255, 0.92)', align: 'left', fontWeight: '500', lineHeight: 16 },
-            badge: { fontSize: 9, color: 'rgba(255, 255, 255, 0.98)', backgroundColor: 'rgba(0, 0, 0, 0.24)', padding: [2, 5], borderRadius: 4, fontWeight: 'bold' },
-            rank: { fontSize: 9, color: '#FEF08A', backgroundColor: 'rgba(0, 0, 0, 0.35)', padding: [2, 6], borderRadius: 4, fontWeight: 'bold' },
-            sym: { fontSize: 20, fontWeight: '800', color: '#FFFFFF', align: 'center', lineHeight: 26, fontFamily: 'Hanken Grotesk, sans-serif' },
+            top: { fontSize: 11, color: 'rgba(255, 255, 255, 0.92)', align: 'left', fontWeight: '500', lineHeight: 18 },
+            badge: { fontSize: 9, color: 'rgba(255, 255, 255, 0.98)', backgroundColor: 'rgba(0, 0, 0, 0.24)', padding: [2, 5], borderRadius: 4, fontWeight: 'bold', align: 'left' },
+            rank: { fontSize: 9, color: '#FEF08A', backgroundColor: 'rgba(0, 0, 0, 0.35)', padding: [2, 6], borderRadius: 4, fontWeight: 'bold', align: 'left' },
+            sym: { fontSize: 20, fontWeight: '800', color: '#FFFFFF', align: 'center', lineHeight: 28, fontFamily: 'Hanken Grotesk, sans-serif' },
             pct: { fontSize: 14, fontWeight: '700', color: '#FFFFFF', align: 'center', lineHeight: 20, fontFamily: 'JetBrains Mono, monospace' },
-            sub: { fontSize: 11, color: 'rgba(255, 255, 255, 0.88)', align: 'center', lineHeight: 16, fontFamily: 'JetBrains Mono, monospace' },
-            bot: { fontSize: 10, color: 'rgba(255, 255, 255, 0.85)', align: 'left', lineHeight: 16 }
+            vol: { fontSize: 11, color: 'rgba(255, 255, 255, 0.88)', align: 'center', lineHeight: 16, fontFamily: 'JetBrains Mono, monospace' },
+            sub: { fontSize: 11, color: 'rgba(255, 255, 255, 0.88)', align: 'center', lineHeight: 16, fontFamily: 'JetBrains Mono, monospace' }
           }
         },
         emphasis: { itemStyle: { borderColor: blue, borderWidth: 2 } }
@@ -4614,6 +4796,14 @@ createApp({ setup() {
     document.addEventListener('visibilitychange', handleVisibilityChange);
     systemTheme?.addEventListener?.('change', followSystemTheme);
     clockTimer = setInterval(() => { clock.value = getAuthoritativeTime(); }, 1000);
+    window.addEventListener('click', e => {
+      if (showRwMoreMenu.value) {
+        const wrap = document.querySelector('.rw-more-wrap');
+        if (wrap && !wrap.contains(e.target)) {
+          showRwMoreMenu.value = false;
+        }
+      }
+    });
   });
 
   onUnmounted(() => {
@@ -4672,6 +4862,7 @@ createApp({ setup() {
     groupOrderSortDir, toggleGroupOrderSort, rwSessionTab, setRwSessionTab, currentExtSessionShortLabel, getRowExtSessionLabel,
     activeSessionKey, activeSessionShortLabel, activeSessionPriceLabel, activeSessionChangeLabel,
     toggleGroupCollapse, toggleAllGroupsCollapse, areAllGroupsCollapsed, openAddStockToGroup, sidebarGroupSections, filteredSidebarGroupSections, sidebarFlatRows, filteredSidebarFlatRows, isMarketOpen, showExtColumn,
+    showRwMoreMenu, showExtSessionSetting, toggleShowExtSessionSetting,
     groupSortStates, resolveGroupSortSpec, getGroupEffectiveSort, isGroupSortedBy, getGroupColumnSortDir, toggleGroupColumnSort, cycleGroupSort, getGroupSortTitle,
     draggedStock, dragOverTarget, dragOverGroup,
     draggedGroup, dragOverGroupOrderTarget, onGroupDragStart, onGroupDragEnd, onGroupHeaderDragLeave, moveGroupUp, moveGroupDown,
@@ -4684,7 +4875,7 @@ createApp({ setup() {
     stockModal, openHeatmapStockModal, closeStockModal, viewStockFromModal,
     undoAction, isInteractingWithTable,
     toast, importing, nyClock, nyClockDetailed, nyClockInfo, sessionStatusText, dateLabel, refreshing,
-    isPageLoading, skeletonPattern, triggerPageLoadingPulse,
+    isPageLoading, skeletonPattern, butterflySkeletonRows, klineCandleSkeletons, flowsBubbleSkeletons, triggerPageLoadingPulse,
     isDeleteMode, pendingDeleteSymbol, toggleDeleteMode, handleChipClick,
     breadcrumbLabel, upSectorsCount, downSectorsCount, upSectorsRatio, isStockGainer, getSparkline,
     stockSectors, rankedSectors, quoteWindow, breadth, findQuote, barWidth, getSectorBarHeight, walls, num, compact, pct, tone, time,
