@@ -495,10 +495,10 @@ test('Watchlist card layout (自选 search, group pills, 常规/延长 switcher,
   assert.ok(muRow, 'MU row exists');
   assert.equal(muRow.querySelector('.rw-cell-ext').textContent.trim(), '2.60%', 'Green positive EXT% omits plus sign');
 
-  // Verify KXIAY (no extended hours data) displays grey slash /
+  // Verify KXIAY (no extended hours data) displays grey dash -
   const kxiayRow = [...storageBlock.querySelectorAll('.rw-stock-row')].find(r => r.querySelector('.rw-sym')?.textContent.trim() === 'KXIAY');
   assert.ok(kxiayRow, 'KXIAY row exists');
-  assert.equal(kxiayRow.querySelector('.rw-cell-ext').textContent.trim(), '/', 'Missing extended hours data renders single slash /');
+  assert.equal(kxiayRow.querySelector('.rw-cell-ext').textContent.trim(), '-', 'Missing extended hours data renders single dash -');
 
   assert.deepEqual(ui.errors, []);
 });

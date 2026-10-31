@@ -3981,13 +3981,13 @@
                 class="rw-cell-ext"
                 :class="isMarketOpen ? 'rw-muted-empty' : (r.extChange !== null ? tone(r.extChange) : 'rw-muted-empty')"
                 @click.stop="toggleSidebarSort('extChange')"
-                :title="isMarketOpen ? '盘中交易时段隐去延长数值' : ('EXT: ' + (r.extChange !== null ? pctNoPlus(r.extChange) : '/'))">
+                :title="isMarketOpen ? '盘中交易时段隐去延长数值' : ('EXT: ' + (r.extChange !== null ? pctNoPlus(r.extChange) : '-'))">
             <template v-if="isMarketOpen">
               <span class="rw-ext-pct-val rw-muted-empty">--</span>
             </template>
             <template v-else>
               <span v-if="r.extChange !== null" class="rw-ext-pct-val">{{ pctNoPlus(r.extChange) }}</span>
-              <span v-else class="rw-ext-pct-val rw-muted-empty">/</span>
+              <span v-else class="rw-ext-pct-val rw-muted-empty">-</span>
             </template>
           </span>
           <button v-if="isDeleteMode" class="rw-del-icon-btn" @click.stop="deleteStockDirect(r.symbol)" title="移出自选">×</button>
@@ -4073,13 +4073,13 @@
                   class="rw-cell-ext"
                   :class="isMarketOpen ? 'rw-muted-empty' : (r.extChange !== null ? tone(r.extChange) : 'rw-muted-empty')"
                   @click.stop="toggleGroupColumnSort(sec.id, 'extChange')"
-                  :title="isMarketOpen ? '盘中交易时段隐去延长数值' : ('EXT: ' + (r.extChange !== null ? pctNoPlus(r.extChange) : '/'))">
+                  :title="isMarketOpen ? '盘中交易时段隐去延长数值' : ('EXT: ' + (r.extChange !== null ? pctNoPlus(r.extChange) : '-'))">
               <template v-if="isMarketOpen">
                 <span class="rw-ext-pct-val rw-muted-empty">--</span>
               </template>
               <template v-else>
                 <span v-if="r.extChange !== null" class="rw-ext-pct-val">{{ pctNoPlus(r.extChange) }}</span>
-                <span v-else class="rw-ext-pct-val rw-muted-empty">/</span>
+                <span v-else class="rw-ext-pct-val rw-muted-empty">-</span>
               </template>
             </span>
             <button v-if="isDeleteMode" class="rw-del-icon-btn" @click.stop="deleteStockDirect(r.symbol)" title="移出自选">×</button>
