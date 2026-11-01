@@ -1461,15 +1461,6 @@ p { color: var(--text-secondary); line-height: 1.6; margin-bottom: 0; }
   display: block;
   flex-shrink: 0;
 }
-.refresh {
-  white-space: nowrap;
-  font-size: 12.5px;
-  height: 34px;
-  padding: 0 13px;
-}
-.spin-icon {
-  animation: spin 0.85s linear infinite;
-}
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }

@@ -483,15 +483,6 @@
       </div>
     </div>
     <button class="topbar-btn mobile-only icon-btn" @click="openMobileSearch" title="搜索美股代码" aria-label="搜索美股代码">🔍</button>
-    <button class="topbar-btn refresh desktop-only" @click="refresh" :disabled="refreshing" title="刷新行情数据">
-      <svg class="topbar-btn-svg" :class="{'spin-icon': refreshing}" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M23 4v6h-6"></path>
-        <path d="M1 20v-6h6"></path>
-        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-      </svg>
-      <span>{{refreshing ? '刷新中…' : '刷新'}}</span>
-    </button>
-    <button class="topbar-btn refresh mobile-only icon-btn" @click="refresh" :disabled="refreshing" :aria-label="refreshing?'刷新中':'刷新行情'">{{refreshing?'…':'↻'}}</button>
     <button v-if="page !== 'watchlist'" class="toggle-rw-btn desktop-only" :class="{ 'is-collapsed': !compactPanelOpen }" @click="compactPanelOpen = !compactPanelOpen" :title="compactPanelOpen ? '收起右侧自选看板' : '展开右侧自选看板'">
       <span class="rw-btn-text">自选</span>
       <svg class="rw-btn-icon-svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">

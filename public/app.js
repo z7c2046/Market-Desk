@@ -1218,10 +1218,10 @@ createApp({ setup() {
   });
   const sessionStatusText = computed(() => currentSession.value?.desc || '正常交易中');
   const dateLabel = computed(() => new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }).format(clock.value));
-  const refreshing = computed(() => Object.values(states).some(s => s.loading));
-  const isPageLoading = computed(() => refreshing.value || isNavigating.value || isInitialLoading.value);
+  const isDataLoading = computed(() => Object.values(states).some(s => s.loading));
+  const isPageLoading = computed(() => isDataLoading.value || isNavigating.value || isInitialLoading.value);
   const isWatchlistSkeleton = computed(() => {
-    return (states.watchlist.loading && refreshing.value) ||
+    return (states.watchlist.loading && isDataLoading.value) ||
            (states.watchlist.loading && !Object.keys(quoteStore.value || {}).length);
   });
 
@@ -4041,7 +4041,7 @@ createApp({ setup() {
     if (data) optionExpiry.value = data.expiration;
   }
 
-  function refresh() {
+  function loadInitialPageData() {
     triggerPageLoadingPulse(700);
     if (page.value === 'overview' || page.value === 'flows') loadOverview();
     if (page.value === 'overview' || page.value === 'news') loadNews();
@@ -5253,7 +5253,7 @@ createApp({ setup() {
 
   onMounted(() => {
     document.addEventListener('visibilitychange', scheduleAiSearchRefresh);
-    refresh();
+    loadInitialPageData();
     fetchWatchlistQuotes();
     setupEventSource();
     initialTimer = setTimeout(() => { isInitialLoading.value = false; }, 800);
@@ -5346,7 +5346,7 @@ createApp({ setup() {
     showGroupModal, showAddStockModal, showBackupModal, newGroupName, addStockInput, addStockTargetGroup, backupJsonText,
     stockModal, openHeatmapStockModal, closeStockModal, viewStockFromModal,
     undoAction, isInteractingWithTable,
-    toast, importing, nyClock, nyClockDetailed, nyClockInfo, sessionStatusText, dateLabel, refreshing,
+    toast, importing, nyClock, nyClockDetailed, nyClockInfo, sessionStatusText, dateLabel,
     isPageLoading, isWatchlistSkeleton, rwSkeletonRows, skeletonPattern, butterflySkeletonRows, klineCandleSkeletons, flowsBubbleSkeletons, triggerPageLoadingPulse,
     isDeleteMode, pendingDeleteSymbol, toggleDeleteMode, handleChipClick,
     breadcrumbLabel, upSectorsCount, downSectorsCount, upSectorsRatio, isStockGainer, getSparkline,
@@ -5368,6 +5368,6 @@ createApp({ setup() {
     klineInteractionMode, chartDelayStatus, activeChartExtQuote,
     activeMacroTab, heatmapTimeRange, rightWatchlistCollapsed, cycleExtMode, extModeLabel, lastUpdateTimeFormatted, bjTimeFormatted, overviewCards8, overviewCards10,
     currentPageTitle, deleteStockDirect, cycleSessionMode, refreshWatchlistQuotes,
-    selectSymbol, search, refresh, loadOverview, loadChart, loadNews, loadOptions, resetPriceChartZoom, fetchWatchlistQuotes, importNotion, importFlows, clearFlows
+    selectSymbol, search, loadInitialPageData, loadOverview, loadChart, loadNews, loadOptions, resetPriceChartZoom, fetchWatchlistQuotes, importNotion, importFlows, clearFlows
   };
 } }).mount('#app');
