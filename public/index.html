@@ -1169,6 +1169,33 @@
           </template>
           <span class="ma-switch-label">{{ m.label === 'VOL' ? '成交量' : m.label }}</span>
         </button>
+        <template v-if="showInflectionSignals">
+          <span class="chart-legend-item dema-legend-indicator dema14-legend" title="DEMA 14 快线">
+            <svg width="20" height="12" viewBox="0 0 20 12" fill="none" aria-hidden="true">
+              <line x1="1" y1="6" x2="19" y2="6" stroke="#38bdf8" stroke-width="2.2" stroke-linecap="round" />
+            </svg>
+            <span style="color:#38bdf8;font-weight:600;font-size:11px;">DEMA14 快线</span>
+          </span>
+          <span class="chart-legend-item dema-legend-indicator dema30-legend" title="DEMA 30 慢线">
+            <svg width="20" height="12" viewBox="0 0 20 12" fill="none" aria-hidden="true">
+              <line x1="1" y1="6" x2="19" y2="6" stroke="#fb923c" stroke-width="2.2" stroke-linecap="round" />
+            </svg>
+            <span style="color:#fb923c;font-weight:600;font-size:11px;">DEMA30 慢线</span>
+          </span>
+        </template>
+        <button type="button" 
+                class="chart-legend-item inflection-switch-btn" 
+                :class="{ 'is-active': showInflectionSignals, 'is-off': !showInflectionSignals }"
+                @click="toggleInflectionSignals"
+                :title="'拐点猎手算法 (DEMA 14 & 30 快慢线综合评分) · ' + (showInflectionSignals ? '已开启，图表绘制快慢线并标注 EB/B/ES/S' : '已关闭，点击开启')"
+                aria-label="切换拐点猎手算法标记"
+                :aria-pressed="showInflectionSignals">
+          <svg class="inflection-btn-svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline>
+            <polyline points="16 7 22 7 22 13"></polyline>
+          </svg>
+          <span class="ma-switch-label">⚡ 拐点 (EB/B/ES/S)</span>
+        </button>
       </div>
     </div>
     <div v-if="states.chart.error" class="error-box">{{states.chart.error}} <button @click="loadChart">重试</button></div>
@@ -3226,6 +3253,34 @@
             <div class="pref-ma-switch-pill" :class="{ 'is-on': klineMaVisibility[m.key] }">
               <span class="pill-slider"></span>
             </div>
+          </div>
+        </div>
+
+        <!-- 拐点猎手算法独立控制横幅 -->
+        <div class="pref-inflection-banner"
+             :class="{ active: showInflectionSignals }"
+             @click="toggleInflectionSignals"
+             role="checkbox"
+             :aria-checked="showInflectionSignals"
+             tabindex="0"
+             @keydown.enter.space.prevent="toggleInflectionSignals">
+          <div class="pref-inflection-left">
+            <div class="pref-inflection-icon-badge">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline>
+                <polyline points="16 7 22 7 22 13"></polyline>
+              </svg>
+            </div>
+            <div class="pref-inflection-content">
+              <div class="pref-inflection-title-row">
+                <strong class="pref-ma-name">⚡ 拐点猎手算法 (DEMA 14 & 30 快慢线综合多因子评分)</strong>
+                <span class="pref-algo-tag">DEMA 多因子</span>
+              </div>
+              <span class="pref-ma-desc">基于双重指数平滑均线 (DEMA) 间距/斜率/偏离度 (ATR归一化) + 变异动量因子 (Mutant Momentum) + 20日成交量放大系数，在 K 线图精准标注 EB (买入观察)、B (确认买入)、ES (卖出观察)、S (确认卖出) 拐点信号</span>
+            </div>
+          </div>
+          <div class="pref-ma-switch-pill" :class="{ 'is-on': showInflectionSignals }">
+            <span class="pill-slider"></span>
           </div>
         </div>
       </section>

@@ -25,6 +25,7 @@ import {
   MACRO_CALENDAR_ITEMS,
   filterEarningsByDay
 } from './earnings-calendar-model.js';
+import { computeInflectionSignals, formatSignalMarkers, dema } from './inflection-signals.js';
 
 const { createApp, ref, computed, reactive, watch, nextTick, onMounted, onUnmounted } = window.Vue;
 let green = '#187454', red = '#B7424D', blue = '#315EAD';
@@ -215,6 +216,11 @@ createApp({ setup() {
     ...DEFAULT_MA_VISIBILITY,
     ...readStorage('market-desk-ma-visibility', {})
   });
+  if (readStorage('market-desk-inflection-signals', false)) {
+    for (const key of ['ma5', 'ma20', 'ma60', 'ma120', 'ma250']) {
+      klineMaVisibility[key] = false;
+    }
+  }
 
   const MA_CONFIGS = [
     { key: 'ma5', period: 5, label: 'MA5', desc: '5 日短线均线', color: '#f97316' },
@@ -262,7 +268,7 @@ createApp({ setup() {
           vol: '成交股数'
         };
         const seriesName = nameMap[key];
-        if (seriesName) {
+        if (seriesName && typeof entry.chart.dispatchAction === 'function') {
           entry.chart.dispatchAction({
             type: isVisible ? 'legendSelect' : 'legendUnSelect',
             name: seriesName
@@ -289,7 +295,7 @@ createApp({ setup() {
     persist('market-desk-ma-visibility', { ...klineMaVisibility });
     if (charts.has('price-chart')) {
       const entry = charts.get('price-chart');
-      if (entry && entry.chart) {
+      if (entry && entry.chart && typeof entry.chart.dispatchAction === 'function') {
         const names = ['MA5', 'MA20', 'MA60', 'MA120', 'MA250', '成交股数'];
         for (const name of names) {
           entry.chart.dispatchAction({
@@ -300,6 +306,153 @@ createApp({ setup() {
       }
     }
     toast.value = `已${val ? '开启全部均线与指标' : '关闭全部均线与指标'}`;
+  }
+
+  const showInflectionSignals = ref(readStorage('market-desk-inflection-signals', false));
+  let lwMarkersPlugin = null;
+  let lwDemaFastSeries = null;
+  let lwDemaSlowSeries = null;
+  let savedMaVisibility = null;
+
+  function toggleInflectionSignals() {
+    showInflectionSignals.value = !showInflectionSignals.value;
+    persist('market-desk-inflection-signals', showInflectionSignals.value);
+
+    if (showInflectionSignals.value) {
+      // 开启拐点猎手算法：自动关闭其他所有常规均线
+      savedMaVisibility = { ...klineMaVisibility };
+      for (const key of ['ma5', 'ma20', 'ma60', 'ma120', 'ma250']) {
+        klineMaVisibility[key] = false;
+        if (lwMaSeriesMap && lwMaSeriesMap[key]) {
+          lwMaSeriesMap[key].applyOptions({ visible: false });
+        }
+      }
+      persist('market-desk-ma-visibility', { ...klineMaVisibility });
+
+      if (charts.has('price-chart')) {
+        const entry = charts.get('price-chart');
+        if (entry && entry.chart && typeof entry.chart.dispatchAction === 'function') {
+          for (const name of ['MA5', 'MA20', 'MA60', 'MA120', 'MA250']) {
+            entry.chart.dispatchAction({ type: 'legendUnSelect', name });
+          }
+        }
+      }
+
+      toast.value = '已开启拐点猎手算法 (已自动关闭其他常规均线，绘制 DEMA 14/30 快慢线)';
+    } else {
+      // 关闭拐点猎手算法：恢复关闭前的均线状态
+      const toRestore = savedMaVisibility || DEFAULT_MA_VISIBILITY;
+      for (const [key, val] of Object.entries(toRestore)) {
+        if (key in klineMaVisibility) {
+          klineMaVisibility[key] = val;
+          if (key === 'vol') {
+            if (lwVolumeSeries) lwVolumeSeries.applyOptions({ visible: val });
+          } else if (lwMaSeriesMap && lwMaSeriesMap[key]) {
+            lwMaSeriesMap[key].applyOptions({ visible: val });
+          }
+        }
+      }
+      persist('market-desk-ma-visibility', { ...klineMaVisibility });
+      if (charts.has('price-chart')) {
+        const entry = charts.get('price-chart');
+        if (entry && entry.chart && typeof entry.chart.dispatchAction === 'function') {
+          for (const [key, name] of Object.entries({ ma5: 'MA5', ma20: 'MA20', ma60: 'MA60', ma120: 'MA120', ma250: 'MA250' })) {
+            entry.chart.dispatchAction({
+              type: klineMaVisibility[key] ? 'legendSelect' : 'legendUnSelect',
+              name
+            });
+          }
+        }
+      }
+      toast.value = '已关闭拐点信号与快慢线';
+    }
+
+    applyInflectionMarkers();
+    applyDemaLinesData();
+    if (!lwPriceChart && charts.has('price-chart')) {
+      renderPrice();
+    }
+  }
+
+  function applyInflectionMarkers() {
+    const bars = chart.value?.bars;
+    if (!bars || !bars.length) {
+      clearInflectionMarkers();
+      return;
+    }
+    if (!showInflectionSignals.value) {
+      clearInflectionMarkers();
+      return;
+    }
+    const signals = computeInflectionSignals(bars);
+    const markers = formatSignalMarkers(signals);
+    setChartMarkers(markers);
+  }
+
+  function applyDemaLinesData() {
+    const bars = chart.value?.bars;
+    if (!bars || !bars.length) {
+      if (lwDemaFastSeries) lwDemaFastSeries.setData([]);
+      if (lwDemaSlowSeries) lwDemaSlowSeries.setData([]);
+      return;
+    }
+    if (!showInflectionSignals.value) {
+      if (lwDemaFastSeries) lwDemaFastSeries.applyOptions({ visible: false });
+      if (lwDemaSlowSeries) lwDemaSlowSeries.applyOptions({ visible: false });
+      return;
+    }
+
+    const closes = bars.map(b => Number(b.close));
+    const fastVals = dema(closes, 14);
+    const slowVals = dema(closes, 30);
+
+    const fastData = [];
+    const slowData = [];
+    for (let i = 0; i < bars.length; i++) {
+      if (fastVals[i] !== null && Number.isFinite(fastVals[i])) {
+        fastData.push({ time: bars[i].time, value: Number(fastVals[i].toFixed(2)) });
+      }
+      if (slowVals[i] !== null && Number.isFinite(slowVals[i])) {
+        slowData.push({ time: bars[i].time, value: Number(slowVals[i].toFixed(2)) });
+      }
+    }
+
+    if (lwDemaFastSeries) {
+      lwDemaFastSeries.applyOptions({ visible: true });
+      lwDemaFastSeries.setData(fastData);
+    }
+    if (lwDemaSlowSeries) {
+      lwDemaSlowSeries.applyOptions({ visible: true });
+      lwDemaSlowSeries.setData(slowData);
+    }
+  }
+
+  function clearInflectionMarkers() {
+    if (lwMarkersPlugin && typeof lwMarkersPlugin.setMarkers === 'function') {
+      lwMarkersPlugin.setMarkers([]);
+    } else if (lwCandleSeries && typeof lwCandleSeries.setMarkers === 'function') {
+      lwCandleSeries.setMarkers([]);
+    }
+  }
+
+  function setChartMarkers(markers) {
+    if (!lwCandleSeries) return;
+    try {
+      if (lwMarkersPlugin && typeof lwMarkersPlugin.setMarkers === 'function') {
+        lwMarkersPlugin.setMarkers(markers);
+        return;
+      }
+      const LW = window.LightweightCharts;
+      if (LW && typeof LW.createSeriesMarkers === 'function') {
+        lwMarkersPlugin = LW.createSeriesMarkers(lwCandleSeries, markers);
+        return;
+      }
+      if (typeof lwCandleSeries.setMarkers === 'function') {
+        lwCandleSeries.setMarkers(markers);
+      }
+    } catch (err) {
+      console.warn('Failed to apply markers to candle series:', err);
+    }
   }
 
   const klineInteractionMode = ref('follow-latest');
@@ -322,6 +475,16 @@ createApp({ setup() {
     if (lwChartResizeObserver) {
       lwChartResizeObserver.disconnect();
       lwChartResizeObserver = null;
+    }
+    if (lwMarkersPlugin) {
+      try { lwMarkersPlugin.detach(); } catch (_) {}
+      lwMarkersPlugin = null;
+    }
+    if (lwDemaFastSeries) {
+      lwDemaFastSeries = null;
+    }
+    if (lwDemaSlowSeries) {
+      lwDemaSlowSeries = null;
     }
     if (lwPriceChart) {
       try { lwPriceChart.remove(); } catch (_) {}
@@ -4345,10 +4508,49 @@ createApp({ setup() {
         }).format(new Date(bar.time * 1000))
       : '';
 
+    let demaReadout = '';
+    let inflectionTag = '';
+    if (showInflectionSignals.value && bars && bars.length) {
+      let fVal = null;
+      let sVal = null;
+      if (param && param.seriesData && lwDemaFastSeries && lwDemaSlowSeries) {
+        const fp = param.seriesData.get(lwDemaFastSeries);
+        const sp = param.seriesData.get(lwDemaSlowSeries);
+        if (fp && typeof fp.value === 'number') fVal = fp.value;
+        if (sp && typeof sp.value === 'number') sVal = sp.value;
+      }
+      if (fVal === null || sVal === null) {
+        const idx = bars.findIndex(b => b.time === bar.time);
+        if (idx >= 0) {
+          const closes = bars.map(b => Number(b.close));
+          const fastVals = dema(closes, 14);
+          const slowVals = dema(closes, 30);
+          if (fastVals[idx] !== null && Number.isFinite(fastVals[idx])) fVal = fastVals[idx];
+          if (slowVals[idx] !== null && Number.isFinite(slowVals[idx])) sVal = slowVals[idx];
+        }
+      }
+      if (fVal !== null && sVal !== null) {
+        demaReadout = ` <span style="color:#38bdf8;font-weight:600;margin-left:8px;">快(DEMA14) <b>${fVal.toFixed(2)}</b></span>` +
+          ` <span style="color:#fb923c;font-weight:600;margin-left:6px;">慢(DEMA30) <b>${sVal.toFixed(2)}</b></span>`;
+      }
+
+      const sigs = computeInflectionSignals(bars);
+      const sig = sigs.find(s => s.time === bar.time);
+      if (sig) {
+        const isBuy = sig.side.includes('B');
+        const isEarly = sig.side.startsWith('e') || sig.side.startsWith('E');
+        const sigColor = isBuy ? (isEarly ? '#38bdf8' : '#10b981') : (isEarly ? '#f59e0b' : '#ef4444');
+        const sigLabel = sig.side === 'EB' ? 'EB 买入观察' : sig.side === 'B' ? 'B 确认买入' : sig.side === 'ES' ? 'ES 卖出观察' : 'S 确认卖出';
+        inflectionTag = ` <span style="background:${sigColor}22;color:${sigColor};border:1px solid ${sigColor}55;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:700;margin-left:6px;">⚡ ${sigLabel}</span>`;
+      }
+    }
+
     textEl.innerHTML = `<span style="color:var(--text-tertiary);margin-right:8px;">${dateStr}</span>` +
       `开 <b style="color:var(--text-primary)">${o}</b> 高 <b style="color:var(--text-primary)">${h}</b> ` +
       `低 <b style="color:var(--text-primary)">${l}</b> 收 <b style="color:${toneColor}">${c}</b> ` +
-      `涨跌 <b style="color:${toneColor}">${diff} (${diffPct})</b>`;
+      `涨跌 <b style="color:${toneColor}">${diff} (${diffPct})</b>` +
+      demaReadout +
+      inflectionTag;
   }
 
   function renderPrice() {
@@ -4469,6 +4671,23 @@ createApp({ setup() {
           });
         }
 
+        const demaFastSeries = chartInstance.addSeries(LW.LineSeries, {
+          color: '#38bdf8',
+          lineWidth: 2,
+          priceLineVisible: false,
+          lastValueVisible: false,
+          crosshairMarkerVisible: false,
+          visible: !!showInflectionSignals.value
+        });
+        const demaSlowSeries = chartInstance.addSeries(LW.LineSeries, {
+          color: '#fb923c',
+          lineWidth: 2,
+          priceLineVisible: false,
+          lastValueVisible: false,
+          crosshairMarkerVisible: false,
+          visible: !!showInflectionSignals.value
+        });
+
         chartInstance.subscribeCrosshairMove(param => {
           updateReadoutFromCrosshair(param, candleSeries, maSeriesMap, bars);
         });
@@ -4497,6 +4716,8 @@ createApp({ setup() {
         lwCandleSeries = candleSeries;
         lwVolumeSeries = volumeSeries;
         lwMaSeriesMap = maSeriesMap;
+        lwDemaFastSeries = demaFastSeries;
+        lwDemaSlowSeries = demaSlowSeries;
         klineGestureCtrl = gestures;
         window.lwPriceChart = chartInstance;
         window.klineGestureCtrl = gestures;
@@ -4552,6 +4773,8 @@ createApp({ setup() {
         close: b.close
       }));
       lwCandleSeries.setData(candleData);
+      applyInflectionMarkers();
+      applyDemaLinesData();
 
       const volData = bars.map(b => ({
         time: b.time,
@@ -4618,90 +4841,142 @@ createApp({ setup() {
     const ma250 = calcMA(d.bars, 250);
     const gridLineType = klineGridStyle.value === 'solid' ? 'solid' : 'dashed';
 
-    makeChart('price-chart', {
-      backgroundColor: chartBg,
-      tooltip: { ...tooltip, trigger: 'axis' },
-      axisPointer: { link: [{ xAxisIndex: 'all' }], lineStyle: { color: gridColorValue } },
-      legend: {
-        data: ['价格 OHLC', 'MA5', 'MA20', 'MA60', 'MA120', 'MA250', '成交股数'],
-        selected: {
-          'MA5': klineMaVisibility.ma5 !== false,
-          'MA20': klineMaVisibility.ma20 !== false,
-          'MA60': klineMaVisibility.ma60 !== false,
-          'MA120': klineMaVisibility.ma120 !== false,
-          'MA250': klineMaVisibility.ma250 !== false,
-          '成交股数': klineMaVisibility.vol !== false
+      const inflectionSignals = (showInflectionSignals.value && Array.isArray(d.bars)) ? computeInflectionSignals(d.bars) : [];
+      const closes = d.bars.map(b => Number(b.close));
+      const demaFastVals = showInflectionSignals.value ? dema(closes, 14) : [];
+      const demaSlowVals = showInflectionSignals.value ? dema(closes, 30) : [];
+      const demaFastData = demaFastVals.map(v => v !== null && Number.isFinite(v) ? Number(v.toFixed(2)) : '-');
+      const demaSlowData = demaSlowVals.map(v => v !== null && Number.isFinite(v) ? Number(v.toFixed(2)) : '-');
+
+      makeChart('price-chart', {
+        backgroundColor: chartBg,
+        tooltip: { ...tooltip, trigger: 'axis' },
+        axisPointer: { link: [{ xAxisIndex: 'all' }], lineStyle: { color: gridColorValue } },
+        legend: {
+          data: [
+            '价格 OHLC', 'MA5', 'MA20', 'MA60', 'MA120', 'MA250',
+            ...(showInflectionSignals.value ? ['DEMA14 (快线)', 'DEMA30 (慢线)'] : []),
+            '成交股数'
+          ],
+          selected: {
+            'MA5': klineMaVisibility.ma5 !== false,
+            'MA20': klineMaVisibility.ma20 !== false,
+            'MA60': klineMaVisibility.ma60 !== false,
+            'MA120': klineMaVisibility.ma120 !== false,
+            'MA250': klineMaVisibility.ma250 !== false,
+            '成交股数': klineMaVisibility.vol !== false,
+            'DEMA14 (快线)': true,
+            'DEMA30 (慢线)': true
+          },
+          textStyle: { color: muted },
+          top: 0,
+          right: 20
         },
-        textStyle: { color: muted },
-        top: 0,
-        right: 20
-      },
-      grid: [{ left: 70, right: 25, top: 32, height: '62%' }, { left: 70, right: 25, top: '76%', height: '13%' }],
-      xAxis: [0, 1].map(i => ({
-        ...axis,
-        type: 'category',
-        data: labels,
-        gridIndex: i,
-        axisLabel: { show: i === 1, color: muted },
-        boundaryGap: true,
-        splitLine: { show: showGrid, lineStyle: { color: gridColorValue, type: gridLineType } }
-      })),
-      yAxis: [
-        {
+        grid: [{ left: 70, right: 25, top: 32, height: '62%' }, { left: 70, right: 25, top: '76%', height: '13%' }],
+        xAxis: [0, 1].map(i => ({
           ...axis,
-          scale: true,
-          name: d.currency,
-          min: val => Math.max(0, Number((val.min - (val.max - val.min) * 0.15).toFixed(2))),
-          max: val => Number((val.max + (val.max - val.min) * 0.15).toFixed(2)),
+          type: 'category',
+          data: labels,
+          gridIndex: i,
+          axisLabel: { show: i === 1, color: muted },
+          boundaryGap: true,
           splitLine: { show: showGrid, lineStyle: { color: gridColorValue, type: gridLineType } }
-        },
-        {
-          ...axis,
-          gridIndex: 1,
-          name: '成交量',
-          axisLabel: { color: muted, formatter: compact },
-          splitLine: { show: showGrid, lineStyle: { color: gridColorValue, type: gridLineType } }
-        }
-      ],
-      dataZoom: [
-        {
-          type: 'inside',
-          id: 'kline-inside-x',
-          xAxisIndex: [0, 1],
-          zoomOnMouseWheel: true,
-          moveOnMouseMove: true,
-          moveOnMouseWheel: false,
-          preventDefaultMouseMove: true
-        },
-        {
-          type: 'inside',
-          id: 'kline-inside-y',
-          yAxisIndex: [0],
-          filterMode: 'none',
-          start: 10,
-          end: 90,
-          zoomOnMouseWheel: true,
-          moveOnMouseMove: true,
-          moveOnMouseWheel: false,
-          preventDefaultMouseMove: true
-        },
-        {
-          type: 'slider',
-          id: 'kline-slider-x',
-          xAxisIndex: [0, 1],
-          bottom: 0,
-          height: 18,
-          borderColor: gridColor,
-          textStyle: { color: muted }
-        }
-      ],
-      series: [
-        { name: '价格 OHLC', type: 'candlestick', data: d.bars.map(b => [b.open, b.close, b.low, b.high]), itemStyle: { color: klineUp, color0: klineDown, borderColor: klineUp, borderColor0: klineDown } },
+        })),
+        yAxis: [
+          {
+            ...axis,
+            scale: true,
+            name: d.currency,
+            min: val => Math.max(0, Number((val.min - (val.max - val.min) * 0.15).toFixed(2))),
+            max: val => Number((val.max + (val.max - val.min) * 0.15).toFixed(2)),
+            splitLine: { show: showGrid, lineStyle: { color: gridColorValue, type: gridLineType } }
+          },
+          {
+            ...axis,
+            gridIndex: 1,
+            name: '成交量',
+            axisLabel: { color: muted, formatter: compact },
+            splitLine: { show: showGrid, lineStyle: { color: gridColorValue, type: gridLineType } }
+          }
+        ],
+        dataZoom: [
+          {
+            type: 'inside',
+            id: 'kline-inside-x',
+            xAxisIndex: [0, 1],
+            zoomOnMouseWheel: true,
+            moveOnMouseMove: true,
+            moveOnMouseWheel: false,
+            preventDefaultMouseMove: true
+          },
+          {
+            type: 'inside',
+            id: 'kline-inside-y',
+            yAxisIndex: [0],
+            filterMode: 'none',
+            start: 10,
+            end: 90,
+            zoomOnMouseWheel: true,
+            moveOnMouseMove: true,
+            moveOnMouseWheel: false,
+            preventDefaultMouseMove: true
+          },
+          {
+            type: 'slider',
+            id: 'kline-slider-x',
+            xAxisIndex: [0, 1],
+            bottom: 0,
+            height: 18,
+            borderColor: gridColor,
+            textStyle: { color: muted }
+          }
+        ],
+        series: [
+          {
+            name: '价格 OHLC',
+            type: 'candlestick',
+            data: d.bars.map(b => [b.open, b.close, b.low, b.high]),
+            itemStyle: { color: klineUp, color0: klineDown, borderColor: klineUp, borderColor0: klineDown },
+            markPoint: inflectionSignals.length > 0 ? {
+              symbol: 'pin',
+              symbolSize: 32,
+              data: inflectionSignals.map(s => {
+                const isBuy = s.side.includes('B');
+                const isEarly = s.side.startsWith('e') || s.side.startsWith('E');
+                const color = isBuy ? (isEarly ? '#38bdf8' : '#10b981') : (isEarly ? '#f59e0b' : '#ef4444');
+                const idx = d.bars.findIndex(b => b.time === s.time);
+                return {
+                  name: s.side,
+                  coord: [labels[idx] || idx, s.price],
+                  value: s.side,
+                  itemStyle: { color }
+                };
+              })
+            } : undefined
+          },
         { name: 'MA5', type: 'line', data: ma5, smooth: true, showSymbol: false, lineStyle: { width: 1.5, color: '#f97316' } },
         { name: 'MA20', type: 'line', data: ma20, smooth: true, showSymbol: false, lineStyle: { width: 1.5, color: '#3b82f6' } },
         { name: 'MA60', type: 'line', data: ma60, smooth: true, showSymbol: false, lineStyle: { width: 1.5, color: '#a855f7' } },
         { name: 'MA120', type: 'line', data: ma120, smooth: true, showSymbol: false, lineStyle: { width: 1.5, color: '#06b6d4' } },
         { name: 'MA250', type: 'line', data: ma250, smooth: true, showSymbol: false, lineStyle: { width: 1.5, color: '#eab308' } },
+        ...(showInflectionSignals.value ? [
+          {
+            name: 'DEMA14 (快线)',
+            type: 'line',
+            data: demaFastData,
+            smooth: true,
+            showSymbol: false,
+            lineStyle: { width: 2, color: '#38bdf8' }
+          },
+          {
+            name: 'DEMA30 (慢线)',
+            type: 'line',
+            data: demaSlowData,
+            smooth: true,
+            showSymbol: false,
+            lineStyle: { width: 2, color: '#fb923c' }
+          }
+        ] : []),
         { name: '成交股数', type: 'bar', xAxisIndex: 1, yAxisIndex: 1, data: d.bars.map(b => ({ value: b.volume, itemStyle: { color: b.close >= b.open ? volUpColor : volDownColor } })) }
       ]
     });
@@ -4989,7 +5264,7 @@ createApp({ setup() {
     // K-Line & Heatmap Color Schemes & Preferences Modal
     klineScheme, klineGridStyle, showPreferencesModal, openPreferencesModal, closePreferencesModal, setKlineScheme, setKlineGrid, klineSchemeOptions, activeKlineScheme, KLINE_SCHEMES,
     heatmapScheme, activeHeatmapScheme, heatmapSchemeOptions, setHeatmapScheme, heatmapGradientStyle, HEATMAP_SCHEMES,
-    klineMaVisibility, MA_CONFIGS, toggleMa, setAllMaVisibility,
+    klineMaVisibility, MA_CONFIGS, toggleMa, setAllMaVisibility, showInflectionSignals, toggleInflectionSignals,
     defaultPage, defaultPageOptions, setDefaultPage,
     page, currentNav, onPageEntered,
     overview, chart, options, news, states, searchInput, symbol, chartRange,

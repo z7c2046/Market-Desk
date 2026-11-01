@@ -2124,6 +2124,54 @@ main { min-width: 0; }
   color: var(--text-muted, #64748b) !important;
 }
 
+/* DEMA Legend Indicators in Chart Readout Strip */
+.dema-legend-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  margin-left: 2px;
+  user-select: none;
+}
+.dema-legend-indicator svg {
+  display: block;
+  flex-shrink: 0;
+}
+
+/* Inflection Hunter Switch Button in Chart Readout Strip */
+.inflection-switch-btn {
+  padding: 2px 7px;
+  border-radius: 4px;
+  transition: all 0.18s ease;
+  border: 1px solid transparent;
+  color: #38bdf8 !important;
+  margin-left: 4px;
+}
+
+.inflection-switch-btn.is-active {
+  background: rgba(56, 189, 248, 0.12);
+  border-color: rgba(56, 189, 248, 0.4);
+  color: #38bdf8 !important;
+}
+
+.inflection-switch-btn.is-active .ma-switch-label {
+  color: #38bdf8;
+  font-weight: 600;
+}
+
+.inflection-switch-btn.is-off {
+  opacity: 0.38 !important;
+  filter: grayscale(1) !important;
+  color: var(--text-muted, #64748b) !important;
+}
+
+.inflection-btn-svg {
+  display: block;
+  flex-shrink: 0;
+}
+
 /* Legacy tag fallback */
 .ma-tag {
   font-size: 9.5px;
@@ -8074,6 +8122,71 @@ td { color: var(--text-primary); }
 }
 .pref-ma-switch-pill.is-on .pill-slider {
   transform: translateX(14px);
+}
+
+/* Preferences Modal Inflection Banner Card */
+.pref-inflection-banner {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--surface-ground);
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  user-select: none;
+}
+
+.pref-inflection-banner:hover {
+  border-color: var(--border-focus);
+  background: var(--surface-card);
+}
+
+.pref-inflection-banner.active {
+  border-color: rgba(56, 189, 248, 0.45);
+  background: rgba(56, 189, 248, 0.06);
+}
+
+.pref-inflection-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.pref-inflection-icon-badge {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.pref-inflection-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pref-inflection-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pref-algo-tag {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.3);
 }
 
 /* ==========================================================================

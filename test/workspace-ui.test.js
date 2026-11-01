@@ -6,6 +6,7 @@ import { JSDOM, VirtualConsole } from 'jsdom';
 import { parseFlows } from '../public/flows.js';
 import * as watchlistModel from '../public/watchlist-model.js';
 import * as earningsCalendarModel from '../public/earnings-calendar-model.js';
+import * as inflectionSignals from '../public/inflection-signals.js';
 const tick = () => new Promise(resolve => setTimeout(resolve, 30));
 async function mount(t, fetchImpl, initStorage = null) {
   const errors = [], configs = new Map();
@@ -17,9 +18,9 @@ async function mount(t, fetchImpl, initStorage = null) {
   w.EventSource = class { constructor() {} close() {} };
   w.requestAnimationFrame = cb => setTimeout(cb, 16);
   w.cancelAnimationFrame = id => clearTimeout(id);
-  Object.assign(w, watchlistModel, earningsCalendarModel);
+  Object.assign(w, watchlistModel, earningsCalendarModel, inflectionSignals);
   Object.defineProperty(w.HTMLElement.prototype, 'clientWidth', { get: () => 800 });
-  w.echarts = { init: el => ({ setOption: config => configs.set(el.id, config), off() {}, on() {}, resize() {}, dispose() {} }) };
+  w.echarts = { init: el => ({ setOption: config => configs.set(el.id, config), off() {}, on() {}, resize() {}, dispose() {}, dispatchAction() {} }) };
   w.eval(await fs.readFile(new URL('../node_modules/vue/dist/vue.global.prod.js', import.meta.url), 'utf8'));
   w.bindKlineGestures = () => ({ focusLatest() {}, reset() {}, resetPriceScale() {}, dispose() {}, isFollowingLatest() { return true; } });
   if (initStorage) {
@@ -31,7 +32,8 @@ async function mount(t, fetchImpl, initStorage = null) {
     .replace("import { parseFlows } from './flows.js';", 'const parseFlows = window.parseFlows;')
     .replace("import { bindKlineGestures } from './composables/klineGesture.js';", 'const bindKlineGestures = window.bindKlineGestures;')
     .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/watchlist-model\.js';/, 'const { WatchlistManager, sortWatchlistRows, getSelectedExtQuote, getCurrentSession, getNyTime, SESSION_TYPES, MAX_UNIQUE_SYMBOLS, validSymbol, SYMBOL_NAMES, NASDAQ100_STOCKS, SP500_STOCKS, isLeveragedEtf, STOCK_MARKET_CAPS, getStockMarketCap, sortSymbolsByMarketCap } = window;')
-    .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/earnings-calendar-model\.js';/, 'const { AI_SECTOR_FILTERS, EARNINGS_DAYS, CORPORATE_LOGOS, DEFAULT_TECH_EARNINGS, MACRO_CALENDAR_ITEMS, filterEarningsByDay } = window;');
+    .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/earnings-calendar-model\.js';/, 'const { AI_SECTOR_FILTERS, EARNINGS_DAYS, CORPORATE_LOGOS, DEFAULT_TECH_EARNINGS, MACRO_CALENDAR_ITEMS, filterEarningsByDay } = window;')
+    .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/inflection-signals\.js';/, 'const { computeInflectionSignals, formatSignalMarkers, dema } = window;');
   w.eval(appSrc);
   await tick();
   const button = text => [...w.document.querySelectorAll('button')].find(el => el.textContent.trim() === text || el.textContent.trim().endsWith(text));
@@ -811,6 +813,72 @@ test('Watchlist skeleton: renders shimmering skeleton rows during page refresh /
   // Skeleton disappears and real data is revealed
   assert.equal(rwSidebar.querySelector('.rw-skeleton-wrap'), null, 'Skeleton wrap disappears after quotes arrive');
   assert.ok(rwSidebar.querySelector('.rw-stock-row:not(.rw-skeleton-row)'), 'Real stock rows are displayed');
+
+  assert.deepEqual(ui.errors, []);
+});
+
+test('Inflection algorithm switch: toggles in chart legend and preferences modal, marks EB/B/ES/S', async t => {
+  const ui = await mount(t, async url => ({ ok: true, json: async () => fixture(url) }));
+  await tick();
+
+  // Navigate to chart page
+  const chartNavBtn = [...ui.w.document.querySelectorAll('.nav-item')].find(el => el.dataset.id === 'chart');
+  assert.ok(chartNavBtn, 'Chart nav button exists');
+  chartNavBtn.click();
+  await tick();
+  await tick();
+
+  // 1. Chart readout strip has the inflection switch button
+  const readoutStrip = ui.w.document.querySelector('#chart-readout-strip');
+  assert.ok(readoutStrip, 'Chart readout strip exists');
+  const inflBtn = readoutStrip.querySelector('.inflection-switch-btn');
+  assert.ok(inflBtn, 'Inflection algorithm switch button exists in chart header');
+  assert.equal(inflBtn.getAttribute('aria-pressed'), 'false', 'Defaults to off');
+
+  // Click to turn ON
+  inflBtn.click();
+  await tick();
+  await tick();
+
+  assert.equal(inflBtn.getAttribute('aria-pressed'), 'true', 'Toggled to active');
+  assert.ok(inflBtn.classList.contains('is-active'), 'Has is-active class');
+  assert.equal(ui.w.localStorage.getItem('market-desk-inflection-signals'), 'true', 'Persisted to localStorage');
+
+  // Verify regular MAs are turned off and DEMA indicators are visible
+  const maStorage = JSON.parse(ui.w.localStorage.getItem('market-desk-ma-visibility'));
+  assert.equal(maStorage.ma5, false, 'MA5 turned off when inflection hunter enabled');
+  assert.equal(maStorage.ma20, false, 'MA20 turned off when inflection hunter enabled');
+  const demaIndicators = readoutStrip.querySelectorAll('.dema-legend-indicator');
+  assert.equal(demaIndicators.length, 2, 'DEMA 14 and DEMA 30 indicators rendered in chart strip');
+
+  // Check fallback chart config contains DEMA lines
+  const chartCfg = ui.configs.get('price-chart');
+  if (chartCfg && chartCfg.series) {
+    const hasDema14 = chartCfg.series.some(s => s.name === 'DEMA14 (快线)');
+    const hasDema30 = chartCfg.series.some(s => s.name === 'DEMA30 (慢线)');
+    assert.ok(hasDema14, 'Chart series includes DEMA14 fast line');
+    assert.ok(hasDema30, 'Chart series includes DEMA30 slow line');
+  }
+
+  // 2. Open preferences modal and check inflection banner switch
+  const settingsBtn = ui.w.document.querySelector('.settings-modal-btn') || [...ui.w.document.querySelectorAll('button')].find(b => b.textContent.includes('设置'));
+  assert.ok(settingsBtn, 'Settings button found');
+  settingsBtn.click();
+  await tick();
+  await tick();
+
+  const prefBanner = ui.w.document.querySelector('.pref-inflection-banner');
+  assert.ok(prefBanner, 'Preferences modal has inflection banner switch');
+  assert.equal(prefBanner.getAttribute('aria-checked'), 'true', 'Modal reflects active state');
+
+  // Click in modal to turn OFF
+  prefBanner.click();
+  await tick();
+  await tick();
+
+  assert.equal(prefBanner.getAttribute('aria-checked'), 'false', 'Modal toggles to false');
+  assert.equal(inflBtn.getAttribute('aria-pressed'), 'false', 'Chart legend button synchronizes to false');
+  assert.equal(ui.w.localStorage.getItem('market-desk-inflection-signals'), 'false', 'Persisted false to localStorage');
 
   assert.deepEqual(ui.errors, []);
 });
