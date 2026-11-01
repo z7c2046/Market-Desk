@@ -220,6 +220,7 @@ createApp({ setup() {
     for (const key of ['ma5', 'ma20', 'ma60', 'ma120', 'ma250']) {
       klineMaVisibility[key] = false;
     }
+    klineMaVisibility.vol = true;
   }
 
   const MA_CONFIGS = [
@@ -319,13 +320,17 @@ createApp({ setup() {
     persist('market-desk-inflection-signals', showInflectionSignals.value);
 
     if (showInflectionSignals.value) {
-      // 开启拐点猎手算法：自动关闭其他所有常规均线
+      // 开启拐点猎手算法：自动关闭其他所有常规均线，保持成交量开启
       savedMaVisibility = { ...klineMaVisibility };
       for (const key of ['ma5', 'ma20', 'ma60', 'ma120', 'ma250']) {
         klineMaVisibility[key] = false;
         if (lwMaSeriesMap && lwMaSeriesMap[key]) {
           lwMaSeriesMap[key].applyOptions({ visible: false });
         }
+      }
+      klineMaVisibility.vol = true;
+      if (lwVolumeSeries) {
+        lwVolumeSeries.applyOptions({ visible: true });
       }
       persist('market-desk-ma-visibility', { ...klineMaVisibility });
 
