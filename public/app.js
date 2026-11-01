@@ -2199,17 +2199,26 @@ createApp({ setup() {
 
   // ================= AI SEARCH MODULE (Tavily / Exa / Firecrawl) =================
   const aiSearchQuery = ref('');
-  const aiSearchEngine = ref('all'); // 'all' | 'tavily' | 'exa' | 'firecrawl'
+  const aiSearchEngine = ref('auto');
   const aiSearchSource = ref('all'); // 'all' | 'social' | 'reddit' | 'x' | 'authority' | 'wsj_reuters'
   const aiSearchResults = ref([]);
   const aiSearchLoading = ref(false);
   const aiSearchError = ref(null);
   const aiSearchTelemetry = ref(null);
   const aiSearchCopiedId = ref(null);
+  const aiSearchTimeRange = ref('day');
+  const aiSearchSort = ref('latest');
+  const aiSearchIncludeUndated = ref(false);
+  const aiSearchAutoRefresh = ref(false);
+  const aiSearchPending = ref(null);
+  let aiSearchController = null, aiSearchSequence = 0, aiSearchTimer = null;
+  let aiSearchApplied = null, aiSearchLastAttempt = 0;
+  const AI_REFRESH_MS = 5 * 60 * 1000;
 
   const AI_SEARCH_ENGINES = [
+    { id: 'auto', label: '智能检索（按需补充）', desc: '优先搜索，结果不足时启用其他引擎', icon: '⚡' },
     { id: 'all', label: '智能多引擎协同 (Ensemble)', desc: 'Tavily + Exa + Firecrawl 全网交叉融合', icon: '⚡' },
-    { id: 'tavily', label: 'Tavily AI Search', desc: '深度事实抓取与社媒实时发现', icon: '🔍' },
+    { id: 'tavily', label: 'Tavily AI Search', desc: '新闻与网络资料检索', icon: '🔍' },
     { id: 'exa', label: 'Exa Neural Search', desc: '深度语义检索与权威金融专稿', icon: '🧠' },
     { id: 'firecrawl', label: 'Firecrawl Search', desc: '网页精准爬取与结构化提取', icon: '🔥' }
   ];
@@ -2219,67 +2228,95 @@ createApp({ setup() {
     { id: 'social', label: '💬 散户与社交舆情', desc: 'Reddit + X 社区' },
     { id: 'reddit', label: '🔴 Reddit 专属社区', desc: 'r/WSB · r/stocks · r/investing' },
     { id: 'x', label: '🐦 X (Twitter 交易圈)', desc: '宏观大V与交易员快讯' },
-    { id: 'authority', label: '📰 顶级权威财经大报', desc: '路透社 · 华尔街日报 · 彭博 · FT · CNBC' },
-    { id: 'wsj_reuters', label: '🏛️ 路透社 & 华尔街专线', desc: '官方通讯社与华尔街大报' }
+    { id: 'authority', label: '📰 媒体与官方来源', desc: '路透社、华尔街日报等媒体，以及美联储、BLS、BEA 等官方来源' },
+    { id: 'wsj_reuters', label: '🏛️ 路透社 & 华尔街日报', desc: '两家媒体的新闻报道' },
+    { id: 'official', label: '🏛️ 官方原始来源', desc: '美联储、BLS、BEA、SEC、财政部等' }
   ];
 
   const AI_SEARCH_PRESETS = [
-    { label: '🔥 华尔街核心焦点 (WSJ & 路透社)', query: 'Wall Street stock market economy Fed rate inflation', engine: 'all', source: 'wsj_reuters', icon: '📰' },
+    { label: '财经要闻', query: 'US stock market', engine: 'auto', source: 'authority', icon: '📰' },
+    { label: '通胀与物价', query: '美国通胀', engine: 'auto', source: 'authority', icon: '📊' },
+    { label: '美联储政策', query: '美联储', engine: 'auto', source: 'authority', icon: '🏛️' },
+    { label: '地缘政治', query: '地缘政治', engine: 'auto', source: 'authority', icon: '🌐' },
+    { label: 'NVDA 公司动态', query: 'NVDA', engine: 'auto', source: 'all', icon: '🔎' },
     { label: '💬 Reddit 散户热议与异动标的', query: 'reddit wallstreetbets stocks trending tickers market sentiment', engine: 'tavily', source: 'reddit', icon: '💬' },
     { label: '🐦 X 宏观与交易圈热议', query: 'stock market trading macro CPI Fed earnings', engine: 'tavily', source: 'x', icon: '🐦' },
-    { label: '🏛️ 美联储降息与宏观流动性', query: 'Federal Reserve interest rate Jerome Powell inflation', engine: 'all', source: 'authority', icon: '🏛️' },
-    { label: '🤖 AI 芯片与半导体大潮', query: 'Nvidia Blackwell AI chip semiconductor demand', engine: 'exa', source: 'all', icon: '🤖' },
-    { label: '🛢️ 地缘博弈与大宗商品', query: 'oil price geopolitical risk Middle East gold rally', engine: 'all', source: 'authority', icon: '🛢️' },
-    { label: '📊 标普500核心财报预期', query: 'SP500 earnings season revenue guidance Wall Street', engine: 'all', source: 'authority', icon: '📊' }
+    { label: '半导体行业', query: '半导体', engine: 'auto', source: 'authority', icon: '🤖' },
+    { label: '公司财报', query: '财报', engine: 'auto', source: 'authority', icon: '📊' }
   ];
 
-  async function executeAiSearch({ query, engine, source } = {}) {
+  function applyAiSearchResult(data) {
+    aiSearchResults.value = data.items || [];
+    aiSearchTelemetry.value = data;
+    aiSearchPending.value = null;
+  }
+
+  function acceptAiSearchUpdate() {
+    if (aiSearchPending.value) applyAiSearchResult(aiSearchPending.value);
+  }
+
+  function scheduleAiSearchRefresh() {
+    clearTimeout(aiSearchTimer);
+    if (!aiSearchAutoRefresh.value || page.value !== 'news' || newsSubView.value !== 'ai_search' || document.hidden || !aiSearchApplied || aiSearchLoading.value) return;
+    aiSearchTimer = setTimeout(() => executeAiSearch({ background: true }), Math.max(1000, AI_REFRESH_MS - (Date.now() - aiSearchLastAttempt)));
+  }
+
+  function aiEngineStatus(engine) {
+    const info = aiSearchTelemetry.value?.engineStatus?.find(s => s.engine === engine);
+    if (info?.status === 'ok') return `返回 ${info.count} 条`;
+    return { error: '本次失败', unconfigured: '未配置', not_requested: '本次未调用' }[info?.status] || '待检索';
+  }
+
+  async function executeAiSearch({ query, engine, source, background = false } = {}) {
+    if (background && (!aiSearchAutoRefresh.value || document.hidden || page.value !== 'news' || newsSubView.value !== 'ai_search' || aiSearchLoading.value)) return;
     if (query !== undefined) aiSearchQuery.value = query;
     if (engine !== undefined) aiSearchEngine.value = engine;
     if (source !== undefined) aiSearchSource.value = source;
 
-    const q = aiSearchQuery.value.trim() || 'Wall Street stock market economy Fed rate inflation';
+    const params = background ? aiSearchApplied : {
+      query: aiSearchQuery.value.trim() || 'US stock market', engine: aiSearchEngine.value, source: aiSearchSource.value,
+      timeRange: aiSearchTimeRange.value, sort: aiSearchSort.value, includeUndated: String(aiSearchIncludeUndated.value), limit: '16'
+    };
+    if (!params) return;
+    clearTimeout(aiSearchTimer);
+    aiSearchController?.abort();
+    aiSearchController = new AbortController();
+    const sequence = ++aiSearchSequence;
+    aiSearchLastAttempt = Date.now();
+    if (!background) {
+      aiSearchApplied = { ...params };
+      aiSearchResults.value = [];
+      aiSearchTelemetry.value = null;
+      aiSearchPending.value = null;
+    }
     aiSearchLoading.value = true;
     aiSearchError.value = null;
 
     try {
-      const url = `/api/news/ai-search?q=${encodeURIComponent(q)}&engine=${aiSearchEngine.value}&source=${aiSearchSource.value}&limit=16`;
-      const res = await fetch(url);
+      const url = `/api/news/ai-search?${new URLSearchParams(params)}`;
+      const res = await fetch(url, { signal: aiSearchController.signal });
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
         throw new Error(errJson.error || `HTTP ${res.status}`);
       }
       const data = await res.json();
-      const sortedItems = [...(data.items || [])].sort((a, b) => {
-        const ta = a.publishedAt ? Date.parse(a.publishedAt) : NaN;
-        const tb = b.publishedAt ? Date.parse(b.publishedAt) : NaN;
-        const va = Number.isFinite(ta);
-        const vb = Number.isFinite(tb);
-        if (va && vb) return tb - ta;
-        if (vb) return 1;
-        if (va) return -1;
-        return 0;
-      });
-      aiSearchResults.value = sortedItems;
-      aiSearchTelemetry.value = {
-        latencyMs: data.latencyMs,
-        total: data.total,
-        engine: data.engine,
-        source: data.source,
-        sortOrder: data.sortOrder || 'publishedAt_desc',
-        sourceCounts: data.sourceCounts || {},
-        fetchedAt: data.fetchedAt
-      };
+      if (sequence !== aiSearchSequence) return;
+      if (background && aiSearchResults.value.length) aiSearchPending.value = data;
+      else applyAiSearchResult(data);
     } catch (err) {
+      if (sequence !== aiSearchSequence || err.name === 'AbortError') return;
       aiSearchError.value = err.message || 'AI 检索服务暂时不可用，请稍后重试';
     } finally {
-      aiSearchLoading.value = false;
+      if (sequence === aiSearchSequence) {
+        aiSearchLoading.value = false;
+        scheduleAiSearchRefresh();
+      }
     }
   }
 
   function selectAiSearchPreset(preset) {
     aiSearchQuery.value = preset.query;
-    aiSearchEngine.value = preset.engine || 'all';
+    aiSearchEngine.value = preset.engine || 'auto';
     aiSearchSource.value = preset.source || 'all';
     executeAiSearch();
   }
@@ -2312,22 +2349,18 @@ createApp({ setup() {
     }
   }
 
-  function formatAiTime(dateStr) {
-    if (!dateStr) return '近期收录';
+  function formatAiTime(dateStr, precision = 'exact') {
+    if (!dateStr) return '发布时间不明';
     const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return '近期收录';
-    const isDateOnly = String(dateStr).endsWith('T00:00:00.000Z');
+    if (isNaN(d.getTime())) return '发布时间不明';
+    if (precision === 'day') return `日期约 ${String(dateStr).slice(0, 10)}`;
     const bjStr = new Intl.DateTimeFormat('zh-CN', {
       timeZone: 'Asia/Shanghai',
       month: '2-digit',
       day: '2-digit',
-      ...(isDateOnly ? {} : { hour: '2-digit', minute: '2-digit', hour12: false })
+      hour: '2-digit', minute: '2-digit', hour12: false
     }).format(d);
     const diff = Math.max(0, Date.now() - d.getTime());
-    if (isDateOnly) {
-      const days = Math.floor(diff / 86400000);
-      return days <= 0 ? `今日 · ${bjStr}` : `${days} 天前 · ${bjStr}`;
-    }
     if (diff < 60000) return `刚刚 · ${bjStr}`;
     if (diff < 3600000) return `${Math.max(1, Math.floor(diff / 60000))} 分钟前 · ${bjStr}`;
     if (diff < 86400000) return `${Math.floor(diff / 3600000)} 小时前 · ${bjStr}`;
@@ -2336,7 +2369,7 @@ createApp({ setup() {
   }
 
   function getAiEngineBadge(eng) {
-    if (eng === 'live_wire') return { name: '实时权威专线', cls: 'engine-pill-tavily' };
+    if (eng === 'live_wire') return { name: 'RSS 订阅源', cls: 'engine-pill-tavily' };
     if (eng === 'tavily') return { name: 'Tavily AI', cls: 'engine-pill-tavily' };
     if (eng === 'exa') return { name: 'Exa Neural', cls: 'engine-pill-exa' };
     if (eng === 'firecrawl') return { name: 'Firecrawl', cls: 'engine-pill-firecrawl' };
@@ -5219,6 +5252,7 @@ createApp({ setup() {
   }
 
   onMounted(() => {
+    document.addEventListener('visibilitychange', scheduleAiSearchRefresh);
     refresh();
     fetchWatchlistQuotes();
     setupEventSource();
@@ -5240,6 +5274,10 @@ createApp({ setup() {
   });
 
   onUnmounted(() => {
+    clearTimeout(aiSearchTimer);
+    aiSearchController?.abort();
+    aiSearchSequence++;
+    document.removeEventListener('visibilitychange', scheduleAiSearchRefresh);
     if (navTimer) clearTimeout(navTimer);
     if (initialTimer) clearTimeout(initialTimer);
     clearInterval(clockTimer);
@@ -5259,9 +5297,10 @@ createApp({ setup() {
 
   watch(newsSubView, async value => {
     if (value === 'ai_search' && aiSearchResults.value.length === 0 && !aiSearchLoading.value) {
-      await executeAiSearch({ query: 'Wall Street stock market economy Fed rate inflation', engine: 'all', source: 'wsj_reuters' });
+      await executeAiSearch();
     }
   });
+  watch([page, newsSubView, aiSearchAutoRefresh], scheduleAiSearchRefresh);
 
   return {
     nav, mobileNav, isDark, isMobile, isWide, showSettings, toggleTheme, openSettings, closeSettings, navigate, handleDrawerKey,
@@ -5323,6 +5362,7 @@ createApp({ setup() {
     getCompanyLogoSvg, getDayEarnings, countDayTotal, openEarningsModal, closeEarningsModal, viewStockFromEarnings,
     // AI News Search Module
     aiSearchQuery, aiSearchEngine, aiSearchSource, aiSearchResults, aiSearchLoading, aiSearchError, aiSearchTelemetry, aiSearchCopiedId,
+    aiSearchTimeRange, aiSearchSort, aiSearchIncludeUndated, aiSearchAutoRefresh, aiSearchPending, acceptAiSearchUpdate, aiEngineStatus,
     AI_SEARCH_ENGINES, AI_SEARCH_SOURCES, AI_SEARCH_PRESETS,
     executeAiSearch, selectAiSearchPreset, filterAiNewsTopic, copyAiNewsLink, formatAiTime, getAiEngineBadge,
     klineInteractionMode, chartDelayStatus, activeChartExtQuote,

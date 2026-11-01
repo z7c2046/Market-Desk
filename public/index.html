@@ -2590,12 +2590,10 @@
         <div class="ai-search-brand">
           <span class="ai-brand-badge">MULTI-ENGINE AI INTELLIGENCE</span>
           <h2 class="ai-search-heading">AI 全网财经与股市深度检索</h2>
-          <p class="ai-search-subheading">接入 <strong>Tavily</strong>、<strong>Firecrawl</strong>、<strong>Exa</strong> 三大前沿 AI 搜索引擎，穿透 Reddit 散户热议、X (Twitter) 交易员速递，以及路透社、华尔街日报、彭博社等顶级权威财经媒体。</p>
+          <p class="ai-search-subheading">按公司、事件或经济指标检索，结合媒体报道与官方原始来源。保留原文和来源时间；社交讨论单独标注。</p>
         </div>
         <div class="ai-engines-status-pills">
-          <span class="engine-live-pill"><span class="engine-indicator green"></span> Tavily AI</span>
-          <span class="engine-live-pill"><span class="engine-indicator green"></span> Exa Neural</span>
-          <span class="engine-live-pill"><span class="engine-indicator green"></span> Firecrawl</span>
+          <span v-for="engine in ['tavily', 'exa', 'firecrawl']" :key="engine" class="engine-live-pill" title="引擎原始返回数量；下方列表另按主题、来源和时间筛选">{{ engine }} · {{ aiEngineStatus(engine) }}</span>
         </div>
       </div>
 
@@ -2607,8 +2605,9 @@
             type="text"
             v-model="aiSearchQuery"
             class="ai-search-input"
+            aria-label="财经新闻搜索词"
+            maxlength="400"
             placeholder="搜索美股标的 (如 NVDA、TSLA)、宏观议题 (如 美联储降息、非农、通胀) 或 Reddit/X 讨论..."
-            :disabled="aiSearchLoading"
           />
           <button
             v-if="aiSearchQuery"
@@ -2618,11 +2617,26 @@
             aria-label="清空输入"
           >×</button>
         </div>
-        <button type="submit" class="ai-search-submit-btn" :disabled="aiSearchLoading">
+        <button type="submit" class="ai-search-submit-btn" aria-label="检索财经新闻">
           <span v-if="aiSearchLoading" class="ai-spinner"></span>
-          <span v-else>🤖 AI 深度检索</span>
+          <span>{{ aiSearchLoading ? '重新检索' : '搜索新闻' }}</span>
         </button>
       </form>
+      <div class="ai-search-options">
+        <label>时间范围
+          <select v-model="aiSearchTimeRange" @change="executeAiSearch()" aria-label="新闻时间范围">
+            <option value="hour">最近 1 小时</option><option value="day">最近 24 小时</option><option value="week">最近 7 天</option>
+          </select>
+        </label>
+        <label>排序
+          <select v-model="aiSearchSort" @change="executeAiSearch()" aria-label="新闻排序">
+            <option value="latest">最新优先</option><option value="relevance">相关性优先</option>
+          </select>
+        </label>
+        <label><input type="checkbox" v-model="aiSearchIncludeUndated" @change="executeAiSearch()"> 包含时间不明资料</label>
+        <label><input type="checkbox" v-model="aiSearchAutoRefresh"> 每 5 分钟检查更新</label>
+      </div>
+      <p class="ai-search-hint">自动检查仅在此页可见时运行，新结果由你确认后显示。检查频率不代表消息发布延迟。</p>
 
       <!-- Engine Selector & Source Scope Filters -->
       <div class="ai-search-filters-row">
@@ -2688,17 +2702,26 @@
           ⚡ 响应耗时 <strong>{{ aiSearchTelemetry.latencyMs }} ms</strong>
         </span>
         <span class="telemetry-pill">
-          📑 检索召回 <strong>{{ aiSearchResults.length }}</strong> 条深度资讯
+          📑 符合筛选 <strong>{{ aiSearchResults.length }}</strong> 条资讯
         </span>
         <span class="telemetry-pill">
-          🤖 当前引擎模式：<strong>{{ AI_SEARCH_ENGINES.find(e => e.id === aiSearchTelemetry.engine)?.label || aiSearchTelemetry.engine }}</strong></span><span class="telemetry-pill">⏱️ 排序：<strong>按最新发布时间降序</strong>
+          检索：<strong>{{ aiSearchTelemetry.query }}</strong></span><span class="telemetry-pill">排序：<strong>{{ aiSearchTelemetry.sortOrder === 'relevance_desc' ? '相关性优先' : '最新优先' }}</strong>
         </span>
+        <span class="telemetry-pill">结果获取：{{ formatAiTime(aiSearchTelemetry.fetchedAt) }}（北京时间）{{ aiSearchTelemetry.cached ? ' · 缓存' : '' }}</span>
       </div>
       <div class="telemetry-right" v-if="aiSearchTelemetry.sourceCounts">
         <span v-for="(cnt, srcName) in aiSearchTelemetry.sourceCounts" :key="srcName" class="telemetry-source-badge">
           {{ srcName }}: {{ cnt }}
         </span>
       </div>
+    </div>
+    <div v-if="aiSearchTelemetry?.engineErrors?.length" class="ai-search-notice" role="status">
+      <strong>部分来源暂不可用，结果可能不完整：</strong>
+      <span v-for="(err, index) in aiSearchTelemetry.engineErrors" :key="index">{{ err.engine }}：{{ err.error }}；</span>
+    </div>
+    <div v-if="aiSearchPending" class="ai-search-notice" role="status">
+      已检查到一批更新结果（{{ aiSearchPending.items.length }} 条）。当前列表保留供你继续阅读。
+      <button type="button" class="ai-retry-btn" @click="acceptAiSearchUpdate()">显示更新结果</button>
     </div>
 
     <!-- Error Banner -->
@@ -2713,7 +2736,7 @@
     </div>
 
     <!-- Loading Skeleton Stream -->
-    <div v-if="aiSearchLoading" class="ai-search-skeleton-grid">
+    <div v-if="aiSearchLoading && !aiSearchResults.length" class="ai-search-skeleton-grid">
       <div v-for="i in 4" :key="i" class="ai-skeleton-card">
         <div class="skeleton-header">
           <div class="skeleton-pill"></div>
@@ -2744,7 +2767,7 @@
               {{ getAiEngineBadge(item.engine).name }}
             </span>
           </div>
-          <span class="ai-time-tag">{{ formatAiTime(item.publishedAt) }}</span>
+          <span class="ai-time-tag" :title="'来源时间；首次发现于本次服务运行：' + (item.firstSeenAt || '未知')">{{ formatAiTime(item.publishedAt, item.timePrecision) }}{{ item.timePrecision === 'relative' ? '（估计）' : '' }}</span>
         </div>
 
         <a :href="item.url" target="_blank" rel="noopener noreferrer" class="ai-card-title-link">
@@ -2752,6 +2775,8 @@
         </a>
 
         <p class="ai-card-snippet">{{ item.snippet || '该新闻未提供正文摘要，点击下方按钮直达完整原文报道。' }}</p>
+        <p v-if="item.evidenceType === 'social_unverified'" class="ai-search-hint">社交讨论 · 未经核实</p>
+        <p v-if="item.engines?.length > 1" class="ai-search-hint">{{ item.engines.length }} 个渠道收录同一报道，不代表独立证实。</p>
 
         <div class="ai-card-footer">
           <span class="ai-card-domain" :title="item.url">
@@ -2784,7 +2809,7 @@
     <div v-else-if="!aiSearchLoading && !aiSearchError" class="ai-search-empty-state">
       <div class="empty-icon">🔍</div>
       <h3>未检索到匹配的资讯结果</h3>
-      <p>可以尝试缩短搜索词，或切换信源通道为「全部信源」，亦可点击上方快捷探索热词重新搜索。</p>
+      <p>当前主题、来源与时间范围内没有匹配结果。可扩大到最近 7 天，或勾选时间不明资料；系统不会用无关新闻补满列表。</p>
       <div class="empty-actions">
         <button class="ai-btn-direct-jump" @click="selectAiSearchPreset(AI_SEARCH_PRESETS[0])">
           浏览华尔街核心焦点

@@ -1,268 +1,180 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { AiSearchService, detectSourceMeta, cleanUrl } from '../src/ai-search-service.js';
+import { AiSearchService, detectSourceMeta, cleanUrl, publicationInfo } from '../src/ai-search-service.js';
+import { normalizeSearchParams, relevanceFor } from '../src/news-search-policy.js';
+import { DataCache } from '../src/workspace-data.js';
 import { createServer } from '../src/server.js';
+const NOW = Date.parse('2026-11-01T16:00:00Z');
+const KEYS = { tavily: 'test-tavily', exa: 'test-exa', firecrawl: 'test-firecrawl' };
+const article = (title = 'Nvidia earnings guidance', suffix = '1', age = 60000) => ({ title, url: `https://www.reuters.com/markets/story-${suffix}`, content: title, published_date: new Date(NOW - age).toISOString() });
+const response = value => new Response(JSON.stringify(value), { status: 200 });
+const svc = (fetchImpl, extra = {}) => new AiSearchService({ keys: KEYS, fetchImpl, now: () => NOW, enableLiveFeeds: false, ...extra });
 
-test('detectSourceMeta correctly identifies Reddit, X, Reuters, WSJ, Bloomberg, and generic domains', () => {
-  const reddit = detectSourceMeta('https://www.reddit.com/r/wallstreetbets/comments/123/nvda');
-  assert.equal(reddit.type, 'reddit');
-  assert.equal(reddit.name, 'Reddit · r/wallstreetbets');
-  assert.equal(reddit.tagClass, 'source-pill-reddit');
-
-  const x = detectSourceMeta('https://x.com/marketsday/status/123456');
-  assert.equal(x.type, 'x');
-  assert.equal(x.name, 'X (Twitter)');
-  assert.equal(x.tagClass, 'source-pill-x');
-
-  const twitter = detectSourceMeta('https://twitter.com/wsj/status/98765');
-  assert.equal(twitter.type, 'x');
-
-  const wsj = detectSourceMeta('https://www.wsj.com/economy/central-banking/fed-rate');
-  assert.equal(wsj.type, 'authority');
-  assert.equal(wsj.name, 'Wall Street Journal (华尔街日报)');
-  assert.equal(wsj.tagClass, 'source-pill-wsj');
-
-  const reuters = detectSourceMeta('https://www.reuters.com/markets/us/stocks-higher-2026');
-  assert.equal(reuters.type, 'authority');
-  assert.equal(reuters.name, 'Reuters (路透社)');
-
-  const bloomberg = detectSourceMeta('https://www.bloomberg.com/news/articles/2026-10-25/oil');
-  assert.equal(bloomberg.type, 'authority');
-  assert.equal(bloomberg.name, 'Bloomberg (彭博终端)');
-
-  const other = detectSourceMeta('https://finance.example.com/story');
-  assert.equal(other.type, 'web');
-  assert.equal(other.domain, 'finance.example.com');
+test('source classification uses hostname boundaries; official and social evidence stay distinct', () => {
+  assert.equal(detectSourceMeta('https://reuters.com/markets/story').type, 'authority');
+  assert.equal(detectSourceMeta('https://reuters.com.evil.test/story').type, 'web');
+  assert.equal(detectSourceMeta('https://notx.com/story').type, 'web');
+  assert.equal(detectSourceMeta('https://www.federalreserve.gov/newsevents/story').type, 'official');
+  assert.equal(detectSourceMeta('https://www.reddit.com/r/wallstreetbets/comments/123').name, 'Reddit · r/wallstreetbets');
+  assert.equal(detectSourceMeta('https://twitter.com/user/status/123').type, 'x');
+  assert.equal(cleanUrl('https://example.com/Story?utm_source=x&keep=yes#top'), 'https://example.com/Story?keep=yes');
 });
 
-test('cleanUrl strips marketing tracking parameters (utm, ref, source)', () => {
-  const dirty = 'https://www.reuters.com/markets/us/stocks?utm_source=twitter&utm_medium=social&ref=123&keep=real';
-  const cleaned = cleanUrl(dirty);
-  assert.equal(cleaned, 'https://www.reuters.com/markets/us/stocks?keep=real');
-});
-
-test('AiSearchService executes Tavily search with domain restrictions', async () => {
-  const mockFetch = async (url, options) => {
-    assert.equal(url, 'https://api.tavily.com/search');
-    const body = JSON.parse(options.body);
-    assert.equal(body.api_key, 'tvly-test');
-    assert.deepEqual(body.include_domains, ['reddit.com']);
-    return new Response(JSON.stringify({
-      results: [
-        {
-          title: 'Reddit WSB NVDA Yolo',
-          url: 'https://www.reddit.com/r/wallstreetbets/comments/nvda?utm_source=share',
-          content: 'Nvidia options discussion on WSB',
-          score: 0.98,
-          published_date: '2026-10-25T01:00:00Z'
-        }
-      ]
-    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-  };
-
-  const svc = new AiSearchService({
-    keys: { tavily: 'tvly-test', firecrawl: 'fc-test', exa: 'exa-test' },
-    fetchImpl: mockFetch
-  });
-
-  const res = await svc.search({ query: 'NVDA', engine: 'tavily', source: 'reddit', limit: 5 });
-  assert.equal(res.ok, true);
-  assert.equal(res.total, 1);
-  assert.equal(res.items[0].source, 'Reddit · r/wallstreetbets');
-  assert.equal(res.items[0].engine, 'tavily');
-  assert.equal(res.items[0].url, 'https://www.reddit.com/r/wallstreetbets/comments/nvda');
-});
-
-test('AiSearchService executes Exa neural search with highlights extraction', async () => {
-  const mockFetch = async (url, options) => {
-    assert.equal(url, 'https://api.exa.ai/search');
-    assert.equal(options.headers['x-api-key'], 'exa-test');
-    return new Response(JSON.stringify({
-      results: [
-        {
-          title: 'Fed signals rate trajectory: WSJ Report',
-          url: 'https://www.wsj.com/livecoverage/stock-market-cpi',
-          highlights: ['Inflation report alters the interest rate curve.', 'Traders expect calm open.'],
-          publishedDate: '2026-10-24T18:00:00Z'
-        }
-      ]
-    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-  };
-
-  const svc = new AiSearchService({
-    keys: { tavily: 'tvly-test', firecrawl: 'fc-test', exa: 'exa-test' },
-    fetchImpl: mockFetch
-  });
-
-  const res = await svc.search({ query: 'Fed rate', engine: 'exa', source: 'authority', limit: 5 });
-  assert.equal(res.ok, true);
-  assert.equal(res.total, 1);
-  assert.equal(res.items[0].source, 'Wall Street Journal (华尔街日报)');
-  assert.equal(res.items[0].engine, 'exa');
-  assert.match(res.items[0].snippet, /Inflation report/);
-});
-
-test('AiSearchService ensemble merges, deduplicates and gracefully tolerates single engine failure', async () => {
-  const mockFetch = async (url) => {
-    if (url.includes('tavily')) {
-      return new Response(JSON.stringify({
-        results: [
-          { title: 'Duplicate Item', url: 'https://www.reuters.com/news/1', content: 'Reuters 1' },
-          { title: 'Tavily Unique Item', url: 'https://www.wsj.com/news/2', content: 'WSJ 2' }
-        ]
-      }), { status: 200 });
-    }
-    if (url.includes('exa')) {
-      return new Response(JSON.stringify({
-        results: [
-          { title: 'Duplicate Item from Exa', url: 'https://www.reuters.com/news/1/', highlights: ['Reuters 1 alt'] },
-          { title: 'Exa Unique Item', url: 'https://x.com/trader/status/1', highlights: ['X Tweet'] }
-        ]
-      }), { status: 200 });
-    }
-    if (url.includes('firecrawl')) {
-      // Simulate Firecrawl 500 error, ensemble should still succeed!
-      return new Response('Firecrawl internal error', { status: 500 });
-    }
-    throw new Error('Unknown url');
-  };
-
-  const svc = new AiSearchService({
-    keys: { tavily: 'tvly-test', firecrawl: 'fc-test', exa: 'exa-test' },
-    fetchImpl: mockFetch
-  });
-
-  const res = await svc.search({ query: 'market', engine: 'all', limit: 10 });
-  assert.equal(res.ok, true);
-  // Total unique: reuters.com/news/1, wsj.com/news/2, x.com/trader/status/1 = 3 items (deduplicated!)
-  assert.equal(res.total, 3);
-  assert.equal(res.items.some(i => i.engine === 'tavily'), true);
-  assert.equal(res.items.some(i => i.engine === 'exa'), true);
-  assert.equal(Array.isArray(res.engineErrors), true);
-  assert.equal(res.engineErrors[0].engine, 'Firecrawl');
-});
-
-test('Server API route /api/news/ai-search responds with standardized schema', async t => {
-  const mockAiService = {
-    search: async (params) => ({
-      ok: true,
-      query: params.q || 'default',
-      engine: params.engine || 'all',
-      source: params.source || 'all',
-      total: 2,
-      items: [
-        {
-          id: 'test_1',
-          title: 'Reddit WSB Trending',
-          url: 'https://www.reddit.com/r/wallstreetbets/test',
-          snippet: 'Trending stocks on reddit',
-          source: 'Reddit · r/wallstreetbets',
-          sourceType: 'reddit',
-          engine: 'tavily'
-        },
-        {
-          id: 'test_2',
-          title: 'Reuters Markets Overview',
-          url: 'https://www.reuters.com/markets',
-          snippet: 'Wall street stocks wrap up',
-          source: 'Reuters (路透社)',
-          sourceType: 'authority',
-          engine: 'exa'
-        }
-      ],
-      latencyMs: 120
-    })
-  };
-
-  const server = createServer({ aiSearchService: mockAiService });
+test('HTTP q and query reach real service and provider; different topics do not share default cache', async t => {
+  const calls = [];
+  const service = svc(async (_, options) => { calls.push(JSON.parse(options.body).query); return response({ results: [] }); });
+  const server = createServer({ aiSearchService: service, workspace: {}, quoteService: {}, watchlist: async () => [] });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-  t.after(() => new Promise(resolve => { server.close(resolve); server.closeAllConnections(); }));
-
-  const port = server.address().port;
-  const res = await fetch(`http://127.0.0.1:${port}/api/news/ai-search?q=Nvidia&engine=all&source=all`);
-  assert.equal(res.status, 200);
-  const data = await res.json();
-  assert.equal(data.ok, true);
-  assert.equal(data.query, 'Nvidia');
-  assert.equal(data.items.length, 2);
-  assert.equal(data.items[0].sourceType, 'reddit');
-  assert.equal(data.items[1].sourceType, 'authority');
+  t.after(() => new Promise(resolve => { server.closeAllConnections(); server.close(resolve); }));
+  for (const [key, query] of [['q', 'NVDA earnings'], ['query', '美国通胀'], ['q', 'NVDA earnings']]) {
+    const res = await fetch(`http://127.0.0.1:${server.address().port}/api/news/ai-search?${new URLSearchParams({ [key]: query, engine: 'tavily' })}`);
+    assert.equal(res.status, 200);
+    assert.equal((await res.json()).query, query);
+  }
+  assert.equal(calls.length, 2);
+  assert.match(calls[0], /NVDA earnings/);
+  assert.match(calls[1], /inflation/);
 });
 
-test('AiSearchService filters out 2022/2023 stale articles, junk domains, homepages, deduplicates headlines, and sorts strictly by publishedAt descending', async () => {
-  const mockFetch = async (url) => {
-    if (url.includes('tavily')) {
-      return new Response(JSON.stringify({
-        results: [
-          {
-            title: 'Wall Street ends down as investors eye slowing economy | Reuters',
-            url: 'https://www.reuters.com/video/watch/wall-street-ends-down-as-investors-eye-s-idOV023723082022RP1/?chan=aoiq7v2k',
-            content: 'August 24, 2022 - Wall Street ended down on Tuesday as investors focused on Jackson Hole.'
-          },
-          {
-            title: 'Wall Street Stock Market',
-            url: 'https://distil.src.online.wsj.com/wall-street',
-            content: 'Welcome to a comprehensive exploration of the renowned Wall Street stock market'
-          },
-          {
-            title: 'The Wall Street Journal - Breaking News, Business, Financial & Economic News',
-            url: 'https://www.wsj.com/',
-            content: 'DJIA Futures S&P 500 Futures'
-          },
-          {
-            title: 'Wall Street Is Making Bullish Bets on the Economy - WSJ',
-            url: 'https://www.wsj.com/economy/wall-street-bullish-bets-1?mod=hp_lead_pos1',
-            content: 'Older duplicate without clock time',
-            published_date: '2026-10-28T00:00:00.000Z'
-          },
-          {
-            title: 'Fed Holds Rates Steady After October Meeting - Reuters',
-            url: 'https://www.reuters.com/markets/us/fed-holds-rates-steady-october',
-            content: 'Federal Reserve keeps rates unchanged.',
-            published_date: '2026-10-28T18:30:00.000Z'
-          }
-        ]
-      }), { status: 200 });
-    }
-    if (url.includes('exa')) {
-      return new Response(JSON.stringify({
-        results: [
-          {
-            title: 'Wall Street Is Making Bullish Bets on the Economy',
-            url: 'https://www.wsj.com/economy/wall-street-bullish-bets-2',
-            highlights: ['Investors pile into bets that economic growth will keep powering forward.'],
-            publishedDate: '2026-10-29T10:15:00.000Z'
-          },
-          {
-            title: 'U.S. Q3 GDP Growth Exceeds Expectations at 3.4% - WSJ',
-            url: 'https://www.wsj.com/economy/us-gdp-q3-growth',
-            highlights: ['Third-quarter GDP accelerated amid strong consumer spending.'],
-            publishedDate: '2026-10-29T13:50:00.000Z'
-          }
-        ]
-      }), { status: 200 });
-    }
-    if (url.includes('firecrawl')) {
-      return new Response(JSON.stringify({ data: [] }), { status: 200 });
-    }
-    throw new Error('Unexpected url: ' + url);
-  };
+test('normalized input has bounded limits and explicit query precedence', () => {
+  assert.equal(normalizeSearchParams({ q: 'A', query: 'B', limit: 'Infinity' }).query, 'B');
+  assert.equal(normalizeSearchParams({ limit: '9999' }).limit, 20);
+  assert.equal(normalizeSearchParams({ limit: '-5' }).limit, 1);
+  assert.equal(normalizeSearchParams({ limit: 'bad' }).limit, 16);
+  assert.throws(() => normalizeSearchParams({ query: 'a'.repeat(401) }), { status: 400 });
+});
 
-  const svc = new AiSearchService({
-    keys: { tavily: 'tvly-test', firecrawl: 'fc-test', exa: 'exa-test' },
-    fetchImpl: mockFetch,
-    enableLiveFeeds: false
+for (const timeRange of ['hour', 'day', 'week']) test(`all providers receive consistent ${timeRange} windows and current API schemas`, async () => {
+  const payloads = {};
+  const service = svc(async (url, options) => {
+    const engine = url.includes('tavily') ? 'tavily' : url.includes('exa') ? 'exa' : 'firecrawl';
+    payloads[engine] = JSON.parse(options.body);
+    if (engine === 'tavily') assert.equal(options.headers.Authorization, 'Bearer test-tavily');
+    if (engine === 'exa') assert.equal(options.headers['x-api-key'], 'test-exa');
+    if (engine === 'firecrawl') {
+      assert.match(url, /\/v2\/search$/);
+      return response({ success: true, data: { news: [{ ...article(), link: article().url, date: '5 minutes ago' }] } });
+    }
+    return response({ results: [article()] });
   });
-
-  const res = await svc.search({ query: 'Wall Street economy', engine: 'all', source: 'wsj_reuters', limit: 10 });
-  assert.equal(res.ok, true);
-  assert.equal(res.sortOrder, 'publishedAt_desc');
-  assert.equal(res.items.length, 3);
-  assert.equal(res.items[0].title, 'U.S. Q3 GDP Growth Exceeds Expectations at 3.4% - WSJ');
-  assert.equal(res.items[0].publishedAt, '2026-10-29T13:50:00.000Z');
-  assert.match(res.items[1].title, /Wall Street Is Making Bullish Bets on the Economy/);
-  assert.equal(res.items[1].publishedAt, '2026-10-29T10:15:00.000Z');
-  assert.equal(res.items[2].title, 'Fed Holds Rates Steady After October Meeting - Reuters');
-  assert.equal(res.items[2].publishedAt, '2026-10-28T18:30:00.000Z');
+  const result = await service.search({ query: 'NVDA', engine: 'all', timeRange });
+  assert.equal(result.items.length, 1);
+  assert.equal(result.items[0].engines.length, 3);
+  assert.equal(payloads.tavily.time_range, timeRange === 'week' ? 'week' : 'day');
+  assert.equal('days' in payloads.tavily, false);
+  assert.equal('useAutoprompt' in payloads.exa, false);
+  assert.equal(Date.parse(payloads.exa.endPublishedDate), NOW);
+  assert.equal(NOW - Date.parse(payloads.exa.startPublishedDate), { hour: 3600000, day: 86400000, week: 604800000 }[timeRange]);
+  assert.deepEqual(payloads.firecrawl.sources, ['news']);
+  assert.equal(payloads.firecrawl.tbs, { hour: 'qdr:h', day: 'qdr:d', week: 'qdr:w' }[timeRange]);
 });
 
+test('strict windows exclude old, future and undated articles; unknown dates are opt-in and last', async () => {
+  const service = svc(async () => response({ results: [article('Nvidia old earnings', 'old', 2 * 86400000), article('Nvidia new earnings', 'new'), article('Nvidia future earnings', 'future', -1000), { ...article('Nvidia undated earnings', 'unknown'), published_date: null }] }));
+  const strict = await service.search({ query: 'NVDA', engine: 'tavily' });
+  assert.equal(strict.items.length, 1);
+  assert.match(strict.items[0].title, /new/);
+  const broad = await service.search({ query: 'NVDA', engine: 'tavily', timeRange: 'week', includeUndated: true });
+  assert.equal(broad.items.length, 3);
+  assert.equal(broad.items.at(-1).publishedAt, null);
+});
+
+test('date precision is preserved; body references cannot date a story; old URL cannot masquerade as new', () => {
+  assert.equal(publicationInfo({ rawDate: '2026-11-01', nowMs: NOW }).timePrecision, 'day');
+  assert.equal(publicationInfo({ rawDate: '2026-11-01T00:00:00Z', nowMs: NOW }).timePrecision, 'exact');
+  assert.equal(publicationInfo({ snippet: 'In August 24, 2022 things changed.', nowMs: NOW }).publishedAt, null);
+  assert.equal(publicationInfo({ rawDate: '3 hours ago', nowMs: NOW }).publishedAt, '2026-11-01T13:00:00.000Z');
+  assert.equal(publicationInfo({ rawDate: '2026-11-01T14:00:00Z', url: 'https://reuters.com/markets/2022-08-24/story', nowMs: NOW }).publishedAt, '2022-08-24T00:00:00.000Z');
+});
+
+test('entity and event relevance filters exclude unrelated companies and unrelated earnings', () => {
+  assert.ok(relevanceFor({ title: 'US stocks rise on earnings' }, '美股新闻') > 0);
+  assert.equal(relevanceFor({ title: 'Best recipes for dinner' }, '美股新闻'), 0);
+  assert.equal(relevanceFor({ title: 'Apple launches new iPhone' }, '通胀'), 0);
+  assert.equal(relevanceFor({ title: 'Tesla earnings guidance' }, 'NVDA earnings'), 0);
+  assert.equal(relevanceFor({ title: 'Nvidia launches a product' }, 'NVDA earnings'), 0);
+  assert.ok(relevanceFor({ title: 'Nvidia quarterly results and guidance' }, 'NVDA earnings') > 0);
+  assert.equal(relevanceFor({ title: 'PCE price index report' }, 'CPI'), 0);
+  assert.ok(relevanceFor({ title: 'Iran ceasefire agreement' }, '伊朗停火') > 0);
+  assert.equal(relevanceFor({ title: 'Ukraine ceasefire agreement' }, '伊朗停火'), 0);
+});
+
+test('daily recurring headlines and distinct case-sensitive URL paths remain separate', async () => {
+  const service = svc(async () => response({ results: [
+    article('Nvidia earnings daily update', 'today'),
+    article('Nvidia earnings daily update', 'yesterday', 86400000 + 60000),
+    { ...article('Nvidia earnings first case'), url: 'https://example.com/Case' },
+    { ...article('Nvidia earnings second case'), url: 'https://example.com/case' },
+  ] }));
+  const result = await service.search({ query: 'NVDA', engine: 'tavily', timeRange: 'week' });
+  assert.equal(result.items.length, 4);
+  assert.equal(new Set(result.items.map(i => i.id)).size, 4);
+});
+
+test('local domain filtering rejects upstream scope violations and unsafe URLs', async () => {
+  const service = svc(async () => response({ results: [article(), { ...article('Nvidia earnings spoof', 'spoof'), url: 'https://reuters.com.evil.test/story' }, { ...article(), url: 'javascript:alert(1)' }, { ...article(), url: 'https://user:password@reuters.com/story' }] }));
+  assert.equal((await service.search({ query: 'NVDA', engine: 'tavily', source: 'authority' })).items.length, 1);
+});
+
+test('dedup uses full URL identity, preserves case-sensitive paths and records channels without claiming corroboration', async () => {
+  const service = svc(async url => response({ results: url.includes('tavily') ? [article(), article('Nvidia second earnings story', '2')] : [{ ...article(), url: article().url + '/?utm_source=exa', publishedDate: '2026-11-01T15:59:30Z' }] }));
+  const result = await service.search({ query: 'NVDA', engine: 'all' });
+  assert.equal(result.items.length, 2);
+  assert.notEqual(result.items[0].id, result.items[1].id);
+  assert.equal(result.items.find(i => i.title === article().title).engines.length, 2);
+  assert.equal(result.engineErrors.length, 1);
+});
+
+test('auto stops after adequate filtered coverage; all explicitly uses every configured engine', async () => {
+  const calls = [];
+  const service = svc(async url => { calls.push(url); return response({ results: Array.from({ length: 8 }, (_, i) => article(`Nvidia earnings event ${i}`, String(i))) }); });
+  const result = await service.search({ query: 'NVDA', engine: 'auto' });
+  assert.equal(calls.length, 1);
+  assert.equal(result.engineStatus.find(s => s.engine === 'exa').status, 'not_requested');
+  assert.equal(result.items.length, 8);
+});
+
+test('auto falls back when results are irrelevant; partial failure is visible and secrets are not echoed', async () => {
+  const service = svc(async url => {
+    if (url.includes('tavily')) return response({ results: [article('Apple launches a phone')] });
+    if (url.includes('exa')) return response({ results: [article()] });
+    return new Response('secret-key upstream error', { status: 429 });
+  });
+  const result = await service.search({ query: 'NVDA', engine: 'auto' });
+  assert.equal(result.items.length, 1);
+  assert.equal(result.items[0].engine, 'exa');
+  assert.match(result.engineErrors[0].error, /429/);
+  assert.doesNotMatch(JSON.stringify(result), /secret-key/);
+});
+
+test('official RSS follows the same topic filter and failure reporting as search', async () => {
+  const service = svc(async url => {
+    if (url.includes('api.tavily')) return response({ results: [] });
+    if (url.includes('speeches_and_testimony')) return new Response('', { status: 503 });
+    return new Response(`<rss><channel><item><title>Inflation and monetary policy</title><link>https://www.federalreserve.gov/newsevents/inflation.htm</link><pubDate>${new Date(NOW - 60000).toUTCString()}</pubDate></item><item><title>Bank merger announcement</title><link>https://www.federalreserve.gov/newsevents/merger.htm</link><pubDate>${new Date(NOW - 30000).toUTCString()}</pubDate></item></channel></rss>`);
+  }, { enableLiveFeeds: true });
+  const result = await service.search({ query: '通胀', engine: 'tavily', source: 'official' });
+  assert.equal(result.items.length, 1);
+  assert.equal(result.items[0].evidenceType, 'primary_source');
+  assert.equal(result.engineErrors.length, 1);
+});
+
+test('cache shares concurrent identical work, expires rolling results and refuses stale success on failure', async () => {
+  let now = NOW, calls = 0, fail = false;
+  const service = svc(async () => { calls++; if (fail) throw new Error('network unavailable'); return response({ results: [article('Nvidia earnings', '1', 3590000)] }); }, { now: () => now, cache: new DataCache({ now: () => now }) });
+  const params = { query: 'NVDA', engine: 'tavily', timeRange: 'hour' };
+  const [a, b] = await Promise.all([service.search(params), service.search(params)]);
+  assert.equal(calls, 1); assert.equal(a.items.length, 1); assert.deepEqual(a.items, b.items);
+  now += 20000;
+  const cached = await service.search(params);
+  assert.equal(cached.cached, true); assert.equal(cached.items.length, 0);
+  now += 100000; fail = true;
+  await assert.rejects(service.search(params), /network unavailable/);
+});
+
+test('latest and relevant sorting differ without comparing incompatible provider scores', async () => {
+  const service = svc(async () => response({ results: [article('Nvidia earnings', 'new', 1000), article('Nvidia earnings demand', 'relevant', 2000)] }));
+  const params = { query: 'NVDA earnings demand', engine: 'tavily' };
+  assert.match((await service.search(params)).items[0].url, /new/);
+  assert.match((await service.search({ ...params, sort: 'relevance' })).items[0].url, /relevant/);
+});

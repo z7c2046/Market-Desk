@@ -7,8 +7,10 @@ import { parseFlows } from '../public/flows.js';
 import * as watchlistModel from '../public/watchlist-model.js';
 import * as earningsCalendarModel from '../public/earnings-calendar-model.js';
 import * as inflectionSignals from '../public/inflection-signals.js';
+import { AiSearchService } from '../src/ai-search-service.js';
+import { createServer } from '../src/server.js';
 const tick = () => new Promise(resolve => setTimeout(resolve, 30));
-async function mount(t, fetchImpl, initStorage = null) {
+async function mount(t, fetchImpl, initStorage = null, configureWindow = null) {
   const errors = [], configs = new Map();
   const virtualConsole = new VirtualConsole(); virtualConsole.on('jsdomError', e => errors.push(e.message)); virtualConsole.on('error', e => errors.push(String(e)));
   const html = await fs.readFile(new URL('../public/index.html', import.meta.url), 'utf8');
@@ -34,6 +36,7 @@ async function mount(t, fetchImpl, initStorage = null) {
     .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/watchlist-model\.js';/, 'const { WatchlistManager, sortWatchlistRows, getSelectedExtQuote, getCurrentSession, getNyTime, SESSION_TYPES, MAX_UNIQUE_SYMBOLS, validSymbol, SYMBOL_NAMES, NASDAQ100_STOCKS, SP500_STOCKS, isLeveragedEtf, STOCK_MARKET_CAPS, getStockMarketCap, sortSymbolsByMarketCap } = window;')
     .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/earnings-calendar-model\.js';/, 'const { AI_SECTOR_FILTERS, EARNINGS_DAYS, CORPORATE_LOGOS, DEFAULT_TECH_EARNINGS, MACRO_CALENDAR_ITEMS, filterEarningsByDay } = window;')
     .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/inflection-signals\.js';/, 'const { computeInflectionSignals, formatSignalMarkers, dema } = window;');
+  if (configureWindow) configureWindow(w);
   w.eval(appSrc);
   await tick();
   const button = text => [...w.document.querySelectorAll('button')].find(el => el.textContent.trim() === text || el.textContent.trim().endsWith(text));
@@ -63,6 +66,104 @@ const fixture = url => {
     provider: { isConfigured: false, name: 'Longbridge' }
   };
 };
+
+test('AI news UI sends the typed query and controls through HTTP to the real search service', async t => {
+  const providerQueries = [], requests = [];
+  const service = new AiSearchService({ keys: { tavily: 'test', exa: '', firecrawl: '' }, enableLiveFeeds: false, fetchImpl: async (_, options) => {
+    providerQueries.push(JSON.parse(options.body).query);
+    return new Response(JSON.stringify({ results: [{ title: 'Nvidia earnings demand improves', url: 'https://reuters.com/markets/nvidia-earnings', published_date: new Date().toISOString(), content: 'Nvidia earnings and demand' }] }));
+  } });
+  const server = createServer({ aiSearchService: service, workspace: {}, quoteService: {}, watchlist: async () => [] });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise(resolve => { server.closeAllConnections(); server.close(resolve); }));
+  const ui = await mount(t, async (url, options) => {
+    if (url.startsWith('/api/news/ai-search')) {
+      requests.push(new URL(url, 'http://localhost'));
+      // Bridge jsdom's signal into Node's native fetch realm.
+      const controller = new AbortController();
+      if (options?.signal?.aborted) controller.abort();
+      else options?.signal?.addEventListener('abort', () => controller.abort(), { once: true });
+      return fetch(`http://127.0.0.1:${server.address().port}${url}`, { signal: controller.signal });
+    }
+    return { ok: true, json: async () => fixture(url) };
+  });
+  await ui.click('新闻资讯'); ui.w.document.querySelectorAll('.news-view-btn')[1].click(); await tick();
+  const input = ui.w.document.querySelector('[aria-label="财经新闻搜索词"]');
+  input.value = 'NVDA earnings'; input.dispatchEvent(new ui.w.Event('input', { bubbles: true }));
+  input.form.dispatchEvent(new ui.w.Event('submit', { bubbles: true, cancelable: true })); await tick(); await tick();
+  assert.equal(requests.at(-1).searchParams.get('query'), 'NVDA earnings');
+  assert.ok(providerQueries.length, ui.w.document.querySelector('.ai-search-error-box')?.textContent || 'Provider was not reached');
+  assert.match(providerQueries.at(-1), /NVDA earnings/);
+  assert.match(ui.w.document.querySelector('.ai-news-card').textContent, /Nvidia earnings/);
+  const range = ui.w.document.querySelector('[aria-label="新闻时间范围"]');
+  range.value = 'week'; range.dispatchEvent(new ui.w.Event('change', { bubbles: true })); await tick(); await tick();
+  const sort = ui.w.document.querySelector('[aria-label="新闻排序"]');
+  sort.value = 'relevance'; sort.dispatchEvent(new ui.w.Event('change', { bubbles: true })); await tick(); await tick();
+  assert.equal(requests.at(-1).searchParams.get('timeRange'), 'week');
+  assert.equal(requests.at(-1).searchParams.get('sort'), 'relevance');
+  assert.match(ui.w.document.querySelector('.ai-search-telemetry-strip').textContent, /相关性优先/);
+  assert.match(ui.w.document.querySelector('.ai-engines-status-pills').textContent, /未配置/);
+  assert.deepEqual(ui.errors, []);
+});
+
+test('AI news rejects late responses and preserves server relevance order and honest date labels', async t => {
+  let releaseOld;
+  const result = query => ({ ok: true, query, items: [{ id: query, title: query, url: 'https://example.com/news', publishedAt: null }, { id: 'recent', title: 'SECOND ITEM', url: 'https://example.com/new', publishedAt: new Date().toISOString() }], sortOrder: 'relevance_desc', engineErrors: [{ engine: 'Exa', error: '请求频率受限' }] });
+  const ui = await mount(t, async url => {
+    if (url.startsWith('/api/news/ai-search')) {
+      const query = new URL(url, 'http://localhost').searchParams.get('query');
+      if (query === 'US stock market') return new Promise(resolve => { releaseOld = () => resolve({ ok: true, json: async () => result('OLD RESULT') }); });
+      return { ok: true, json: async () => result(query) };
+    }
+    return { ok: true, json: async () => fixture(url) };
+  });
+  await ui.click('新闻资讯'); ui.w.document.querySelectorAll('.news-view-btn')[1].click(); await tick();
+  await ui.click('通胀与物价');
+  releaseOld(); await tick();
+  const cards = [...ui.w.document.querySelectorAll('.ai-card-title')];
+  assert.equal(cards[0].textContent, '美国通胀');
+  assert.equal(cards[1].textContent, 'SECOND ITEM');
+  assert.doesNotMatch(ui.w.document.querySelector('main').textContent, /OLD RESULT/);
+  assert.match(ui.w.document.querySelector('.ai-time-tag').textContent, /发布时间不明/);
+  assert.match(ui.w.document.querySelector('.ai-search-notice').textContent, /请求频率受限/);
+  assert.deepEqual(ui.errors, []);
+});
+
+test('AI automatic refresh pauses on hidden pages, uses submitted query and stages results until accepted', async t => {
+  const timers = new Map(); let timerId = 100000, now = Date.now(), hidden = false, searches = 0;
+  const queries = [];
+  const ui = await mount(t, async url => {
+    if (url.startsWith('/api/news/ai-search')) {
+      searches++; queries.push(new URL(url, 'http://localhost').searchParams.get('query'));
+      return { ok: true, json: async () => ({ query: queries.at(-1), items: [{ id: String(searches), title: `NEWS VERSION ${searches}`, url: 'https://example.com/story' }] }) };
+    }
+    return { ok: true, json: async () => fixture(url) };
+  }, null, w => {
+    Object.defineProperty(w.document, 'hidden', { get: () => hidden });
+    w.Date.now = () => now;
+    const realSet = w.setTimeout.bind(w), realClear = w.clearTimeout.bind(w);
+    w.setTimeout = (fn, ms, ...args) => { if (ms >= 1000 && ms <= 300000) { const id = ++timerId; timers.set(id, { fn, ms }); return id; } return realSet(fn, ms, ...args); };
+    w.clearTimeout = id => { timers.delete(id); realClear(id); };
+  });
+  await ui.click('新闻资讯'); ui.w.document.querySelectorAll('.news-view-btn')[1].click(); await tick();
+  const auto = [...ui.w.document.querySelectorAll('.ai-search-options input')].find(el => el.parentElement.textContent.includes('每 5 分钟'));
+  auto.click(); await tick();
+  assert.ok([...timers.values()].some(t => t.ms === 300000));
+  hidden = true; ui.w.document.dispatchEvent(new ui.w.Event('visibilitychange')); await tick();
+  assert.equal([...timers.values()].filter(t => t.ms === 300000).length, 0);
+  hidden = false; ui.w.document.dispatchEvent(new ui.w.Event('visibilitychange')); await tick();
+  const input = ui.w.document.querySelector('[aria-label="财经新闻搜索词"]');
+  input.value = 'UNSUBMITTED DRAFT'; input.dispatchEvent(new ui.w.Event('input', { bubbles: true }));
+  now += 300000;
+  const entry = [...timers.entries()].find(([, value]) => value.ms === 300000); timers.delete(entry[0]); entry[1].fn(); await tick();
+  assert.equal(queries.at(-1), 'US stock market');
+  assert.match(ui.w.document.querySelector('.ai-card-title').textContent, /VERSION 1/);
+  await ui.click('显示更新结果');
+  assert.match(ui.w.document.querySelector('.ai-card-title').textContent, /VERSION 2/);
+  await ui.click('数据与说明');
+  assert.equal([...timers.values()].filter(t => t.ms === 300000).length, 0);
+  assert.deepEqual(ui.errors, []);
+});
 test('Vue page mounts, navigates all modules, wires chart data and handles watchlist', async t => {
   const ui = await mount(t, async url => ({ ok: true, json: async () => fixture(url) }));
   assert.ok(ui.w.document.querySelector('#heatmap-chart')); assert.ok(ui.configs.get('heatmap-chart').series[0].data.length > 0);

@@ -64,6 +64,7 @@ date,symbol,netFlowUsd,source
 | `/api/market/overview` | 大盘、板块、精选股、缺失列表 |
 | `/api/market/chart` | `symbol=NVDA&range=3mo`；range 为 `1d/1mo/3mo/6mo/1y` |
 | `/api/news` | 空参数为市场新闻；`symbol=AAPL` 为个股 |
+| `/api/news/ai-search` | `query`、`engine=auto`、`source`、`timeRange=hour/day/week`、`sort=latest/relevance`；[使用与验证说明](docs/AI_NEWS_SEARCH_UPDATE.zh-CN.md) |
 | `/api/options` | `symbol=SPY`；`expiration=YYYY-MM-DD` 或 `all`，省略默认最近有效日 |
 | `/api/watchlist` | 复用已有 Notion 接入，只有点击导入时使用 |
 
