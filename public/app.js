@@ -2376,6 +2376,164 @@ createApp({ setup() {
     return { name: 'AI 协同聚合', cls: 'engine-pill-all' };
   }
 
+  // ================= TREE NEWS WEBSOCKET MODULE (Tree of Alpha) =================
+  const treeNewsList = ref([]);
+  const treeNewsConnected = ref(false);
+  const treeNewsPaused = ref(false);
+  const treeNewsSearch = ref('');
+  const treeNewsSourceFilter = ref('all');
+  const treeNewsAudioAlert = ref(false);
+  const treeNewsCopiedId = ref(null);
+  const treeNewsLoading = ref(false);
+  let treeNewsEventSource = null;
+  let treeNewsReconnectTimer = null;
+
+  async function fetchTreeNewsHistory() {
+    try {
+      treeNewsLoading.value = true;
+      const res = await fetch('/api/news/live/history?limit=50');
+      const data = await res.json();
+      if (data && Array.isArray(data.items)) {
+        treeNewsList.value = data.items;
+        if (data.status?.status === 'connected') {
+          treeNewsConnected.value = true;
+        }
+      }
+    } catch {} finally {
+      treeNewsLoading.value = false;
+    }
+  }
+
+  function playAlertChime() {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.12);
+      gain.gain.setValueAtTime(0.08, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.3);
+    } catch {}
+  }
+
+  function setupTreeNewsStream() {
+    if (treeNewsEventSource) {
+      treeNewsEventSource.close();
+      treeNewsEventSource = null;
+    }
+    clearTimeout(treeNewsReconnectTimer);
+    if (typeof EventSource === 'undefined') return;
+
+    try {
+      treeNewsEventSource = new EventSource('/api/news/live/stream');
+      treeNewsEventSource.onopen = () => {
+        treeNewsConnected.value = true;
+      };
+      treeNewsEventSource.onmessage = e => {
+        try {
+          const payload = JSON.parse(e.data);
+          if (payload.type === 'snapshot') {
+            if (Array.isArray(payload.items) && payload.items.length) {
+              treeNewsList.value = payload.items;
+            }
+            treeNewsConnected.value = payload.status?.status === 'connected';
+          } else if (payload.type === 'news' && payload.data) {
+            treeNewsConnected.value = true;
+            if (!treeNewsPaused.value) {
+              if (!treeNewsList.value.some(it => it.id === payload.data.id)) {
+                treeNewsList.value.unshift(payload.data);
+                if (treeNewsList.value.length > 200) {
+                  treeNewsList.value.pop();
+                }
+                if (treeNewsAudioAlert.value && payload.data.isBreaking) {
+                  playAlertChime();
+                }
+              }
+            }
+          }
+        } catch {}
+      };
+      treeNewsEventSource.onerror = () => {
+        treeNewsConnected.value = false;
+        if (treeNewsEventSource?.readyState === EventSource.CLOSED) {
+          treeNewsEventSource?.close();
+          treeNewsEventSource = null;
+          clearTimeout(treeNewsReconnectTimer);
+          treeNewsReconnectTimer = setTimeout(() => {
+            if (typeof document !== 'undefined' && !document.hidden) {
+              setupTreeNewsStream();
+            }
+          }, 5000);
+        }
+      };
+    } catch {
+      treeNewsConnected.value = false;
+    }
+  }
+
+  function toggleTreeNewsPause() {
+    treeNewsPaused.value = !treeNewsPaused.value;
+  }
+
+  function toggleTreeNewsAudio() {
+    treeNewsAudioAlert.value = !treeNewsAudioAlert.value;
+    if (treeNewsAudioAlert.value) playAlertChime();
+  }
+
+  function clearTreeNewsList() {
+    treeNewsList.value = [];
+  }
+
+  function copyTreeNews(item) {
+    if (!item) return;
+    const text = `${item.title}\n来源: ${item.source} (${item.timeIso})\n${item.url || ''}`.trim();
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).then(() => {
+        treeNewsCopiedId.value = item.id;
+        setTimeout(() => { treeNewsCopiedId.value = null; }, 2000);
+      }).catch(() => {});
+    }
+  }
+
+  function formatTreeNewsTime(timeMs) {
+    if (!timeMs) return '刚刚';
+    const d = new Date(timeMs);
+    if (isNaN(d.getTime())) return '刚刚';
+    const bjTime = new Intl.DateTimeFormat('zh-CN', {
+      timeZone: 'Asia/Shanghai',
+      month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+    }).format(d);
+    const diff = Math.max(0, Date.now() - d.getTime());
+    if (diff < 5000) return `刚刚 · ${bjTime}`;
+    if (diff < 60000) return `${Math.floor(diff / 1000)}秒前 · ${bjTime}`;
+    if (diff < 3600000) return `${Math.floor(diff / 60000)}分钟前 · ${bjTime}`;
+    return bjTime;
+  }
+
+  const filteredTreeNews = computed(() => {
+    let list = treeNewsList.value || [];
+    const q = treeNewsSearch.value.trim().toUpperCase();
+    if (q) {
+      list = list.filter(it => 
+        (it.symbols && it.symbols.some(s => s.includes(q))) ||
+        (it.title && it.title.toUpperCase().includes(q)) ||
+        (it.body && it.body.toUpperCase().includes(q))
+      );
+    }
+    const src = treeNewsSourceFilter.value;
+    if (src && src !== 'all') {
+      list = list.filter(it => it.sourceType === src || it.source.toLowerCase().includes(src));
+    }
+    return list;
+  });
+
   function getCompanyLogoSvg(sym) {
     return CORPORATE_LOGOS[sym] || '';
   }
@@ -5256,6 +5414,8 @@ createApp({ setup() {
     loadInitialPageData();
     fetchWatchlistQuotes();
     setupEventSource();
+    setupTreeNewsStream();
+    fetchTreeNewsHistory();
     initialTimer = setTimeout(() => { isInitialLoading.value = false; }, 800);
     window.addEventListener('resize', resizeLayout);
     window.addEventListener('keydown', handleGlobalKeyDown);
@@ -5283,8 +5443,10 @@ createApp({ setup() {
     clearInterval(clockTimer);
     stopShortPolling();
     clearTimeout(sseReconnectTimer);
+    clearTimeout(treeNewsReconnectTimer);
     clearTimeout(watchlistDebounceTimer);
     eventSource?.close();
+    treeNewsEventSource?.close();
     window.removeEventListener('resize', resizeLayout);
     window.removeEventListener('keydown', handleGlobalKeyDown);
     window.removeEventListener('popstate', onPopState);
@@ -5298,6 +5460,9 @@ createApp({ setup() {
   watch(newsSubView, async value => {
     if (value === 'ai_search' && aiSearchResults.value.length === 0 && !aiSearchLoading.value) {
       await executeAiSearch();
+    }
+    if (value === 'tree_news' && treeNewsList.value.length === 0) {
+      await fetchTreeNewsHistory();
     }
   });
   watch([page, newsSubView, aiSearchAutoRefresh], scheduleAiSearchRefresh);
@@ -5367,6 +5532,11 @@ createApp({ setup() {
     executeAiSearch, selectAiSearchPreset, filterAiNewsTopic, copyAiNewsLink, formatAiTime, getAiEngineBadge,
     klineInteractionMode, chartDelayStatus, activeChartExtQuote,
     activeMacroTab, heatmapTimeRange, rightWatchlistCollapsed, cycleExtMode, extModeLabel, lastUpdateTimeFormatted, bjTimeFormatted, overviewCards8, overviewCards10,
+    // Tree News Real-time WebSocket Module
+    treeNewsList, treeNewsConnected, treeNewsPaused, treeNewsSearch, treeNewsSourceFilter,
+    treeNewsAudioAlert, treeNewsCopiedId, treeNewsLoading, filteredTreeNews,
+    fetchTreeNewsHistory, toggleTreeNewsPause, toggleTreeNewsAudio, clearTreeNewsList,
+    copyTreeNews, formatTreeNewsTime, setupTreeNewsStream,
     currentPageTitle, deleteStockDirect, cycleSessionMode, refreshWatchlistQuotes,
     selectSymbol, search, loadInitialPageData, loadOverview, loadChart, loadNews, loadOptions, resetPriceChartZoom, fetchWatchlistQuotes, importNotion, importFlows, clearFlows
   };

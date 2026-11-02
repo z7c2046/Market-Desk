@@ -27,6 +27,7 @@ npm.cmd start
 | 资金观察 | 11 个板块 ETF 涨跌/成交额散点图；导入真实净申赎 CSV | 默认未接 ETF 净申赎服务，不能从 OHLCV 推算真实资金净流入 |
 | 期权墙 | Cboe 链；到期日选择；Call/Put OI 墙、持仓比、估算 GEX；行权价范围筛选 | 公开延迟快照，持仓量通常每日更新；GEX 含仓位方向假设 |
 | 新闻 | CNBC、MarketWatch 市场新闻；Yahoo 个股 RSS；原文链接 | 保留原文标题，不内置新闻翻译或 AI 摘要 |
+| 突发快讯 (Tree News) | 直连 Tree of Alpha 实时 WebSocket (100~300ms 毫秒级延迟)；专抓彭博/路透终端、SEC Form 8-K 与企业突发公告；支持代码过滤、声音警报与暂停 | 公开公共广播流，100% 免费无需注册；支持可选 VIP 密钥 |
 | 自选 | 本地保存、增删；手动合并已有 Notion 自选 | 本地浏览器保存，不自动跨设备同步 |
 
 ## GitHub 项目融合
@@ -65,8 +66,22 @@ date,symbol,netFlowUsd,source
 | `/api/market/chart` | `symbol=NVDA&range=3mo`；range 为 `1d/1mo/3mo/6mo/1y` |
 | `/api/news` | 空参数为市场新闻；`symbol=AAPL` 为个股 |
 | `/api/news/ai-search` | `query`、`engine=auto`、`source`、`timeRange=hour/day/week`、`sort=latest/relevance`；[使用与验证说明](docs/AI_NEWS_SEARCH_UPDATE.zh-CN.md) |
+| `/api/news/live/stream` | Server-Sent Events (SSE) 毫秒级突发快讯长连接推送 |
+| `/api/news/live/history` | `symbol`、`query`、`source`、`limit`；获取内存环形缓冲中的最新快讯快照 |
+| `/api/news/live/status` | WebSocket 连接状态、已接收快讯计数、延迟与运行指标 |
 | `/api/options` | `symbol=SPY`；`expiration=YYYY-MM-DD` 或 `all`，省略默认最近有效日 |
 | `/api/watchlist` | 复用已有 Notion 接入，只有点击导入时使用 |
+
+## 实时突发数据源：Tree News (Tree of Alpha) WebSocket
+
+系统现已原生集成量化圈最强免费实时财讯黑科技 **Tree News (Tree of Alpha)**：
+
+- **数据源与连接方式**：直连公开公共 WebSocket 节点 `wss://news.treeofalpha.com/ws`，支持毫秒级（100~300ms）快讯广播。
+- **专抓信源**：系统全天候监听彭博终端（Bloomberg）、路透社（Reuters）、美国证监会 SEC Form 8-K 官方重大重组披露以及企业突发官方博客。
+- **双层架构保证**：
+  1. **服务端中继与环形缓冲**：服务启动时预拉取 `https://news.treeofalpha.com/api/news?limit=50` 预热，维护最近 200 条快讯内存缓存，断线指数退避自动重连；
+  2. **客户端实时推流**：通过 SSE 长连接向前端广播，支持高亮微闪（Flash Highlight）、股票代码点击过滤、暂停滚动与重大突发声音警报（Web Audio 提示音）。
+- **费用与鉴权**：100% 完全免费，无配额限制。如持有订阅版 VIP Key，可在 `.env` 中声明 `TREE_NEWS_API_KEY`，长连接建立时将自动发送 `login` 验证。
 
 旧 `/api/radar`、`/api/backtest`、`/api/market/snapshot` 返回 **410 Gone**。算法模块保留历史用途，新服务器不加载。迁移前 UI、服务入口和说明见 [archive/inflection-v0.2](archive/inflection-v0.2/ARCHIVE.md)。
 

@@ -1957,6 +1957,10 @@
         <span class="btn-icon">🤖</span> AI 全网深度检索
         <span class="badge-fire-pill">Tavily · Exa · Firecrawl</span>
       </button>
+      <button class="news-view-btn" :class="{ active: newsSubView === 'tree_news' }" @click="newsSubView = 'tree_news'">
+        <span class="btn-icon">⚡</span> 毫秒级突发快讯
+        <span class="badge-fire-pill">Tree News WS 直连</span>
+      </button>
       <button class="news-view-btn" :class="{ active: newsSubView === 'geopolitics' }" @click="newsSubView = 'geopolitics'">
         <span class="btn-icon">🌍</span> 全球地缘政治看板
         <span class="badge-fire-pill">Hot Radar</span>
@@ -1971,6 +1975,11 @@
     </div>
 
     <!-- Quick Telemetry & Stats -->
+    <div v-if="newsSubView === 'tree_news'" class="earnings-header-stats">
+      <span class="stat-pill"><span class="pulse-dot" :class="{ green: treeNewsConnected, red: !treeNewsConnected }"></span> WebSocket 长连接：<strong>{{ treeNewsConnected ? '在线广播中 (100~300ms)' : '正在连接...' }}</strong></span>
+      <span class="stat-pill stat-accent">核心专线：彭博终端 · 路透社 · SEC Form 8-K · 官方突发</span>
+      <span class="stat-pill">实时快讯库：<strong>{{ treeNewsList.length }}</strong> 条</span>
+    </div>
     <div v-if="newsSubView === 'ai_search'" class="earnings-header-stats">
       <span class="stat-pill"><span class="pulse-dot"></span> 3 大 AI 搜索引擎协同在线：Tavily · Exa · Firecrawl</span>
       <span class="stat-pill stat-accent">穿透信源：Reddit · X · 路透社 · 华尔街日报 · 彭博 · FT</span>
@@ -2804,6 +2813,182 @@
       <div class="empty-actions">
         <button class="ai-btn-direct-jump" @click="selectAiSearchPreset(AI_SEARCH_PRESETS[0])">
           浏览华尔街核心焦点
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= SUBVIEW 6: TREE NEWS REAL-TIME WEBSOCKET STREAM ================= -->
+  <section v-else-if="newsSubView === 'tree_news'" class="tree-news-workspace-section">
+    <!-- Tree News Header Card -->
+    <div class="tree-news-console-card">
+      <div class="tree-news-top-row">
+        <div class="tree-news-brand">
+          <span class="tree-brand-badge">LIVE WEBSOCKET STREAM (TREE OF ALPHA)</span>
+          <h2 class="tree-news-heading">Tree News 毫秒级突发财讯与大事件流</h2>
+          <p class="tree-news-subheading">直连 Tree of Alpha 极简 WebSocket 广播节点，毫秒级 (100~300ms) 监听彭博 (Bloomberg)、路透 (Reuters)、美国证监会 SEC Form 8-K 与企业官方突发披露。完全免费无配额限制。</p>
+        </div>
+        <div class="tree-engines-status-pills">
+          <span class="engine-live-pill" :class="{ 'live-online': treeNewsConnected }">
+            <span class="engine-indicator" :class="{ green: treeNewsConnected, red: !treeNewsConnected }"></span>
+            WS 广播流 · {{ treeNewsConnected ? '在线 (100~300ms)' : '重连中' }}
+          </span>
+          <span class="engine-live-pill">wss://news.treeofalpha.com/ws</span>
+          <span class="engine-live-pill" :title="'接收状态'">{{ treeNewsPaused ? '⏸️ 已暂停更新' : '▶️ 实时推流中' }}</span>
+        </div>
+      </div>
+
+      <!-- Controls & Filter Toolbar -->
+      <div class="tree-news-toolbar">
+        <div class="tree-search-input-wrap">
+          <span class="search-input-icon">🔍</span>
+          <input
+            type="text"
+            v-model="treeNewsSearch"
+            class="tree-news-input"
+            aria-label="代码或关键词搜索"
+            placeholder="筛选股票/代币代码 (如 NVDA, TSLA, BTC) 或突发事件关键词..."
+          />
+          <button
+            v-if="treeNewsSearch"
+            type="button"
+            class="tree-input-clear-btn"
+            @click="treeNewsSearch = ''"
+            aria-label="清空输入"
+          >×</button>
+        </div>
+
+        <div class="tree-actions-wrap">
+          <button 
+            type="button" 
+            class="tree-action-btn"
+            :class="{ active: treeNewsAudioAlert }" 
+            @click="toggleTreeNewsAudio" 
+            :title="treeNewsAudioAlert ? '已开启突发提示音' : '开启突发提示音'"
+          >
+            {{ treeNewsAudioAlert ? '🔔 提示音: 开' : '🔕 提示音: 关' }}
+          </button>
+          <button 
+            type="button" 
+            class="tree-action-btn"
+            :class="{ active: treeNewsPaused }" 
+            @click="toggleTreeNewsPause" 
+            :title="treeNewsPaused ? '恢复实时流' : '暂停实时流滚动'"
+          >
+            {{ treeNewsPaused ? '▶️ 继续接收' : '⏸️ 暂停流' }}
+          </button>
+          <button 
+            type="button" 
+            class="tree-action-btn"
+            @click="clearTreeNewsList" 
+            title="清空当前列表"
+          >
+            🗑️ 清空
+          </button>
+        </div>
+      </div>
+
+      <!-- Source Scope Filters -->
+      <div class="tree-source-filters">
+        <button 
+          v-for="s in [
+            { id: 'all', label: '全部来源', count: treeNewsList.length },
+            { id: 'bloomberg', label: '彭博终端 Bloomberg' },
+            { id: 'reuters', label: '路透社 Reuters' },
+            { id: 'sec', label: 'SEC 8-K 官方披露' },
+            { id: 'twitter', label: 'X (Twitter 速递)' },
+            { id: 'official', label: '企业官方公告' }
+          ]" 
+          :key="s.id" 
+          class="tree-source-pill"
+          :class="{ active: treeNewsSourceFilter === s.id }"
+          @click="treeNewsSourceFilter = s.id"
+        >
+          {{ s.label }} <span v-if="s.count !== undefined" class="pill-count">({{ s.count }})</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Live Telemetry Bar -->
+    <div class="tree-telemetry-strip">
+      <div class="telemetry-left">
+        <span class="telemetry-pill">
+          ⚡ 广播节点：<strong>news.treeofalpha.com</strong>
+        </span>
+        <span class="telemetry-pill">
+          📑 符合筛选：<strong>{{ filteredTreeNews.length }}</strong> / {{ treeNewsList.length }} 条
+        </span>
+        <span class="telemetry-pill">
+          ⏱️ 延迟：<strong>毫秒级 (100~300ms)</strong>
+        </span>
+      </div>
+    </div>
+
+    <!-- Real-time Cards Stream -->
+    <div v-if="filteredTreeNews.length" class="tree-news-cards-flow">
+      <div 
+        v-for="(item, idx) in filteredTreeNews" 
+        :key="item.id"
+        class="tree-card"
+        :class="[
+          'tree-card-' + item.sourceType,
+          { 'is-breaking': item.isBreaking, 'is-newest': idx === 0 && !treeNewsPaused }
+        ]"
+      >
+        <div class="tree-card-top-row">
+          <div class="tree-card-meta-left">
+            <span class="tree-source-tag" :class="item.badgeClass">
+              {{ item.source }}
+            </span>
+            <span v-if="item.isBreaking" class="tree-breaking-tag">
+              ⚡ 突发大事件
+            </span>
+            <span v-for="sym in item.symbols" :key="sym" class="tree-symbol-tag" @click="treeNewsSearch = sym">
+              ${{ sym }}
+            </span>
+          </div>
+          <span class="tree-time-tag" :title="'时间戳: ' + item.timeIso">
+            {{ formatTreeNewsTime(item.time) }}
+          </span>
+        </div>
+
+        <h3 class="tree-card-title">
+          <a v-if="item.url" :href="item.url" target="_blank" rel="noopener noreferrer" class="tree-title-link">
+            {{ item.title }}
+          </a>
+          <span v-else>{{ item.title }}</span>
+        </h3>
+
+        <p v-if="item.body && item.body !== item.title" class="tree-card-body">
+          {{ item.body }}
+        </p>
+
+        <div class="tree-card-footer">
+          <span class="tree-card-origin">
+            信源: {{ item.rawSource || item.source }}
+            <span v-if="item.importance > 1.5" class="tree-importance-badge">重要度 {{ item.importance }}</span>
+          </span>
+          <div class="tree-card-actions">
+            <button type="button" class="tree-btn-copy" @click="copyTreeNews(item)">
+              {{ treeNewsCopiedId === item.id ? '✓ 已复制' : '复制' }}
+            </button>
+            <a v-if="item.url" :href="item.url" target="_blank" rel="noopener noreferrer" class="tree-btn-open">
+              直达原文 ↗
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Empty State -->
+    <div v-else class="tree-news-empty-state">
+      <div class="empty-icon">📡</div>
+      <h3>{{ treeNewsList.length ? '当前筛选条件下暂无快讯' : '正在保持 WebSocket 毫秒级长连接...' }}</h3>
+      <p v-if="treeNewsList.length">可以尝试清空筛选框或切换来源范围。</p>
+      <p v-else>公共广播节点已就绪。全球彭博终端、路透社及官方最新快讯发布时将毫秒级自动推送到此处。</p>
+      <div class="empty-actions" v-if="treeNewsSearch || treeNewsSourceFilter !== 'all'">
+        <button class="ai-btn-direct-jump" @click="treeNewsSearch = ''; treeNewsSourceFilter = 'all'">
+          重置全部筛选
         </button>
       </div>
     </div>

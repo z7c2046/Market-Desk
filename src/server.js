@@ -7,6 +7,7 @@ import { fetchWatchlistSymbols } from './notion.js';
 import { createMarketWorkspace } from './market-workspace.js';
 import { getWatchlistQuoteService } from './watchlist-quotes.js';
 import { getAiSearchService } from './ai-search-service.js';
+import { getTreeNewsService } from './tree-news-service.js';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const publicDir = path.join(root, 'public');
 const vendor = {
@@ -16,7 +17,8 @@ const vendor = {
 };
 const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.json': 'application/json', '.csv': 'text/csv; charset=utf-8' };
 function json(res, status, data) { res.writeHead(status, { 'Content-Type': mime['.json'], 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' }); res.end(JSON.stringify(data)); }
-export function createServer({ workspace = createMarketWorkspace(), watchlist = fetchWatchlistSymbols, quoteService = getWatchlistQuoteService(), aiSearchService = getAiSearchService() } = {}) {
+export function createServer({ workspace = createMarketWorkspace(), watchlist = fetchWatchlistSymbols, quoteService = getWatchlistQuoteService(), aiSearchService = getAiSearchService(), treeNewsService = null } = {}) {
+  const treeNews = treeNewsService;
   return http.createServer(async (req, res) => {
     try {
       const url = new URL(req.url, 'http://localhost');
@@ -26,6 +28,12 @@ export function createServer({ workspace = createMarketWorkspace(), watchlist = 
         const symbols = (params.symbols || '').split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
         quoteService.addClient(req, res, symbols);
         return;
+      }
+      if (url.pathname === '/api/news/live/stream') {
+        if (treeNews?.addClient) {
+          treeNews.addClient(req, res);
+          return;
+        }
       }
       if (url.pathname === '/api/watchlist/quotes') {
         const symbols = (params.symbols || '').split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
@@ -47,6 +55,8 @@ export function createServer({ workspace = createMarketWorkspace(), watchlist = 
         '/api/crypto': () => (workspace.crypto ? workspace.crypto() : { items: [] }),
         '/api/news': () => workspace.news(params),
         '/api/news/ai-search': () => aiSearchService.search(params),
+        '/api/news/live/history': () => (treeNews?.getHistory ? treeNews.getHistory(params) : { ok: true, items: [] }),
+        '/api/news/live/status': () => (treeNews?.getStatus ? treeNews.getStatus() : { ok: false, status: 'unconfigured' }),
         '/api/options': () => workspace.options(params),
         '/api/watchlist': () => watchlist({ force: params.force === '1' }),
       };
@@ -66,5 +76,5 @@ export function createServer({ workspace = createMarketWorkspace(), watchlist = 
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const port = Number(process.env.PORT || 5174);
-  createServer().listen(port, process.env.HOST || '127.0.0.1', () => console.log(`Market Desk running at http://localhost:${port}`));
+  createServer({ treeNewsService: getTreeNewsService() }).listen(port, process.env.HOST || '127.0.0.1', () => console.log(`Market Desk running at http://localhost:${port}`));
 }

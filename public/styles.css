@@ -12101,4 +12101,405 @@ body.is-loading .top-progress,
   }
 }
 
+/* ================= 6.0 Tree News Real-time WebSocket Module ================= */
+.tree-news-workspace-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  animation: fadeIn 0.25s ease-out;
+}
+
+.tree-news-console-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 22px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  position: relative;
+  overflow: hidden;
+}
+
+.tree-news-console-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #06b6d4, #3b82f6, #10b981, #f59e0b);
+}
+
+.tree-news-top-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.tree-news-brand {
+  max-width: 720px;
+}
+
+.tree-brand-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  color: #06b6d4;
+  background: rgba(6, 182, 212, 0.12);
+  padding: 3px 8px;
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+
+.tree-news-heading {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0 0 6px 0;
+  color: var(--text);
+  letter-spacing: -0.3px;
+}
+
+.tree-news-subheading {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.55;
+  margin: 0;
+}
+
+.tree-engines-status-pills {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.engine-live-pill.live-online {
+  border-color: rgba(16, 185, 129, 0.35);
+  background: rgba(16, 185, 129, 0.08);
+  color: var(--text);
+}
+
+.tree-news-toolbar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.tree-search-input-wrap {
+  flex: 1;
+  min-width: 260px;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.tree-news-input {
+  width: 100%;
+  height: 42px;
+  padding: 0 36px 0 38px;
+  background: var(--card-bg, rgba(255, 255, 255, 0.05));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 13.5px;
+  transition: all 0.2s ease;
+}
+
+.tree-news-input:focus {
+  outline: none;
+  border-color: #06b6d4;
+  box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.2);
+}
+
+.tree-input-clear-btn {
+  position: absolute;
+  right: 10px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.tree-actions-wrap {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.tree-action-btn {
+  height: 40px;
+  padding: 0 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--card-bg, rgba(255, 255, 255, 0.03));
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+
+.tree-action-btn:hover {
+  background: var(--hover-bg, rgba(255, 255, 255, 0.08));
+  border-color: var(--border-hover, #4b5563);
+}
+
+.tree-action-btn.active {
+  background: rgba(6, 182, 212, 0.14);
+  border-color: #06b6d4;
+  color: #06b6d4;
+  font-weight: 600;
+}
+
+.tree-source-filters {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+  padding-top: 14px;
+}
+
+.tree-source-pill {
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12.5px;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tree-source-pill:hover {
+  background: var(--hover-bg, rgba(255, 255, 255, 0.05));
+  color: var(--text);
+}
+
+.tree-source-pill.active {
+  background: var(--text);
+  color: var(--bg);
+  border-color: var(--text);
+  font-weight: 600;
+}
+
+.tree-telemetry-strip {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 14px;
+  background: var(--card-bg, rgba(255, 255, 255, 0.02));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.tree-news-cards-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tree-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.tree-card:hover {
+  border-color: var(--border-hover, #4b5563);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.tree-card.is-newest {
+  animation: flashHighlight 1.8s ease-out;
+}
+
+@keyframes flashHighlight {
+  0% { background: rgba(6, 182, 212, 0.25); border-color: #06b6d4; }
+  100% { background: var(--surface); border-color: var(--border); }
+}
+
+.tree-card-bloomberg { border-left: 3.5px solid #f97316; }
+.tree-card-reuters { border-left: 3.5px solid #3b82f6; }
+.tree-card-sec { border-left: 3.5px solid #a855f7; }
+.tree-card-twitter { border-left: 3.5px solid #0ea5e9; }
+.tree-card-crypto { border-left: 3.5px solid #eab308; }
+.tree-card-official { border-left: 3.5px solid #10b981; }
+.tree-card-wire { border-left: 3.5px solid #64748b; }
+
+.tree-card-top-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.tree-card-meta-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tree-source-tag {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2.5px 8px;
+  border-radius: 4px;
+}
+
+.tree-breaking-tag {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2.5px 7px;
+  border-radius: 4px;
+  background: rgba(239, 68, 68, 0.16);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.tree-symbol-tag {
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--font-mono, monospace);
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(59, 130, 246, 0.12);
+  color: #3b82f6;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tree-symbol-tag:hover {
+  background: #3b82f6;
+  color: #ffffff;
+}
+
+.tree-time-tag {
+  font-size: 11.5px;
+  font-family: var(--font-mono, monospace);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.tree-card-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.tree-title-link {
+  color: inherit;
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.tree-title-link:hover {
+  color: #06b6d4;
+  text-decoration: underline;
+}
+
+.tree-card-body {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.tree-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.04));
+  padding-top: 8px;
+  margin-top: 2px;
+}
+
+.tree-importance-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 5px;
+  background: rgba(245, 158, 11, 0.12);
+  color: #f59e0b;
+  border-radius: 3px;
+  font-size: 10.5px;
+}
+
+.tree-card-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.tree-btn-copy, .tree-btn-open {
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.tree-btn-copy:hover, .tree-btn-open:hover {
+  background: var(--hover-bg, rgba(255, 255, 255, 0.08));
+  color: var(--text);
+  border-color: var(--border-hover);
+}
+
+.tree-news-empty-state {
+  padding: 60px 20px;
+  text-align: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.tree-news-empty-state .empty-icon {
+  font-size: 42px;
+  margin-bottom: 12px;
+}
+
+.tree-news-empty-state h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.tree-news-empty-state p {
+  font-size: 13px;
+  color: var(--text-muted);
+  max-width: 480px;
+  margin: 0 auto 16px auto;
+  line-height: 1.6;
+}
+
+
 
