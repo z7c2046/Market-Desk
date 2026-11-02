@@ -1,9 +1,8 @@
 /* ============================================================
-   Frontend Design Engineering System (Modern Data Dashboard)
-   Specification: D:\YUXIANZHAO\Code\Skills\frontend-design-engineering
-   Tokens: Primary #2563EB / #3B82F6 | Secondary #10B981 | Tertiary #F43F5E | Neutral #64748B
-   Fonts:  CJK: Noto Sans SC / PingFang SC | Latin: Inter Variable | Numbers: JetBrains Mono
-   Physics: Micro-Spring cubic-bezier(0.34, 1.56, 0.64, 1) + 0.08s Mechanical Tactile Switch
+   Frontend Design Engineering System (Market Desk Terminal)
+   Transplanted 1:1 from: market_desk_skeleton_demo.html
+   Dark Mode: Obsidian Depth #0b0d10 / #0d0f12 / #15181c / #31c39a / #f06e75
+   Light Mode: Pure White Canvas #ffffff / #f5f5f7 / #111111 / #10b981 / #ef4444
    ============================================================ */
 :root {
   color-scheme: light;
@@ -14,49 +13,50 @@
   --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   --font-sans: var(--font-sc);
 
-  /* 1. Four-Tier Surface Elevation (Light Mode: Watchlist Card Palette #F6F7FA + #FFFFFF) */
-  --surface-canvas: #F6F7FA;   /* Soft neutral cool-gray canvas matching Watchlist */
-  --surface-card: #FFFFFF;     /* Crisp pure white cards */
-  --surface-raised: #FAFBFD;   /* Elevated panels & pill headers */
-  --surface-hover: #F2F4F7;    /* Clean interactive hover */
-  --surface-sunken: #EDEFF3;   /* Sunken tracks, pill troughs */
+  /* 1. Four-Tier Surface Elevation (Light Mode 1:1 Demo: 纯白大底 #ffffff + 微软灰 #f7f7f9 + 柔浅灰 #f5f5f7) */
+  --surface-canvas: #ffffff;   /* 彻底告别蓝灰水泥底，100% 通透纯白大画布 */
+  --surface-card: #ffffff;     /* 主面板与主卡片纯白 */
+  --surface-raised: #f5f5f7;   /* 指标卡使用参考图同款圆润柔浅灰 #f5f5f7 */
+  --surface-hover: #eeeeee;    /* 鼠标悬停软灰 */
+  --surface-sunken: #f5f5f5;   /* 输入框与胶囊凹槽同款 #f5f5f5 */
 
-  /* 2. Borders & Dividers */
-  --border-subtle: rgba(20, 20, 20, 0.06);
-  --border-strong: #DFE2E8;
-  --control-border: #DFE2E8;
+  /* 2. Borders & Dividers (1:1 Demo) */
+  --border-subtle: #eeeeee;    /* 极微弱极干净的纤细微线 #eeeeee */
+  --border-strong: #ebebeb;    /* 按钮与组件边框 #ebebeb */
+  --control-border: #ededed;   /* 搜索与输入框边框 #ededed */
 
-  /* 3. Typography Ink Tokens (Watchlist Deep Black + Neutral Grays) */
-  --text-main: #141414;
-  --text-strong: #0A0A0A;
-  --text-primary: #141414;
-  --text-secondary: #6B7280;
-  --text-muted: #8E95A2;
-  --text-tertiary: #9CA3AF;
+  /* 3. Typography Ink Tokens (1:1 Demo: 饱满炭黑 #111111 + 优雅中灰 #626477 + 柔雾灰紫 #888aa3) */
+  --text-main: #111111;        /* 参考图同款饱满炭黑 #111111，醒目纯粹 */
+  --text-strong: #111111;
+  --text-primary: #111111;
+  --text-secondary: #626477;   /* 优雅稳健中灰 #626477 */
+  --text-muted: #888aa3;       /* 柔雾灰紫导航文字 #888aa3 */
+  --text-tertiary: #9e9ea7;    /* 提示副字与输入框占位 #9e9ea7 */
 
-  /* 4. Brand & Financial Semantics (Watchlist Ink + Stock Green/Red) */
-  --accent-primary: #141414;
-  --accent-secondary: #374151;
-  --accent-fill: #141414;
-  --accent-text: #141414;
-  --accent-soft: rgba(20, 20, 20, 0.06);
-  --accent-ink: #FFFFFF;
+  /* 4. Brand & Financial Semantics (1:1 Demo) */
+  --accent-primary: #111111;   /* 激活态黑白极致反差 #111111 */
+  --accent-secondary: #626477;
+  --accent-fill: #111111;
+  --accent-text: #111111;
+  --accent-soft: rgba(37, 99, 235, .08);
+  --accent-ink: #ffffff;
 
-  --semantic-up: #00A854;      /* Watchlist Stock Up Green (+0.93%) */
-  --semantic-up-soft: rgba(0, 168, 84, 0.10);
-  --semantic-up-chart: #00A854;
-  --semantic-down: #E1251B;    /* Watchlist Stock Down Red (-1.06%) */
-  --semantic-down-soft: rgba(225, 37, 27, 0.10);
-  --semantic-warning: #D97706;
-  --semantic-warning-soft: rgba(217, 119, 6, 0.10);
+  --semantic-up: #10b981;      /* 纯净翠绿 #10b981 */
+  --semantic-up-soft: rgba(16, 185, 129, 0.10);
+  --semantic-up-chart: #10b981;
+  --semantic-down: #ef4444;    /* 纯净珊瑚红 #ef4444 */
+  --semantic-down-soft: rgba(239, 68, 68, 0.10);
+  --semantic-warning: #f59e0b;
+  --semantic-warning-soft: rgba(245, 158, 11, 0.10);
 
   /* 向下兼容别名 (Backward-compatible Aliases) */
   --canvas: var(--surface-canvas);
   --surface: var(--surface-card);
   --bg: var(--surface-canvas);
-  --sidebar-bg: var(--surface-canvas);
+  --sidebar-bg: #ffffff;       /* 左侧导轨纯白无暇 */
+  --topbar-bg: #ffffff;        /* 顶栏通透纯白 */
   --border: var(--border-subtle);
-  --input-bg: var(--surface-card);
+  --input-bg: var(--surface-sunken);
   --card-bg: var(--surface-card);
   --card-bg-hover: var(--surface-hover);
   --accent-bg: var(--accent-soft);
@@ -66,31 +66,39 @@
   --down-soft: var(--semantic-down-soft);
   --warning-text: var(--semantic-warning);
   --warning-soft: var(--semantic-warning-soft);
-  --apple-blue: var(--accent-primary);
-  --apple-blue-lt: #374151;
+  --apple-blue: #2563eb;       /* 纯正科技电光蓝 #2563eb */
+  --apple-blue-lt: #3b82f6;
   --apple-green: var(--semantic-up);
   --apple-red: var(--semantic-down);
   --apple-orange: var(--semantic-warning);
 
-  /* 4.5 Financial Terminal Skeleton Tokens (Light Mode) */
-  --skeleton-base: #e6eaf0;
-  --skeleton-high: #f2f5f9;
+  /* 4.5 Financial Terminal Skeleton Tokens (Light Mode 1:1 Demo) */
+  --skeleton-base: #f0f0f3;
+  --skeleton-high: #e4e4e7;
+  --skeleton-bars-1: #e4e4e7;
+  --skeleton-bars-2: #eeeeee;
 
   /* 5. Shadows & Dynamic Environmental Ambient Lighting */
-  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.03);
-  --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.05), 0 1px 3px rgba(15, 23, 42, 0.03);
-  --shadow-card: 0 1px 4px rgba(15, 23, 42, 0.03), 0 1px 2px rgba(15, 23, 42, 0.02);
-  --shadow-float: 0 16px 24px -4px rgba(15, 23, 42, 0.08), 0 6px 10px -4px rgba(15, 23, 42, 0.04);
-  --glow-focus: 0 0 0 2px rgba(20, 20, 20, 0.12);
-  --wash-1: rgba(20, 20, 20, 0.04);
-  --wash-2: rgba(217, 119, 6, 0.06);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.02);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.04);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.02);
+  --shadow-float: 0 12px 24px -4px rgba(0, 0, 0, 0.06);
+  --glow-focus: 0 0 0 2px rgba(37, 99, 235, 0.15);
+  --wash-1: rgba(0, 0, 0, 0.02);
+  --wash-2: rgba(37, 99, 235, 0.04);
 
-  /* 5.1 Group Header Tokens */
-  --group-header-bg: #FFFFFF;
-  --group-header-bg-hover: #F7F8FA;
-  --group-header-border: rgba(20, 20, 20, 0.06);
-  --group-badge-bg: rgba(20, 20, 20, 0.06);
-  --group-badge-text: #141414;
+  /* 5.1 Group Header Tokens (1:1 Demo) */
+  --group-header-bg: #f7f7f9;
+  --group-header-bg-hover: #eeeeee;
+  --group-header-border: #eeeeee;
+  --group-badge-bg: #f5f5f5;
+  --group-badge-text: #111111;
+
+  /* Demo 独有扩展变量 (Demo Specialized Tokens) */
+  --demo-blue: #2563eb;
+  --demo-blue-soft: rgba(37, 99, 235, .08);
+  --demo-legend-call: #2563eb;
+  --demo-legend-put: #7c3aed;
 
   /* 6. Precision Motion Curves & Radii */
   --radius-sm: 8px;
@@ -114,47 +122,48 @@ html:lang(en), [data-script='en'] {
 [data-theme='dark'] {
   color-scheme: dark;
 
-  /* 1. Four-Tier Surface Elevation (Ember Dashboard Final 1:1 Minimal Dark Palette) */
-  --surface-canvas: #111111;   /* Ember --page: #111111 (Deep matte obsidian canvas) */
-  --surface-card: #191919;     /* Ember --surface: #191919 (Card & panel surface) */
-  --surface-raised: #292929;   /* Ember --active: #292929 (Active pill, button & header) */
-  --surface-hover: #222222;    /* Interactive hover state */
-  --surface-sunken: #1b1b1b;   /* Ember --input: #1b1b1b (Input & track troughs) */
+  /* 1. Four-Tier Surface Elevation (Dark Mode 1:1 Demo: 沉稳大气黑曜石质感) */
+  --surface-canvas: #0b0d10;   /* Demo --bg: #0b0d10 (极致沉稳黑曜石大画布) */
+  --surface-card: #15181c;     /* Demo --surface: #15181c (面板与卡片底色) */
+  --surface-raised: #1b1f25;   /* Demo --surface-active: #1b1f25 (活动卡与微抬高) */
+  --surface-hover: #191c21;    /* Demo --surface-hover: #191c21 (交互悬停态) */
+  --surface-sunken: #212429;   /* Demo --search-bg: #212429 (搜索/输入框凹槽) */
 
-  /* 2. Borders & Dividers */
-  --border-subtle: #262626;    /* Ember --divider: #262626 */
-  --border-strong: #2a2a2a;    /* Ember --border: #2a2a2a */
-  --control-border: #2c2c2c;   /* Ember --input-border: #2c2c2c */
+  /* 2. Borders & Dividers (1:1 Demo) */
+  --border-subtle: #20252b;    /* Demo --border-soft: #20252b */
+  --border-strong: #262b31;    /* Demo --border: #262b31 */
+  --control-border: #2b3036;   /* Demo --btn-border: #2b3036, --search-border: #23272c */
 
-  /* 3. Typography Ink Tokens (Ember Text Hierarchy) */
-  --text-main: #f4f4f4;        /* Ember --main-text: #f4f4f4 */
-  --text-strong: #ffffff;
-  --text-primary: #f4f4f4;     /* Ember --main-text: #f4f4f4 */
-  --text-secondary: #969696;   /* Ember --secondary: #969696 */
-  --text-muted: #858585;       /* Ember --heading-year: #858585 */
-  --text-tertiary: #696969;    /* Ember --tertiary: #696969 */
+  /* 3. Typography Ink Tokens (1:1 Demo: 冰银白 #eef1f4 + 纯白 #ffffff + 哑光灰 #8b949f + 幽暗深灰 #59636e) */
+  --text-main: #eef1f4;        /* Demo --text: #eef1f4 */
+  --text-strong: #ffffff;      /* Demo --text-strong: #ffffff */
+  --text-primary: #eef1f4;     /* Demo --text: #eef1f4 */
+  --text-secondary: #8b949f;   /* Demo --muted: #8b949f */
+  --text-muted: #59636e;       /* Demo --dim: #59636e */
+  --text-tertiary: #66717c;    /* Demo --dim-sub: #66717c */
 
-  /* 4. Brand & Financial Semantics (Ember Precision Palette) */
-  --accent-primary: #f4f4f4;
-  --accent-secondary: #969696;
-  --accent-fill: #292929;      /* Ember --active: #292929 */
-  --accent-text: #f4f4f4;
-  --accent-soft: rgba(255, 255, 255, 0.08);
-  --accent-ink: #111111;
+  /* 4. Brand & Financial Semantics (1:1 Demo) */
+  --accent-primary: #548afa;   /* Demo --blue: #548afa */
+  --accent-secondary: #75a5ff; /* Demo --brand-pro-text: #75a5ff */
+  --accent-fill: #24324a;      /* Demo --tiny-btn-act-bg: #24324a */
+  --accent-text: #b0c9ff;      /* Demo --tiny-btn-act-text: #b0c9ff */
+  --accent-soft: rgba(84, 138, 250, .12); /* Demo --blue-soft */
+  --accent-ink: #ffffff;
 
-  --semantic-up: #53cb9b;      /* Ember --trend: #53cb9b (Emerald Green) */
-  --semantic-up-soft: rgba(83, 203, 155, 0.14);
-  --semantic-up-chart: #53cb9b;
-  --semantic-down: #ff5c5c;    /* Balanced High-Contrast Coral Red */
-  --semantic-down-soft: rgba(255, 92, 92, 0.14);
-  --semantic-warning: #f4b72b; /* Ember Enterprise Gold #f4b72b */
+  --semantic-up: #31c39a;      /* Demo --green: #31c39a (松石翠绿) */
+  --semantic-up-soft: rgba(49, 195, 154, 0.14);
+  --semantic-up-chart: #31c39a;
+  --semantic-down: #f06e75;    /* Demo --red: #f06e75 (珊瑚靓红) */
+  --semantic-down-soft: rgba(240, 110, 117, 0.14);
+  --semantic-warning: #f4b72b; /* 警示金黄 */
   --semantic-warning-soft: rgba(244, 183, 43, 0.14);
 
   /* 向下兼容别名 (Backward-compatible Aliases) */
   --canvas: var(--surface-canvas);
   --surface: var(--surface-card);
   --bg: var(--surface-canvas);
-  --sidebar-bg: #0e0e0e;       /* Ember --sidebar: #0e0e0e */
+  --sidebar-bg: #0d0f12;       /* Demo --sidebar: #0d0f12 (深邃导轨底色) */
+  --topbar-bg: #111316;        /* Demo --topbar: #111316 */
   --border: var(--border-strong);
   --input-bg: var(--surface-sunken);
   --card-bg: var(--surface-card);
@@ -166,31 +175,39 @@ html:lang(en), [data-script='en'] {
   --down-soft: var(--semantic-down-soft);
   --warning-text: var(--semantic-warning);
   --warning-soft: var(--semantic-warning-soft);
-  --apple-blue: #5598f2;       /* Ember Pro Blue #5598f2 */
-  --apple-blue-lt: #67a3ef;
+  --apple-blue: #548afa;       /* Demo --blue: #548afa */
+  --apple-blue-lt: #75a5ff;
   --apple-green: var(--semantic-up);
   --apple-red: var(--semantic-down);
   --apple-orange: var(--semantic-warning);
 
-  /* 4.5 Financial Terminal Skeleton Tokens (Dark Mode) */
+  /* 4.5 Financial Terminal Skeleton Tokens (Dark Mode 1:1 Demo) */
   --skeleton-base: #24282e;
-  --skeleton-high: #353a42;
+  --skeleton-high: #292f38;
+  --skeleton-bars-1: #292f38;
+  --skeleton-bars-2: #272d38;
 
   /* 5. Shadows & Dynamic Environmental Ambient Lighting */
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
-  --shadow-card: 0 27px 67px rgba(0, 0, 0, 0.33), 0 80px 100px rgba(0, 0, 0, 0.08); /* Ember App Shadow */
-  --shadow-float: 0 27px 67px rgba(0, 0, 0, 0.5);
-  --glow-focus: 0 0 0 2px rgba(255, 255, 255, 0.2);
-  --wash-1: rgba(255, 255, 255, 0.04);
-  --wash-2: rgba(244, 183, 43, 0.06);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.45);
+  --shadow-card: none;         /* Demo --card-shadow: none */
+  --shadow-float: 0 16px 32px rgba(0, 0, 0, 0.5);
+  --glow-focus: 0 0 0 2px rgba(84, 138, 250, 0.25);
+  --wash-1: rgba(255, 255, 255, 0.03);
+  --wash-2: rgba(84, 138, 250, 0.05);
 
-  /* Group Header Tokens */
-  --group-header-bg: #191919;
-  --group-header-bg-hover: #222222;
-  --group-header-border: #262626;
-  --group-badge-bg: #292929;
-  --group-badge-text: #f4f4f4;
+  /* Group Header Tokens (1:1 Demo) */
+  --group-header-bg: #171a1e;  /* Demo --surface-card: #171a1e */
+  --group-header-bg-hover: #191c21;
+  --group-header-border: #262b31;
+  --group-badge-bg: #2a2e35;   /* Demo --badge-bg: #2a2e35 */
+  --group-badge-text: #dadde1; /* Demo --badge-text: #dadde1 */
+
+  /* Demo 独有扩展变量 (Demo Specialized Tokens) */
+  --demo-blue: #548afa;
+  --demo-blue-soft: rgba(84, 138, 250, .12);
+  --demo-legend-call: #60a3fb;
+  --demo-legend-put: #996ee2;
 }
 /* Custom refined scrollbars */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -1355,29 +1372,48 @@ p { color: var(--text-secondary); line-height: 1.6; margin-bottom: 0; }
 .brand-mark-sm {
   width: 32px;
   height: 32px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #2563eb, #3b82f6);
+  border-radius: 9px;
+  background: #111111;
   color: #fff;
-  font-size: 13px;
-  font-weight: 800;
+  font-size: 12px;
+  font-weight: 850;
   display: grid;
   place-items: center;
-  box-shadow: 0 3px 8px rgba(37, 99, 235, 0.28);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   flex-shrink: 0;
+  letter-spacing: -0.2px;
 }
 .brand-titles { display: flex; flex-direction: column; gap: 1px; }
-.brand-name { font-size: 14.5px; font-weight: 700; display: flex; align-items: center; gap: 6px; letter-spacing: -0.2px; }
+.brand-name { font-size: 14px; font-weight: 780; display: flex; align-items: center; gap: 6px; letter-spacing: -0.2px; line-height: 1.2; color: var(--text-strong, #111111); }
 .badge-pro {
   font-size: 9px;
-  font-weight: 800;
-  color: var(--apple-blue);
-  background: rgba(37, 99, 235, 0.08);
-  border: 1px solid rgba(37, 99, 235, 0.25);
+  font-weight: 600;
   border-radius: 4px;
-  padding: 1px 4px;
-  letter-spacing: 0.5px;
+  padding: 1px 5px;
+  letter-spacing: 0;
+  line-height: 1.3;
+  display: inline-block;
+  vertical-align: 2px;
 }
-.brand-desc { font-size: 10.5px; color: var(--text-tertiary); letter-spacing: 0; }
+:root:not(.dark) .badge-pro,
+[data-theme="light"] .badge-pro {
+  background: #f5f5f7 !important;
+  border: 1px solid #e0e0e4 !important;
+  color: #111111 !important;
+}
+:root.dark .badge-pro {
+  background: transparent !important;
+  border: 1px solid #27529e !important;
+  color: #75a5ff !important;
+}
+.brand-desc { font-size: 10px; color: var(--dim, #888aa3); letter-spacing: 0; line-height: 1.2; margin-top: 1px; white-space: nowrap; }
+:root:not(.dark) .brand-desc,
+[data-theme="light"] .brand-desc {
+  color: #888aa3;
+}
+:root.dark .brand-desc {
+  color: #59636e;
+}
 .topbar-search-form {
   display: flex;
   align-items: center;
@@ -1602,10 +1638,10 @@ main { min-width: 0; }
   border: 1px solid rgba(183, 66, 77, 0.22);
 }
 :root.dark .pct-pill.badge-pos {
-  border-color: rgba(104, 183, 154, 0.3);
+  border-color: rgba(49, 195, 154, 0.3);
 }
 :root.dark .pct-pill.badge-neg {
-  border-color: rgba(223, 139, 148, 0.3);
+  border-color: rgba(240, 110, 117, 0.3);
 }
 .index-card-foot {
   font-size: 10.5px;
@@ -6162,12 +6198,12 @@ td { color: var(--text-primary); }
 :root.dark .badge-pos,
 :root.dark .kpi-pill-green,
 :root.dark .cell-flash-up {
-  border-color: rgba(104, 183, 154, 0.3) !important;
+  border-color: rgba(49, 195, 154, 0.3) !important;
 }
 :root.dark .badge-neg,
 :root.dark .kpi-pill-red,
 :root.dark .cell-flash-down {
-  border-color: rgba(223, 139, 148, 0.3) !important;
+  border-color: rgba(240, 110, 117, 0.3) !important;
 }
 
 /* 5. News Stream Contrast & Ticker Wrap */
@@ -6247,9 +6283,9 @@ td { color: var(--text-primary); }
 :root.dark .crypto-echarts-box,
 [data-theme='dark'] .price-chart,
 [data-theme='dark'] .crypto-echarts-box {
-  background-color: #000000 !important;
+  background-color: var(--surface-card, #15181c) !important;
   border-radius: var(--radius-md);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 0 0 1px var(--border-subtle, #20252b);
 }
 
 :root .price-chart,
@@ -6258,7 +6294,7 @@ td { color: var(--text-primary); }
 [data-theme='light'] .crypto-echarts-box {
   background-color: #ffffff !important;
   border-radius: var(--radius-md);
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+  box-shadow: inset 0 0 0 1px var(--border-subtle, #eeeeee);
 }
 
 /* Chart Header Controls & Actions Row */
@@ -6311,6 +6347,78 @@ td { color: var(--text-primary); }
   cursor: pointer;
   white-space: nowrap;
   box-sizing: border-box;
+}
+
+/* ================= 1:1 Demo Panel Tools & Tiny Buttons (1W 1M 3M) ================= */
+.panel-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tiny-btn {
+  border-radius: 7px;
+  padding: 5px 10px;
+  font-size: 11px;
+  white-space: nowrap;
+  transition: all .18s ease;
+  font-weight: 550;
+  cursor: pointer;
+  line-height: 1.3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: inherit;
+}
+
+/* Light Mode: Inactive soft pill grey #f5f5f5 + border #ebebeb + text #626477 */
+:root:not(.dark) .tiny-btn,
+[data-theme="light"] .tiny-btn {
+  border: 1px solid #ebebeb;
+  background: #f5f5f5;
+  color: #626477;
+}
+
+:root:not(.dark) .tiny-btn:hover,
+[data-theme="light"] .tiny-btn:hover {
+  background: #eeeeee;
+  border-color: #e0e0e0;
+  color: #000000;
+}
+
+/* Light Mode: Active solid pitch-black #111111 with pure white #ffffff */
+:root:not(.dark) .tiny-btn.active,
+:root:not(.dark) .tiny-btn.selected,
+[data-theme="light"] .tiny-btn.active,
+[data-theme="light"] .tiny-btn.selected,
+:root:not(.dark) .mobile-range-pill.active,
+[data-theme="light"] .mobile-range-pill.active {
+  background: #111111 !important;
+  border-color: #111111 !important;
+  color: #ffffff !important;
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+/* Dark Mode */
+:root.dark .tiny-btn {
+  border: 1px solid #30363e;
+  background: #1b2026;
+  color: #aeb7c0;
+}
+:root.dark .tiny-btn:hover {
+  background: #252a31;
+  border-color: #3b4552;
+  color: #ffffff;
+}
+
+:root.dark .tiny-btn.active,
+:root.dark .tiny-btn.selected,
+:root.dark .mobile-range-pill.active {
+  background: #24324a !important;
+  border-color: #344d7c !important;
+  color: #b0c9ff !important;
+  box-shadow: none;
 }
 
 /* Quick Palette Selector in Chart Toolbars */
@@ -6515,10 +6623,10 @@ td { color: var(--text-primary); }
   line-height: 1.45;
 }
 
-/* 3 Schemes Grid Cards */
+/* K-Line Schemes Grid Cards */
 .kline-schemes-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   gap: 12px;
 }
 
@@ -6594,6 +6702,16 @@ td { color: var(--text-primary); }
 .scheme-order-tag.highlight-cyber {
   background: rgba(0, 210, 255, 0.15);
   color: #00d2ff;
+}
+
+.scheme-order-tag.highlight-bluepurple {
+  background: rgba(96, 163, 251, 0.15);
+  color: #60a3fb;
+}
+
+.scheme-order-tag.highlight-obsidian {
+  background: rgba(49, 195, 154, 0.15);
+  color: #31c39a;
 }
 
 .scheme-title {
@@ -9054,54 +9172,78 @@ td { color: var(--text-primary); }
   width: 32px;
   height: 32px;
   border-radius: 9px;
-  background: #2563EB;
-  color: #FFFFFF;
-  font-size: 13px;
-  font-weight: 800;
+  background: #111111 !important;
+  color: #FFFFFF !important;
+  font-size: 12px;
+  font-weight: 850;
   display: grid;
   place-items: center;
-  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  flex-shrink: 0;
+  letter-spacing: -0.2px;
 }
 
 .topbar-brand .brand-name {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--text-main);
+  font-size: 14px;
+  font-weight: 780;
+  letter-spacing: -0.2px;
+  line-height: 1.2;
+  color: var(--text-strong, #111111);
   display: flex;
   align-items: center;
   gap: 6px;
-  line-height: 1.2;
 }
 
 .topbar-brand .badge-pro {
-  font-size: 9.5px;
-  font-weight: 800;
-  color: #2563EB;
-  background: rgba(37, 99, 235, 0.1);
-  border: 1px solid rgba(37, 99, 235, 0.25);
+  font-size: 9px;
+  font-weight: 600;
   border-radius: 4px;
   padding: 1px 5px;
+  letter-spacing: 0;
+  line-height: 1.3;
+  display: inline-block;
+  vertical-align: 2px;
+}
+
+:root:not(.dark) .topbar-brand .badge-pro,
+[data-theme="light"] .topbar-brand .badge-pro {
+  background: #f5f5f7 !important;
+  border: 1px solid #e0e0e4 !important;
+  color: #111111 !important;
+}
+
+:root.dark .topbar-brand .badge-pro {
+  background: transparent !important;
+  border: 1px solid #27529e !important;
+  color: #75a5ff !important;
 }
 
 .topbar-brand .brand-desc {
-  font-size: 11px;
-  color: var(--text-tertiary);
+  font-size: 10px;
+  color: var(--dim, #888aa3);
+  white-space: nowrap;
+  margin-top: 1px;
   line-height: 1.2;
 }
 
-.topbar-title-divider {
-  width: 1px;
-  height: 20px;
-  background: var(--border-subtle);
-  margin: 0 4px;
+:root:not(.dark) .topbar-brand .brand-desc {
+  color: #888aa3;
+}
+:root.dark .topbar-brand .brand-desc {
+  color: #59636e;
 }
 
+.topbar-brand .topbar-page-title,
 .topbar-page-title {
-  font-size: 17px;
-  font-weight: 700;
-  color: var(--text-main);
-  margin: 0;
-  letter-spacing: -0.2px;
+  font-size: 14px;
+  font-weight: 780;
+  color: var(--text-strong, #111111);
+  margin-left: 2px;
+}
+
+.topbar-title-divider {
+  display: none;
+}
 }
 
 /* Center Search Pill matching Image 2 */
@@ -9241,49 +9383,79 @@ td { color: var(--text-primary); }
 }
 
 .rail-nav-item {
-  width: 54px;
+  width: 50px;
   height: 54px;
-  border-radius: 12px;
+  border-radius: 10px;
   background: transparent;
   border: 1px solid transparent;
-  color: var(--text-secondary);
+  color: var(--dim, #888aa3);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
+  gap: 2px;
   cursor: pointer;
   padding: 0;
-  transition: all 0.18s var(--ease);
+  transition: background 0.18s, border-color 0.18s, color 0.18s;
 }
 
 .rail-nav-item .rail-icon {
-  font-size: 17px;
+  font-size: 16px;
   line-height: 1;
 }
 
 .rail-nav-item .rail-text {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   line-height: 1;
 }
 
-.rail-nav-item:hover {
-  background: var(--surface-hover);
-  color: var(--text-main);
-  border-color: var(--border-subtle);
+:root:not(.dark) .rail-nav-item:not(.active),
+[data-theme="light"] .rail-nav-item:not(.active) {
+  color: #888aa3;
+  background: transparent;
+  border-color: transparent;
 }
 
-.rail-nav-item.active {
-  background: var(--surface-card) !important;
-  color: var(--text-main) !important;
-  border-color: var(--border-subtle) !important;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08) !important;
+:root:not(.dark) .rail-nav-item:not(.active):hover,
+[data-theme="light"] .rail-nav-item:not(.active):hover {
+  background: #eeeeee;
+  color: #111111;
+  border-color: transparent;
 }
 
-.rail-nav-item.active .rail-text {
-  color: var(--text-main) !important;
-  font-weight: 700;
+/* Light Mode: Active Item is 1:1 Demo Solid Pitch-Black #111111 with White #ffffff */
+:root:not(.dark) .rail-nav-item.active,
+[data-theme="light"] .rail-nav-item.active {
+  background: #111111 !important;
+  border-color: #111111 !important;
+  color: #ffffff !important;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
+}
+
+:root:not(.dark) .rail-nav-item.active .rail-text,
+:root:not(.dark) .rail-nav-item.active .rail-icon,
+[data-theme="light"] .rail-nav-item.active .rail-text,
+[data-theme="light"] .rail-nav-item.active .rail-icon {
+  color: #ffffff !important;
+  fill: #ffffff !important;
+  stroke: #ffffff !important;
+}
+
+/* Dark Mode Navigation */
+:root.dark .rail-nav-item.active {
+  background: #181c21 !important;
+  border-color: #2a313a !important;
+  color: #eef1f4 !important;
+  box-shadow: none !important;
+}
+:root.dark .rail-nav-item:not(.active) {
+  color: #59636e;
+}
+:root.dark .rail-nav-item:not(.active):hover {
+  background: #15181c;
+  color: #eef1f4;
 }
 
 /* ================= CARD 1: 市场概览 (Prototype Image 2) ================= */
@@ -9766,12 +9938,12 @@ td { color: var(--text-primary); }
 }
 
 .temp-bar-fill.fill-pos, .fill-pos {
-  background: #10B981;
+  background: var(--semantic-up, #10B981);
   box-shadow: none;
 }
 
 .temp-bar-fill.fill-neg, .fill-neg {
-  background: #F43F5E;
+  background: var(--semantic-down, #F43F5E);
   box-shadow: none;
 }
 
@@ -10300,36 +10472,58 @@ td { color: var(--text-primary); }
 
 .rw-grp-pill {
   flex-shrink: 0;
-  height: 30px;
-  padding: 0 12px;
-  border-radius: 9px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 6px;
   border: none;
   background: transparent;
-  color: var(--text-secondary);
-  font-size: 13px;
+  color: var(--dim, #888aa3);
+  font-size: 11.5px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.18s ease;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+:root:not(.dark) .rw-grp-pill:not(.active),
+[data-theme="light"] .rw-grp-pill:not(.active) {
+  color: #888aa3;
+  background: transparent;
+}
+
+:root:not(.dark) .rw-grp-pill:not(.active):hover,
+[data-theme="light"] .rw-grp-pill:not(.active):hover {
+  color: #111111;
+  background: #eeeeee;
+}
+
+/* Light Mode: Active Group Tab is 1:1 Demo Solid Pitch-Black #111111 with Pure White #ffffff */
+:root:not(.dark) .rw-grp-pill.active,
+[data-theme="light"] .rw-grp-pill.active {
+  background: #111111 !important;
+  color: #ffffff !important;
+  font-weight: 650;
+  border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 :root.dark .rw-grp-pill {
-  color: var(--text-secondary);
+  color: #59636e;
 }
 
-.rw-grp-pill:hover {
-  color: var(--text-main);
-}
-
-.rw-grp-pill.active {
-  background: var(--surface-card);
-  color: var(--text-main);
-  font-weight: 700;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+:root.dark .rw-grp-pill:hover {
+  color: #eef1f4;
+  background: #181c21;
 }
 
 :root.dark .rw-grp-pill.active {
-  background: var(--surface-raised);
-  color: var(--text-main);
+  background: #2e3238 !important;
+  color: #f0f3f7 !important;
+  font-weight: 650;
+  border-radius: 6px;
 }
 
 /* Time & Session Switcher Bar */
@@ -11663,6 +11857,16 @@ td { color: var(--text-primary); }
   border-color: rgba(0, 153, 76, 0.25);
   color: #00994C;
 }
+.session-pill-closed {
+  background: rgba(107, 114, 128, 0.08);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+}
+.dark .session-pill-closed {
+  background: rgba(20, 20, 20, 0.06);
+  border-color: var(--border-subtle);
+  color: var(--text-muted);
+}
 
 /* Col 8 Time & Hover Remove */
 .wl-cell-time {
@@ -11926,7 +12130,7 @@ body.is-loading .top-progress,
   inset: 0;
   transition: opacity 0.3s ease, transform 0.38s ease;
   pointer-events: none;
-  background: var(--surface-card, #191919);
+  background: var(--surface-card, #15181c);
   z-index: 2;
 }
 .kpi-card.metric-skeleton-card,
@@ -11945,7 +12149,7 @@ body.is-loading .top-progress,
   gap: 8px;
   padding: 16px;
   min-height: 380px;
-  background: var(--surface-card, #191919);
+  background: var(--surface-card, #15181c);
   border-radius: 8px;
 }
 .sk-treemap-tile {

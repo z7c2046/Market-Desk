@@ -289,6 +289,7 @@ export function getSelectedExtQuote(quote, extMode = 'auto', currentSession = nu
     const active = currentSession?.session;
     const candidateOrder =
       active === SESSION_TYPES.PRE ? [SESSION_TYPES.PRE, SESSION_TYPES.OVERNIGHT, SESSION_TYPES.POST] :
+      active === SESSION_TYPES.REGULAR ? [SESSION_TYPES.PRE, SESSION_TYPES.POST, SESSION_TYPES.OVERNIGHT] :
       active === SESSION_TYPES.OVERNIGHT ? [SESSION_TYPES.OVERNIGHT, SESSION_TYPES.POST, SESSION_TYPES.PRE] :
       active === SESSION_TYPES.POST ? [SESSION_TYPES.POST, SESSION_TYPES.PRE, SESSION_TYPES.OVERNIGHT] :
       [SESSION_TYPES.POST, SESSION_TYPES.OVERNIGHT, SESSION_TYPES.PRE];
@@ -300,6 +301,9 @@ export function getSelectedExtQuote(quote, extMode = 'auto', currentSession = nu
     } else if (active === SESSION_TYPES.PRE || active === SESSION_TYPES.POST || active === SESSION_TYPES.OVERNIGHT) {
       target = active;
       isCurrent = true;
+    } else if (active === SESSION_TYPES.REGULAR) {
+      target = SESSION_TYPES.PRE;
+      isCurrent = false;
     } else {
       target = SESSION_TYPES.POST;
       isCurrent = false;

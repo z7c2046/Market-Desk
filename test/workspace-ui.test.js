@@ -983,3 +983,53 @@ test('Inflection algorithm switch: toggles in chart legend and preferences modal
 
   assert.deepEqual(ui.errors, []);
 });
+
+
+test('Watchlist table: displays accurate session status (☀️ 常规交易) and distinct headers (最新现价 vs 盘前对照) during regular trading', async t => {
+  const regularMarketFixture = url => {
+    const u = new URL(url, 'http://localhost');
+    if (u.pathname.includes('/watchlist/quotes')) {
+      return {
+        session: { session: 'regular', isExt: false, desc: '常规交易' },
+        quotes: {
+          NVDA: {
+            symbol: 'NVDA',
+            name: 'NVIDIA Corporation',
+            regular: { price: 287.16, changePercent: 1.25, volume: 15000000 },
+            pre: { price: 285.25, changePercent: 0.30, volume: 1000000 },
+            post: { price: 288.10, changePercent: 0.33, volume: 500000 }
+          }
+        }
+      };
+    }
+    return fixture(url);
+  };
+
+  const ui = await mount(t, async url => ({ ok: true, json: async () => regularMarketFixture(url) }), {
+    'market-desk-default-page': 'watchlist'
+  });
+  await tick();
+  await tick();
+
+  // 1. Verify table is rendered on the watchlist page
+  const table = ui.w.document.querySelector('.watchlist-table');
+  assert.ok(table, 'Watchlist table exists');
+
+  // 2. Verify column headers in regular trading
+  const regPriceTh = table.querySelector('.wl-col-regular-price');
+  assert.match(regPriceTh.textContent, /最新现价/, 'Col 2 header is 最新现价 during regular trading, not 常规收盘价');
+
+  const regChgTh = table.querySelector('.wl-col-regular-chg');
+  assert.match(regChgTh.textContent, /日内涨跌%/, 'Col 3 header is 日内涨跌%');
+
+  const extPriceTh = table.querySelector('.wl-col-ext-price');
+  assert.match(extPriceTh.textContent, /盘前/, 'Col 4 EXT header reflects 盘前 instead of duplicating 常规');
+
+  // 3. Verify session badge displays 常规交易 (not 盘后交易)
+  const sessionPills = table.querySelectorAll('.wl-session-pill');
+  assert.ok(sessionPills.length > 0, 'Session pills exist');
+  assert.match(sessionPills[0].textContent, /常规交易/, 'Session badge displays 常规交易');
+  assert.ok(sessionPills[0].classList.contains('session-pill-regular'), 'Session badge has session-pill-regular class');
+
+  assert.deepEqual(ui.errors, []);
+});

@@ -432,17 +432,23 @@
       <a class="topbar-brand" href="#overview" @click.prevent="navigate('overview')">
         <span class="brand-mark-sm">MD</span>
         <div class="brand-titles">
-          <div class="brand-name">Market Desk <span class="badge-pro">PRO</span></div>
-          <div class="brand-desc">美股实时行情观察工作台</div>
+          <div class="brand-name">
+            <span>Market Desk</span>
+            <span class="badge-pro">PRO</span>
+            <span class="topbar-page-title">{{ currentPageTitle }}</span>
+          </div>
+          <div class="brand-desc">美股实时行情观察工作台 · 全局多周期决策系统</div>
         </div>
       </a>
-      <span class="topbar-title-divider"></span>
-      <div class="topbar-page-title">{{ currentPageTitle }}</div>
     </div>
     <a class="topbar-brand mobile-only" href="#overview" @click.prevent="navigate('overview')">
       <span class="brand-mark-sm">MD</span>
       <div class="brand-titles">
-        <div class="brand-name">Market Desk <span class="badge-pro">PRO</span></div>
+        <div class="brand-name">
+          <span>Market Desk</span>
+          <span class="badge-pro">PRO</span>
+          <span class="topbar-page-title">{{ currentPageTitle }}</span>
+        </div>
         <div class="brand-desc">美股实时行情观察工作台</div>
       </div>
     </a>
@@ -824,10 +830,10 @@
         <!-- Session Select Dropdown -->
         <div class="wl-session-select-wrapper">
           <select class="wl-session-select" v-model="extMode" aria-label="EXT 时段模式">
-            <option value="auto">🕒 自动 · 当前{{ extShortLabel }} (04:00-09:30 EDT)</option>
-            <option value="pre">🕒 盘前交易 (04:00-09:30 EDT)</option>
-            <option value="post">🕒 盘后交易 (16:00-20:00 EDT)</option>
-            <option value="overnight">🕒 隔夜交易 (20:00-04:00 EDT)</option>
+            <option value="auto">🕒 {{ autoSessionOptionText }}</option>
+            <option value="pre">🕒 盘前交易 (04:00-09:30 {{ nyClockInfo?.nyTz || 'ET' }})</option>
+            <option value="post">🕒 盘后交易 (16:00-20:00 {{ nyClockInfo?.nyTz || 'ET' }})</option>
+            <option value="overnight">🕒 隔夜交易 (20:00-04:00 {{ nyClockInfo?.nyTz || 'ET' }})</option>
           </select>
         </div>
 
@@ -880,16 +886,16 @@
               代码 / 标的名称 / 市值 {{ sortField === 'symbol' ? (sortDirection === 'asc' ? '▲' : '▼') : '' }}
             </th>
             <th class="wl-col-regular-price num sortable" :class="{ sorted: sortField === 'regularPrice' }" @click="toggleSort('regularPrice')" :aria-sort="sortField === 'regularPrice' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
-              常规收盘价 {{ sortField === 'regularPrice' ? (sortDirection === 'asc' ? '▲' : '▼') : '' }}
+              {{ regularPriceColTitle }} {{ sortField === 'regularPrice' ? (sortDirection === 'asc' ? '▲' : '▼') : '' }}
             </th>
             <th class="wl-col-regular-chg num sortable" :class="{ sorted: sortField === 'regularChange' }" @click="toggleSort('regularChange')" :aria-sort="sortField === 'regularChange' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
-              常规涨跌% {{ sortField === 'regularChange' ? (sortDirection === 'asc' ? '▲' : '▼') : '' }}
+              {{ regularChangeColTitle }} {{ sortField === 'regularChange' ? (sortDirection === 'asc' ? '▲' : '▼') : '' }}
             </th>
             <th class="wl-col-ext-price num sortable wl-highlight-col" :class="{ sorted: sortField === 'extPrice' }" @click="toggleSort('extPrice')" :aria-sort="sortField === 'extPrice' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
-              当前{{ extShortLabel }}价 {{ sortField === 'extPrice' ? (sortDirection === 'asc' ? '▲' : '▼') : '' }}
+              {{ extPriceColTitle }} {{ sortField === 'extPrice' ? (sortDirection === 'asc' ? '▲' : '▼') : '' }}
             </th>
             <th class="wl-col-ext-chg num sortable wl-highlight-col" :class="{ sorted: sortField === 'extChange' }" @click="toggleSort('extChange')" :aria-sort="sortField === 'extChange' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
-              {{ extShortLabel }}涨跌% {{ sortField === 'extChange' ? (sortDirection === 'asc' ? '↑' : '↓') : '↓' }}
+              {{ extChangeColTitle }} {{ sortField === 'extChange' ? (sortDirection === 'asc' ? '↑' : '↓') : '↓' }}
             </th>
             <th class="wl-col-range" style="text-align:center;">日内区间 (Low —— High)</th>
             <th class="wl-col-session" style="text-align:center;">当前场次状态</th>
@@ -1095,7 +1101,23 @@
         <div class="chart-actions-row">
           <button class="chart-watch-btn" @click="addWatch(symbol)">{{watchlist.includes(symbol)?'✓ 已在自选':'+ 加入自选'}}</button>
           <button class="topbar-btn chart-reset-btn" @click="resetPriceChartZoom" title="复位视角 (也可双击图表)">⟲ 复位</button>
-          <select class="desktop-only chart-range-select" v-model="chartRange" aria-label="行情周期">
+          <div class="desktop-only panel-tools chart-range-tools" role="tablist" aria-label="行情周期切换">
+            <button v-for="opt in [
+                      { value: '1d', label: '1日' },
+                      { value: '1mo', label: '1月' },
+                      { value: '3mo', label: '3月' },
+                      { value: '6mo', label: '6月' },
+                      { value: '1y', label: '1年' }
+                    ]"
+                    :key="opt.value"
+                    type="button"
+                    class="tiny-btn"
+                    :class="{ active: chartRange === opt.value }"
+                    @click="chartRange = opt.value">
+              {{ opt.label }}
+            </button>
+          </div>
+          <select class="desktop-only chart-range-select" v-model="chartRange" aria-label="行情周期" style="display:none;">
             <option value="1d">日内 · 5 分钟</option>
             <option value="1mo">1 个月</option>
             <option value="3mo">3 个月</option>
@@ -1884,11 +1906,11 @@
         </div>
       </div>
 
-      <!-- Options Toolbar matching proto_07_options.png -->
+      <!-- Options Toolbar matching proto_07_options.png & Demo -->
       <div class="options-toolbar">
-        <div class="tabs">
-          <button :class="{selected:optionMetric==='oi'}" @click="optionMetric='oi'">持仓量分布 (Open Interest)<span class="sr-only">持仓量 OI</span></button>
-          <button :class="{selected:optionMetric==='gex'}" @click="optionMetric='gex'">估算 Gamma 敞口 (GEX)<span class="sr-only">估算 GEX</span></button>
+        <div class="tabs panel-tools">
+          <button class="tiny-btn" :class="{active: optionMetric==='oi', selected: optionMetric==='oi'}" @click="optionMetric='oi'">持仓量分布 (Open Interest)<span class="sr-only">持仓量 OI</span></button>
+          <button class="tiny-btn" :class="{active: optionMetric==='gex', selected: optionMetric==='gex'}" @click="optionMetric='gex'">估算 Gamma 敞口 (GEX)<span class="sr-only">估算 GEX</span></button>
         </div>
         <div class="options-legend-group">
           <span class="legend-item"><span class="legend-box legend-call"></span> Call 看涨期权持仓 (上方/右侧)</span>
@@ -3051,7 +3073,7 @@
         <div class="pref-section-header">
           <div class="pref-section-title-wrap">
             <h4 class="pref-section-title">K 线配色方案</h4>
-            <span class="pref-badge">图一 / 图二 / 图三 规范</span>
+            <span class="pref-badge">经典 / 荧光 / 赛博 / Demo同款</span>
           </div>
           <span class="pref-section-desc">支持实时切换并持久化保存，已适配个股行情与加密资产全场景 K 线及成交量</span>
         </div>
@@ -3177,6 +3199,88 @@
             <div class="scheme-palette-badges">
               <span class="color-badge"><i style="background: #00D2FF"></i> 阳线 #00D2FF</span>
               <span class="color-badge"><i style="background: #FF3377"></i> 阴线 #FF3377</span>
+            </div>
+          </div>
+
+          <!-- 方案 4: Demo同款 极光蓝紫 (蔚蓝 / 紫罗兰) -->
+          <div
+            class="kline-scheme-card"
+            :class="{ active: klineScheme === 'bluepurple' }"
+            @click="setKlineScheme('bluepurple')"
+            role="radio"
+            :aria-checked="klineScheme === 'bluepurple'"
+            tabindex="0"
+            @keydown.enter.space.prevent="setKlineScheme('bluepurple')"
+          >
+            <div class="scheme-radio-indicator">
+              <span class="radio-circle"></span>
+              <span class="scheme-order-tag highlight-bluepurple">Demo同款 · 蓝紫</span>
+            </div>
+            <div class="scheme-info">
+              <div class="scheme-title">极光蓝紫 (Demo 主图同款)</div>
+              <div class="scheme-desc">Demo 演示主图同款蔚蓝与紫罗兰，期权多空持仓经典质感</div>
+            </div>
+            <!-- 迷你 K 线与成交量柱示意图 -->
+            <div class="kline-mini-preview preview-bluepurple">
+              <div class="preview-candles">
+                <div class="mini-candle up" style="--c-color: #60A3FB; height: 32px;"><span class="wick"></span><span class="body"></span></div>
+                <div class="mini-candle down" style="--c-color: #996EE2; height: 26px;"><span class="wick"></span><span class="body"></span></div>
+                <div class="mini-candle up" style="--c-color: #60A3FB; height: 42px;"><span class="wick"></span><span class="body"></span></div>
+                <div class="mini-candle up" style="--c-color: #60A3FB; height: 22px;"><span class="wick"></span><span class="body"></span></div>
+                <div class="mini-candle down" style="--c-color: #996EE2; height: 36px;"><span class="wick"></span><span class="body"></span></div>
+              </div>
+              <div class="preview-volume">
+                <span class="vol-bar up" style="background:#60A3FB; height: 60%;"></span>
+                <span class="vol-bar down" style="background:#996EE2; height: 40%;"></span>
+                <span class="vol-bar up" style="background:#60A3FB; height: 95%;"></span>
+                <span class="vol-bar up" style="background:#60A3FB; height: 35%;"></span>
+                <span class="vol-bar down" style="background:#996EE2; height: 75%;"></span>
+              </div>
+            </div>
+            <div class="scheme-palette-badges">
+              <span class="color-badge"><i style="background: #60A3FB"></i> 阳线/Call #60A3FB</span>
+              <span class="color-badge"><i style="background: #996EE2"></i> 阴线/Put #996EE2</span>
+            </div>
+          </div>
+
+          <!-- 方案 5: Demo同款 黑曜沉稳 (松石绿 / 珊瑚红) -->
+          <div
+            class="kline-scheme-card"
+            :class="{ active: klineScheme === 'obsidian' }"
+            @click="setKlineScheme('obsidian')"
+            role="radio"
+            :aria-checked="klineScheme === 'obsidian'"
+            tabindex="0"
+            @keydown.enter.space.prevent="setKlineScheme('obsidian')"
+          >
+            <div class="scheme-radio-indicator">
+              <span class="radio-circle"></span>
+              <span class="scheme-order-tag highlight-obsidian">Demo终端 · 黑曜</span>
+            </div>
+            <div class="scheme-info">
+              <div class="scheme-title">黑曜沉稳 (松石绿 / 珊瑚红)</div>
+              <div class="scheme-desc">Demo 演示终端原生沉稳松石绿与珊瑚红，护眼耐看，高雅深邃</div>
+            </div>
+            <!-- 迷你 K 线与成交量柱示意图 -->
+            <div class="kline-mini-preview preview-obsidian">
+              <div class="preview-candles">
+                <div class="mini-candle up" style="--c-color: #31C39A; height: 32px;"><span class="wick"></span><span class="body"></span></div>
+                <div class="mini-candle down" style="--c-color: #F06E75; height: 26px;"><span class="wick"></span><span class="body"></span></div>
+                <div class="mini-candle up" style="--c-color: #31C39A; height: 42px;"><span class="wick"></span><span class="body"></span></div>
+                <div class="mini-candle up" style="--c-color: #31C39A; height: 22px;"><span class="wick"></span><span class="body"></span></div>
+                <div class="mini-candle down" style="--c-color: #F06E75; height: 36px;"><span class="wick"></span><span class="body"></span></div>
+              </div>
+              <div class="preview-volume">
+                <span class="vol-bar up" style="background:#31C39A; height: 60%;"></span>
+                <span class="vol-bar down" style="background:#F06E75; height: 40%;"></span>
+                <span class="vol-bar up" style="background:#31C39A; height: 95%;"></span>
+                <span class="vol-bar up" style="background:#31C39A; height: 35%;"></span>
+                <span class="vol-bar down" style="background:#F06E75; height: 75%;"></span>
+              </div>
+            </div>
+            <div class="scheme-palette-badges">
+              <span class="color-badge"><i style="background: #31C39A"></i> 阳线 #31C39A</span>
+              <span class="color-badge"><i style="background: #F06E75"></i> 阴线 #F06E75</span>
             </div>
           </div>
         </div>

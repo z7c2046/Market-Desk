@@ -137,6 +137,30 @@ const KLINE_SCHEMES = {
     upLabel: '阳线 #00D2FF',
     downLabel: '阴线 #FF3377',
     title: '图三：赛博霓虹 (青蓝 #00D2FF / 炫彩品红 #FF3377)'
+  },
+  bluepurple: {
+    id: 'bluepurple',
+    name: 'Demo极光蓝紫 (Demo主图)',
+    shortName: '极光蓝紫',
+    tag: 'Demo同款 · 蓝紫',
+    description: 'Demo 演示原型主图同款电光蔚蓝与紫罗兰，期权多空持仓经典质感',
+    up: '#60A3FB',
+    down: '#996EE2',
+    upLabel: '阳线/Call #60A3FB',
+    downLabel: '阴线/Put #996EE2',
+    title: 'Demo同款：极光蓝紫 (蔚蓝 #60A3FB / 紫罗兰 #996EE2)'
+  },
+  obsidian: {
+    id: 'obsidian',
+    name: 'Demo黑曜沉稳 (松石绿 / 珊瑚红)',
+    shortName: '黑曜绿红',
+    tag: 'Demo终端 · 黑曜',
+    description: 'Demo 演示终端原生沉稳松石绿与珊瑚红，护眼耐看，高雅深邃',
+    up: '#31C39A',
+    down: '#F06E75',
+    upLabel: '阳线 #31C39A',
+    downLabel: '阴线 #F06E75',
+    title: 'Demo同款：黑曜沉稳 (松石绿 #31C39A / 珊瑚红 #F06E75)'
   }
 };
 const klineSchemeOptions = Object.values(KLINE_SCHEMES);
@@ -186,7 +210,7 @@ createApp({ setup() {
   const savedTheme = readStorage('market-desk-theme', null);
   const isDark = ref(savedTheme === 'dark' || (savedTheme !== 'light' && Boolean(systemTheme?.matches)));
   const savedKlineScheme = readStorage('market-desk-kline-scheme', 'classic');
-  const klineScheme = ref(['classic', 'neon', 'cyberpunk'].includes(savedKlineScheme) ? savedKlineScheme : 'classic');
+  const klineScheme = ref(['classic', 'neon', 'cyberpunk', 'bluepurple', 'obsidian'].includes(savedKlineScheme) ? savedKlineScheme : 'classic');
   const savedHeatmapScheme = readStorage('market-desk-heatmap-scheme', 'classic');
   const heatmapScheme = ref(['classic', 'neon', 'cyberpunk'].includes(savedHeatmapScheme) ? savedHeatmapScheme : 'classic');
   const savedKlineGrid = readStorage('market-desk-kline-grid', 'dashed');
@@ -2879,12 +2903,58 @@ createApp({ setup() {
       const s = currentSession.value?.session;
       if (s === 'post') return '盘后';
       if (s === 'overnight') return '隔夜';
-      if (s === 'regular') return '常规';
+      if (s === 'regular') return '盘前';
       return '盘前';
     }
     if (extMode.value === 'post') return '盘后';
     if (extMode.value === 'overnight') return '隔夜';
     return '盘前';
+  });
+
+  const regularPriceColTitle = computed(() => {
+    return (isMarketOpen.value || currentSession.value?.session === 'regular') ? '最新现价' : '常规收盘价';
+  });
+
+  const regularChangeColTitle = computed(() => {
+    return (isMarketOpen.value || currentSession.value?.session === 'regular') ? '日内涨跌%' : '常规涨跌%';
+  });
+
+  const extPriceColTitle = computed(() => {
+    if (extMode.value === 'auto') {
+      const s = currentSession.value?.session;
+      if (s === 'regular') return '盘前价 (对照)';
+      if (s === 'pre') return '当前盘前价';
+      if (s === 'post') return '当前盘后价';
+      if (s === 'overnight') return '当前隔夜价';
+      return '盘后价 (已结)';
+    }
+    if (extMode.value === 'post') return '当前盘后价';
+    if (extMode.value === 'overnight') return '当前隔夜价';
+    return '当前盘前价';
+  });
+
+  const extChangeColTitle = computed(() => {
+    if (extMode.value === 'auto') {
+      const s = currentSession.value?.session;
+      if (s === 'regular') return '盘前涨跌%';
+      if (s === 'pre') return '盘前涨跌%';
+      if (s === 'post') return '盘后涨跌%';
+      if (s === 'overnight') return '隔夜涨跌%';
+      return '盘后涨跌%';
+    }
+    if (extMode.value === 'post') return '盘后涨跌%';
+    if (extMode.value === 'overnight') return '隔夜涨跌%';
+    return '盘前涨跌%';
+  });
+
+  const autoSessionOptionText = computed(() => {
+    const s = currentSession.value?.session;
+    const tz = nyClockInfo.value?.nyTz || 'ET';
+    if (s === 'regular') return `自动 · 当前常规 · 盘前对照 (${tz})`;
+    if (s === 'pre') return `自动 · 盘前交易 (04:00-09:30 ${tz})`;
+    if (s === 'post') return `自动 · 盘后交易 (16:00-20:00 ${tz})`;
+    if (s === 'overnight') return `自动 · 隔夜交易 (20:00-04:00 ${tz})`;
+    return `自动 · 时段联动 (${tz})`;
   });
 
   const PROTO_EXT_CHANGES = {
@@ -2987,8 +3057,8 @@ createApp({ setup() {
   const currentSortLabel = computed(() => {
     const f = sortField.value;
     if (f === 'extChange') return `${extShortLabel.value}涨跌幅`;
-    if (f === 'regularChange') return '常规涨跌幅';
-    if (f === 'regularPrice') return '常规收盘价';
+    if (f === 'regularChange') return (isMarketOpen.value || currentSession.value?.session === 'regular') ? '日内涨跌幅' : '常规涨跌幅';
+    if (f === 'regularPrice') return (isMarketOpen.value || currentSession.value?.session === 'regular') ? '最新现价' : '常规收盘价';
     if (f === 'extPrice') return `${extShortLabel.value}价格`;
     if (f === 'marketCap') return '总市值';
     if (f === 'symbol') return '股票代码';
@@ -3038,20 +3108,24 @@ createApp({ setup() {
   }
 
   function getRowSessionBadge(r) {
-    const sess = r?.extSession || currentSession.value?.session || 'pre';
-    if (sess === 'pre' || r?.extStatus?.includes('盘前')) {
-      return { icon: '🌅', label: '盘前交易', cls: 'session-pill-pre' };
-    }
-    if (sess === 'post' || r?.extStatus?.includes('盘后')) {
-      return { icon: '🌇', label: '盘后交易', cls: 'session-pill-post' };
-    }
-    if (sess === 'overnight' || r?.extStatus?.includes('隔夜')) {
-      return { icon: '🌙', label: '隔夜交易', cls: 'session-pill-overnight' };
-    }
-    if (sess === 'regular' || r?.extStatus?.includes('常规')) {
+    const active = currentSession.value?.session || 'regular';
+    const sess = (extMode.value && extMode.value !== 'auto') ? extMode.value : active;
+    if (sess === 'regular' || sess === 'rth') {
       return { icon: '☀️', label: '常规交易', cls: 'session-pill-regular' };
     }
-    return { icon: '🌅', label: r?.extStatus || '盘前交易', cls: 'session-pill-pre' };
+    if (sess === 'pre') {
+      return { icon: '🌅', label: '盘前交易', cls: 'session-pill-pre' };
+    }
+    if (sess === 'post') {
+      return { icon: '🌇', label: '盘后交易', cls: 'session-pill-post' };
+    }
+    if (sess === 'overnight') {
+      return { icon: '🌙', label: '隔夜交易', cls: 'session-pill-overnight' };
+    }
+    if (sess === 'closed') {
+      return { icon: '💤', label: '已休市', cls: 'session-pill-closed' };
+    }
+    return { icon: '☀️', label: '常规交易', cls: 'session-pill-regular' };
   }
 
   function toggleSort(field) {
@@ -4439,15 +4513,15 @@ createApp({ setup() {
   }
 
   function updateChartTheme() {
-    muted = isDark.value ? '#6b6b6b' : '#8E95A2';
-    gridColor = isDark.value ? '#303030' : '#E2E8F0';
-    chartText = isDark.value ? '#f4f4f4' : '#141414';
-    chartSurface = isDark.value ? '#191919' : '#FFFFFF';
-    green = isDark.value ? '#53cb9b' : '#00A854';
-    red = isDark.value ? '#ff5c5c' : '#E1251B';
-    blue = isDark.value ? '#5598f2' : '#2563EB';
+    muted = isDark.value ? '#8b949f' : '#626477';
+    gridColor = isDark.value ? '#20252b' : '#f0f0f3';
+    chartText = isDark.value ? '#eef1f4' : '#111111';
+    chartSurface = isDark.value ? '#15181c' : '#ffffff';
+    green = isDark.value ? '#31c39a' : '#10b981';
+    red = isDark.value ? '#f06e75' : '#ef4444';
+    blue = isDark.value ? '#548afa' : '#2563eb';
     axis = { axisLine: { lineStyle: { color: gridColor } }, axisTick: { show: false }, axisLabel: { color: muted }, splitLine: { lineStyle: { color: gridColor, type: 'dashed' } } };
-    tooltip = { renderMode: 'richText', backgroundColor: isDark.value ? '#191919' : '#FFFFFF', borderColor: isDark.value ? '#2a2a2a' : '#E2E8F0', textStyle: { color: chartText }, confine: true };
+    tooltip = { renderMode: 'richText', backgroundColor: isDark.value ? '#15181c' : '#ffffff', borderColor: isDark.value ? '#262b31' : '#eeeeee', textStyle: { color: chartText }, confine: true };
   }
 
   const STOCK_ROLES = {
@@ -4477,8 +4551,8 @@ createApp({ setup() {
   function getHeatmapBracketStyle(change, dark) {
     const scheme = heatmapScheme.value || 'classic';
     const isDarkTheme = Boolean(dark);
-    const fallbackBg = isDarkTheme ? '#292929' : '#64748B';
-    const border = isDarkTheme ? '#111111' : '#FFFFFF';
+    const fallbackBg = isDarkTheme ? '#171a1e' : '#f5f5f7';
+    const border = isDarkTheme ? '#0b0d10' : '#ffffff';
 
     if (change === null || change === undefined || !Number.isFinite(change)) {
       return { bg: fallbackBg, text: '#FFFFFF', border };
@@ -4534,7 +4608,7 @@ createApp({ setup() {
         quote: q,
         itemStyle: {
           color: st.bg,
-          borderColor: isDarkTheme ? '#111111' : '#FFFFFF',
+          borderColor: isDarkTheme ? '#0b0d10' : '#FFFFFF',
           borderWidth: 3,
           gapWidth: 4
         },
@@ -4585,7 +4659,7 @@ createApp({ setup() {
         top: 0,
         bottom: 0,
         itemStyle: {
-          borderColor: isDarkTheme ? '#111111' : '#FFFFFF',
+          borderColor: isDarkTheme ? '#0b0d10' : '#FFFFFF',
           borderWidth: 3,
           gapWidth: 4,
           borderRadius: 8
@@ -4761,7 +4835,7 @@ createApp({ setup() {
     const isDarkTheme = isDark.value;
     const chartBg = isDarkTheme ? '#000000' : '#FFFFFF';
     const gridColorValue = isDarkTheme ? 'rgba(255, 255, 255, 0.09)' : 'rgba(0, 0, 0, 0.07)';
-    const textThemeColor = isDarkTheme ? '#94A3B8' : '#64748B';
+    const textThemeColor = isDarkTheme ? '#8b949f' : '#626477';
     const showGrid = klineGridStyle.value !== 'none';
     const gridStyleNum = klineGridStyle.value === 'solid' ? 0 : 2;
     const volAlpha = isDarkTheme ? 0.65 : 0.75;
@@ -4814,8 +4888,8 @@ createApp({ setup() {
           },
           crosshair: {
             mode: LW.CrosshairMode.Normal,
-            vertLine: { color: isDarkTheme ? '#475569' : '#94A3B8', width: 1, style: 2 },
-            horzLine: { color: isDarkTheme ? '#475569' : '#94A3B8', width: 1, style: 2 }
+            vertLine: { color: isDarkTheme ? '#262b31' : '#eeeeee', width: 1, style: 2 },
+            horzLine: { color: isDarkTheme ? '#262b31' : '#eeeeee', width: 1, style: 2 }
           },
           // Disable native scroll & scale handlers to grant 100% viewport ownership to bindKlineGestures
           handleScroll: { mouseWheel: false, pressedMouseMove: false, horzTouchDrag: false, vertTouchDrag: false },
@@ -5223,6 +5297,8 @@ createApp({ setup() {
     const rows = d.rows.filter(r => strikeRange.value === 'all' || Math.abs(r.strike / d.spot - 1) <= Number(strikeRange.value));
     const gex = optionMetric.value === 'gex';
     const noData = !rows.length;
+    const optCallColor = isDark.value ? '#60a3fb' : '#2563eb';
+    const optPutColor = isDark.value ? '#996ee2' : '#7c3aed';
     makeChart('options-chart', {
       title: noData ? { text: '所选范围内无期权数据', left: 'center', top: 'center', textStyle: { color: muted, fontSize: 14 } } : undefined,
       tooltip: { ...tooltip, trigger: 'axis' },
@@ -5232,8 +5308,8 @@ createApp({ setup() {
       yAxis: { ...axis, type: 'value', name: gex ? 'USD / 1% 波动' : '持仓量（合约）', axisLabel: { color: muted, formatter: compact } },
       dataZoom: [{ type: 'inside' }, { type: 'slider', bottom: 5, height: 20, borderColor: gridColor, textStyle: { color: muted } }],
       series: noData ? [] : [
-        { type: 'bar', name: 'Call', itemStyle: { color: green }, data: rows.map(r => gex ? (r.callGex ?? 0) : (r.callOi ?? 0)) },
-        { type: 'bar', name: 'Put', itemStyle: { color: red }, data: rows.map(r => gex ? (r.putGex ?? 0) : (r.putOi ?? 0)) }
+        { type: 'bar', name: 'Call', itemStyle: { color: optCallColor }, data: rows.map(r => gex ? (r.callGex ?? 0) : (r.callOi ?? 0)) },
+        { type: 'bar', name: 'Put', itemStyle: { color: optPutColor }, data: rows.map(r => gex ? (r.putGex ?? 0) : (r.putOi ?? 0)) }
       ]
     });
   }
@@ -5490,7 +5566,8 @@ createApp({ setup() {
     watchlistData, groups, watchlist, quoteStore, providerInfo, currentSession,
     viewMode, extMode, sortField, sortDirection, freezeResort, compactPanelOpen,
     allRankedRows, groupedRows, groupAverages, compactRows, cellFlashes,
-    extShortLabel, getDisplayExtPrice, getDisplayExtChange, groupExtAverages, getGroupFullTitle, getGroupShortTitle, watchlistGroupPills, jumpToGroup, currentSortLabel, formatWatchlistTime, getRowSessionBadge,
+    extShortLabel, regularPriceColTitle, regularChangeColTitle, extPriceColTitle, extChangeColTitle, autoSessionOptionText,
+    getDisplayExtPrice, getDisplayExtChange, groupExtAverages, getGroupFullTitle, getGroupShortTitle, watchlistGroupPills, jumpToGroup, currentSortLabel, formatWatchlistTime, getRowSessionBadge,
     getExtSessionKey, getExtSessionIcon, getExtSessionTitle,
     STOCK_MARKET_CAPS, getStockMarketCap, sortSymbolsByMarketCap,
     sidebarSortField, sidebarSortDirection, sidebarActiveGroup, sidebarSearchQuery, selectSidebarGroupPill, setSidebarSort, setSidebarGroup, sidebarWatchlistRows,
