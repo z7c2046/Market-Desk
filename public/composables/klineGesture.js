@@ -37,6 +37,7 @@ export function bindKlineGestures(element, chart, series, options = {}) {
   const wheelSensitivity = options.wheelSensitivity ?? 0.0017;
   const axisSensitivity = options.axisSensitivity ?? 0.007;
 
+  let currentPolicy = options.inputPolicy || 'desktop';
   let followLatest = true;
   let active = null;
   let frame = 0;
@@ -221,9 +222,42 @@ export function bindKlineGestures(element, chart, series, options = {}) {
     emit('follow-latest');
   }
 
+  function getInputPolicy() {
+    return typeof options.getInputPolicy === 'function' ? options.getInputPolicy() : currentPolicy;
+  }
+
+  function setInputPolicy(policy) {
+    if (active) {
+      if (typeof element.releasePointerCapture === 'function' && active.pointerId) {
+        try { element.releasePointerCapture(active.pointerId); } catch (_) {}
+      }
+      active = null;
+    }
+    flushFrame();
+    currentPolicy = policy;
+  }
+
+  function zoomIn(factor = 0.8) {
+    flushFrame();
+    const current = chart.timeScale().getVisibleLogicalRange();
+    if (!finiteRange(current)) return;
+    applyTime(scaleTimeFrom(current, factor, 0.5, followLatest));
+  }
+
+  function zoomOut(factor = 1.25) {
+    flushFrame();
+    const current = chart.timeScale().getVisibleLogicalRange();
+    if (!finiteRange(current)) return;
+    applyTime(scaleTimeFrom(current, factor, 0.5, followLatest));
+  }
+
   function onPointerDown(e) {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     if (active || dead) return;
+    const policy = getInputPolicy();
+    if (policy === 'reading' && e.pointerType === 'touch') {
+      return;
+    }
     flushFrame();
     wheelBatch = null;
     const { x, y } = local(e);
@@ -254,6 +288,10 @@ export function bindKlineGestures(element, chart, series, options = {}) {
   }
 
   function onPointerMove(e) {
+    const policy = getInputPolicy();
+    if (policy === 'reading' && e.pointerType === 'touch') {
+      return;
+    }
     if (!active || active.pointerId !== e.pointerId) {
       const { x, y } = local(e);
       emit(hitZone(x, y));
@@ -440,13 +478,17 @@ export function bindKlineGestures(element, chart, series, options = {}) {
   element.addEventListener('lostpointercapture', end, true);
   element.addEventListener('wheel', onWheel, { passive: false, capture: true });
   element.addEventListener('dblclick', onDblClick, true);
-  window.addEventListener('keydown', onEscape);
+  if (typeof window !== 'undefined') window.addEventListener('keydown', onEscape);
 
   return {
     focusLatest,
     showAll,
     reset,
     resetPriceScale,
+    getInputPolicy,
+    setInputPolicy,
+    zoomIn,
+    zoomOut,
     isFollowingLatest: () => followLatest,
     notifyLatestBarChanged: () => {
       if (!followLatest || active) return;
@@ -469,7 +511,7 @@ export function bindKlineGestures(element, chart, series, options = {}) {
       element.removeEventListener('lostpointercapture', end, true);
       element.removeEventListener('wheel', onWheel, true);
       element.removeEventListener('dblclick', onDblClick, true);
-      window.removeEventListener('keydown', onEscape);
+      if (typeof window !== 'undefined') window.removeEventListener('keydown', onEscape);
     }
   };
 }

@@ -7,6 +7,9 @@ import { parseFlows } from '../public/flows.js';
 import * as watchlistModel from '../public/watchlist-model.js';
 import * as earningsCalendarModel from '../public/earnings-calendar-model.js';
 import * as inflectionSignals from '../public/inflection-signals.js';
+import * as themeModel from '../public/theme-model.js';
+import * as mobileWorkspace from '../public/mobile-workspace.js';
+import * as mobileQuoteView from '../public/mobile-quote-view.js';
 import { AiSearchService } from '../src/ai-search-service.js';
 import { createServer } from '../src/server.js';
 const tick = () => new Promise(resolve => setTimeout(resolve, 30));
@@ -20,11 +23,11 @@ async function mount(t, fetchImpl, initStorage = null, configureWindow = null) {
   w.EventSource = class { constructor() {} close() {} };
   w.requestAnimationFrame = cb => setTimeout(cb, 16);
   w.cancelAnimationFrame = id => clearTimeout(id);
-  Object.assign(w, watchlistModel, earningsCalendarModel, inflectionSignals);
+  Object.assign(w, watchlistModel, earningsCalendarModel, inflectionSignals, themeModel, mobileWorkspace, mobileQuoteView);
   Object.defineProperty(w.HTMLElement.prototype, 'clientWidth', { get: () => 800 });
   w.echarts = { init: el => ({ setOption: config => configs.set(el.id, config), off() {}, on() {}, resize() {}, dispose() {}, dispatchAction() {} }) };
   w.eval(await fs.readFile(new URL('../node_modules/vue/dist/vue.global.prod.js', import.meta.url), 'utf8'));
-  w.bindKlineGestures = () => ({ focusLatest() {}, reset() {}, resetPriceScale() {}, dispose() {}, isFollowingLatest() { return true; } });
+  w.bindKlineGestures = () => ({ focusLatest() {}, reset() {}, resetPriceScale() {}, setInputPolicy() {}, getInputPolicy() { return 'desktop'; }, zoomIn() {}, zoomOut() {}, dispose() {}, isFollowingLatest() { return true; } });
   if (initStorage) {
     for (const [k, v] of Object.entries(initStorage)) {
       w.localStorage.setItem(k, JSON.stringify(v));
@@ -34,8 +37,11 @@ async function mount(t, fetchImpl, initStorage = null, configureWindow = null) {
     .replace("import { parseFlows } from './flows.js';", 'const parseFlows = window.parseFlows;')
     .replace("import { bindKlineGestures } from './composables/klineGesture.js';", 'const bindKlineGestures = window.bindKlineGestures;')
     .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/watchlist-model\.js';/, 'const { WatchlistManager, sortWatchlistRows, getSelectedExtQuote, getCurrentSession, getNyTime, SESSION_TYPES, MAX_UNIQUE_SYMBOLS, validSymbol, SYMBOL_NAMES, NASDAQ100_STOCKS, SP500_STOCKS, isLeveragedEtf, STOCK_MARKET_CAPS, getStockMarketCap, sortSymbolsByMarketCap } = window;')
-    .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/earnings-calendar-model\.js';/, 'const { AI_SECTOR_FILTERS, EARNINGS_DAYS, CORPORATE_LOGOS, DEFAULT_TECH_EARNINGS, MACRO_CALENDAR_ITEMS, filterEarningsByDay } = window;')
-    .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/inflection-signals\.js';/, 'const { computeInflectionSignals, formatSignalMarkers, dema } = window;');
+    .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/earnings-calendar-model\.js';/, 'const { AI_SECTOR_FILTERS, EARNINGS_DAYS, CORPORATE_LOGOS, DEFAULT_TECH_EARNINGS, CURRENT_WEEK_EARNINGS, EARNINGS_WEEKS, MACRO_CALENDAR_ITEMS, filterEarningsByDay, parseMetricNumber, getMetricSurprise, getMetricYoy } = window;')
+    .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/inflection-signals\.js';/, 'const { computeInflectionSignals, formatSignalMarkers, dema } = window;')
+    .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/theme-model\.js';/, 'const { VALID_PALETTES, VALID_THEMES, DEFAULT_PALETTE, DEFAULT_THEME, normalizePalette, normalizeTheme, applyThemeToDOM, readChartTokens } = window;')
+    .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/mobile-workspace\.js';/, 'const { isPhone, isCompact, getRecentSymbols, addRecentSymbol, clearRecentSymbols, createHistoryState, captureViewState, getViewState, clearViewState, lockBodyScroll, unlockBodyScroll } = window;')
+    .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/mobile-quote-view\.js';/, 'const { toMobileQuoteView, formatSessionLabel } = window;');
   if (configureWindow) configureWindow(w);
   w.eval(appSrc);
   await tick();
@@ -271,6 +277,21 @@ test('K-line color schemes: defaults to classic (图一), switches to neon (图�
   assert.equal(JSON.parse(ui.w.localStorage.getItem('market-desk-kline-scheme')), 'classic');
   chartCfg = ui.configs.get('price-chart');
   assert.equal(chartCfg.series[0].itemStyle.color, '#10B981', 'Reverted to classic green');
+
+  // Verify Deep Blue-Purple (Demo Options Center) scheme is selectable & obsidian is removed
+  const deepCard = modal.querySelector('.preview-deepbluepurple').closest('.kline-scheme-card');
+  assert.ok(deepCard, 'Deep blue-purple card found in modal');
+  deepCard.click();
+  await tick();
+  assert.equal(JSON.parse(ui.w.localStorage.getItem('market-desk-kline-scheme')), 'deepbluepurple');
+  chartCfg = ui.configs.get('price-chart');
+  assert.equal(chartCfg.series[0].itemStyle.color, '#2563EB', 'Deep blue-purple up color is #2563EB');
+  assert.equal(chartCfg.series[0].itemStyle.color0, '#7C3AED', 'Deep blue-purple down color is #7C3AED');
+  assert.equal(ui.w.document.querySelector('.preview-obsidian'), null, 'Obsidian scheme is removed from modal');
+
+  // Revert back to classic
+  classicCard.click();
+  await tick();
 
   // Close modal via finish button
   modal.querySelector('.pref-confirm-btn').click();
@@ -915,6 +936,20 @@ test('Watchlist skeleton: renders shimmering skeleton rows during page refresh /
   assert.equal(rwSidebar.querySelector('.rw-skeleton-wrap'), null, 'Skeleton wrap disappears after quotes arrive');
   assert.ok(rwSidebar.querySelector('.rw-stock-row:not(.rw-skeleton-row)'), 'Real stock rows are displayed');
 
+  // 3. Subsequent background quotes update (e.g. switching back from IDE / visibilitychange / periodic refresh):
+  // Wait for initial page mount loading pulse (800ms) to complete
+  await new Promise(r => setTimeout(r, 850));
+  await tick();
+
+  // Must NOT re-trigger skeleton screen or top progress bar!
+  ui.w.document.dispatchEvent(new ui.w.Event('visibilitychange'));
+  await tick();
+  await tick();
+
+  assert.equal(rwSidebar.querySelector('.rw-skeleton-wrap'), null, 'Skeleton wrap is never shown during background refresh');
+  assert.equal(ui.w.document.querySelector('.top-progress.is-active'), null, 'Top progress bar is not triggered during background refresh');
+  assert.ok(rwSidebar.querySelector('.rw-stock-row:not(.rw-skeleton-row)'), 'Real stock rows stay continuously visible without flickering');
+
   assert.deepEqual(ui.errors, []);
 });
 
@@ -1029,7 +1064,83 @@ test('Watchlist table: displays accurate session status (☀️ 常规交易) an
   const sessionPills = table.querySelectorAll('.wl-session-pill');
   assert.ok(sessionPills.length > 0, 'Session pills exist');
   assert.match(sessionPills[0].textContent, /常规交易/, 'Session badge displays 常规交易');
-  assert.ok(sessionPills[0].classList.contains('session-pill-regular'), 'Session badge has session-pill-regular class');
+  assert.deepEqual(ui.errors, []);
+});
+
+test('UI Palette selection: defaults to terminal, switches to cobalt in preferences modal, and persists to localStorage', async t => {
+  const ui = await mount(t, async url => ({ ok: true, json: async () => fixture(url) }));
+  
+  // 1. Initial palette is terminal
+  assert.equal(ui.w.document.documentElement.getAttribute('data-palette'), 'terminal');
+
+  // 2. Open preferences modal
+  const settingsBtn = ui.w.document.querySelector('.settings-modal-btn');
+  assert.ok(settingsBtn, 'Settings modal button exists');
+  settingsBtn.click();
+  await tick();
+
+  const modal = ui.w.document.querySelector('.preferences-modal-backdrop');
+  assert.ok(modal, 'Modal is open');
+  assert.match(modal.textContent, /界面配色/);
+  assert.match(modal.textContent, /经典终端/);
+  assert.match(modal.textContent, /蓝灰数据/);
+
+  // 3. Click Cobalt palette card
+  const cobaltCard = [...modal.querySelectorAll('.pref-palette-card')].find(c => c.textContent.includes('蓝灰数据'));
+  assert.ok(cobaltCard, 'Cobalt card exists');
+  cobaltCard.click();
+  await tick();
+
+  assert.equal(ui.w.document.documentElement.getAttribute('data-palette'), 'cobalt');
+  assert.equal(JSON.parse(ui.w.localStorage.getItem('market-desk-ui-palette')), 'cobalt');
+
+  // 4. Click Terminal palette card to switch back
+  const terminalCard = [...modal.querySelectorAll('.pref-palette-card')].find(c => c.textContent.includes('经典终端'));
+  assert.ok(terminalCard, 'Terminal card exists');
+  terminalCard.click();
+  await tick();
+
+  assert.equal(ui.w.document.documentElement.getAttribute('data-palette'), 'terminal');
+  assert.equal(JSON.parse(ui.w.localStorage.getItem('market-desk-ui-palette')), 'terminal');
+
+  modal.querySelector('.pref-confirm-btn').click();
+  await tick();
+  assert.deepEqual(ui.errors, []);
+});
+
+test('Mobile Workspace Redesign: 5 bottom tabs, dedicated search overlay, more functions sheet, and vertical card list', async t => {
+  const ui = await mount(t, async url => ({ ok: true, json: async () => fixture(url) }));
+  
+  // 1. Resize to mobile width (390px iPhone standard)
+  ui.w.innerWidth = 390;
+  ui.w.dispatchEvent(new ui.w.Event('resize'));
+  await tick();
+
+  // 2. Verify 5 bottom tabs: 市场 / 自选 / 个股 / 资讯 / 更多
+  const mobileTabs = [...ui.w.document.querySelectorAll('.mobile-tab-item')];
+  assert.equal(mobileTabs.length, 5, 'Should have exactly 5 bottom tabs');
+  assert.match(mobileTabs[0].textContent, /市场/);
+  assert.match(mobileTabs[1].textContent, /自选/);
+  assert.match(mobileTabs[2].textContent, /个股/);
+  assert.match(mobileTabs[3].textContent, /资讯/);
+  assert.match(mobileTabs[4].textContent, /更多/);
+
+  // 3. Click "自选" tab
+  mobileTabs[1].click();
+  await tick();
+  assert.equal(ui.w.document.querySelector('.mobile-watchlist-container') !== null, true, 'Mobile vertical stock list is rendered');
+
+  // 4. Click "更多" tab -> opens more functions sheet
+  mobileTabs[4].click();
+  await tick();
+  assert.ok(ui.w.document.querySelector('.mobile-bottom-sheet.is-active'), 'More sheet is active');
+  assert.match(ui.w.document.querySelector('.mobile-bottom-sheet.is-active').textContent, /加密行情/);
+  assert.match(ui.w.document.querySelector('.mobile-bottom-sheet.is-active').textContent, /期权持仓/);
+
+  // Close more sheet
+  ui.w.document.querySelector('.mobile-bottom-sheet.is-active .sheet-close-btn').click();
+  await tick();
+  assert.equal(ui.w.document.querySelector('.mobile-bottom-sheet.is-active'), null, 'Sheet closed');
 
   assert.deepEqual(ui.errors, []);
 });

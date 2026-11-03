@@ -1,16 +1,18 @@
-<!doctype html><html lang="zh-CN" data-script="zh" data-preset="dashboard" :data-theme="isDark ? 'dark' : 'light'" :class="{dark: isDark}"><head>
+<!doctype html><html lang="zh-CN" data-script="zh" data-preset="dashboard"><head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#0d1117" media="(prefers-color-scheme: dark)">
-<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" id="theme-color" content="#ffffff">
+<script src="/theme-bootstrap.js?v=2.9.0"></script>
 <title>Market Desk · 美股观察工作台</title><meta name="description" content="集中观察美股行情、板块热力图、财经新闻、期权持仓分布及多时段自选看板。">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/styles.css?v=2.8.4">
+<link rel="stylesheet" href="/styles.css?v=2.9.0">
+<link rel="stylesheet" href="/mobile-layout.css?v=2.9.0">
+<link rel="stylesheet" href="/color-palettes.css?v=2.9.0">
 <style>
 /* Prevent Flash of Uncompiled Content (FOUC) and raw modal popups before Vue finishes mounting */
 [v-cloak],
@@ -23,7 +25,7 @@
   display: none !important;
 }
 </style>
-<script defer src="/vendor/vue.js"></script><script defer src="/vendor/echarts.js"></script><script defer src="/vendor/lightweight-charts.standalone.js"></script><script type="module" src="/app.js?v=2.8.4"></script>
+<script defer src="/vendor/vue.js"></script><script defer src="/vendor/echarts.js"></script><script defer src="/vendor/lightweight-charts.standalone.js"></script><script type="module" src="/app.js?v=2.9.0"></script>
 </head><body><div id="app" v-cloak>
 <aside class="nav-rail desktop-only" aria-label="工作台主导航">
   <div class="rail-top">
@@ -35,6 +37,7 @@
             :aria-label="item.label">
       <span class="rail-icon">{{ item.icon }}</span>
       <span class="rail-text">{{ item.label.slice(0, 2) }}</span>
+      <span class="sr-only">{{ item.label }}</span>
     </button>
   </div>
   <div class="rail-bottom">
@@ -871,14 +874,71 @@
       </div>
 
       <div class="wl-toolbar-right">
+        <button
+          v-if="isCompactLayout"
+          class="mobile-tool-pill"
+          @click="mobileViewMode = (mobileViewMode === 'cards' ? 'table' : 'cards')"
+          type="button"
+          style="margin-right: 8px;"
+        >
+          {{ mobileViewMode === 'cards' ? '📋 完整表格' : '📱 纵向精简' }}
+        </button>
         <span class="wl-sort-indicator" @click="toggleSort('extChange')" title="点击切换排序">
           当前排序: <strong class="wl-sort-name">{{ currentSortLabel }}</strong> {{ sortDirection === 'asc' ? '▲' : '▼' }}
         </span>
       </div>
     </div>
 
+    <!-- Mobile Vertical Stock Cards (Default on Compact/Phone) -->
+    <div v-if="isCompactLayout && mobileViewMode === 'cards'" class="mobile-watchlist-container">
+      <div v-if="isWatchlistSkeleton" class="mobile-stock-list">
+        <div v-for="i in 6" :key="i" class="mobile-quote-card" style="pointer-events:none;">
+          <div class="mq-col-identity">
+            <span class="sk sk-strong" style="width: 55px; height: 18px;"></span>
+            <span class="sk sk-small" style="width: 85px;"></span>
+          </div>
+          <div class="mq-col-price">
+            <span class="sk sk-line" style="width: 65px;"></span>
+            <span class="sk sk-small" style="width: 40px;"></span>
+          </div>
+          <div class="mq-col-change">
+            <span class="sk sk-pill" style="width: 60px; height: 26px;"></span>
+          </div>
+        </div>
+      </div>
+      <div v-else class="mobile-stock-list">
+        <div
+          v-for="r in mobileQuoteRows"
+          :key="r.symbol"
+          class="mobile-quote-card"
+          @click="selectSymbol(r.symbol, { source: 'watchlist' })"
+          role="button"
+          tabindex="0"
+          :aria-label="r.symbol + ' ' + r.name"
+        >
+          <div class="mq-col-identity">
+            <span class="mq-sym">{{ r.symbol }}</span>
+            <span class="mq-name">{{ r.name }}</span>
+          </div>
+          <div class="mq-col-price">
+            <span class="mq-price-val">{{ r.price != null ? ('$' + r.price) : '—' }}</span>
+            <span class="mq-session-tag">{{ r.displayedSession || '常规' }}</span>
+          </div>
+          <div class="mq-col-change">
+            <span
+              class="mq-change-pill"
+              :class="r.changePercent == null ? 'flat' : (r.changePercent > 0 ? 'up' : (r.changePercent < 0 ? 'down' : 'flat'))"
+            >
+              {{ r.changePercent != null ? (r.changePercent > 0 ? '+' : '') + r.changePercent.toFixed(2) + '%' : '—' }}
+            </span>
+            <span v-if="r.sourceTime" class="mq-time">{{ r.sourceTime }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Watchlist Table -->
-    <div class="watchlist-table-wrap" @mousedown="isInteractingWithTable=true" @mouseup="isInteractingWithTable=false">
+    <div v-if="!isCompactLayout || mobileViewMode === 'table'" class="watchlist-table-wrap" @mousedown="isInteractingWithTable=true" @mouseup="isInteractingWithTable=false">
       <table class="watchlist-table wl-modern-table" aria-label="美股自选与多时段报价表">
         <thead>
           <tr>
@@ -2007,8 +2067,17 @@
       <span class="stat-pill stat-accent">穿透信源：Reddit · X · 路透社 · 华尔街日报 · 彭博 · FT</span>
     </div>
     <div v-if="newsSubView === 'earnings'" class="earnings-header-stats">
-      <span class="stat-pill">📅 2026 Q3/Q4 核心披露周 · 10月26日 - 10月30日</span>
-      <span class="stat-pill stat-accent">覆盖 29 家核心科技与 AI 链标的</span>
+      <div class="earnings-week-tabs">
+        <button v-for="(w, wKey) in EARNINGS_WEEKS" :key="wKey"
+                class="week-tab-btn"
+                :class="{ active: activeEarningsWeek === wKey, 'is-current-badge': wKey === 'current' }"
+                @click="setEarningsWeek(wKey)">
+          <span v-if="wKey === 'current'" class="week-live-dot">●</span>
+          {{ w.label }}
+        </button>
+      </div>
+      <span class="stat-pill">📅 {{ currentEarningsWeekInfo.rangeText }}</span>
+      <span class="stat-pill stat-accent">🔥 覆盖 {{ earningsList.length }} 家核心科技与 AI 标的 ({{ currentEarningsWeekInfo.theme }})</span>
     </div>
     <div v-if="newsSubView === 'geopolitics'" class="earnings-header-stats">
       <span class="stat-pill"><span class="pulse-dot"></span> 全球地缘风险指数：高位戒备 (84.6)</span>
@@ -2027,6 +2096,7 @@
                 :class="{ active: earningsSectorFilter === sec.id }"
                 @click="earningsSectorFilter = sec.id">
           {{ sec.label }}
+          <span class="sec-chip-count">({{ getEarningsSectorCount(sec.id) }})</span>
         </button>
       </div>
 
@@ -2051,107 +2121,113 @@
           <input v-model="earningsSearch" placeholder="筛选公司/代码 (如 VRT)" aria-label="搜索财报公司">
           <button v-if="earningsSearch" class="clear-btn" @click="earningsSearch=''">✕</button>
         </div>
+
+        <!-- Quick Action Hint Pill -->
+        <div class="earnings-hint-pill" title="点击任意公司卡片以 3D 翻页动效展开全屏财报">
+          <span class="pulse-dot"></span>
+          <span>点击卡片 3D 展开全景财报</span>
+        </div>
       </div>
     </div>
 
-    <!-- 5-Day Weekly Calendar Wall (Earnings Whispers 5 Columns) -->
+    <!-- 5-Day Weekly Calendar Wall (Earnings Whispers 5 Columns, BMO & AMC Side-by-Side) -->
     <div class="earnings-calendar-wall">
-      <div v-for="d in EARNINGS_DAYS" :key="d.id"
+      <div v-for="d in currentEarningsDays" :key="d.id"
            class="earnings-day-col"
-           :class="{ 'key-day-col': d.isKeyDay }">
+           :class="{ 'key-day-col': d.isKeyDay, 'today-col': d.isToday }">
         <!-- Day Column Header -->
-        <div class="earnings-day-header">
+        <div class="earnings-day-header" :class="{ 'is-today-header': d.isToday }">
           <div class="day-titles">
             <span class="day-name">{{ d.label }}</span>
-            <span class="day-date">{{ d.dateStr }}</span>
+            <div class="day-meta-right">
+              <span class="day-date">{{ d.dateStr }}</span>
+              <span v-if="d.isToday" class="today-badge-pill">今日</span>
+            </div>
           </div>
           <span v-if="d.highlight" class="day-highlight-tag">{{ d.highlight }}</span>
         </div>
 
-        <!-- BMO (盘前 Before Market Open) -->
-        <div class="earnings-timing-block bmo-block">
-          <div class="timing-badge-header">
-            <span class="timing-icon">☀️</span>
-            <span class="timing-title">盘前 (Before Open · BMO)</span>
-            <span class="timing-count-badge">{{ getDayEarnings(d.id, 'BMO').length }}</span>
-          </div>
-          <div class="earnings-cards-list">
-            <div v-for="item in getDayEarnings(d.id, 'BMO')" :key="item.symbol"
-                 class="earnings-company-card"
-                 :class="{ 'ai-core-card': item.isAiSupplyChain }"
-                 @click="openEarningsModal(item)">
-              <!-- Corporate Official Logo -->
-              <div class="card-logo-container" v-html="getCompanyLogoSvg(item.symbol)"></div>
+        <!-- Day Split Subcolumns: Left 盘前 (BMO) | Right 盘后 (AMC) -->
+        <div class="earnings-day-subcols-grid">
+          <!-- Left Subcolumn: 盘前 (BMO) -->
+          <div class="earnings-subcol bmo-subcol">
+            <div class="subcol-header bmo-header">
+              <span class="subcol-title"><span class="subcol-icon">☀️</span> 盘前 BMO</span>
+              <span class="subcol-count">{{ getDayEarnings(d.id, 'BMO').length }}</span>
+            </div>
 
-              <!-- Ticker Symbol & Full Name -->
-              <div class="card-identity-row">
-                <strong class="card-symbol-badge">{{ item.symbol }}</strong>
-                <span class="card-company-name">{{ item.name }}</span>
+            <div class="subcol-cards-flow">
+              <div v-for="item in getDayEarnings(d.id, 'BMO')" :key="item.symbol"
+                   class="earnings-wall-card"
+                   :class="['status-' + (item.reportStatus || 'pending')]"
+                   @click="openEarningsModal(item)"
+                   :title="'点击 3D 展开 ' + item.name + ' (' + item.symbol + ') 财报全景详情'">
+                
+                <!-- Top-Right Glowing Corner Mask (Green = Beat, Red = Miss) -->
+                <div v-if="item.reportStatus === 'beat' || item.reportStatus === 'miss'"
+                     class="card-corner-mask"
+                     :class="'mask-' + item.reportStatus"
+                     :title="item.reportStatus === 'beat' ? ('财报大捷 · ' + (item.statusBadgeText || '超预期')) : ('财报承压 · ' + (item.statusBadgeText || '爆雷/不及预期'))">
+                  <div class="corner-ribbon-content">
+                    <span class="corner-status-text">{{ item.reportStatus === 'beat' ? 'BEAT' : 'MISS' }}</span>
+                  </div>
+                </div>
+
+                <!-- Company Official Logo -->
+                <div class="front-logo-wrapper" v-html="getCompanyLogoSvg(item.symbol)"></div>
+
+                <!-- Ticker Symbol & Hover Action Hint -->
+                <div class="front-ticker-row">
+                  <span class="front-ticker">{{ item.symbol }}</span>
+                  <span class="flip-hint-badge" title="点击 3D 展开全景财报">⤢ 展开</span>
+                </div>
               </div>
 
-              <!-- Sector Pill Tag -->
-              <div class="card-tags-row">
-                <span class="card-sector-pill" :class="'sec-' + item.sectorId">{{ item.aiTag }}</span>
-              </div>
-
-              <!-- Financial Consensus: EPS & Revenue -->
-              <div class="card-financials-row">
-                <span class="fin-item">预期EPS <strong>{{ item.epsConsensus }}</strong></span>
-                <span class="fin-item">营收 <strong>{{ item.revConsensus }}</strong></span>
-              </div>
-
-              <!-- AI Catalyst Focus -->
-              <div class="card-catalyst-box">
-                <span class="catalyst-tag">AI 焦点:</span>
-                <p class="catalyst-desc">{{ item.aiCatalyst }}</p>
+              <!-- Empty state if no BMO earnings -->
+              <div v-if="!getDayEarnings(d.id, 'BMO').length" class="subcol-empty-card">
+                <span>无披露</span>
               </div>
             </div>
-            <div v-if="!getDayEarnings(d.id, 'BMO').length" class="earnings-empty-slot">
-              <span>无符合条件披露</span>
-            </div>
           </div>
-        </div>
 
-        <!-- AMC (盘后 After Market Close) -->
-        <div class="earnings-timing-block amc-block">
-          <div class="timing-badge-header">
-            <span class="timing-icon">🌙</span>
-            <span class="timing-title">盘后 (After Close · AMC)</span>
-            <span class="timing-count-badge">{{ getDayEarnings(d.id, 'AMC').length }}</span>
-          </div>
-          <div class="earnings-cards-list">
-            <div v-for="item in getDayEarnings(d.id, 'AMC')" :key="item.symbol"
-                 class="earnings-company-card"
-                 :class="{ 'ai-core-card': item.isAiSupplyChain }"
-                 @click="openEarningsModal(item)">
-              <!-- Corporate Official Logo -->
-              <div class="card-logo-container" v-html="getCompanyLogoSvg(item.symbol)"></div>
-
-              <!-- Ticker Symbol & Full Name -->
-              <div class="card-identity-row">
-                <strong class="card-symbol-badge">{{ item.symbol }}</strong>
-                <span class="card-company-name">{{ item.name }}</span>
-              </div>
-
-              <!-- Sector Pill Tag -->
-              <div class="card-tags-row">
-                <span class="card-sector-pill" :class="'sec-' + item.sectorId">{{ item.aiTag }}</span>
-              </div>
-
-              <!-- Financial Consensus: EPS & Revenue -->
-              <div class="card-financials-row">
-                <span class="fin-item">预期EPS <strong>{{ item.epsConsensus }}</strong></span>
-                <span class="fin-item">营收 <strong>{{ item.revConsensus }}</strong></span>
-              </div>
-
-              <!-- AI Catalyst Focus -->
-              <div class="card-catalyst-box">
-                <span class="catalyst-tag">AI 焦点:</span>
-                <p class="catalyst-desc">{{ item.aiCatalyst }}</p>
-              </div>
+          <!-- Right Subcolumn: 盘后 (AMC) -->
+          <div class="earnings-subcol amc-subcol">
+            <div class="subcol-header amc-header">
+              <span class="subcol-title"><span class="subcol-icon">🌙</span> 盘后 AMC</span>
+              <span class="subcol-count">{{ getDayEarnings(d.id, 'AMC').length }}</span>
             </div>
-            <div v-if="!getDayEarnings(d.id, 'AMC').length" class="earnings-empty-slot">
-              <span>无符合条件披露</span>
+
+            <div class="subcol-cards-flow">
+              <div v-for="item in getDayEarnings(d.id, 'AMC')" :key="item.symbol"
+                   class="earnings-wall-card"
+                   :class="['status-' + (item.reportStatus || 'pending')]"
+                   @click="openEarningsModal(item)"
+                   :title="'点击 3D 展开 ' + item.name + ' (' + item.symbol + ') 财报全景详情'">
+                
+                <!-- Top-Right Glowing Corner Mask (Green = Beat, Red = Miss) -->
+                <div v-if="item.reportStatus === 'beat' || item.reportStatus === 'miss'"
+                     class="card-corner-mask"
+                     :class="'mask-' + item.reportStatus"
+                     :title="item.reportStatus === 'beat' ? ('财报大捷 · ' + (item.statusBadgeText || '超预期')) : ('财报承压 · ' + (item.statusBadgeText || '爆雷/不及预期'))">
+                  <div class="corner-ribbon-content">
+                    <span class="corner-status-text">{{ item.reportStatus === 'beat' ? 'BEAT' : 'MISS' }}</span>
+                  </div>
+                </div>
+
+                <!-- Company Official Logo -->
+                <div class="front-logo-wrapper" v-html="getCompanyLogoSvg(item.symbol)"></div>
+
+                <!-- Ticker Symbol & Hover Action Hint -->
+                <div class="front-ticker-row">
+                  <span class="front-ticker">{{ item.symbol }}</span>
+                  <span class="flip-hint-badge" title="点击 3D 展开全景财报">⤢ 展开</span>
+                </div>
+              </div>
+
+              <!-- Empty state if no AMC earnings -->
+              <div v-if="!getDayEarnings(d.id, 'AMC').length" class="subcol-empty-card">
+                <span>无披露</span>
+              </div>
             </div>
           </div>
         </div>
@@ -3243,44 +3319,44 @@
             </div>
           </div>
 
-          <!-- 方案 5: Demo同款 黑曜沉稳 (松石绿 / 珊瑚红) -->
+          <!-- 方案 5: Demo期权中心 深邃蓝紫 (宝蓝 / 紫罗兰) -->
           <div
             class="kline-scheme-card"
-            :class="{ active: klineScheme === 'obsidian' }"
-            @click="setKlineScheme('obsidian')"
+            :class="{ active: klineScheme === 'deepbluepurple' }"
+            @click="setKlineScheme('deepbluepurple')"
             role="radio"
-            :aria-checked="klineScheme === 'obsidian'"
+            :aria-checked="klineScheme === 'deepbluepurple'"
             tabindex="0"
-            @keydown.enter.space.prevent="setKlineScheme('obsidian')"
+            @keydown.enter.space.prevent="setKlineScheme('deepbluepurple')"
           >
             <div class="scheme-radio-indicator">
               <span class="radio-circle"></span>
-              <span class="scheme-order-tag highlight-obsidian">Demo终端 · 黑曜</span>
+              <span class="scheme-order-tag highlight-deepbluepurple">期权中心 · 深邃</span>
             </div>
             <div class="scheme-info">
-              <div class="scheme-title">黑曜沉稳 (松石绿 / 珊瑚红)</div>
-              <div class="scheme-desc">Demo 演示终端原生沉稳松石绿与珊瑚红，护眼耐看，高雅深邃</div>
+              <div class="scheme-title">深邃蓝紫 (Demo 期权中心同款)</div>
+              <div class="scheme-desc">Demo 演示原型期权持仓中心 ATM 聚类同款深邃宝蓝与高贵紫罗兰，色彩浓郁饱和，多空层次分明</div>
             </div>
             <!-- 迷你 K 线与成交量柱示意图 -->
-            <div class="kline-mini-preview preview-obsidian">
+            <div class="kline-mini-preview preview-deepbluepurple">
               <div class="preview-candles">
-                <div class="mini-candle up" style="--c-color: #31C39A; height: 32px;"><span class="wick"></span><span class="body"></span></div>
-                <div class="mini-candle down" style="--c-color: #F06E75; height: 26px;"><span class="wick"></span><span class="body"></span></div>
-                <div class="mini-candle up" style="--c-color: #31C39A; height: 42px;"><span class="wick"></span><span class="body"></span></div>
-                <div class="mini-candle up" style="--c-color: #31C39A; height: 22px;"><span class="wick"></span><span class="body"></span></div>
-                <div class="mini-candle down" style="--c-color: #F06E75; height: 36px;"><span class="wick"></span><span class="body"></span></div>
+                <div class="mini-candle up" style="--c-color: #2563EB; height: 32px;"><span class="wick"></span><span class="body"></span></div>
+                <div class="mini-candle down" style="--c-color: #7C3AED; height: 26px;"><span class="wick"></span><span class="body"></span></div>
+                <div class="mini-candle up" style="--c-color: #2563EB; height: 42px;"><span class="wick"></span><span class="body"></span></div>
+                <div class="mini-candle up" style="--c-color: #2563EB; height: 22px;"><span class="wick"></span><span class="body"></span></div>
+                <div class="mini-candle down" style="--c-color: #7C3AED; height: 36px;"><span class="wick"></span><span class="body"></span></div>
               </div>
               <div class="preview-volume">
-                <span class="vol-bar up" style="background:#31C39A; height: 60%;"></span>
-                <span class="vol-bar down" style="background:#F06E75; height: 40%;"></span>
-                <span class="vol-bar up" style="background:#31C39A; height: 95%;"></span>
-                <span class="vol-bar up" style="background:#31C39A; height: 35%;"></span>
-                <span class="vol-bar down" style="background:#F06E75; height: 75%;"></span>
+                <span class="vol-bar up" style="background:#2563EB; height: 60%;"></span>
+                <span class="vol-bar down" style="background:#7C3AED; height: 40%;"></span>
+                <span class="vol-bar up" style="background:#2563EB; height: 95%;"></span>
+                <span class="vol-bar up" style="background:#2563EB; height: 35%;"></span>
+                <span class="vol-bar down" style="background:#7C3AED; height: 75%;"></span>
               </div>
             </div>
             <div class="scheme-palette-badges">
-              <span class="color-badge"><i style="background: #31C39A"></i> 阳线 #31C39A</span>
-              <span class="color-badge"><i style="background: #F06E75"></i> 阴线 #F06E75</span>
+              <span class="color-badge"><i style="background: #2563EB"></i> 阳线/Call #2563EB</span>
+              <span class="color-badge"><i style="background: #7C3AED"></i> 阴线/Put #7C3AED</span>
             </div>
           </div>
         </div>
@@ -3445,27 +3521,107 @@
         </div>
       </section>
 
-      <!-- 模块 3: 白天黑夜显示模式 (适配黑夜纯黑底 + 白天纯白底) -->
+      <!-- 模块 2.5: 界面配色选择 (经典终端 / 蓝灰数据) -->
+      <section class="pref-section" aria-label="界面配色选择">
+        <div class="pref-section-header">
+          <div class="pref-section-title-wrap">
+            <h4 class="pref-section-title">界面配色</h4>
+            <span class="pref-badge">两套独立配色</span>
+          </div>
+          <span class="pref-section-desc">经典终端与蓝灰数据均完美适配白天与黑夜模式</span>
+        </div>
+
+        <div class="pref-palette-options" role="radiogroup" aria-label="界面配色">
+          <button
+            class="pref-palette-card"
+            :class="{ active: uiPalette === 'terminal' }"
+            @click="setUiPalette('terminal')"
+            type="button"
+            role="radio"
+            :aria-checked="uiPalette === 'terminal'"
+            :aria-pressed="uiPalette === 'terminal'"
+          >
+            <div class="palette-card-header">
+              <span class="palette-card-title">经典终端</span>
+              <span v-if="uiPalette === 'terminal'" class="theme-active-tag">当前生效</span>
+            </div>
+            <div class="palette-card-desc">纯白与黑曜石，沿用当前外观</div>
+            <div class="palette-swatches-preview">
+              <div class="swatch-row">
+                <span class="swatch-label">白天</span>
+                <div class="swatch-bars">
+                  <span class="swatch-chip" style="background:#eef1f4" title="画布"></span>
+                  <span class="swatch-chip" style="background:#ffffff" title="卡片"></span>
+                  <span class="swatch-chip" style="background:#111111" title="主色"></span>
+                </div>
+              </div>
+              <div class="swatch-row">
+                <span class="swatch-label">黑夜</span>
+                <div class="swatch-bars">
+                  <span class="swatch-chip" style="background:#0d1117" title="画布"></span>
+                  <span class="swatch-chip" style="background:#15181c" title="卡片"></span>
+                  <span class="swatch-chip" style="background:#31c39a" title="主色"></span>
+                </div>
+              </div>
+            </div>
+          </button>
+
+          <button
+            class="pref-palette-card"
+            :class="{ active: uiPalette === 'cobalt' }"
+            @click="setUiPalette('cobalt')"
+            type="button"
+            role="radio"
+            :aria-checked="uiPalette === 'cobalt'"
+            :aria-pressed="uiPalette === 'cobalt'"
+          >
+            <div class="palette-card-header">
+              <span class="palette-card-title">蓝灰数据</span>
+              <span v-if="uiPalette === 'cobalt'" class="theme-active-tag">当前生效</span>
+            </div>
+            <div class="palette-card-desc">中性灰底与蓝色强调，来自配色演示</div>
+            <div class="palette-swatches-preview">
+              <div class="swatch-row">
+                <span class="swatch-label">白天</span>
+                <div class="swatch-bars">
+                  <span class="swatch-chip" style="background:#e3e3e3" title="画布"></span>
+                  <span class="swatch-chip" style="background:#ffffff" title="卡片"></span>
+                  <span class="swatch-chip" style="background:#2976ff" title="主色"></span>
+                </div>
+              </div>
+              <div class="swatch-row">
+                <span class="swatch-label">黑夜</span>
+                <div class="swatch-bars">
+                  <span class="swatch-chip" style="background:#101010" title="画布"></span>
+                  <span class="swatch-chip" style="background:#2d2d2d" title="卡片"></span>
+                  <span class="swatch-chip" style="background:#2976ff" title="主色"></span>
+                </div>
+              </div>
+            </div>
+          </button>
+        </div>
+      </section>
+
+      <!-- 模块 3: 白天黑夜显示模式 -->
       <section class="pref-section">
         <div class="pref-section-header">
           <div class="pref-section-title-wrap">
             <h4 class="pref-section-title">白天 / 黑夜外观模式</h4>
-            <span class="pref-badge">图一 底色规范</span>
           </div>
-          <span class="pref-section-desc">黑夜模式下 K 线图为纯黑背景并带浅灰网格；白天模式自动适配纯白清爽背景</span>
+          <span class="pref-section-desc">根据光照环境选择舒适的明暗显示</span>
         </div>
 
         <div class="pref-theme-options">
           <button
             class="pref-theme-card"
             :class="{ active: !isDark }"
-            @click="isDark ? toggleTheme() : null"
+            @click="setThemeMode('light')"
             type="button"
           >
             <span class="theme-icon">☀️</span>
             <div class="theme-card-text">
               <strong>白天模式 (Light)</strong>
-              <span>纯白洁净背景 · 柔和浅灰网格</span>
+              <span>适合明亮环境 · 清爽柔和</span>
             </div>
             <span v-if="!isDark" class="theme-active-tag">当前生效</span>
           </button>
@@ -3473,13 +3629,13 @@
           <button
             class="pref-theme-card"
             :class="{ active: isDark }"
-            @click="!isDark ? toggleTheme() : null"
+            @click="setThemeMode('dark')"
             type="button"
           >
             <span class="theme-icon">🌙</span>
             <div class="theme-card-text">
               <strong>黑夜模式 (Dark)</strong>
-              <span>纯黑深邃背景 · 浅灰网格线 (图一风格)</span>
+              <span>适合较暗环境 · 护眼沉浸</span>
             </div>
             <span v-if="isDark" class="theme-active-tag">当前生效</span>
           </button>
@@ -4097,24 +4253,46 @@
   </div>
 </div>
 
-<!-- Modal: Company Earnings Detail Modal (科技股财报预期与 AI 焦点) -->
-<div v-if="showEarningsModal && selectedEarningsItem" class="modal-backdrop" @click.self="closeEarningsModal" @keydown.esc="closeEarningsModal">
-  <div class="earnings-modal-card" role="dialog" aria-modal="true" :aria-label="selectedEarningsItem.name + ' 财报详情'">
-    <div class="earnings-modal-header">
-      <div class="modal-brand-row">
-        <div class="modal-logo-slot" v-html="getCompanyLogoSvg(selectedEarningsItem.symbol)"></div>
-        <div>
-          <div class="modal-title-row">
-            <h3>{{ selectedEarningsItem.name }}</h3>
-            <span class="modal-symbol-tag">{{ selectedEarningsItem.symbol }}</span>
-            <span class="modal-timing-tag" :class="selectedEarningsItem.timing === 'BMO' ? 'bmo-tag' : 'amc-tag'">
+<!-- Modal: 3D Expanded Company Earnings Hero Card (科技与 AI 财报全景深度卡片) -->
+<div v-if="showEarningsModal && selectedEarningsItem"
+     class="earnings-hero-backdrop modal-backdrop"
+     @click.self="closeEarningsModal"
+     @keydown.esc="closeEarningsModal">
+  <div class="earnings-hero-expanded-card"
+       :class="['status-' + (selectedEarningsItem.reportStatus || 'pending')]"
+       role="dialog"
+       aria-modal="true"
+       :aria-label="selectedEarningsItem.name + ' (' + selectedEarningsItem.symbol + ') 财报全景详情'">
+
+    <!-- Top-Right Glowing Status Ribbon (Beat / Miss) -->
+    <div v-if="selectedEarningsItem.reportStatus === 'beat' || selectedEarningsItem.reportStatus === 'miss'"
+         class="hero-ribbon-badge"
+         :class="'ribbon-' + selectedEarningsItem.reportStatus">
+      <span>{{ selectedEarningsItem.reportStatus === 'beat' ? '★ BEAT 业绩超预期' : '⚠ MISS 业绩爆雷承压' }}</span>
+    </div>
+
+    <!-- 1. Header Section: Logo, Title, Symbol, Disclosure Timing, AI Sector & Role -->
+    <div class="earnings-hero-header">
+      <div class="hero-brand-group">
+        <div class="hero-logo-slot" v-html="getCompanyLogoSvg(selectedEarningsItem.symbol)"></div>
+        <div class="hero-brand-meta">
+          <div class="hero-title-line">
+            <h2 class="hero-company-name">{{ selectedEarningsItem.name }}</h2>
+            <span class="hero-symbol-tag">{{ selectedEarningsItem.symbol }}</span>
+            <span class="hero-timing-pill" :class="selectedEarningsItem.timing === 'BMO' ? 'bmo-pill' : 'amc-pill'">
               {{ selectedEarningsItem.timing === 'BMO' ? '☀️ 盘前披露 (BMO)' : '🌙 盘后披露 (AMC)' }}
             </span>
           </div>
-          <span class="modal-date-sub">披露窗口: 2026 Q3/Q4 财报季 · 美东时间对应交易日</span>
+          <div class="hero-sub-meta">
+            <span class="hero-meta-pill sector-pill">{{ selectedEarningsItem.sectorName || '科技核心标的' }}</span>
+            <span class="hero-meta-sep">/</span>
+            <span class="hero-meta-pill ai-role-pill">⚡ {{ selectedEarningsItem.aiTag }}</span>
+            <span class="hero-meta-sep">/</span>
+            <span class="hero-meta-pill season-pill">2026 Q3/Q4 财报季</span>
+          </div>
         </div>
       </div>
-      <button class="stock-modal-close-btn" aria-label="关闭" @click="closeEarningsModal">
+      <button class="hero-close-btn stock-modal-close-btn" aria-label="收缩关闭" title="收缩关闭 (Esc)" @click="closeEarningsModal">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
           <line x1="18" y1="6" x2="6" y2="18"></line>
           <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -4122,41 +4300,154 @@
       </button>
     </div>
 
-    <div class="earnings-modal-body">
-      <!-- Grid 1: Key Financial Consensus -->
-      <div class="modal-kpi-grid">
-        <div class="modal-kpi-item">
-          <span class="kpi-lbl">一致预期 EPS</span>
-          <strong class="kpi-num">{{ selectedEarningsItem.epsConsensus }}</strong>
-        </div>
-        <div class="modal-kpi-item">
-          <span class="kpi-lbl">一致预期营收</span>
-          <strong class="kpi-num">{{ selectedEarningsItem.revConsensus }}</strong>
-        </div>
-        <div class="modal-kpi-item">
-          <span class="kpi-lbl">营收同比增速 (YoY)</span>
-          <strong class="kpi-num kpi-green">{{ selectedEarningsItem.revYoy }}</strong>
-        </div>
-        <div class="modal-kpi-item">
-          <span class="kpi-lbl">AI 产业链赛道</span>
-          <span class="kpi-badge">{{ selectedEarningsItem.aiTag }}</span>
-        </div>
+    <!-- 2. Status Announcement Banner -->
+    <div class="hero-status-banner" :class="'banner-' + (selectedEarningsItem.reportStatus || 'pending')">
+      <div class="banner-left">
+        <span class="banner-status-dot"></span>
+        <span class="banner-status-title">
+          {{ selectedEarningsItem.reportStatus === 'beat' ? '超预期大捷 · BEAT' : selectedEarningsItem.reportStatus === 'miss' ? '业绩承压 / 爆雷 · MISS' : '财报披露前瞻 · PENDING' }}
+        </span>
+        <span class="banner-desc">{{ selectedEarningsItem.statusBadgeText }}</span>
       </div>
-
-      <!-- Section 2: AI Core Focus & Guidance -->
-      <div class="modal-catalyst-block">
-        <h4>⚡ 华尔街核心博弈焦点 (AI Catalyst & Capex Focus)</h4>
-        <p>{{ selectedEarningsItem.aiCatalyst }}</p>
-      </div>
-
-      <!-- Section 3: Action Buttons -->
-      <div class="modal-footer-actions">
-        <button class="btn-jump-chart" @click="viewStockFromEarnings(selectedEarningsItem.symbol)">
-          查看 {{ selectedEarningsItem.symbol }} 实时行情走势与 K 线 ➔
-        </button>
-        <button class="btn-close-modal" @click="closeEarningsModal">关闭</button>
+      <div class="banner-right-pills">
+        <span v-if="selectedEarningsItem.revYoy" class="banner-pill" :class="selectedEarningsItem.revYoy.startsWith('+') ? 'pill-up' : 'pill-down'">
+          同比 {{ selectedEarningsItem.revYoy }}
+        </span>
+        <span v-if="selectedEarningsItem.revQoq" class="banner-pill" :class="selectedEarningsItem.revQoq.startsWith('+') ? 'pill-up' : selectedEarningsItem.revQoq.startsWith('-') ? 'pill-down' : ''">
+          环比 {{ selectedEarningsItem.revQoq }}
+        </span>
       </div>
     </div>
+
+    <!-- 3. Dual KPI Financial Comparison Cards (EPS & Revenue) -->
+    <div class="hero-kpi-comparison-grid">
+      <!-- EPS (每股收益) Card -->
+      <div class="hero-kpi-card eps-card" :class="'card-' + (selectedEarningsItem.reportStatus || 'pending')">
+        <div class="kpi-card-top">
+          <div class="kpi-title-group">
+            <span class="kpi-type-icon">📊</span>
+            <span class="kpi-title-text">每股收益 (EPS - Diluted)</span>
+          </div>
+          <span v-if="getMetricSurprise(selectedEarningsItem.epsActual, selectedEarningsItem.epsConsensus)"
+                class="kpi-surprise-pill"
+                :class="getMetricSurprise(selectedEarningsItem.epsActual, selectedEarningsItem.epsConsensus).isPositive ? 'pill-beat' : 'pill-miss'">
+            {{ getMetricSurprise(selectedEarningsItem.epsActual, selectedEarningsItem.epsConsensus).badgeText }}
+          </span>
+        </div>
+
+        <div class="kpi-hero-num-row">
+          <div class="hero-num-cell">
+            <span class="num-lbl">{{ selectedEarningsItem.epsActual ? '实际值 (Actual)' : '一致预期 (Consensus)' }}</span>
+            <span class="num-val-main" :class="selectedEarningsItem.reportStatus === 'beat' ? 'txt-up' : selectedEarningsItem.reportStatus === 'miss' ? 'txt-down' : ''">
+              {{ selectedEarningsItem.epsActual || selectedEarningsItem.epsConsensus }}
+            </span>
+          </div>
+          <div v-if="getMetricSurprise(selectedEarningsItem.epsActual, selectedEarningsItem.epsConsensus)" class="hero-diff-cell">
+            <span class="num-lbl">超预期差额</span>
+            <span class="num-val-diff" :class="getMetricSurprise(selectedEarningsItem.epsActual, selectedEarningsItem.epsConsensus).isPositive ? 'txt-up' : 'txt-down'">
+              {{ getMetricSurprise(selectedEarningsItem.epsActual, selectedEarningsItem.epsConsensus).diff }}
+            </span>
+          </div>
+        </div>
+
+        <div class="kpi-compare-row">
+          <div class="compare-col">
+            <span class="c-lbl">一致预期</span>
+            <span class="c-val">{{ selectedEarningsItem.epsConsensus }}</span>
+          </div>
+          <div class="compare-sep"></div>
+          <div class="compare-col">
+            <span class="c-lbl">去年同期前值</span>
+            <span class="c-val">{{ selectedEarningsItem.epsPrev || '-' }}</span>
+          </div>
+          <div class="compare-sep"></div>
+          <div class="compare-col">
+            <span class="c-lbl">EPS 同比增幅</span>
+            <span class="c-val" :class="getMetricYoy(selectedEarningsItem.epsActual || selectedEarningsItem.epsConsensus, selectedEarningsItem.epsPrev)?.startsWith('+') ? 'txt-up' : 'txt-down'">
+              {{ getMetricYoy(selectedEarningsItem.epsActual || selectedEarningsItem.epsConsensus, selectedEarningsItem.epsPrev) || '-' }}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Revenue (营业收入) Card -->
+      <div class="hero-kpi-card rev-card" :class="'card-' + (selectedEarningsItem.reportStatus || 'pending')">
+        <div class="kpi-card-top">
+          <div class="kpi-title-group">
+            <span class="kpi-type-icon">💰</span>
+            <span class="kpi-title-text">营业收入 (Revenue)</span>
+          </div>
+          <span v-if="getMetricSurprise(selectedEarningsItem.revActual, selectedEarningsItem.revConsensus)"
+                class="kpi-surprise-pill"
+                :class="getMetricSurprise(selectedEarningsItem.revActual, selectedEarningsItem.revConsensus).isPositive ? 'pill-beat' : 'pill-miss'">
+            {{ getMetricSurprise(selectedEarningsItem.revActual, selectedEarningsItem.revConsensus).badgeText }}
+          </span>
+        </div>
+
+        <div class="kpi-hero-num-row">
+          <div class="hero-num-cell">
+            <span class="num-lbl">{{ selectedEarningsItem.revActual ? '实际值 (Actual)' : '一致预期 (Consensus)' }}</span>
+            <span class="num-val-main" :class="selectedEarningsItem.reportStatus === 'beat' ? 'txt-up' : selectedEarningsItem.reportStatus === 'miss' ? 'txt-down' : ''">
+              {{ selectedEarningsItem.revActual || selectedEarningsItem.revConsensus }}
+            </span>
+          </div>
+          <div v-if="getMetricSurprise(selectedEarningsItem.revActual, selectedEarningsItem.revConsensus)" class="hero-diff-cell">
+            <span class="num-lbl">超预期差额</span>
+            <span class="num-val-diff" :class="getMetricSurprise(selectedEarningsItem.revActual, selectedEarningsItem.revConsensus).isPositive ? 'txt-up' : 'txt-down'">
+              {{ getMetricSurprise(selectedEarningsItem.revActual, selectedEarningsItem.revConsensus).diff }}
+            </span>
+          </div>
+        </div>
+
+        <div class="kpi-compare-row">
+          <div class="compare-col">
+            <span class="c-lbl">一致预期</span>
+            <span class="c-val">{{ selectedEarningsItem.revConsensus }}</span>
+          </div>
+          <div class="compare-sep"></div>
+          <div class="compare-col">
+            <span class="c-lbl">去年同期前值</span>
+            <span class="c-val">{{ selectedEarningsItem.revPrev || '-' }}</span>
+          </div>
+          <div class="compare-sep"></div>
+          <div class="compare-col">
+            <span class="c-lbl">同比 (YoY)</span>
+            <span class="c-val" :class="selectedEarningsItem.revYoy && selectedEarningsItem.revYoy.startsWith('+') ? 'txt-up' : 'txt-down'">
+              {{ selectedEarningsItem.revYoy || '-' }}
+            </span>
+          </div>
+          <div class="compare-sep"></div>
+          <div class="compare-col">
+            <span class="c-lbl">环比 (QoQ)</span>
+            <span class="c-val" :class="selectedEarningsItem.revQoq && selectedEarningsItem.revQoq.startsWith('+') ? 'txt-up' : selectedEarningsItem.revQoq && selectedEarningsItem.revQoq.startsWith('-') ? 'txt-down' : ''">
+              {{ selectedEarningsItem.revQoq || '-' }}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. AI Catalyst & Capex Guidance Block -->
+    <div class="hero-catalyst-block">
+      <div class="catalyst-header">
+        <span class="catalyst-icon">⚡</span>
+        <h4 class="catalyst-title">华尔街机构核心博弈焦点与资本开支指引 (AI Catalyst & Capex Guidance)</h4>
+      </div>
+      <p class="catalyst-body">{{ selectedEarningsItem.aiCatalyst }}</p>
+    </div>
+
+    <!-- 5. Action Footer: Jump to K-Line Chart or Shrink Close -->
+    <div class="hero-action-footer">
+      <button class="hero-jump-chart-btn" @click="viewStockFromEarnings(selectedEarningsItem.symbol)">
+        <span class="btn-icon">📈</span>
+        <span>查看 {{ selectedEarningsItem.symbol }} 实时行情走势与完整 K 线 ➔</span>
+      </button>
+      <button class="hero-shrink-close-btn" @click="closeEarningsModal">
+        <span class="btn-icon">↩</span>
+        <span>收缩关闭 (Esc)</span>
+      </button>
+    </div>
+
   </div>
 </div>
 
@@ -4479,14 +4770,116 @@
 
 </div><!-- /.workspace-body -->
 </div><!-- /.workspace -->
-<nav class="ios-tab-bar mobile-only" aria-label="底部导航" :inert="isMobile&&showSettings">
-  <button v-for="item in mobileNav" :key="item.id" :class="['tab-item',{active:page===item.id}]" :aria-current="page===item.id?'page':undefined" @click="navigate(item.id)">
-    <span class="tab-icon">{{item.icon}}</span>
-    <span class="tab-label">{{item.label}}</span>
-  </button>
-  <button :class="['tab-item', { active: showSettings }]" @click="openSettings" aria-label="更多功能与导航">
-    <span class="tab-icon">☷</span>
-    <span class="tab-label">更多</span>
+<nav class="mobile-tab-bar mobile-only" aria-label="底部主导航">
+  <button
+    v-for="item in mobileNav"
+    :key="item.id"
+    :class="['mobile-tab-item', { active: item.id === 'more' ? isMoreActive : page === item.id }]"
+    :aria-current="page === item.id ? 'page' : undefined"
+    @click="navigate(item.id)"
+  >
+    <span class="mobile-tab-icon">{{ item.icon }}</span>
+    <span class="mobile-tab-label">{{ item.label }}</span>
   </button>
 </nav>
+
+<!-- Mobile Unified Overlay Root -->
+<div id="mobile-overlay-root">
+  <!-- Backdrop Scrim -->
+  <div
+    class="mobile-overlay-scrim"
+    :class="{ 'is-active': activeMobileOverlay }"
+    @click="closeMobileOverlay"
+    aria-hidden="true"
+  ></div>
+
+  <!-- Dedicated Search Sheet -->
+  <div
+    class="mobile-bottom-sheet"
+    :class="{ 'is-active': activeMobileOverlay === 'search' }"
+    role="dialog"
+    aria-label="搜索股票代码"
+    :aria-modal="activeMobileOverlay === 'search' ? 'true' : undefined"
+  >
+    <div class="sheet-header">
+      <span class="sheet-title">搜索美股代码</span>
+      <button class="sheet-close-btn" @click="closeMobileOverlay" aria-label="关闭搜索">✕</button>
+    </div>
+    <div class="sheet-body">
+      <form class="mobile-search-input-wrap" @submit.prevent="executeMobileSearch()">
+        <input
+          class="mobile-search-input"
+          v-model="mobileSearchQuery"
+          placeholder="输入代码，如 NVDA / AAPL / SPY"
+          maxlength="12"
+          autocomplete="off"
+          spellcheck="false"
+        >
+        <button type="submit" class="primary-btn" style="height:44px;padding:0 16px;">进入</button>
+      </form>
+      <div v-if="recentSymbolsList && recentSymbolsList.length" class="mobile-recent-section">
+        <div class="pref-section-title" style="font-size:13px;margin-bottom:6px;">最近查看</div>
+        <div class="mobile-recent-chips">
+          <button
+            v-for="sym in recentSymbolsList"
+            :key="sym"
+            type="button"
+            class="mobile-recent-chip"
+            @click="executeMobileSearch(sym)"
+          >
+            {{ sym }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dedicated "More" Functions Sheet -->
+  <div
+    class="mobile-bottom-sheet"
+    :class="{ 'is-active': activeMobileOverlay === 'more' }"
+    role="dialog"
+    aria-label="更多功能面板"
+    :aria-modal="activeMobileOverlay === 'more' ? 'true' : undefined"
+  >
+    <div class="sheet-header">
+      <span class="sheet-title">更多功能与观察</span>
+      <button class="sheet-close-btn" @click="closeMobileOverlay" aria-label="关闭面板">✕</button>
+    </div>
+    <div class="sheet-body">
+      <div class="mobile-more-grid">
+        <button class="mobile-more-card" @click="navigate('crypto')">
+          <span class="mobile-more-icon">₿</span>
+          <span class="mobile-more-title">加密行情</span>
+          <span class="mobile-more-desc">主流资产 24/7 流动性观察</span>
+        </button>
+        <button class="mobile-more-card" @click="navigate('flows')">
+          <span class="mobile-more-icon">⇄</span>
+          <span class="mobile-more-title">资金观察</span>
+          <span class="mobile-more-desc">板块轮动与 ETF 净申赎</span>
+        </button>
+        <button class="mobile-more-card" @click="navigate('options')">
+          <span class="mobile-more-icon">⎐</span>
+          <span class="mobile-more-title">期权持仓</span>
+          <span class="mobile-more-desc">OI / GEX 与大单持仓分布</span>
+        </button>
+        <button class="mobile-more-card" @click="openPreferencesModal">
+          <span class="mobile-more-icon">⚙</span>
+          <span class="mobile-more-title">偏好设置</span>
+          <span class="mobile-more-desc">经典/蓝灰配色与图表定制</span>
+        </button>
+        <button class="mobile-more-card" @click="navigate('sources')">
+          <span class="mobile-more-icon">ⓘ</span>
+          <span class="mobile-more-title">数据与说明</span>
+          <span class="mobile-more-desc">数据源诊断与架构文档</span>
+        </button>
+        <button class="mobile-more-card" @click="showBackupModal = true; closeMobileOverlay()">
+          <span class="mobile-more-icon">⎘</span>
+          <span class="mobile-more-title">备份与恢复</span>
+          <span class="mobile-more-desc">导出/导入自选分组配置</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 </div><noscript>请启用 JavaScript 以使用 Market Desk。</noscript></body></html>

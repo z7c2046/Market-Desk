@@ -1,0 +1,684 @@
+/*
+ * Market Desk Mobile & Compact Layout
+ * Pure structural, responsive, and touch-optimized layout system for screens <= 1023px.
+ * Colors utilize semantic tokens defined in styles.css & color-palettes.css.
+ */
+
+@media (max-width: 1023px) {
+  /* 1. Shell and Workspace Foundation */
+  html, body {
+    overflow-x: hidden;
+  }
+
+  body {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .nav-rail.desktop-only,
+  .topbar-brand-area.desktop-only,
+  .topbar-center-search.desktop-only,
+  .topbar-clock-group.desktop-only,
+  .toggle-rw-btn.desktop-only,
+  .settings-modal-btn.desktop-only,
+  .floating-expand-rw-btn.desktop-only,
+  .rw-sidebar.desktop-only,
+  .desktop-only {
+    display: none !important;
+  }
+
+  .mobile-only {
+    display: flex !important;
+  }
+
+  .workspace {
+    margin-left: 0 !important;
+    width: 100% !important;
+    max-width: 100vw !important;
+    padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  .workspace-body {
+    flex-direction: column !important;
+    width: 100% !important;
+  }
+
+  .workspace-main-wrapper {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* 2. Streamlined Mobile Topbar */
+  .topbar {
+    height: calc(56px + env(safe-area-inset-top, 0px)) !important;
+    padding-top: env(safe-area-inset-top, 0px) !important;
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 100 !important;
+  }
+
+  .mobile-topbar-nav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .mobile-back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 38px;
+    padding: 0 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface-card);
+    color: var(--apple-blue);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .mobile-back-btn:active {
+    background: var(--surface-hover);
+  }
+
+  .mobile-title-wrap {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .mobile-head-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-main);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mobile-head-subtitle {
+    font-size: 11px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mobile-topbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .mobile-action-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface-card);
+    color: var(--text-main);
+    font-size: 16px;
+    cursor: pointer;
+  }
+
+  .mobile-action-icon-btn:active {
+    background: var(--surface-hover);
+  }
+
+  /* 3. Five-Tab Bottom Navigation Bar */
+  .mobile-tab-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: calc(64px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    background: var(--topbar-bg, var(--surface-card));
+    border-top: 1px solid var(--border-subtle);
+    display: flex !important;
+    align-items: center;
+    justify-content: space-around;
+    z-index: 200;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+  }
+
+  .mobile-tab-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    flex: 1;
+    height: 100%;
+    min-height: 44px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: color 0.15s ease;
+    padding: 4px 0;
+  }
+
+  .mobile-tab-icon {
+    font-size: 18px;
+    line-height: 1;
+  }
+
+  .mobile-tab-label {
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1;
+  }
+
+  .mobile-tab-item.active {
+    color: var(--apple-blue);
+  }
+
+  .mobile-tab-item.active .mobile-tab-label {
+    font-weight: 700;
+  }
+
+  /* 4. Watchlist Mobile Vertical List */
+  .mobile-watchlist-container {
+    display: flex;
+    flex-direction: column;
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .mobile-watchlist-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+
+  .mobile-tool-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 38px;
+    padding: 0 12px;
+    border-radius: 19px;
+    border: 1px solid var(--border);
+    background: var(--surface-card);
+    color: var(--text-main);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .mobile-tool-pill:active {
+    background: var(--surface-hover);
+  }
+
+  .mobile-tool-pill.active {
+    background: var(--selection-bg);
+    color: var(--selection-text);
+    border-color: var(--selection-border);
+  }
+
+  .mobile-stock-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .mobile-quote-card {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--border-subtle);
+    background: var(--surface-card);
+    cursor: pointer;
+    transition: background 0.12s ease;
+    min-height: 76px;
+  }
+
+  .mobile-quote-card:active {
+    background: var(--surface-hover);
+  }
+
+  .mq-col-identity {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+  }
+
+  .mq-sym {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-main);
+  }
+
+  .mq-name {
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mq-col-price {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 3px;
+    min-width: 90px;
+  }
+
+  .mq-price-val {
+    font-size: 17px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-main);
+  }
+
+  .mq-session-tag {
+    font-size: 11px;
+    color: var(--text-secondary);
+  }
+
+  .mq-col-change {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 3px;
+    min-width: 76px;
+  }
+
+  .mq-change-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: #ffffff;
+    min-width: 64px;
+  }
+
+  .mq-change-pill.up {
+    background: var(--semantic-up-chart, #2e9b63);
+  }
+
+  .mq-change-pill.down {
+    background: var(--semantic-down-chart, #df4f46);
+  }
+
+  .mq-change-pill.flat {
+    background: var(--control-border, #787878);
+  }
+
+  .mq-time {
+    font-size: 11px;
+    color: var(--text-secondary);
+  }
+
+  /* 5. Mobile Chart & Reading Mode */
+  .mobile-chart-header {
+    display: flex;
+    flex-direction: column;
+    padding: 12px 14px 6px;
+    background: var(--surface-card);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .mobile-chart-price-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-top: 4px;
+  }
+
+  .mcp-price {
+    font-size: 26px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-main);
+  }
+
+  .mcp-change {
+    font-size: 16px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .mobile-chart-actions-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--surface-card);
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .m-chart-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 38px;
+    padding: 0 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface-card);
+    color: var(--text-main);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .m-chart-action-btn:active {
+    background: var(--surface-hover);
+  }
+
+  .m-chart-action-btn.active {
+    background: var(--accent-fill);
+    color: var(--accent-ink);
+    border-color: var(--accent-fill);
+  }
+
+  /* 6. Chart Expanded Fullscreen Overlay */
+  .chart-expand-fullscreen {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: var(--surface-card);
+    display: flex;
+    flex-direction: column;
+  }
+
+  .chart-expand-topbar {
+    height: 48px;
+    padding: 0 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border-subtle);
+    background: var(--topbar-bg);
+  }
+
+  .chart-expand-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .chart-expand-btn {
+    height: 32px;
+    padding: 0 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface-card);
+    color: var(--text-main);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .chart-expand-btn:active {
+    background: var(--surface-hover);
+  }
+
+  .chart-expand-host {
+    flex: 1;
+    width: 100%;
+    position: relative;
+  }
+
+  /* 7. Bottom Sheets & Unified Overlays */
+  .mobile-overlay-scrim {
+    position: fixed;
+    inset: 0;
+    background: var(--overlay-scrim, rgba(0, 0, 0, 0.5));
+    backdrop-filter: blur(2px);
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+  }
+
+  .mobile-overlay-scrim.is-active {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  .mobile-bottom-sheet {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    max-height: 85dvh;
+    border-radius: 16px 16px 0 0;
+    background: var(--surface-card);
+    border-top: 1px solid var(--border-strong);
+    box-shadow: var(--shadow-float);
+    z-index: 1001;
+    display: flex;
+    flex-direction: column;
+    transform: translateY(100%);
+    transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .mobile-bottom-sheet.is-active {
+    transform: translateY(0);
+  }
+
+  .sheet-header {
+    height: 52px;
+    padding: 0 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .sheet-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-main);
+  }
+
+  .sheet-close-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 18px;
+    border: none;
+    background: var(--surface-sunken);
+    color: var(--text-main);
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+
+  .sheet-body {
+    padding: 16px;
+    overflow-y: auto;
+    flex: 1;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* 8. Dedicated Mobile Search Sheet */
+  .mobile-search-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+
+  .mobile-search-input {
+    flex: 1;
+    height: 44px;
+    padding: 0 14px;
+    border-radius: 10px;
+    border: 1px solid var(--control-border);
+    background: var(--surface-sunken);
+    color: var(--text-main);
+    font-size: 16px; /* 16px prevents iOS automatic zoom */
+    outline: none;
+  }
+
+  .mobile-search-input:focus {
+    border-color: var(--focus-ring);
+    box-shadow: 0 0 0 2px var(--focus-ring);
+  }
+
+  .mobile-recent-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+    margin-bottom: 16px;
+  }
+
+  .mobile-recent-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 34px;
+    padding: 0 12px;
+    border-radius: 17px;
+    border: 1px solid var(--border);
+    background: var(--surface-card);
+    color: var(--text-main);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .mobile-recent-chip:active {
+    background: var(--surface-hover);
+  }
+
+  /* 9. Dedicated Mobile More Sheet Menu Grid */
+  .mobile-more-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .mobile-more-card {
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+    border-radius: 12px;
+    border: 1px solid var(--border-subtle);
+    background: var(--surface-raised);
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.12s ease;
+  }
+
+  .mobile-more-card:active {
+    background: var(--surface-hover);
+  }
+
+  .mobile-more-icon {
+    font-size: 24px;
+    margin-bottom: 8px;
+  }
+
+  .mobile-more-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-main);
+    margin-bottom: 2px;
+  }
+
+  .mobile-more-desc {
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  /* 10. News / Earnings Mobile Segments */
+  .mobile-news-segments {
+    display: flex;
+    gap: 8px;
+    padding: 10px 12px;
+    background: var(--surface-card);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .mobile-segment-btn {
+    flex: 1;
+    height: 40px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface-card);
+    color: var(--text-main);
+    font-size: 14px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+
+  .mobile-segment-btn.active {
+    background: var(--selection-bg);
+    color: var(--selection-text);
+    border-color: var(--selection-border);
+  }
+
+  .earnings-date-strip {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding: 8px 12px;
+    background: var(--surface-card);
+  }
+
+  .earnings-date-chip {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 62px;
+    height: 52px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface-raised);
+    cursor: pointer;
+    padding: 4px;
+  }
+
+  .earnings-date-chip.active {
+    background: var(--selection-bg);
+    color: var(--selection-text);
+    border-color: var(--selection-border);
+  }
+}
+
+/* Reduced Motion Preference */
+@media (prefers-reduced-motion: reduce) {
+  .mobile-bottom-sheet,
+  .mobile-overlay-scrim {
+    transition: none !important;
+  }
+}

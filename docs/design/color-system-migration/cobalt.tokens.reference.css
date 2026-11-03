@@ -1,0 +1,232 @@
+/*
+ * 方案附件 / NOT imported by the application.
+ * Target: public/color-palettes.css (Gemini implements the migration).
+ * Source: 配色/color-system.html; adaptations explained in the handoff.
+ * Palette and day/night are independent: data-palette + data-theme.
+ * Terminal UI defaults stay in styles.css; only chart compatibility tokens
+ * are added here. Never replace KLINE_SCHEMES or HEATMAP_SCHEMES with these.
+ */
+
+/* Exact compatibility values from the current live code paths. */
+:root {
+  --chart-surface: #ffffff;
+  --chart-text: #111111;
+  --chart-muted: #626477;
+  --chart-grid: #f0f0f3;
+  --chart-up: #10b981;
+  --chart-down: #ef4444;
+  --chart-accent: #2563eb;
+  --chart-tooltip-bg: #ffffff;
+  --chart-tooltip-border: #eeeeee;
+  --chart-kline-surface: #ffffff;
+  --chart-kline-grid: rgba(0, 0, 0, .07);
+  --chart-kline-crosshair: #eeeeee;
+  --chart-call: #2563eb;
+  --chart-put: #7c3aed;
+}
+:root.dark,
+:root[data-theme="dark"] {
+  --chart-surface: #15181c;
+  --chart-text: #eef1f4;
+  --chart-muted: #8b949f;
+  --chart-grid: #20252b;
+  --chart-up: #31c39a;
+  --chart-down: #f06e75;
+  --chart-accent: #548afa;
+  --chart-tooltip-bg: #15181c;
+  --chart-tooltip-border: #262b31;
+  --chart-kline-surface: #000000;
+  --chart-kline-grid: rgba(255, 255, 255, .09);
+  --chart-kline-crosshair: #262b31;
+  --chart-call: #60a3fb;
+  --chart-put: #996ee2;
+}
+
+/* Shared Cobalt primitives, aliases, and light mode. */
+:root[data-palette="cobalt"] {
+  /* Source primitives: keep the original swatches inspectable. */
+  --cs-blue: #2976ff;
+  --cs-blue-panel: #3f67bf;
+  --cs-blue-deep: #174789;
+  --cs-blue-soft: #95b6f9;
+  --cs-blue-ice: #a8cef5;
+  --cs-up: #38ab70;
+  --cs-up-line: #31b869;
+  --cs-up-gradient: #42b983;
+  --cs-up-pale: #b8f2e6;
+  --cs-down: #df4f46;
+  --cs-orange-pale: #ffbe88;
+  --cs-sub-light: #787878;
+  --cs-line-dark: #6c6c6c;
+
+  --surface-canvas: #e3e3e3;
+  --surface-card: #ffffff;
+  --surface-raised: #f9f9f9;
+  --surface-hover: #eeeeee;
+  --surface-sunken: #e8e8e8;
+  --sidebar-bg: #f9f9f9;
+  --topbar-bg: #ffffff;
+  --border-subtle: #e8e8e8;
+  --border-strong: #cfcfcf;
+  --control-border: #787878;
+  --text-main: #101010;
+  --text-primary: var(--text-main);
+  --text-strong: #000000;
+  --text-secondary: #626262;
+  --text-muted: #626262;
+  --text-tertiary: #626262;
+
+  /* Brand swatch, readable text, and filled-button background are distinct. */
+  --accent-primary: var(--cs-blue);
+  --accent-secondary: var(--cs-blue-panel);
+  --accent-fill: var(--cs-blue-panel);
+  --accent-text: var(--cs-blue-deep);
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(41, 118, 255, .10);
+  --action-hover-bg: var(--cs-blue-deep);
+  --focus-ring: var(--cs-blue-panel);
+  --selection-bg: var(--cs-blue-panel);
+  --selection-text: #ffffff;
+  --selection-border: var(--cs-blue-panel);
+
+  --semantic-up: #17683f;
+  --semantic-up-soft: rgba(56, 171, 112, .10);
+  --semantic-up-chart: #2e9b63;
+  --semantic-down: #ad302b;
+  --semantic-down-soft: rgba(223, 79, 70, .10);
+  --semantic-down-chart: var(--cs-down);
+  --semantic-warning: #835000;
+  --semantic-warning-soft: rgba(243, 125, 66, .10);
+  --semantic-info: var(--accent-text);
+  --semantic-info-soft: var(--accent-soft);
+
+  --skeleton-base: #e8e8e8;
+  --skeleton-high: #cfcfcf;
+  --skeleton-bars-1: #cfcfcf;
+  --skeleton-bars-2: #e3e3e3;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, .04);
+  --shadow-md: 0 2px 14px rgba(0, 0, 0, .07);
+  --shadow-card: 0 2px 14px rgba(0, 0, 0, .07);
+  --shadow-float: 0 12px 30px rgba(0, 0, 0, .16);
+  --glow-focus: 0 0 0 3px rgba(41, 118, 255, .20);
+  --wash-1: transparent;
+  --wash-2: transparent;
+  --overlay-scrim: rgba(16, 16, 16, .45);
+
+  --group-header-bg: var(--surface-raised);
+  --group-header-bg-hover: var(--surface-hover);
+  --group-header-border: var(--border-strong);
+  --group-badge-bg: var(--surface-sunken);
+  --group-badge-text: var(--text-main);
+
+  /* Existing Market Desk aliases, scoped so Terminal remains unchanged. */
+  --canvas: var(--surface-canvas);
+  --surface: var(--surface-card);
+  --bg: var(--surface-canvas);
+  --border: var(--border-subtle);
+  --input-bg: var(--surface-sunken);
+  --card-bg: var(--surface-card);
+  --card-bg-hover: var(--surface-hover);
+  --hover-bg: var(--surface-hover);
+  --border-hover: var(--border-strong);
+  --accent-bg: var(--accent-soft);
+  --up-text: var(--semantic-up);
+  --up-soft: var(--semantic-up-soft);
+  --down-text: var(--semantic-down);
+  --down-soft: var(--semantic-down-soft);
+  --warning-text: var(--semantic-warning);
+  --warning-soft: var(--semantic-warning-soft);
+  --apple-blue: var(--accent-text);
+  --apple-blue-lt: var(--cs-blue-soft);
+  --apple-green: var(--semantic-up);
+  --apple-red: var(--semantic-down);
+  --apple-orange: var(--semantic-warning);
+  --demo-blue: var(--accent-text);
+  --demo-blue-soft: var(--accent-soft);
+  --demo-legend-call: var(--chart-call);
+  --demo-legend-put: var(--chart-put);
+  --accent-rose: var(--semantic-down);
+  --text: var(--text-main);
+  --muted: var(--text-secondary);
+  --dim: var(--text-muted);
+  --dim-sub: var(--text-tertiary);
+  --blue: var(--accent-text);
+  --green: var(--semantic-up);
+  --red: var(--semantic-down);
+
+  /* ECharts chrome/general series; not candle, MA, or treemap bins. */
+  --chart-surface: var(--surface-card);
+  --chart-text: var(--text-main);
+  --chart-muted: var(--text-secondary);
+  --chart-grid: #cfcfcf;
+  --chart-up: var(--semantic-up-chart);
+  --chart-down: var(--semantic-down-chart);
+  --chart-accent: var(--cs-blue);
+  --chart-tooltip-bg: var(--surface-card);
+  --chart-tooltip-border: var(--border-strong);
+  --chart-kline-surface: var(--surface-card);
+  --chart-kline-grid: #cfcfcf;
+  --chart-kline-crosshair: #787878;
+  --chart-call: var(--cs-blue);
+  --chart-put: #9846ec;
+
+  /* Reserved source palette: only use where an existing component needs it. */
+  --feature-surface: var(--cs-blue-panel);
+  --feature-footer: var(--cs-blue-deep);
+  --feature-ring-track: var(--cs-blue-deep);
+  --feature-ring-fill: var(--cs-blue-ice);
+  --feature-text: #ffffff;
+  --gradient-orange: linear-gradient(90deg, #f37d42, #e4551a);
+  --gradient-purple: linear-gradient(90deg, #9846ec, #5438d1);
+  --gradient-magenta: linear-gradient(90deg, #8938d1, #ae41c5, #df51ad);
+  --gradient-pink: linear-gradient(90deg, #df51ad, #eb587d);
+}
+
+:root[data-palette="cobalt"][data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-palette="cobalt"][data-theme="dark"] {
+  color-scheme: dark;
+  --surface-canvas: #101010;
+  --surface-card: #2d2d2d;
+  --surface-raised: #383838;
+  --surface-hover: #404040;
+  --surface-sunken: #202020;
+  --sidebar-bg: #101010;
+  --topbar-bg: #2d2d2d;
+  --border-subtle: #444444;
+  --border-strong: #6c6c6c;
+  --control-border: #878787;
+  --text-main: #ffffff;
+  --text-strong: #ffffff;
+  --text-secondary: #afafaf;
+  --text-muted: #afafaf;
+  --text-tertiary: #afafaf;
+  --accent-secondary: var(--cs-blue-soft);
+  --accent-text: var(--cs-blue-ice);
+  --accent-soft: rgba(41, 118, 255, .18);
+  --focus-ring: var(--cs-blue-soft);
+  --selection-border: var(--cs-blue-soft);
+  --semantic-up: #70d6a0;
+  --semantic-up-soft: rgba(56, 171, 112, .14);
+  --semantic-up-chart: var(--cs-up);
+  --semantic-down: #ff9991;
+  --semantic-down-soft: rgba(223, 79, 70, .14);
+  --semantic-warning: var(--cs-orange-pale);
+  --semantic-warning-soft: rgba(243, 125, 66, .14);
+  --skeleton-base: #383838;
+  --skeleton-high: #444444;
+  --skeleton-bars-1: #444444;
+  --skeleton-bars-2: #383838;
+  --shadow-sm: 0 1px 4px rgba(0, 0, 0, .25);
+  --shadow-md: 0 4px 18px rgba(0, 0, 0, .45);
+  --shadow-card: 0 4px 18px rgba(0, 0, 0, .45);
+  --shadow-float: 0 16px 36px rgba(0, 0, 0, .50);
+  --glow-focus: 0 0 0 3px rgba(149, 182, 249, .24);
+  --overlay-scrim: rgba(0, 0, 0, .64);
+  --chart-grid: rgba(108, 108, 108, .45);
+  --chart-kline-grid: rgba(108, 108, 108, .45);
+  --chart-kline-crosshair: #afafaf;
+  --chart-put: #b88af4;
+}

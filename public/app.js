@@ -1,6 +1,33 @@
 import { parseFlows } from './flows.js';
 import { bindKlineGestures } from './composables/klineGesture.js';
 import {
+  VALID_PALETTES,
+  VALID_THEMES,
+  DEFAULT_PALETTE,
+  DEFAULT_THEME,
+  normalizePalette,
+  normalizeTheme,
+  applyThemeToDOM,
+  readChartTokens
+} from './theme-model.js';
+import {
+  isPhone,
+  isCompact,
+  getRecentSymbols,
+  addRecentSymbol,
+  clearRecentSymbols,
+  createHistoryState,
+  captureViewState,
+  getViewState,
+  clearViewState,
+  lockBodyScroll,
+  unlockBodyScroll
+} from './mobile-workspace.js';
+import {
+  toMobileQuoteView,
+  formatSessionLabel
+} from './mobile-quote-view.js';
+import {
   WatchlistManager,
   sortWatchlistRows,
   getSelectedExtQuote,
@@ -22,8 +49,13 @@ import {
   EARNINGS_DAYS,
   CORPORATE_LOGOS,
   DEFAULT_TECH_EARNINGS,
+  CURRENT_WEEK_EARNINGS,
+  EARNINGS_WEEKS,
   MACRO_CALENDAR_ITEMS,
-  filterEarningsByDay
+  filterEarningsByDay,
+  parseMetricNumber,
+  getMetricSurprise,
+  getMetricYoy
 } from './earnings-calendar-model.js';
 import { computeInflectionSignals, formatSignalMarkers, dema } from './inflection-signals.js';
 
@@ -150,17 +182,17 @@ const KLINE_SCHEMES = {
     downLabel: '阴线/Put #996EE2',
     title: 'Demo同款：极光蓝紫 (蔚蓝 #60A3FB / 紫罗兰 #996EE2)'
   },
-  obsidian: {
-    id: 'obsidian',
-    name: 'Demo黑曜沉稳 (松石绿 / 珊瑚红)',
-    shortName: '黑曜绿红',
-    tag: 'Demo终端 · 黑曜',
-    description: 'Demo 演示终端原生沉稳松石绿与珊瑚红，护眼耐看，高雅深邃',
-    up: '#31C39A',
-    down: '#F06E75',
-    upLabel: '阳线 #31C39A',
-    downLabel: '阴线 #F06E75',
-    title: 'Demo同款：黑曜沉稳 (松石绿 #31C39A / 珊瑚红 #F06E75)'
+  deepbluepurple: {
+    id: 'deepbluepurple',
+    name: '深邃蓝紫 (Demo期权中心)',
+    shortName: '深邃蓝紫',
+    tag: '期权中心 · 深邃',
+    description: 'Demo 演示原型期权持仓中心 ATM 聚类同款深邃宝蓝与高贵紫罗兰，色彩浓郁饱和，多空层次分明',
+    up: '#2563EB',
+    down: '#7C3AED',
+    upLabel: '阳线/Call #2563EB',
+    downLabel: '阴线/Put #7C3AED',
+    title: 'Demo期权中心深邃蓝紫 (宝蓝 #2563EB / 紫罗兰 #7C3AED)'
   }
 };
 const klineSchemeOptions = Object.values(KLINE_SCHEMES);
@@ -207,10 +239,16 @@ const heatmapSchemeOptions = Object.values(HEATMAP_SCHEMES);
 
 createApp({ setup() {
   const systemTheme = window.matchMedia?.('(prefers-color-scheme: dark)');
+  const savedPalette = readStorage('market-desk-ui-palette', null);
+  const uiPalette = ref(normalizePalette(savedPalette));
+  const uiPaletteOptions = [
+    { id: 'terminal', label: '经典终端', desc: '纯白与黑曜石，沿用当前外观' },
+    { id: 'cobalt', label: '蓝灰数据', desc: '中性灰底与蓝色强调，来自配色演示' }
+  ];
   const savedTheme = readStorage('market-desk-theme', null);
   const isDark = ref(savedTheme === 'dark' || (savedTheme !== 'light' && Boolean(systemTheme?.matches)));
   const savedKlineScheme = readStorage('market-desk-kline-scheme', 'classic');
-  const klineScheme = ref(['classic', 'neon', 'cyberpunk', 'bluepurple', 'obsidian'].includes(savedKlineScheme) ? savedKlineScheme : 'classic');
+  const klineScheme = ref(['classic', 'neon', 'cyberpunk', 'bluepurple', 'deepbluepurple'].includes(savedKlineScheme) ? savedKlineScheme : 'classic');
   const savedHeatmapScheme = readStorage('market-desk-heatmap-scheme', 'classic');
   const heatmapScheme = ref(['classic', 'neon', 'cyberpunk'].includes(savedHeatmapScheme) ? savedHeatmapScheme : 'classic');
   const savedKlineGrid = readStorage('market-desk-kline-grid', 'dashed');
@@ -555,49 +593,193 @@ createApp({ setup() {
   }
 
   const isMobile = ref(window.innerWidth < 768);
+  const isCompactLayout = ref(isCompact(window.innerWidth));
+  const isPhoneLayout = ref(isPhone(window.innerWidth));
   const isWide = ref(window.innerWidth >= 1600);
   const showSettings = ref(false);
+  const activeMobileOverlay = ref(null);
+  const mobileSearchQuery = ref('');
+  const recentSymbolsList = ref(getRecentSymbols());
+  const sourceNavigationPage = ref('overview');
+  const isChartExpanded = ref(false);
+  const mobileViewMode = ref('cards'); // 'cards' (纵向报价列表) or 'table' (完整表格)
+  const mobileEarningsDay = ref('mon');
+
   const mobileNav = [
-    { id: 'overview', label: '总览', icon: '◫' },
+    { id: 'overview', label: '市场', icon: '◫' },
     { id: 'watchlist', label: '自选', icon: '★' },
-    { id: 'chart', label: '行情', icon: '⌁' },
-    { id: 'crypto', label: '加密', icon: '₿' }
+    { id: 'chart', label: '个股', icon: '⌁' },
+    { id: 'news', label: '资讯', icon: '📰' },
+    { id: 'more', label: '更多', icon: '☰' }
   ];
+
+  const isMoreActive = computed(() => {
+    return ['crypto', 'flows', 'options', 'sources'].includes(page.value) || activeMobileOverlay.value === 'more';
+  });
+
   const RANGE_OPTIONS = [
-    { value: '1d', label: '分时' },
+    { value: '1d', label: '1日' },
     { value: '1mo', label: '1月' },
     { value: '3mo', label: '3月' },
     { value: '6mo', label: '6月' },
     { value: '1y', label: '1年' },
     { value: '2y', label: '2年' }
   ];
+
+  function openMobileOverlay(name) {
+    activeMobileOverlay.value = name;
+    lockBodyScroll();
+    if (name === 'search') {
+      recentSymbolsList.value = getRecentSymbols();
+    }
+  }
+
+  function closeMobileOverlay() {
+    activeMobileOverlay.value = null;
+    unlockBodyScroll();
+  }
+
   function openMobileSearch() {
-    openSettings();
+    openMobileOverlay('search');
+  }
+
+  function executeMobileSearch(targetSym) {
+    const sym = (targetSym || mobileSearchQuery.value).trim().toUpperCase();
+    if (!validSymbol(sym)) {
+      toast.value = '请输入有效代码，例如 AAPL、SPY 或 NVDA。';
+      return;
+    }
+    addRecentSymbol(sym);
+    recentSymbolsList.value = getRecentSymbols();
+    mobileSearchQuery.value = '';
+    closeMobileOverlay();
+    selectSymbol(sym);
+  }
+
+  function toggleChartExpanded() {
+    isChartExpanded.value = !isChartExpanded.value;
+    if (klineGestureCtrl?.setInputPolicy) {
+      klineGestureCtrl.setInputPolicy(isChartExpanded.value ? 'expanded' : (isPhoneLayout.value ? 'reading' : 'desktop'));
+    }
     nextTick(() => {
-      const searchEl = document.querySelector('.sidebar-search-form input');
-      if (searchEl) {
-        searchEl.focus();
-      }
+      if (lwPriceChart) lwPriceChart.resize();
     });
   }
+
   let themeOverride = savedTheme === 'dark' || savedTheme === 'light';
   let muted, gridColor, chartText, chartSurface, axis, tooltip;
+  const charts = new Map(), sequences = {}, controllers = {};
 
-  document.documentElement.classList.toggle('dark', isDark.value);
-  document.documentElement.setAttribute('data-theme', isDark.value ? 'dark' : 'light');
-  function toggleTheme() {
+  function setUiPalette(value) {
+    const next = normalizePalette(value);
+    if (next === uiPalette.value) return;
+    uiPalette.value = next;
+    persist('market-desk-ui-palette', next);
+    applyDOMTheme();
+  }
+
+  function applyChartAppearance() {
+    const tokens = readChartTokens(document.documentElement);
+    muted = tokens.muted;
+    gridColor = tokens.grid;
+    chartText = tokens.text;
+    chartSurface = tokens.surface;
+    green = tokens.up;
+    red = tokens.down;
+    blue = tokens.accent;
+    axis = {
+      axisLine: { lineStyle: { color: gridColor } },
+      axisTick: { show: false },
+      axisLabel: { color: muted },
+      splitLine: { lineStyle: { color: gridColor, type: 'dashed' } }
+    };
+    tooltip = {
+      renderMode: 'richText',
+      backgroundColor: tokens.tooltipBg,
+      borderColor: tokens.tooltipBorder,
+      textStyle: { color: chartText },
+      confine: true
+    };
+
+    if (lwPriceChart) {
+      lwPriceChart.applyOptions({
+        layout: {
+          background: { color: tokens.klineSurface },
+          textColor: tokens.muted
+        },
+        grid: {
+          vertLines: { color: tokens.klineGrid },
+          horzLines: { color: tokens.klineGrid }
+        },
+        rightPriceScale: {
+          borderColor: tokens.klineGrid
+        },
+        timeScale: {
+          borderColor: tokens.klineGrid
+        },
+        crosshair: {
+          vertLine: { color: tokens.crosshair },
+          horzLine: { color: tokens.crosshair }
+        }
+      });
+    }
+
+    for (const [id, entry] of charts) {
+      if (entry?.chart?.setOption) {
+        try {
+          entry.chart.setOption({
+            backgroundColor: tokens.surface,
+            textStyle: { color: tokens.text }
+          });
+        } catch (_) {}
+      }
+    }
+  }
+
+  function applyDOMTheme() {
+    applyThemeToDOM({
+      palette: uiPalette.value,
+      mode: isDark.value ? 'dark' : 'light',
+      root: document.documentElement,
+      metaEl: document.getElementById('theme-color')
+    });
+    applyChartAppearance();
+  }
+
+  function setThemeMode(mode) {
     themeOverride = true;
-    isDark.value = !isDark.value;
-    document.documentElement.classList.toggle('dark', isDark.value);
-    document.documentElement.setAttribute('data-theme', isDark.value ? 'dark' : 'light');
-    persist('market-desk-theme', isDark.value ? 'dark' : 'light');
+    const nextDark = mode === 'dark';
+    if (isDark.value === nextDark) return;
+    isDark.value = nextDark;
+    persist('market-desk-theme', nextDark ? 'dark' : 'light');
+    applyDOMTheme();
   }
-  function followSystemTheme(event) { if (!themeOverride) isDark.value = event.matches; }
+
+  function toggleTheme() {
+    setThemeMode(isDark.value ? 'light' : 'dark');
+  }
+
+  function followSystemTheme(event) {
+    if (!themeOverride) {
+      isDark.value = Boolean(event.matches);
+      applyDOMTheme();
+    }
+  }
+
+  applyDOMTheme();
+
   function resizeLayout() {
-    isMobile.value = window.innerWidth < 768;
-    isWide.value = window.innerWidth >= 1600;
+    const w = window.innerWidth;
+    isMobile.value = w < 768;
+    isCompactLayout.value = isCompact(w);
+    isPhoneLayout.value = isPhone(w);
+    isWide.value = w >= 1600;
     if (!isMobile.value) showSettings.value = false;
+    if (klineGestureCtrl?.setInputPolicy) {
+      klineGestureCtrl.setInputPolicy(isChartExpanded.value ? 'expanded' : (isPhoneLayout.value ? 'reading' : 'desktop'));
+    }
   }
+
   async function openSettings() { showSettings.value = true; await nextTick(); document.querySelector('#workspace-settings .bottom-sheet-handle')?.focus(); }
   async function closeSettings() { if (!showSettings.value) return; showSettings.value = false; await nextTick(); document.querySelector('.settings-trigger')?.focus(); }
 
@@ -691,17 +873,34 @@ createApp({ setup() {
     }, duration);
   }
 
-  function navigate(id) {
+  function navigate(id, options = {}) {
+    if (id === 'more') {
+      openMobileOverlay('more');
+      return;
+    }
+    closeMobileOverlay();
     if (page.value !== id) {
+      const source = options.source || page.value;
+      sourceNavigationPage.value = source;
       if (typeof history !== 'undefined' && history.pushState) {
-        history.pushState({ page: id, symbol: symbol.value }, '', '#' + id);
+        history.pushState(createHistoryState({ page: id, symbol: symbol.value, sourcePage: source }), '', '#' + id);
       }
       page.value = id;
-      triggerPageLoadingPulse(500);
     }
     closeSettings();
   }
   function onPopState(e) {
+    if (activeMobileOverlay.value) {
+      closeMobileOverlay();
+      return;
+    }
+    const state = e.state;
+    if (state?.owner === 'market-desk') {
+      if (state.sourcePage) sourceNavigationPage.value = state.sourcePage;
+      if (state.symbol && state.symbol !== symbol.value) symbol.value = state.symbol;
+      if (state.page && state.page !== page.value) page.value = state.page;
+      return;
+    }
     const hash = location.hash.slice(1);
     if (hash && nav.some(n => n.id === hash)) {
       page.value = hash;
@@ -713,7 +912,6 @@ createApp({ setup() {
       const opt = toOptionSymbol(e.state.symbol);
       if (opt) optionSymbol.value = opt;
     }
-    triggerPageLoadingPulse(500);
   }
   function getSparkline(sym, chg) {
     const isUp = (chg || 0) >= 0;
@@ -1243,10 +1441,23 @@ createApp({ setup() {
   const sessionStatusText = computed(() => currentSession.value?.desc || '正常交易中');
   const dateLabel = computed(() => new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }).format(clock.value));
   const isDataLoading = computed(() => Object.values(states).some(s => s.loading));
-  const isPageLoading = computed(() => isDataLoading.value || isNavigating.value || isInitialLoading.value);
+  const isPrimaryPageLoading = computed(() => {
+    const curr = page.value;
+    if (curr === 'chart' && states.chart.loading && !chart.value) return true;
+    if (curr === 'options' && states.options.loading && !options.value) return true;
+    if (curr === 'overview' && states.overview.loading && !overview.value) return true;
+    if (curr === 'news' && states.news.loading && !news.value) return true;
+    if (curr === 'crypto' && states.crypto.loading && !cryptoData.value) return true;
+    if (curr === 'watchlist' && states.watchlist.loading && !Object.keys(quoteStore.value || {}).length) return true;
+    return false;
+  });
+  const isPageLoading = computed(() => isPrimaryPageLoading.value || isNavigating.value || isInitialLoading.value);
   const isWatchlistSkeleton = computed(() => {
-    return (states.watchlist.loading && isDataLoading.value) ||
-           (states.watchlist.loading && !Object.keys(quoteStore.value || {}).length);
+    // Only show skeleton on initial load when there is NO quote data yet.
+    // If quotes are already populated, never show skeleton; data updates in-place smoothly.
+    const hasQuotes = Object.keys(quoteStore.value || {}).length > 0;
+    if (hasQuotes) return false;
+    return states.watchlist.loading || isInitialLoading.value;
   });
 
   watch(isPageLoading, (loading) => {
@@ -2129,6 +2340,8 @@ createApp({ setup() {
 
   // News Sub-Views: 'stream' (实时财经快讯流), 'earnings' (科技与AI财报周历), 'macro' (宏观重磅经济日历)
   const newsSubView = ref('stream');
+  const activeEarningsWeek = ref('current');
+  const earningsWeeks = EARNINGS_WEEKS;
   const earningsSectorFilter = ref('all');
   const earningsTimingFilter = ref('all');
   const earningsAiOnly = ref(false);
@@ -2136,8 +2349,41 @@ createApp({ setup() {
   const showEarningsModal = ref(false);
   const selectedEarningsItem = ref(null);
 
-  const earningsList = ref(DEFAULT_TECH_EARNINGS);
+  const earningsList = ref((EARNINGS_WEEKS && EARNINGS_WEEKS.current && EARNINGS_WEEKS.current.items) || CURRENT_WEEK_EARNINGS || DEFAULT_TECH_EARNINGS);
   const macroCalendarList = ref(MACRO_CALENDAR_ITEMS);
+
+  const currentEarningsWeekInfo = computed(() => {
+    if (EARNINGS_WEEKS && EARNINGS_WEEKS[activeEarningsWeek.value]) {
+      return EARNINGS_WEEKS[activeEarningsWeek.value];
+    }
+    if (EARNINGS_WEEKS && EARNINGS_WEEKS.current) {
+      return EARNINGS_WEEKS.current;
+    }
+    return {
+      id: 'current',
+      label: '本周 (11/02 - 11/06)',
+      rangeText: '2026 Q3/Q4 核心披露周 · 11月02日 - 11月06日',
+      theme: '芯片、AI边缘与企业软件周',
+      days: EARNINGS_DAYS,
+      items: earningsList.value
+    };
+  });
+
+  const currentEarningsDays = computed(() => {
+    return currentEarningsWeekInfo.value.days || EARNINGS_DAYS;
+  });
+
+  function setEarningsWeek(wKey) {
+    if (!EARNINGS_WEEKS || !EARNINGS_WEEKS[wKey]) return;
+    activeEarningsWeek.value = wKey;
+    earningsList.value = EARNINGS_WEEKS[wKey].items;
+  }
+
+  function getEarningsSectorCount(secId) {
+    if (!Array.isArray(earningsList.value)) return 0;
+    if (secId === 'all') return earningsList.value.length;
+    return earningsList.value.filter(item => item.sectorId === secId).length;
+  }
 
   const GEOPOLITICAL_HOTSPOTS = [
     {
@@ -2579,6 +2825,30 @@ createApp({ setup() {
     return earningsList.value.filter(item => item.day === dayId).length;
   }
 
+  const flippedEarningsCards = ref({});
+
+  function isCardFlipped(sym) {
+    return Boolean(flippedEarningsCards.value[sym]);
+  }
+
+  function toggleCardFlip(item, event) {
+    if (event && event.defaultPrevented) return;
+    const sym = typeof item === 'string' ? item : item?.symbol;
+    if (!sym) return;
+    flippedEarningsCards.value = {
+      ...flippedEarningsCards.value,
+      [sym]: !flippedEarningsCards.value[sym]
+    };
+  }
+
+  function flipAllCards(state = false) {
+    const next = {};
+    if (state && Array.isArray(earningsList.value)) {
+      earningsList.value.forEach(it => { next[it.symbol] = true; });
+    }
+    flippedEarningsCards.value = next;
+  }
+
   function openEarningsModal(item) {
     selectedEarningsItem.value = item;
     showEarningsModal.value = true;
@@ -2715,7 +2985,6 @@ createApp({ setup() {
   const breadth = computed(() => { const values = (overview.value?.stocks || []).map(q => q.changePercent); return { up: values.filter(v => v > 0).length, down: values.filter(v => v < 0).length, flat: values.filter(v => v === 0).length, unknown: values.filter(v => !Number.isFinite(v)).length }; });
   const flowDates = computed(() => [...new Set(flows.value.map(f => f.date))]);
   const dayFlows = computed(() => flows.value.filter(f => f.date === flowDate.value).sort((a, b) => b.netFlowUsd - a.netFlowUsd));
-  const charts = new Map(), sequences = {}, controllers = {};
   let clockTimer, eventSource = null, pollTimer = null;
 
   const findQuote = s => [...(overview.value?.stocks || []), ...(overview.value?.benchmarks || []), ...(overview.value?.sectors || [])].find(q => q.symbol === s);
@@ -2896,6 +3165,17 @@ createApp({ setup() {
   // Compact Rows for Wide Sidebar
   const compactRows = computed(() => {
     return allRankedRows.value.slice(0, 15);
+  });
+
+  // Mobile Quote Rows projection
+  const mobileQuoteRows = computed(() => {
+    const list = allRankedRows.value || [];
+    const sess = currentSession.value?.session || 'regular';
+    return list.map(row => toMobileQuoteView(row, {
+      quotes: quoteStore.value || {},
+      session: extMode.value || 'auto',
+      currentMarketSession: sess
+    }));
   });
 
   const extShortLabel = computed(() => {
@@ -3964,8 +4244,8 @@ createApp({ setup() {
     setTimeout(() => { delete cellFlashes[key]; }, 650);
   }
 
-  // Fetch Watchlist Quotes Snapshot
-  async function fetchWatchlistQuotes() {
+  // Fetch Watchlist Quotes Snapshot (Supports silent in-place background update)
+  async function fetchWatchlistQuotes(options = {}) {
     const scopeSymbols = heatmapScope.value === 'nasdaq100'
       ? NASDAQ100_STOCKS.map(d => d.symbol)
       : heatmapScope.value === 'sp500'
@@ -3973,13 +4253,37 @@ createApp({ setup() {
         : [];
     const symbols = [...new Set([...(watchlist.value || []), ...scopeSymbols])];
     if (!symbols.length) return;
+
+    const hasExistingQuotes = Object.keys(quoteStore.value || {}).length > 0;
+    const isSilent = options.silent !== undefined ? Boolean(options.silent) : hasExistingQuotes;
+
     try {
-      states.watchlist.loading = true;
+      if (!isSilent) {
+        states.watchlist.loading = true;
+      }
       const res = await fetch(`/api/watchlist/quotes?symbols=${encodeURIComponent(symbols.join(','))}`);
       calibrateClock(res?.headers?.get?.('date'));
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       if (data.quotes) {
+        // Compare new quotes against existing quotes to trigger smooth in-place cell flashes
+        if (hasExistingQuotes) {
+          for (const [sym, q] of Object.entries(data.quotes)) {
+            const oldQ = quoteStore.value[sym];
+            if (oldQ && q) {
+              const oldPrice = oldQ.regular?.price ?? oldQ.price;
+              const newPrice = q.regular?.price ?? q.price;
+              if (oldPrice !== null && newPrice !== null && oldPrice !== undefined && newPrice !== undefined && oldPrice !== newPrice) {
+                flashCell(sym, 'regular', newPrice > oldPrice ? 'up' : 'down');
+              }
+              const oldExt = oldQ.ext?.price;
+              const newExt = q.ext?.price;
+              if (oldExt !== null && newExt !== null && oldExt !== undefined && newExt !== undefined && oldExt !== newExt) {
+                flashCell(sym, 'ext', newExt > oldExt ? 'up' : 'down');
+              }
+            }
+          }
+        }
         quoteStore.value = { ...quoteStore.value, ...data.quotes };
       }
       if (data.provider) providerInfo.value = data.provider;
@@ -4066,7 +4370,7 @@ createApp({ setup() {
     if (pollTimer) return;
     pollTimer = setInterval(() => {
       if (typeof document !== 'undefined' && document.hidden) return;
-      fetchWatchlistQuotes();
+      fetchWatchlistQuotes({ silent: true });
     }, 10000);
   }
 
@@ -4196,7 +4500,7 @@ createApp({ setup() {
     showBackupModal.value = false;
   }
 
-  function selectSymbol(s) {
+  function selectSymbol(s, options = {}) {
     const optSym = toOptionSymbol(s);
     if (optSym) {
       optionSymbol.value = optSym;
@@ -4209,17 +4513,18 @@ createApp({ setup() {
       }
       symbol.value = s;
       loadOptions(true);
-      triggerPageLoadingPulse(600);
       return;
     }
 
+    const source = options.source || page.value;
+    sourceNavigationPage.value = source;
+
     if (symbol.value === s && page.value === 'chart') {
-      resetPriceChartZoom();
+      if (options.resetZoom) resetPriceChartZoom();
       return;
     }
     symbol.value = s;
-    navigate('chart');
-    triggerPageLoadingPulse(600);
+    navigate('chart', { source });
   }
   function search() { const s = searchInput.value.trim().toUpperCase(); if (!validSymbol(s)) { toast.value = '请输入有效代码，例如 AAPL、SPY 或 BRK-B。'; return; } selectSymbol(s); }
 
@@ -4513,15 +4818,16 @@ createApp({ setup() {
   }
 
   function updateChartTheme() {
-    muted = isDark.value ? '#8b949f' : '#626477';
-    gridColor = isDark.value ? '#20252b' : '#f0f0f3';
-    chartText = isDark.value ? '#eef1f4' : '#111111';
-    chartSurface = isDark.value ? '#15181c' : '#ffffff';
-    green = isDark.value ? '#31c39a' : '#10b981';
-    red = isDark.value ? '#f06e75' : '#ef4444';
-    blue = isDark.value ? '#548afa' : '#2563eb';
+    const tokens = readChartTokens(document.documentElement);
+    muted = tokens.muted;
+    gridColor = tokens.grid;
+    chartText = tokens.text;
+    chartSurface = tokens.surface;
+    green = tokens.up;
+    red = tokens.down;
+    blue = tokens.accent;
     axis = { axisLine: { lineStyle: { color: gridColor } }, axisTick: { show: false }, axisLabel: { color: muted }, splitLine: { lineStyle: { color: gridColor, type: 'dashed' } } };
-    tooltip = { renderMode: 'richText', backgroundColor: isDark.value ? '#15181c' : '#ffffff', borderColor: isDark.value ? '#262b31' : '#eeeeee', textStyle: { color: chartText }, confine: true };
+    tooltip = { renderMode: 'richText', backgroundColor: tokens.tooltipBg, borderColor: tokens.tooltipBorder, textStyle: { color: chartText }, confine: true };
   }
 
   const STOCK_ROLES = {
@@ -4833,9 +5139,11 @@ createApp({ setup() {
     const klineUp = curKline.up;
     const klineDown = curKline.down;
     const isDarkTheme = isDark.value;
-    const chartBg = isDarkTheme ? '#000000' : '#FFFFFF';
-    const gridColorValue = isDarkTheme ? 'rgba(255, 255, 255, 0.09)' : 'rgba(0, 0, 0, 0.07)';
-    const textThemeColor = isDarkTheme ? '#8b949f' : '#626477';
+    const tokens = readChartTokens(document.documentElement);
+    const chartBg = tokens.klineSurface;
+    const gridColorValue = tokens.klineGrid;
+    const textThemeColor = tokens.muted;
+    const crosshairColor = tokens.crosshair;
     const showGrid = klineGridStyle.value !== 'none';
     const gridStyleNum = klineGridStyle.value === 'solid' ? 0 : 2;
     const volAlpha = isDarkTheme ? 0.65 : 0.75;
@@ -4888,8 +5196,8 @@ createApp({ setup() {
           },
           crosshair: {
             mode: LW.CrosshairMode.Normal,
-            vertLine: { color: isDarkTheme ? '#262b31' : '#eeeeee', width: 1, style: 2 },
-            horzLine: { color: isDarkTheme ? '#262b31' : '#eeeeee', width: 1, style: 2 }
+            vertLine: { color: crosshairColor, width: 1, style: 2 },
+            horzLine: { color: crosshairColor, width: 1, style: 2 }
           },
           // Disable native scroll & scale handlers to grant 100% viewport ownership to bindKlineGestures
           handleScroll: { mouseWheel: false, pressedMouseMove: false, horzTouchDrag: false, vertTouchDrag: false },
@@ -4963,6 +5271,7 @@ createApp({ setup() {
         });
 
         const gestures = bindKlineGestures(el, chartInstance, candleSeries, {
+          inputPolicy: isChartExpanded.value ? 'expanded' : (isPhoneLayout.value ? 'reading' : 'desktop'),
           getLatestLogicalIndex: () => (chart.value?.bars?.length || 1) - 1,
           getFirstLogicalIndex: () => 0,
           initialBars: Math.min(bars.length, 120),
@@ -5297,8 +5606,9 @@ createApp({ setup() {
     const rows = d.rows.filter(r => strikeRange.value === 'all' || Math.abs(r.strike / d.spot - 1) <= Number(strikeRange.value));
     const gex = optionMetric.value === 'gex';
     const noData = !rows.length;
-    const optCallColor = isDark.value ? '#60a3fb' : '#2563eb';
-    const optPutColor = isDark.value ? '#996ee2' : '#7c3aed';
+    const tokens = readChartTokens(document.documentElement);
+    const optCallColor = tokens.call;
+    const optPutColor = tokens.put;
     makeChart('options-chart', {
       title: noData ? { text: '所选范围内无期权数据', left: 'center', top: 'center', textStyle: { color: muted, fontSize: 14 } } : undefined,
       tooltip: { ...tooltip, trigger: 'axis' },
@@ -5435,7 +5745,12 @@ createApp({ setup() {
   }
 
   watch(page, async value => {
-    history.replaceState(null, '', '#' + value);
+    if (typeof history !== 'undefined' && history.replaceState) {
+      const curState = history.state;
+      if (!curState || curState.owner !== 'market-desk' || curState.page !== value) {
+        history.replaceState(createHistoryState({ page: value, symbol: symbol.value, sourcePage: sourceNavigationPage.value }), '', '#' + value);
+      }
+    }
     await nextTick();
     if (['overview', 'flows'].includes(value) && !overview.value && !states.overview.loading) loadOverview();
     if (value === 'crypto' && !states.crypto.loading) loadCrypto();
@@ -5457,7 +5772,7 @@ createApp({ setup() {
   watch(newsSymbol, () => { if (page.value === 'news') loadNews(); });
   watch(optionExpiry, value => { if (page.value === 'options' && value && value !== options.value?.expiration) loadOptions(); });
   watch([heatSize, sectorFilter, heatmapSession, resolvedHeatmapSession, extMode, flowTab, flowDate, optionMetric, strikeRange], async () => { await nextTick(); render(); });
-  watch(isDark, async value => { document.documentElement.classList.toggle('dark', value); await nextTick(); render(); });
+  watch([uiPalette, isDark], async () => { applyDOMTheme(); await nextTick(); render(); });
   watch([klineScheme, klineGridStyle], async () => { await nextTick(); render(); });
   watch(showSettings, value => { document.body.classList.toggle('drawer-open', value && isMobile.value); });
 
@@ -5465,7 +5780,7 @@ createApp({ setup() {
     if (document.hidden) {
       stopShortPolling();
     } else {
-      fetchWatchlistQuotes();
+      fetchWatchlistQuotes({ silent: true });
       if (!eventSource || eventSource.readyState === 2) { // 2 = EventSource.CLOSED
         setupEventSource();
       }
@@ -5544,7 +5859,12 @@ createApp({ setup() {
   watch([page, newsSubView, aiSearchAutoRefresh], scheduleAiSearchRefresh);
 
   return {
-    nav, mobileNav, isDark, isMobile, isWide, showSettings, toggleTheme, openSettings, closeSettings, navigate, handleDrawerKey,
+    nav, mobileNav, isDark, isMobile, isWide, showSettings, toggleTheme, setThemeMode, openSettings, closeSettings, navigate, handleDrawerKey,
+    uiPalette, uiPaletteOptions, setUiPalette,
+    isCompactLayout, isPhoneLayout, activeMobileOverlay, openMobileOverlay, closeMobileOverlay,
+    mobileSearchQuery, recentSymbolsList, executeMobileSearch, sourceNavigationPage,
+    isChartExpanded, toggleChartExpanded, klineGestureCtrl,
+    mobileViewMode, mobileEarningsDay, mobileQuoteRows, isMoreActive,
     RANGE_OPTIONS, openMobileSearch, mobileTitleInfo,
     // K-Line & Heatmap Color Schemes & Preferences Modal
     klineScheme, klineGridStyle, showPreferencesModal, openPreferencesModal, closePreferencesModal, setKlineScheme, setKlineGrid, klineSchemeOptions, activeKlineScheme, KLINE_SCHEMES,
@@ -5597,11 +5917,14 @@ createApp({ setup() {
     newsCategory, newsCategories, filteredNews, getNewsSentiment, getNewsTags, getDayRange, getDayRangeWidth, missingTurnoverCount,
     savedNewsUrls, isBookmarked, toggleBookmark, showNewsMoreMenu, formatRelativeTime, getSourceMeta, getNewsImage, getTagColorClass, handleImgError, openNewsUrl, onNewsSearchSubmit,
     // Earnings & Macro & Geopolitics Calendars
-    newsSubView, earningsSectorFilter, earningsTimingFilter, earningsAiOnly, earningsSearch,
+    newsSubView, activeEarningsWeek, earningsWeeks, EARNINGS_WEEKS, currentEarningsWeekInfo, currentEarningsDays, setEarningsWeek, getEarningsSectorCount,
+    earningsSectorFilter, earningsTimingFilter, earningsAiOnly, earningsSearch,
     showEarningsModal, selectedEarningsItem, earningsList, macroCalendarList,
     GEOPOLITICAL_HOTSPOTS, GEOPOLITICAL_ASSET_MATRIX, filterGeopoliticsTopic,
     AI_SECTOR_FILTERS, EARNINGS_DAYS, CORPORATE_LOGOS,
     getCompanyLogoSvg, getDayEarnings, countDayTotal, openEarningsModal, closeEarningsModal, viewStockFromEarnings,
+    flippedEarningsCards, isCardFlipped, toggleCardFlip, flipAllCards,
+    parseMetricNumber, getMetricSurprise, getMetricYoy,
     // AI News Search Module
     aiSearchQuery, aiSearchEngine, aiSearchSource, aiSearchResults, aiSearchLoading, aiSearchError, aiSearchTelemetry, aiSearchCopiedId,
     aiSearchTimeRange, aiSearchSort, aiSearchIncludeUndated, aiSearchAutoRefresh, aiSearchPending, acceptAiSearchUpdate, aiEngineStatus,
