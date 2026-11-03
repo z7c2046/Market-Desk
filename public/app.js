@@ -725,7 +725,7 @@ createApp({ setup() {
     }
 
     for (const [id, entry] of charts) {
-      if (entry?.chart?.setOption) {
+      if (id !== 'price-chart' && entry?.chart?.setOption) {
         try {
           entry.chart.setOption({
             backgroundColor: tokens.surface,

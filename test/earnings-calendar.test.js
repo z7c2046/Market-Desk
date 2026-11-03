@@ -9,7 +9,10 @@ import {
   EARNINGS_WEEKS,
   CURRENT_WEEK_DAYS,
   MACRO_CALENDAR_ITEMS,
-  filterEarningsByDay
+  filterEarningsByDay,
+  parseMetricNumber,
+  getMetricSurprise,
+  getMetricYoy
 } from '../public/earnings-calendar-model.js';
 
 test('Earnings Calendar: Sector filters and days definition integrity', () => {
