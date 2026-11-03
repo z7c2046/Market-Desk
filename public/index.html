@@ -1349,13 +1349,16 @@
           </div>
         </div>
       </section>
-      <section class="panel crypto-chart-panel">
-        <div class="panel-heading"><span class="sk sk-strong" style="width: 160px; height: 20px;"></span></div>
-        <div class="chart-viewport" style="min-height: 400px; position: relative;">
-          <div class="sk-chart-grid"></div>
-          <div class="skeleton-bars">
-            <span v-for="(h, i) in skeletonPattern.slice(0, 24)" :key="i" class="sk" :style="{ height: (h * 0.5) + '%' }"></span>
-          </div>
+      <section class="panel crypto-pending-panel crypto-pending-skeleton">
+        <div class="panel-heading">
+          <span class="sk sk-strong" style="width: 120px; height: 20px;"></span>
+          <span class="sk sk-pill" style="width: 48px; height: 18px;"></span>
+        </div>
+        <div style="padding: 48px 20px; display:flex; flex-direction:column; align-items:center; gap:14px; text-align:center;">
+          <span class="sk sk-pill" style="width: 52px; height: 52px; border-radius: 16px;"></span>
+          <span class="sk sk-strong" style="width: 150px; height: 20px;"></span>
+          <span class="sk sk-line" style="width: 240px; height: 14px;"></span>
+          <span class="sk sk-small" style="width: 180px; height: 12px;"></span>
         </div>
       </section>
     </div>
@@ -1501,10 +1504,11 @@
                 <th class="col-range">24h 振幅区间</th>
                 <th class="col-mcap text-right">市值</th>
                 <th class="col-vol text-right">24h 成交额</th>
+                <th class="col-action text-right">走势</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="c in cryptoList" :key="c.symbol" :class="{selected: selectedCrypto === c.symbol}" @click="selectCryptoCoin(c.symbol)" style="cursor:pointer;">
+              <tr v-for="c in cryptoList" :key="c.symbol" :class="{selected: selectedCrypto === c.symbol}" @click="selectCryptoCoin(c.symbol)" style="cursor:pointer;" :title="'点击进入个股查看 ' + c.code + ' 走势'">
                 <td class="col-rank">
                   <span class="rank-num-badge">#{{ c.rank }}</span>
                 </td>
@@ -1521,8 +1525,8 @@
                   <strong class="crypto-price-text">${{ formatCryptoPrice(c.price) }}</strong>
                 </td>
                 <td class="col-chg text-right">
-                  <span class="crypto-pct-pill" :class="c.changePercent >= 0 ? 'badge-pos' : 'badge-neg'">
-                    {{ c.changePercent >= 0 ? '+' : '' }}{{ c.changePercent.toFixed(2) }}%
+                  <span class="crypto-pct-pill" :class="c.changePercent != null ? (c.changePercent >= 0 ? 'badge-pos' : 'badge-neg') : 'badge-neutral'">
+                    {{ pct(c.changePercent) }}
                   </span>
                 </td>
                 <td class="col-range">
@@ -1538,72 +1542,42 @@
                 </td>
                 <td class="col-mcap text-right font-mono">${{ c.marketCap }}</td>
                 <td class="col-vol text-right font-mono">${{ c.vol24h }}</td>
+                <td class="col-action text-right">
+                  <button class="crypto-jump-btn" :title="'前往个股查看 ' + c.code + ' 走势'" @click.stop="selectCryptoCoin(c.symbol)">
+                    <span>个股</span>
+                    <span class="jump-arrow">↗</span>
+                  </button>
+                </td>
               </tr>
             </tbody>
           </table>
         </div>
       </section>
 
-      <!-- 右侧：选中代币走势图与深度概况 -->
-      <section class="panel crypto-chart-panel">
+      <!-- 右侧：待定区域 -->
+      <section class="panel crypto-pending-panel">
         <div class="panel-heading">
-          <div class="chart-coin-head">
-            <span class="chart-coin-icon" :style="{ backgroundColor: selectedCryptoItem.iconColor + '20', color: selectedCryptoItem.iconColor }">{{ selectedCryptoItem.icon }}</span>
-            <div>
-              <h2>{{ selectedCryptoItem.code }} / USD 实时走势</h2>
-            </div>
+          <div class="heading-row">
+            <h2>扩展观察区</h2>
+            <span class="badge-pending-pill">待定</span>
           </div>
-          <div class="crypto-chart-controls">
-            <div class="timeframe-buttons">
-              <button :class="{active: cryptoTimeframe==='24h'}" @click="cryptoTimeframe='24h'">24H</button>
-              <button :class="{active: cryptoTimeframe==='7d'}" @click="cryptoTimeframe='7d'">7D</button>
-              <button :class="{active: cryptoTimeframe==='30d'}" @click="cryptoTimeframe='30d'">30D</button>
-              <button :class="{active: cryptoTimeframe==='1y'}" @click="cryptoTimeframe='1y'">1Y</button>
-            </div>
-            <div class="kline-palette-quick-selector" title="K 线走势配色方案">
-              <button
-                v-for="item in klineSchemeOptions"
-                :key="item.id"
-                class="kline-palette-chip"
-                :class="{ active: klineScheme === item.id }"
-                :title="item.title"
-                @click="setKlineScheme(item.id)"
-              >
-                <span class="chip-dot" :style="{ backgroundColor: item.up }"></span>
-                <span class="chip-dot" :style="{ backgroundColor: item.down }"></span>
-                <span class="chip-name">{{ item.shortName }}</span>
-              </button>
-              <button class="btn-settings-icon" @click="openPreferencesModal" title="K 线图表与偏好设置">⚙️</button>
-            </div>
-          </div>
+          <span class="pending-status-tag">TBD</span>
         </div>
 
-        <div class="crypto-chart-stat-strip">
-          <div class="stat-item">
-            <span class="stat-lbl">现价</span>
-            <strong class="stat-val font-mono">${{ formatCryptoPrice(selectedCryptoItem.price) }}</strong>
+        <div class="crypto-pending-card">
+          <div class="pending-card-icon-wrap">
+            <span class="pending-card-icon">⏳</span>
           </div>
-          <div class="stat-item">
-            <span class="stat-lbl">24h 涨跌</span>
-            <span class="stat-val font-mono" :class="selectedCryptoItem.changePercent >= 0 ? 'pos-text' : 'neg-text'">
-              {{ pct(selectedCryptoItem.changePercent) }}
-            </span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-lbl">24h 最高</span>
-            <span class="stat-val font-mono">${{ formatCryptoPrice(selectedCryptoItem.high24h) }}</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-lbl">24h 最低</span>
-            <span class="stat-val font-mono">${{ formatCryptoPrice(selectedCryptoItem.low24h) }}</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-lbl">流通总量</span>
-            <span class="stat-val font-mono">{{ selectedCryptoItem.supply || '流通中' }}</span>
+          <h3 class="pending-card-title">该区域功能待定</h3>
+          <p class="pending-card-desc">
+            加密资产实时走势与深度指标已整合至「个股行情」模块。<br>
+            点击左侧任意标的，可立即跳转至个股页面查看 24/7 专业走势图。
+          </p>
+          <div class="pending-tip-box">
+            <span class="tip-dot"></span>
+            <span>当前区域处于规划阶段，后续将支持自定义看板或链上深度数据</span>
           </div>
         </div>
-
-        <div id="crypto-chart" class="crypto-echarts-box" role="img" aria-label="加密货币走势图"></div>
       </section>
     </div>
   </div>

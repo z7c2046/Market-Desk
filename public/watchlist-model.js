@@ -6,6 +6,14 @@ export const STORAGE_KEY_V2 = 'market-desk-watchlist-v2';
 export const MAX_UNIQUE_SYMBOLS = 100;
 
 export const SYMBOL_NAMES = {
+  // 加密货币
+  'BTC-USD': '比特币',
+  'ETH-USD': '以太坊',
+  'BNB-USD': '币安币',
+  'SOL-USD': '索拉纳',
+  'XRP-USD': '瑞波币',
+  'ADA-USD': '艾达币',
+
   // 存储
   NTAP: '美国网存',
   MU: '美光科技',

@@ -55,6 +55,7 @@ const fixture = url => {
   if (u.pathname.endsWith('overview')) return { benchmarks: [{ ...q, symbol: 'SPY' }], stocks: [q], sectors: [{ ...q, symbol: 'XLK' }], unavailable: [], note: 'Fixture for automated tests only' };
   if (u.pathname === '/api/news') return { symbol: u.searchParams.get('symbol'), fetchedAt: '2026-10-22T00:00:00Z', unavailable: [], items: [{ title: 'A test headline', url: 'https://example.com', source: 'Test', publishedAt: '2026-10-21T21:00:00Z' }] };
   if (u.pathname.endsWith('chart')) return { ...q, symbol: u.searchParams.get('symbol'), currency: 'USD', range: u.searchParams.get('range'), bars: [{ time: 1792612800, open: 99, close: 100, low: 98, high: 101, volume: 1000 }] };
+  if (u.pathname === '/api/crypto') return { items: [{ symbol: 'BTC-USD', code: 'BTC', name: 'Bitcoin 比特币', price: 68000, changePercent: 1.5, marketCap: '1.3T', vol24h: '30B', high24h: 69000, low24h: 67000 }] };
   if (u.pathname === '/api/options') return { symbol: 'SPY', spot: 100, expiration: '2026-10-23', expirations: ['2026-10-23'], callWall: [105], putWall: [95], callOi: 100, putOi: 50, putCallRatio: .5, netGex: 10000, missingOi: 0, missingGamma: 0, contracts: 2, rows: [{ strike: 105, callOi: 100, putOi: 50, callGex: 20000, putGex: -10000 }], asOf: '2026-10-22 00:00:00' };
   if (u.pathname.includes('/watchlist/quotes')) return {
     quotes: {
@@ -1141,6 +1142,35 @@ test('Mobile Workspace Redesign: 5 bottom tabs, dedicated search overlay, more f
   ui.w.document.querySelector('.mobile-bottom-sheet.is-active .sheet-close-btn').click();
   await tick();
   assert.equal(ui.w.document.querySelector('.mobile-bottom-sheet.is-active'), null, 'Sheet closed');
+
+  assert.deepEqual(ui.errors, []);
+});
+
+test('Crypto Workspace: right side shows pending panel instead of crypto-chart, clicking coin navigates directly to chart (个股)', async t => {
+  const ui = await mount(t, async url => ({ ok: true, json: async () => fixture(url) }));
+
+  // 1. Navigate to Crypto module
+  await ui.click('加密货币');
+  await tick();
+
+  // 2. Verify right side does NOT render #crypto-chart
+  assert.equal(ui.w.document.querySelector('#crypto-chart'), null, 'crypto-chart is not rendered on the right side');
+
+  // 3. Verify right side renders crypto-pending-panel with 待定 badge
+  const pendingPanel = ui.w.document.querySelector('.crypto-pending-panel');
+  assert.ok(pendingPanel, 'Crypto pending panel exists');
+  assert.match(pendingPanel.textContent, /待定/);
+  assert.match(pendingPanel.textContent, /该区域功能待定/);
+
+  // 4. Click a coin row (BTC)
+  const btcRow = ui.w.document.querySelector('.crypto-table tbody tr');
+  assert.ok(btcRow, 'Crypto BTC row exists');
+  btcRow.click();
+  await tick();
+  await tick();
+
+  // 5. Verify direct navigation to 'chart' (个股) with BTC-USD
+  assert.equal(ui.w.document.querySelector('main').textContent.includes('BTC-USD'), true, 'Navigated to individual stock chart with BTC-USD');
 
   assert.deepEqual(ui.errors, []);
 });

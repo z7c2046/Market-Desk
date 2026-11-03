@@ -1146,7 +1146,7 @@ createApp({ setup() {
 
   function selectCryptoCoin(sym) {
     selectedCrypto.value = sym;
-    nextTick(() => renderCryptoChart());
+    selectSymbol(sym, { source: 'crypto' });
   }
 
   // Watchlist Model & Manager (v2)
@@ -5625,6 +5625,8 @@ createApp({ setup() {
   }
 
   function renderCryptoChart() {
+    const el = document.getElementById('crypto-chart');
+    if (!el) return;
     const item = selectedCryptoItem.value;
     if (!item) return;
     let bars = item.bars && item.bars.length >= 2 ? item.bars : null;
