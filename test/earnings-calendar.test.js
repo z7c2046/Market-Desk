@@ -140,3 +140,47 @@ test('Earnings Calendar: 3D Flip Card metrics, glowing corner masks (beat/miss/p
   assert.strictEqual(amd?.reportStatus, 'miss', 'AMD must be miss');
   assert.strictEqual(intc?.reportStatus, 'miss', 'INTC must be miss');
 });
+
+test('Earnings Calendar: parseMetricNumber, getMetricSurprise, getMetricYoy calculation and hero modal metrics', () => {
+  // 1. parseMetricNumber
+  assert.strictEqual(parseMetricNumber('$0.41'), 0.41);
+  assert.strictEqual(parseMetricNumber('$1.74B'), 1740);
+  assert.strictEqual(parseMetricNumber('$725.5M'), 725.5);
+  assert.strictEqual(parseMetricNumber('-34.0%'), -34);
+
+  // 2. getMetricSurprise (EPS Beat)
+  const gfsEps = getMetricSurprise('$0.41', '$0.38');
+  assert.ok(gfsEps);
+  assert.strictEqual(gfsEps.diff, '+$0.03');
+  assert.strictEqual(gfsEps.pct, '+7.9%');
+  assert.strictEqual(gfsEps.isPositive, true);
+  assert.strictEqual(gfsEps.badgeText, '超预期 +7.9%');
+
+  // 3. getMetricSurprise (Revenue in Billions)
+  const gfsRev = getMetricSurprise('$1.74B', '$1.73B');
+  assert.ok(gfsRev);
+  assert.strictEqual(gfsRev.diff, '+$10.0M');
+  assert.strictEqual(gfsRev.pct, '+0.6%');
+  assert.strictEqual(gfsRev.isPositive, true);
+
+  // 4. getMetricSurprise (EPS Miss)
+  const lsccEps = getMetricSurprise('$0.22', '$0.24');
+  assert.ok(lsccEps);
+  assert.strictEqual(lsccEps.diff, '-$0.02');
+  assert.strictEqual(lsccEps.pct, '-8.3%');
+  assert.strictEqual(lsccEps.isPositive, false);
+  assert.strictEqual(lsccEps.badgeText, '不及预期 -8.3%');
+
+  // 5. getMetricSurprise (Revenue in Millions Miss)
+  const lsccRev = getMetricSurprise('$124.8M', '$127M');
+  assert.ok(lsccRev);
+  assert.strictEqual(lsccRev.diff, '-$2.2M');
+  assert.strictEqual(lsccRev.pct, '-1.7%');
+  assert.strictEqual(lsccRev.isPositive, false);
+
+  // 6. getMetricYoy
+  assert.strictEqual(getMetricYoy('$0.41', '$0.34'), '+20.6%');
+  assert.strictEqual(getMetricYoy('$1.74B', '$1.63B'), '+6.7%');
+  assert.strictEqual(getMetricYoy('$0.22', '$0.23'), '-4.3%');
+});
+
