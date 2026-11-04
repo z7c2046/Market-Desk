@@ -80,8 +80,8 @@ export function createServer({ workspace = createMarketWorkspace(), watchlist = 
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const port = Number(process.env.PORT || 5174);
-  const host = process.env.HOST || '0.0.0.0';
+  const host = process.env.HOST || '127.0.0.1';
   createServer({ treeNewsService: getTreeNewsService() }).listen(port, host, () => {
-    console.log(`Market Desk running at http://${host}:${port}`);
+    console.log(`Market Desk running at http://localhost:${port}`);
   });
 }

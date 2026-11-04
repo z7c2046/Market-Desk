@@ -807,10 +807,12 @@ test('Heatmap color schemes: defaults to classic (经典绿红), switches to neo
   assert.ok(modal);
 
   const chips = [...modal.querySelectorAll('.heatmap-scheme-card')];
-  assert.equal(chips.length, 3);
+  assert.equal(chips.length, 5);
   assert.match(chips[0].textContent, /经典绿红/);
   assert.match(chips[1].textContent, /荧光极光/);
   assert.match(chips[2].textContent, /赛博霓虹/);
+  assert.match(chips[3].textContent, /极光蓝紫/);
+  assert.match(chips[4].textContent, /深邃蓝紫/);
 
   chips[1].click();
   await tick();
@@ -819,6 +821,14 @@ test('Heatmap color schemes: defaults to classic (经典绿红), switches to neo
   chips[2].click();
   await tick();
   assert.equal(JSON.parse(ui.w.localStorage.getItem('market-desk-heatmap-scheme')), 'cyberpunk');
+
+  chips[3].click();
+  await tick();
+  assert.equal(JSON.parse(ui.w.localStorage.getItem('market-desk-heatmap-scheme')), 'bluepurple');
+
+  chips[4].click();
+  await tick();
+  assert.equal(JSON.parse(ui.w.localStorage.getItem('market-desk-heatmap-scheme')), 'deepbluepurple');
 
   assert.deepEqual(ui.errors, []);
 });
@@ -1309,6 +1319,20 @@ test('Crypto Workspace: crypto market cap table is converted into watchlist cryp
   assert.match(onchainPanel.textContent, /英伟达/);
   assert.match(onchainPanel.textContent, /Top 10 链上总成交额/);
 
+  // 3b. Verify On-Chain flow column header & cell are centered and aligned with buy/sell bar
+  const thFlow = onchainPanel.querySelector('.th-flow');
+  assert.ok(thFlow, 'th-flow header exists');
+  assert.ok(thFlow.classList.contains('text-center'), 'th-flow has text-center class');
+  const firstColFlow = onchainPanel.querySelector('.col-flow');
+  assert.ok(firstColFlow, 'first col-flow cell exists');
+  assert.ok(firstColFlow.classList.contains('text-center'), 'col-flow cell has text-center class');
+  const flowRatioSub = firstColFlow.querySelector('.flow-ratio-sub');
+  assert.ok(flowRatioSub, 'flow-ratio-sub container exists');
+  assert.ok(flowRatioSub.querySelector('.flow-ratio-buy'), 'flow-ratio-buy element exists');
+  assert.ok(flowRatioSub.querySelector('.flow-ratio-sell'), 'flow-ratio-sell element exists');
+  const netflowVal = firstColFlow.querySelector('.netflow-val');
+  assert.match(netflowVal.textContent, /^\+[0-9$]/, 'positive net flow has valid sign');
+
   // 4. Verify lower area renders full-width crypto-whale-tracker-panel with Hyperliquid L1 & positions
   const whalePanel = ui.w.document.querySelector('.crypto-whale-tracker-panel');
   assert.ok(whalePanel, 'Full-width Crypto whale tracker panel exists');
@@ -1316,6 +1340,34 @@ test('Crypto Workspace: crypto market cap table is converted into watchlist cryp
   assert.match(whalePanel.textContent, /巨鲸合约持仓追踪/);
   assert.match(whalePanel.textContent, /做多/);
   assert.match(whalePanel.textContent, /做空/);
+
+  // 4b. Verify whale positions table sorting on "仓位规模 / 数量" and "未实现盈亏"
+  const thVal = ui.w.document.querySelector('.th-val.sortable-th');
+  const thPnl = ui.w.document.querySelector('.th-pnl.sortable-th');
+  assert.ok(thVal, 'Sortable 仓位规模 / 数量 header exists');
+  assert.ok(thPnl, 'Sortable 未实现盈亏 header exists');
+
+  // Initial order is positionValue desc: ETH ($31.8M), BTC ($6.93M)
+  let coinNames = Array.from(ui.w.document.querySelectorAll('.whale-positions-table .pos-coin-name')).map(el => el.textContent.trim());
+  assert.deepEqual(coinNames.slice(0, 2), ['ETH', 'BTC']);
+
+  // Click 仓位规模 to sort asc (smallest first)
+  thVal.click();
+  await tick();
+  coinNames = Array.from(ui.w.document.querySelectorAll('.whale-positions-table .pos-coin-name')).map(el => el.textContent.trim());
+  assert.deepEqual(coinNames.slice(0, 2), ['BTC', 'ETH']);
+
+  // Click 未实现盈亏 to sort pnl desc (185000 > 24500)
+  thPnl.click();
+  await tick();
+  coinNames = Array.from(ui.w.document.querySelectorAll('.whale-positions-table .pos-coin-name')).map(el => el.textContent.trim());
+  assert.deepEqual(coinNames.slice(0, 2), ['ETH', 'BTC']);
+
+  // Click 未实现盈亏 again to sort pnl asc (24500 < 185000)
+  thPnl.click();
+  await tick();
+  coinNames = Array.from(ui.w.document.querySelectorAll('.whale-positions-table .pos-coin-name')).map(el => el.textContent.trim());
+  assert.deepEqual(coinNames.slice(0, 2), ['BTC', 'ETH']);
 
   // 5. Verify Watchlist sidebar contains the '加密货币' group
   const rwSidebar = ui.w.document.querySelector('.right-watchlist-sidebar');

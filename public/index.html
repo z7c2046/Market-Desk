@@ -532,8 +532,6 @@
 <div class="workspace-body">
   <div class="workspace-main-wrapper">
     <main>
-<div v-if="toast" class="toast" role="status"><span>{{toast}}</span><button v-if="undoAction" class="text-button" @click="undoAction(); toast=''">↶ 撤销</button><button aria-label="关闭提示" @click="toast=''">×</button></div>
-
 <div class="workspace-container">
 <div class="workspace-content">
 <transition name="page" @after-enter="onPageEntered">
@@ -1537,7 +1535,7 @@
           <div class="onchain-summary-metric">
             <span class="onchain-sum-label">全网资金净流向</span>
             <strong class="onchain-sum-val font-mono" :class="onchainAggregate.totalNetFlow24h >= 0 ? 'text-pos' : 'text-neg'">
-              {{ (onchainAggregate.totalNetFlow24h >= 0 ? '+' : '') + '$' + formatOnchainUsd(onchainAggregate.totalNetFlow24h) }}
+              {{ formatOnchainFlowUsd(onchainAggregate.totalNetFlow24h) }}
             </strong>
           </div>
           <div class="onchain-summary-metric">
@@ -1575,7 +1573,7 @@
                   <span>24H 链上成交量</span>
                   <span class="sort-icon" v-if="onchainStockSortField === 'volume24h'">{{ onchainStockSortDir === 'desc' ? '▼' : '▲' }}</span>
                 </th>
-                <th class="th-flow text-right" @click="toggleOnchainSort('netFlow')" style="cursor:pointer;" title="点击按净资金流向排序">
+                <th class="th-flow text-center" @click="toggleOnchainSort('netFlow')" style="cursor:pointer;" title="点击按净资金流向排序">
                   <span>净资金流向 (买/卖盘比)</span>
                   <span class="sort-icon" v-if="onchainStockSortField === 'netFlow'">{{ onchainStockSortDir === 'desc' ? '▼' : '▲' }}</span>
                 </th>
@@ -1623,16 +1621,19 @@
                     </div>
                   </div>
                 </td>
-                <td class="col-flow text-right font-mono">
+                <td class="col-flow text-center font-mono">
                   <div class="flow-cell">
                     <strong class="netflow-val" :class="s.netFlow >= 0 ? 'text-pos' : 'text-neg'">
-                      {{ (s.netFlow >= 0 ? '+' : '') + '$' + formatOnchainUsd(s.netFlow) }}
+                      {{ formatOnchainFlowUsd(s.netFlow) }}
                     </strong>
                     <div class="mini-flow-bar">
                       <div class="flow-buy" :style="{ width: s.buyRatio + '%' }" :title="'主动买入: ' + s.buyRatio + '%'"></div>
                       <div class="flow-sell" :style="{ width: s.sellRatio + '%' }" :title="'主动卖出: ' + s.sellRatio + '%'"></div>
                     </div>
-                    <span class="flow-ratio-sub muted small">{{ s.buyRatio }}% 买 / {{ s.sellRatio }}% 卖</span>
+                    <div class="flow-ratio-sub">
+                      <span class="flow-ratio-buy text-pos">{{ s.buyRatio }}% 买</span>
+                      <span class="flow-ratio-sell text-neg">{{ s.sellRatio }}% 卖</span>
+                    </div>
                   </div>
                 </td>
                 <td class="col-prem text-right font-mono">
@@ -1812,11 +1813,20 @@
                 <table class="whale-positions-table">
                   <thead>
                     <tr>
-                      <th class="th-coin">合约标的</th>
+                      <th class="th-coin sortable-th" :class="{ 'is-sorted': isWhaleSortedBy(w.address, 'coin') }" @click.stop="toggleWhalePositionSort('coin', w.address)" title="点击按合约标的字母排序" role="button" tabindex="0">
+                        <span>合约标的</span>
+                        <span class="sort-indicator" :class="{ 'is-active': isWhaleSortedBy(w.address, 'coin') }">{{ getWhaleSortIcon(w.address, 'coin') }}</span>
+                      </th>
                       <th class="th-dir">方向 / 杠杆</th>
-                      <th class="th-val text-right">仓位规模 / 数量</th>
+                      <th class="th-val text-right sortable-th" :class="{ 'is-sorted': isWhaleSortedBy(w.address, 'val') }" @click.stop="toggleWhalePositionSort('val', w.address)" :title="'点击按仓位规模 ' + (isWhaleSortedBy(w.address, 'val') && getWhaleSortDir(w.address, 'val') === 'desc' ? '升序排序 (小到大)' : '降序排序 (大到小)')" role="button" tabindex="0">
+                        <span>仓位规模 / 数量</span>
+                        <span class="sort-indicator" :class="{ 'is-active': isWhaleSortedBy(w.address, 'val') }">{{ getWhaleSortIcon(w.address, 'val') }}</span>
+                      </th>
                       <th class="th-px text-right">开仓均价 / 现价</th>
-                      <th class="th-pnl text-right">未实现盈亏</th>
+                      <th class="th-pnl text-right sortable-th" :class="{ 'is-sorted': isWhaleSortedBy(w.address, 'pnl') }" @click.stop="toggleWhalePositionSort('pnl', w.address)" :title="'点击按未实现盈亏 ' + (isWhaleSortedBy(w.address, 'pnl') && getWhaleSortDir(w.address, 'pnl') === 'desc' ? '升序排序 (亏到盈)' : '降序排序 (盈到亏)')" role="button" tabindex="0">
+                        <span>未实现盈亏</span>
+                        <span class="sort-indicator" :class="{ 'is-active': isWhaleSortedBy(w.address, 'pnl') }">{{ getWhaleSortIcon(w.address, 'pnl') }}</span>
+                      </th>
                       <th class="th-liq text-right">强平价 / 安全垫</th>
                       <th class="th-jump text-center">走势</th>
                     </tr>
@@ -3680,12 +3690,12 @@
         </div>
       </section>
 
-      <!-- 模块 1.2: 美股核心热力图配色方案 (经典绿红 / 荧光极光 / 赛博霓虹) -->
+      <!-- 模块 1.2: 美股核心热力图配色方案 (经典绿红 / 荧光极光 / 赛博霓虹 / 极光蓝紫 / 深邃蓝紫) -->
       <section class="pref-section">
         <div class="pref-section-header">
           <div class="pref-section-title-wrap">
             <h4 class="pref-section-title">热力图配色方案</h4>
-            <span class="pref-badge">图一 / 图二 / 图三 规范</span>
+            <span class="pref-badge">5 大主题配色</span>
           </div>
           <span class="pref-section-desc">支持实时切换并持久化保存，美股核心市场热力图与跌涨梯度色板独立配置</span>
         </div>
@@ -3799,6 +3809,80 @@
             <div class="scheme-palette-badges">
               <span class="color-badge"><i style="background: #00D2FF"></i> 上涨 #00D2FF</span>
               <span class="color-badge"><i style="background: #FF3377"></i> 下跌 #FF3377</span>
+            </div>
+          </div>
+
+          <!-- 方案 4: Demo同款 极光蓝紫 (蔚蓝 / 紫罗兰) -->
+          <div
+            class="kline-scheme-card heatmap-scheme-card"
+            :class="{ active: heatmapScheme === 'bluepurple' }"
+            @click="setHeatmapScheme('bluepurple')"
+            role="radio"
+            :aria-checked="heatmapScheme === 'bluepurple'"
+            tabindex="0"
+            @keydown.enter.space.prevent="setHeatmapScheme('bluepurple')"
+          >
+            <div class="scheme-radio-indicator">
+              <span class="radio-circle"></span>
+              <span class="scheme-order-tag highlight-bluepurple">Demo同款 · 蓝紫</span>
+            </div>
+            <div class="scheme-info">
+              <div class="scheme-title">极光蓝紫 (Demo 主图同款)</div>
+              <div class="scheme-desc">Demo 演示主图同款蔚蓝与紫罗兰，期权多空经典质感，优雅科技风</div>
+            </div>
+            <!-- 迷你热力图区块示意 -->
+            <div class="heatmap-mini-preview preview-bluepurple">
+              <div class="mini-hm-grid">
+                <div class="mini-hm-col">
+                  <div class="mini-hm-block" style="background: #60A3FB; flex: 1.2;"><span class="hm-mini-symbol">NVDA</span><span class="hm-mini-val">+2.4%</span></div>
+                  <div class="mini-hm-block" style="background: #3B82F6; flex: 0.8;"><span class="hm-mini-symbol">AAPL</span><span class="hm-mini-val">+3.6%</span></div>
+                </div>
+                <div class="mini-hm-col">
+                  <div class="mini-hm-block" style="background: #996EE2; flex: 1;"><span class="hm-mini-symbol">MSFT</span><span class="hm-mini-val">-1.8%</span></div>
+                  <div class="mini-hm-block" style="background: #6D28D9; flex: 1;"><span class="hm-mini-symbol">TSLA</span><span class="hm-mini-val">-4.2%</span></div>
+                </div>
+              </div>
+            </div>
+            <div class="scheme-palette-badges">
+              <span class="color-badge"><i style="background: #60A3FB"></i> 上涨 #60A3FB</span>
+              <span class="color-badge"><i style="background: #996EE2"></i> 下跌 #996EE2</span>
+            </div>
+          </div>
+
+          <!-- 方案 5: Demo期权中心 深邃蓝紫 (宝蓝 / 紫罗兰) -->
+          <div
+            class="kline-scheme-card heatmap-scheme-card"
+            :class="{ active: heatmapScheme === 'deepbluepurple' }"
+            @click="setHeatmapScheme('deepbluepurple')"
+            role="radio"
+            :aria-checked="heatmapScheme === 'deepbluepurple'"
+            tabindex="0"
+            @keydown.enter.space.prevent="setHeatmapScheme('deepbluepurple')"
+          >
+            <div class="scheme-radio-indicator">
+              <span class="radio-circle"></span>
+              <span class="scheme-order-tag highlight-deepbluepurple">期权中心 · 深邃</span>
+            </div>
+            <div class="scheme-info">
+              <div class="scheme-title">深邃蓝紫 (Demo 期权中心同款)</div>
+              <div class="scheme-desc">Demo 原型期权持仓中心同款深邃宝蓝与高贵紫罗兰，色彩浓郁饱和，多空层次分明</div>
+            </div>
+            <!-- 迷你热力图区块示意 -->
+            <div class="heatmap-mini-preview preview-deepbluepurple">
+              <div class="mini-hm-grid">
+                <div class="mini-hm-col">
+                  <div class="mini-hm-block" style="background: #2563EB; flex: 1.2;"><span class="hm-mini-symbol">NVDA</span><span class="hm-mini-val">+2.4%</span></div>
+                  <div class="mini-hm-block" style="background: #1D4ED8; flex: 0.8;"><span class="hm-mini-symbol">AAPL</span><span class="hm-mini-val">+3.6%</span></div>
+                </div>
+                <div class="mini-hm-col">
+                  <div class="mini-hm-block" style="background: #7C3AED; flex: 1;"><span class="hm-mini-symbol">MSFT</span><span class="hm-mini-val">-1.8%</span></div>
+                  <div class="mini-hm-block" style="background: #5B21B6; flex: 1;"><span class="hm-mini-symbol">TSLA</span><span class="hm-mini-val">-4.2%</span></div>
+                </div>
+              </div>
+            </div>
+            <div class="scheme-palette-badges">
+              <span class="color-badge"><i style="background: #2563EB"></i> 上涨 #2563EB</span>
+              <span class="color-badge"><i style="background: #7C3AED"></i> 下跌 #7C3AED</span>
             </div>
           </div>
         </div>

@@ -4937,11 +4937,26 @@ td { color: var(--text-primary); }
   font-size: 9.5px;
 }
 
+.onchain-stocks-table th.th-flow,
+.onchain-stocks-table td.col-flow {
+  text-align: center;
+}
+
 /* Price Cell */
-.price-cell, .vol-cell, .flow-cell, .prem-cell, .oi-cell {
+.price-cell, .vol-cell, .prem-cell, .oi-cell {
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+
+.flow-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 3px;
+  width: 100%;
 }
 
 .price-val {
@@ -4971,33 +4986,57 @@ td { color: var(--text-primary); }
   border-radius: 2px;
 }
 
-/* Mini Flow Bar */
+/* Mini Flow Bar & Ratio */
 .netflow-val {
-  font-size: 12.5px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
 }
 
 .mini-flow-bar {
   display: flex;
-  width: 100%;
-  max-width: 120px;
-  height: 4px;
-  border-radius: 2px;
+  width: 130px;
+  max-width: 100%;
+  height: 5px;
+  border-radius: 999px;
   overflow: hidden;
-  margin-left: auto;
+  margin: 1px auto 0 auto;
 }
 
 .flow-buy {
   background: #10b981;
   height: 100%;
+  transition: width 0.3s ease;
 }
 
 .flow-sell {
   background: #f43f5e;
   height: 100%;
+  transition: width 0.3s ease;
 }
 
 .flow-ratio-sub {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 130px;
+  max-width: 100%;
+  margin: 0 auto;
   font-size: 9.5px;
+  line-height: 1.2;
+}
+
+.flow-ratio-buy {
+  color: #10b981;
+  font-weight: 600;
+  text-align: left;
+}
+
+.flow-ratio-sell {
+  color: #f43f5e;
+  font-weight: 600;
+  text-align: right;
 }
 
 /* Premium Pill */
@@ -5621,6 +5660,36 @@ td { color: var(--text-primary); }
   font-weight: 600;
   border-bottom: 1px solid var(--border-subtle, var(--border));
   white-space: nowrap;
+}
+
+.whale-positions-table th.sortable-th {
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.whale-positions-table th.sortable-th:hover {
+  color: var(--text-primary);
+  background-color: var(--surface-hover, rgba(127, 127, 127, 0.08));
+}
+
+.whale-positions-table th.sortable-th.is-sorted {
+  color: var(--apple-blue, #007aff);
+}
+
+.whale-positions-table .sort-indicator {
+  display: inline-block;
+  margin-left: 3px;
+  font-size: 10px;
+  opacity: 0.45;
+  vertical-align: baseline;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.whale-positions-table .sort-indicator.is-active {
+  opacity: 1;
+  color: var(--apple-blue, #007aff);
+  font-weight: 700;
 }
 
 .whale-positions-table td {
@@ -12440,6 +12509,8 @@ body[data-theme="light"] .hero-catalyst-block {
 
 .text-pos { color: var(--semantic-up); }
 .text-neg { color: var(--semantic-down); }
+.text-right { text-align: right; }
+.text-center { text-align: center; }
 
 .temp-bar-track {
   width: 38px;

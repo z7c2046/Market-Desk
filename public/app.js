@@ -234,6 +234,30 @@ const HEATMAP_SCHEMES = {
     upLabel: '上涨 #00D2FF',
     downLabel: '下跌 #FF3377',
     title: '图三：赛博霓虹 (青蓝 #00D2FF / 炫彩品红 #FF3377)'
+  },
+  bluepurple: {
+    id: 'bluepurple',
+    name: 'Demo极光蓝紫 (Demo主图)',
+    shortName: '极光蓝紫',
+    tag: 'Demo同款 · 蓝紫',
+    description: 'Demo 演示原型主图同款电光蔚蓝与紫罗兰，期权多空经典质感，优雅科技风',
+    up: '#60A3FB',
+    down: '#996EE2',
+    upLabel: '上涨 #60A3FB',
+    downLabel: '下跌 #996EE2',
+    title: 'Demo同款：极光蓝紫 (蔚蓝 #60A3FB / 紫罗兰 #996EE2)'
+  },
+  deepbluepurple: {
+    id: 'deepbluepurple',
+    name: '深邃蓝紫 (Demo期权中心)',
+    shortName: '深邃蓝紫',
+    tag: '期权中心 · 深邃',
+    description: 'Demo 演示原型期权持仓中心同款深邃宝蓝与高贵紫罗兰，色彩浓郁饱和，多空层次分明',
+    up: '#2563EB',
+    down: '#7C3AED',
+    upLabel: '上涨 #2563EB',
+    downLabel: '下跌 #7C3AED',
+    title: 'Demo期权中心深邃蓝紫 (宝蓝 #2563EB / 紫罗兰 #7C3AED)'
   }
 };
 const heatmapSchemeOptions = Object.values(HEATMAP_SCHEMES);
@@ -251,7 +275,7 @@ createApp({ setup() {
   const savedKlineScheme = readStorage('market-desk-kline-scheme', 'classic');
   const klineScheme = ref(['classic', 'neon', 'cyberpunk', 'bluepurple', 'deepbluepurple'].includes(savedKlineScheme) ? savedKlineScheme : 'classic');
   const savedHeatmapScheme = readStorage('market-desk-heatmap-scheme', 'classic');
-  const heatmapScheme = ref(['classic', 'neon', 'cyberpunk'].includes(savedHeatmapScheme) ? savedHeatmapScheme : 'classic');
+  const heatmapScheme = ref(['classic', 'neon', 'cyberpunk', 'bluepurple', 'deepbluepurple'].includes(savedHeatmapScheme) ? savedHeatmapScheme : 'classic');
   const savedKlineGrid = readStorage('market-desk-kline-grid', 'dashed');
   const klineGridStyle = ref(['dashed', 'solid', 'none'].includes(savedKlineGrid) ? savedKlineGrid : 'dashed');
   const showPreferencesModal = ref(false);
@@ -263,6 +287,12 @@ createApp({ setup() {
     }
     if (heatmapScheme.value === 'cyberpunk') {
       return 'linear-gradient(90deg, #D6004F 0%, #FF3377 28%, #6B7280 50%, #00AEE6 72%, #00D2FF 100%)';
+    }
+    if (heatmapScheme.value === 'bluepurple') {
+      return 'linear-gradient(90deg, #6D28D9 0%, #996EE2 28%, #6B7280 50%, #60A3FB 72%, #1D4ED8 100%)';
+    }
+    if (heatmapScheme.value === 'deepbluepurple') {
+      return 'linear-gradient(90deg, #5B21B6 0%, #7C3AED 28%, #6B7280 50%, #2563EB 72%, #1D4ED8 100%)';
     }
     return 'linear-gradient(90deg, #E11D48 0%, #F43F5E 28%, #6B7280 50%, #10B981 72%, #059669 100%)';
   });
@@ -342,8 +372,6 @@ createApp({ setup() {
     }
 
     const item = MA_CONFIGS.find(m => m.key === key);
-    const label = item ? item.label : key.toUpperCase();
-    toast.value = `已${isVisible ? '开启' : '关闭'} ${label} 指标`;
   }
 
   function setAllMaVisibility(visible) {
@@ -369,7 +397,6 @@ createApp({ setup() {
         }
       }
     }
-    toast.value = `已${val ? '开启全部均线与指标' : '关闭全部均线与指标'}`;
   }
 
   const showInflectionSignals = ref(readStorage('market-desk-inflection-signals', false));
@@ -405,8 +432,6 @@ createApp({ setup() {
           }
         }
       }
-
-      toast.value = '已开启拐点猎手算法 (已自动关闭其他常规均线，绘制 DEMA 14/30 快慢线)';
     } else {
       // 关闭拐点猎手算法：恢复关闭前的均线状态
       const toRestore = savedMaVisibility || DEFAULT_MA_VISIBILITY;
@@ -432,7 +457,6 @@ createApp({ setup() {
           }
         }
       }
-      toast.value = '已关闭拐点信号与快慢线';
     }
 
     applyInflectionMarkers();
@@ -573,7 +597,6 @@ createApp({ setup() {
     if (KLINE_SCHEMES[scheme]) {
       klineScheme.value = scheme;
       persist('market-desk-kline-scheme', scheme);
-      toast.value = `已切换 K 线配色为「${KLINE_SCHEMES[scheme].name}」`;
       render();
     }
   }
@@ -586,7 +609,6 @@ createApp({ setup() {
     if (HEATMAP_SCHEMES[scheme]) {
       heatmapScheme.value = scheme;
       persist('market-desk-heatmap-scheme', scheme);
-      toast.value = `已切换热力图配色为「${HEATMAP_SCHEMES[scheme].name}」`;
       if (page.value === 'overview') {
         renderHeatmap();
       }
@@ -954,8 +976,6 @@ createApp({ setup() {
     if (nav.some(n => n.id === pageId)) {
       defaultPage.value = pageId;
       persist(DEFAULT_PAGE_STORAGE_KEY, pageId);
-      const target = defaultPageOptions.find(p => p.id === pageId);
-      toast.value = `已设置默认打开页面为「${target ? target.label : pageId}」`;
     }
   }
 
@@ -1206,15 +1226,81 @@ createApp({ setup() {
       let positions = w.positions || [];
       if (filter === 'long') positions = positions.filter(p => p.isLong);
       else if (filter === 'short') positions = positions.filter(p => !p.isLong);
-      if (q) {
-        positions = [...positions].sort((a, b) => (b.coin.toUpperCase().includes(q) ? 1 : 0) - (a.coin.toUpperCase().includes(q) ? 1 : 0));
-      }
+
+      const sortSpec = getWhalePositionSort(w.address);
+      const sortF = sortSpec?.field || 'val';
+      const sortD = sortSpec?.dir || 'desc';
+
+      positions = [...positions].sort((a, b) => {
+        if (q) {
+          const aMatch = a.coin.toUpperCase().includes(q) ? 1 : 0;
+          const bMatch = b.coin.toUpperCase().includes(q) ? 1 : 0;
+          if (aMatch !== bMatch) return bMatch - aMatch;
+        }
+
+        let diff = 0;
+        if (sortF === 'val') {
+          diff = (Number(a.positionValue) || 0) - (Number(b.positionValue) || 0);
+        } else if (sortF === 'pnl') {
+          diff = (Number(a.unrealizedPnl) || 0) - (Number(b.unrealizedPnl) || 0);
+        } else if (sortF === 'coin') {
+          diff = a.coin.localeCompare(b.coin);
+        }
+
+        if (diff !== 0) {
+          return sortD === 'asc' ? diff : -diff;
+        }
+
+        return (Number(b.positionValue) || 0) - (Number(a.positionValue) || 0);
+      });
+
       return {
         ...w,
         displayPositions: positions
       };
     });
   });
+
+  const whaleSortStates = reactive({}); // address -> { field: 'val'|'pnl'|'coin', dir: 'desc'|'asc' }
+  const whaleGlobalSort = reactive({ field: 'val', dir: 'desc' });
+
+  function getWhalePositionSort(addr) {
+    if (addr && whaleSortStates[addr]) {
+      return whaleSortStates[addr];
+    }
+    return whaleGlobalSort;
+  }
+
+  function isWhaleSortedBy(addr, field) {
+    const s = getWhalePositionSort(addr);
+    return s && s.field === field;
+  }
+
+  function getWhaleSortDir(addr, field) {
+    const s = getWhalePositionSort(addr);
+    return s && s.field === field ? s.dir : 'desc';
+  }
+
+  function getWhaleSortIcon(addr, field) {
+    if (!isWhaleSortedBy(addr, field)) return '⇅';
+    return getWhaleSortDir(addr, field) === 'asc' ? '↑' : '↓';
+  }
+
+  function toggleWhalePositionSort(field, addr) {
+    const current = getWhalePositionSort(addr);
+    let nextDir = 'desc';
+    if (current && current.field === field) {
+      nextDir = current.dir === 'desc' ? 'asc' : 'desc';
+    } else {
+      nextDir = field === 'coin' ? 'asc' : 'desc';
+    }
+
+    if (addr) {
+      whaleSortStates[addr] = { field, dir: nextDir };
+    }
+    whaleGlobalSort.field = field;
+    whaleGlobalSort.dir = nextDir;
+  }
 
   const whaleActivityLogs = computed(() => {
     const logs = cryptoWhaleData.value?.activityLogs || [];
@@ -1224,12 +1310,12 @@ createApp({ setup() {
   });
 
   function formatWhaleUsd(val) {
-    if (val == null || isNaN(val)) return '$0';
+    if (val == null || isNaN(val)) return '0';
     const num = Math.abs(Number(val));
-    const sign = Number(val) < 0 ? '-' : '';
-    if (num >= 1e6) return `${sign}$${(num / 1e6).toFixed(2)}M`;
-    if (num >= 1e3) return `${sign}$${(num / 1e3).toFixed(1)}K`;
-    return `${sign}$${num.toFixed(0)}`;
+    if (num >= 1e9) return `${(num / 1e9).toFixed(2)}B`;
+    if (num >= 1e6) return `${(num / 1e6).toFixed(2)}M`;
+    if (num >= 1e3) return `${(num / 1e3).toFixed(1)}K`;
+    return `${num.toFixed(0)}`;
   }
 
   function formatWhaleCoinSize(size, coin) {
@@ -1254,13 +1340,10 @@ createApp({ setup() {
         await navigator.clipboard.writeText(addr);
       }
       copiedWhaleAddress.value = addr;
-      toast.value = `已复制巨鲸钱包地址: ${addr.slice(0, 6)}...${addr.slice(-4)}`;
       setTimeout(() => {
         if (copiedWhaleAddress.value === addr) copiedWhaleAddress.value = '';
       }, 2500);
-    } catch {
-      toast.value = `钱包地址: ${addr}`;
-    }
+    } catch {}
   }
 
   async function loadCryptoWhales({ force = false } = {}) {
@@ -1290,7 +1373,36 @@ createApp({ setup() {
   // ==========================================
   // 链上美股资金流向 (On-Chain US Equities Flow Top 10)
   // ==========================================
-  const onchainStocksData = ref(null);
+  const DEFAULT_ONCHAIN_STOCKS_PAYLOAD = {
+    ok: true,
+    provider: 'On-Chain DEX & RWA Aggregator',
+    isLive: true,
+    aggregate: {
+      totalTrackedCount: 10,
+      totalVolume24h: 302500000,
+      totalNetFlow24h: 61256160,
+      overallBuyRatio: 60.1,
+      overallSellRatio: 39.9,
+      overallSentiment: '多头净流入 BULLISH INFLOW',
+      sentimentClass: 'bullish',
+      topInflowSymbol: 'NVDA (+$18.4M)',
+      maxPremiumSymbol: 'MSTR (+1.19%)',
+      activeTradersCount: 14850
+    },
+    top10: [
+      { rank: 1, symbol: 'NVDA', name: '英伟达', enName: 'NVIDIA Corporation', protocol: 'Hyperliquid Perp / Backed', network: 'Hyperliquid L1 / Arbitrum', price: 148.50, changePercent: 0.47, tradFiClose: 147.80, premiumPct: 0.47, volume24h: 64820000, inflow24h: 41614440, outflow24h: 23205560, netFlow: 18408880, buyRatio: 64.2, sellRatio: 35.8, openInterest: 38500000, turnoverRate: 16.8, chartSymbol: 'NVDA' },
+      { rank: 2, symbol: 'TSLA', name: '特斯拉', enName: 'Tesla, Inc.', protocol: 'Hyperliquid Perp / Synthetix', network: 'Hyperliquid L1 / Optimism', price: 251.60, changePercent: 1.13, tradFiClose: 248.80, premiumPct: 1.13, volume24h: 52310000, inflow24h: 32589130, outflow24h: 19720870, netFlow: 12868260, buyRatio: 62.3, sellRatio: 37.7, openInterest: 31200000, turnoverRate: 15.4, chartSymbol: 'TSLA' },
+      { rank: 3, symbol: 'MSTR', name: '微策略', enName: 'MicroStrategy Inc.', protocol: 'Hyperliquid Perp / Backed', network: 'Hyperliquid L1 / Base', price: 238.20, changePercent: 1.19, tradFiClose: 235.40, premiumPct: 1.19, volume24h: 41650000, inflow24h: 27947150, outflow24h: 13702850, netFlow: 14244300, buyRatio: 67.1, sellRatio: 32.9, openInterest: 26800000, turnoverRate: 18.2, chartSymbol: 'MSTR' },
+      { rank: 4, symbol: 'COIN', name: 'Coinbase', enName: 'Coinbase Global, Inc.', protocol: 'Hyperliquid Perp / Backed', network: 'Hyperliquid L1 / Base', price: 213.80, changePercent: 0.85, tradFiClose: 212.00, premiumPct: 0.85, volume24h: 33120000, inflow24h: 19805760, outflow24h: 13314240, netFlow: 6491520, buyRatio: 59.8, sellRatio: 40.2, openInterest: 19400000, turnoverRate: 13.9, chartSymbol: 'COIN' },
+      { rank: 5, symbol: 'AAPL', name: '苹果', enName: 'Apple Inc.', protocol: 'Backed Finance bAAPL', network: 'Ethereum / Base', price: 222.40, changePercent: -0.22, tradFiClose: 222.90, premiumPct: -0.22, volume24h: 24750000, inflow24h: 11335500, outflow24h: 13414500, netFlow: -2079000, buyRatio: 45.8, sellRatio: 54.2, openInterest: 15600000, turnoverRate: 8.5, chartSymbol: 'AAPL' },
+      { rank: 6, symbol: 'SPY', name: '标普500 ETF', enName: 'SPDR S&P 500 ETF Trust', protocol: 'Hyperliquid Perp / Synthetix', network: 'Hyperliquid L1 / Ethereum', price: 579.80, changePercent: 0.22, tradFiClose: 578.50, premiumPct: 0.22, volume24h: 22400000, inflow24h: 13104000, outflow24h: 9296000, netFlow: 3808000, buyRatio: 58.5, sellRatio: 41.5, openInterest: 28900000, turnoverRate: 6.2, chartSymbol: 'SPY' },
+      { rank: 7, symbol: 'QQQ', name: '纳指100 ETF', enName: 'Invesco QQQ Trust', protocol: 'Hyperliquid Perp / Synthetix', network: 'Hyperliquid L1 / Ethereum', price: 489.60, changePercent: 0.29, tradFiClose: 488.20, premiumPct: 0.29, volume24h: 19850000, inflow24h: 12148200, outflow24h: 7701800, netFlow: 4446400, buyRatio: 61.2, sellRatio: 38.8, openInterest: 24100000, turnoverRate: 7.1, chartSymbol: 'QQQ' },
+      { rank: 8, symbol: 'AMZN', name: '亚马逊', enName: 'Amazon.com, Inc.', protocol: 'Backed Finance bAMZN', network: 'Base / Arbitrum', price: 199.10, changePercent: 0.35, tradFiClose: 198.40, premiumPct: 0.35, volume24h: 16500000, inflow24h: 9553500, outflow24h: 6946500, netFlow: 2607000, buyRatio: 57.9, sellRatio: 42.1, openInterest: 12200000, turnoverRate: 9.3, chartSymbol: 'AMZN' },
+      { rank: 9, symbol: 'MSFT', name: '微软', enName: 'Microsoft Corporation', protocol: 'Backed Finance bMSFT', network: 'Ethereum / Base', price: 415.90, changePercent: -0.22, tradFiClose: 416.80, premiumPct: -0.22, volume24h: 14200000, inflow24h: 6375800, outflow24h: 7824200, netFlow: -1448400, buyRatio: 44.9, sellRatio: 55.1, openInterest: 11500000, turnoverRate: 7.8, chartSymbol: 'MSFT' },
+      { rank: 10, symbol: 'META', name: 'Meta', enName: 'Meta Platforms, Inc.', protocol: 'Hyperliquid Perp / Backed', network: 'Hyperliquid L1 / Solana', price: 566.50, changePercent: 0.23, tradFiClose: 565.20, premiumPct: 0.23, volume24h: 12900000, inflow24h: 7404600, outflow24h: 5495400, netFlow: 1909200, buyRatio: 57.4, sellRatio: 42.6, openInterest: 10800000, turnoverRate: 8.9, chartSymbol: 'META' }
+    ]
+  };
+  const onchainStocksData = ref(DEFAULT_ONCHAIN_STOCKS_PAYLOAD);
   const onchainStocksLoading = ref(false);
   const onchainStocksError = ref('');
   const onchainStockSearch = ref('');
@@ -1357,6 +1469,24 @@ createApp({ setup() {
     return Math.round(num).toLocaleString();
   }
 
+  function formatOnchainFlowUsd(val) {
+    if (val == null || isNaN(val)) return '$0';
+    const num = Number(val);
+    const sign = num > 0 ? '+' : (num < 0 ? '-' : '');
+    const abs = Math.abs(num);
+    let str = '';
+    if (abs >= 1e9) {
+      str = (abs / 1e9).toFixed(2) + 'B';
+    } else if (abs >= 1e6) {
+      str = (abs / 1e6).toFixed(2) + 'M';
+    } else if (abs >= 1e3) {
+      str = (abs / 1e3).toFixed(1) + 'K';
+    } else {
+      str = Math.round(abs).toLocaleString();
+    }
+    return `${sign}$${str}`;
+  }
+
   async function loadOnchainStocks({ force = false } = {}) {
     try {
       onchainStocksLoading.value = true;
@@ -1370,9 +1500,15 @@ createApp({ setup() {
         }
       } else {
         onchainStocksError.value = `HTTP ${res.status}`;
+        if (!onchainStocksData.value) {
+          onchainStocksData.value = DEFAULT_ONCHAIN_STOCKS_PAYLOAD;
+        }
       }
     } catch (err) {
       onchainStocksError.value = err.message || '网络连接异常';
+      if (!onchainStocksData.value) {
+        onchainStocksData.value = DEFAULT_ONCHAIN_STOCKS_PAYLOAD;
+      }
     } finally {
       onchainStocksLoading.value = false;
     }
@@ -1417,7 +1553,6 @@ createApp({ setup() {
 
   function deleteStockDirect(sym) {
     removeWatch(sym);
-    toast.value = `已移出自选：${sym}`;
   }
 
   function cycleSessionMode() {
@@ -2284,10 +2419,8 @@ createApp({ setup() {
     const idx = list.indexOf(item.url);
     if (idx > -1) {
       list.splice(idx, 1);
-      toast.value = '已从收藏夹移除';
     } else {
       list.unshift(item.url);
-      toast.value = '已保存至我的收藏快讯';
     }
     savedNewsUrls.value = list;
     try {
@@ -4214,8 +4347,6 @@ createApp({ setup() {
       sidebarSortField.value = 'manual';
       persist('market-desk-sidebar-sort-field', 'manual');
       syncWatchlistData();
-      const grp = watchlistMgr.getGroup(groupId);
-      toast.value = `已将「${grp?.name || '分组'}」上移`;
     }
   }
 
@@ -4225,8 +4356,6 @@ createApp({ setup() {
       sidebarSortField.value = 'manual';
       persist('market-desk-sidebar-sort-field', 'manual');
       syncWatchlistData();
-      const grp = watchlistMgr.getGroup(groupId);
-      toast.value = `已将「${grp?.name || '分组'}」下移`;
     }
   }
 
@@ -4297,11 +4426,8 @@ createApp({ setup() {
 
     if (sourceGroupId === targetGroupId) {
       watchlistMgr.moveSymbolWithinGroup(targetGroupId, srcSym, targetSymbol, pos);
-      toast.value = `已调整 ${srcSym} 组内排序`;
     } else {
       watchlistMgr.moveSymbolBetweenGroups(sourceGroupId, targetGroupId, srcSym, targetSymbol, pos);
-      const toGrp = watchlistMgr.getGroup(targetGroupId);
-      toast.value = `已将 ${srcSym} 移入「${toGrp?.name || '新分组'}」`;
     }
 
     // Switch sort mode to manual so the user's custom ordering is immediately visible
@@ -4372,8 +4498,6 @@ createApp({ setup() {
           sidebarSortField.value = 'manual';
           persist('market-desk-sidebar-sort-field', 'manual');
           syncWatchlistData();
-          const grp = watchlistMgr.getGroup(srcGroupId);
-          toast.value = `已调整分组「${grp?.name || ''}」排序`;
         }
       }
       onGroupDragEnd();
@@ -4387,12 +4511,9 @@ createApp({ setup() {
       const grp = watchlistMgr.getGroup(groupId);
       if (grp && grp.symbolIds.length) {
         watchlistMgr.moveSymbolWithinGroup(groupId, srcSym, grp.symbolIds[0], 'before');
-        toast.value = `已置顶 ${srcSym}`;
       }
     } else {
       watchlistMgr.moveSymbolBetweenGroups(sourceGroupId, groupId, srcSym, null, 'after');
-      const toGrp = watchlistMgr.getGroup(groupId);
-      toast.value = `已将 ${srcSym} 移入「${toGrp?.name || '新分组'}」`;
     }
 
     sidebarSortField.value = 'manual';
@@ -4415,13 +4536,10 @@ createApp({ setup() {
         const lastSym = grp.symbolIds[grp.symbolIds.length - 1];
         if (lastSym !== srcSym) {
           watchlistMgr.moveSymbolWithinGroup(groupId, srcSym, lastSym, 'after');
-          toast.value = `已移至组末 ${srcSym}`;
         }
       }
     } else {
       watchlistMgr.moveSymbolBetweenGroups(sourceGroupId, groupId, srcSym, null, 'after');
-      const toGrp = watchlistMgr.getGroup(groupId);
-      toast.value = `已将 ${srcSym} 移入「${toGrp?.name || '新分组'}」`;
     }
     sidebarSortField.value = 'manual';
     persist('market-desk-sidebar-sort-field', 'manual');
@@ -4439,8 +4557,6 @@ createApp({ setup() {
     if (!draggedStock.value) return;
     const { symbol: srcSym, sourceGroupId } = draggedStock.value;
     watchlistMgr.moveSymbolBetweenGroups(sourceGroupId, groupId, srcSym, null, 'after');
-    const toGrp = watchlistMgr.getGroup(groupId);
-    toast.value = `已将 ${srcSym} 移入「${toGrp?.name || '新分组'}」`;
     sidebarSortField.value = 'manual';
     persist('market-desk-sidebar-sort-field', 'manual');
     if (groupSortStates[groupId] && groupSortStates[groupId] !== 'default') {
@@ -4650,7 +4766,6 @@ createApp({ setup() {
       return;
     }
     syncWatchlistData();
-    toast.value = `${res.symbol} 已加入自选`;
   }
 
   function removeWatch(s, groupId = null) {
@@ -4681,7 +4796,6 @@ createApp({ setup() {
       // 2nd click: execute delete
       removeWatch(sym);
       pendingDeleteSymbol.value = null;
-      toast.value = `已移出自选：${sym}`;
     } else {
       // 1st click: stage for deletion with blur + red cross
       pendingDeleteSymbol.value = sym;
@@ -4696,7 +4810,6 @@ createApp({ setup() {
     }
     syncWatchlistData();
     newGroupName.value = '';
-    toast.value = `分组“${res.group.name}”已创建`;
   }
 
   function handleDeleteGroup(groupId) {
@@ -4713,13 +4826,6 @@ createApp({ setup() {
       return;
     }
     syncWatchlistData();
-    undoAction.value = () => {
-      watchlistMgr.undoDeleteGroup();
-      syncWatchlistData();
-      toast.value = `已撤销删除“${groupName}”`;
-      undoAction.value = null;
-    };
-    toast.value = `分组“${groupName}”已删除，${res.movedSymbolsCount} 支标的已直接转移至“未分组”`;
   }
 
   function handleAddStockModalSubmit() {
@@ -4745,7 +4851,6 @@ createApp({ setup() {
       return;
     }
     syncWatchlistData();
-    toast.value = `已成功恢复 ${res.groupCount} 个分组与 ${res.symbolCount} 支自选股`;
     showBackupModal.value = false;
   }
 
@@ -5137,6 +5242,26 @@ createApp({ setup() {
       if (change < 1.5) return { bg: '#00AEE6', text: '#FFFFFF', border };
       if (change < 3.0) return { bg: '#0095C4', text: '#FFFFFF', border };
       return { bg: '#007AA3', text: '#FFFFFF', border };
+    }
+
+    // 方案 4: 极光蓝紫 (蔚蓝 #60A3FB / 紫罗兰 #996EE2)
+    if (scheme === 'bluepurple') {
+      if (change <= -3.0) return { bg: '#6D28D9', text: '#FFFFFF', border };
+      if (change <= -1.5) return { bg: '#8B5CF6', text: '#FFFFFF', border };
+      if (change < 0) return { bg: '#996EE2', text: '#FFFFFF', border };
+      if (change < 1.5) return { bg: '#60A3FB', text: '#FFFFFF', border };
+      if (change < 3.0) return { bg: '#3B82F6', text: '#FFFFFF', border };
+      return { bg: '#1D4ED8', text: '#FFFFFF', border };
+    }
+
+    // 方案 5: 深邃蓝紫 (宝蓝 #2563EB / 紫罗兰 #7C3AED)
+    if (scheme === 'deepbluepurple') {
+      if (change <= -3.0) return { bg: '#5B21B6', text: '#FFFFFF', border };
+      if (change <= -1.5) return { bg: '#6D28D9', text: '#FFFFFF', border };
+      if (change < 0) return { bg: '#7C3AED', text: '#FFFFFF', border };
+      if (change < 1.5) return { bg: '#3B82F6', text: '#FFFFFF', border };
+      if (change < 3.0) return { bg: '#2563EB', text: '#FFFFFF', border };
+      return { bg: '#1D4ED8', text: '#FFFFFF', border };
     }
 
     // 方案 1: 经典绿红 (默认: 翡翠绿 #10B981 / 珊瑚红 #F43F5E)
@@ -6139,9 +6264,10 @@ createApp({ setup() {
     cryptoWhaleData, cryptoWhaleLoading, cryptoWhaleError, cryptoWhaleFilter, cryptoWhaleSearch,
     expandedWhaleAddress, copiedWhaleAddress, whaleAggregate, allWhales, filteredWhales, whaleActivityLogs,
     formatWhaleUsd, formatWhaleCoinSize, toggleWhaleExpand, copyWhaleAddress, loadCryptoWhales,
+    isWhaleSortedBy, getWhaleSortDir, getWhaleSortIcon, toggleWhalePositionSort,
     // On-Chain US Equities Flow Top 10
     onchainStocksData, onchainStocksLoading, onchainStocksError, onchainStockSearch, onchainStockSortField, onchainStockSortDir,
-    onchainAggregate, onchainStocksList, toggleOnchainSort, formatOnchainUsd, loadOnchainStocks,
+    onchainAggregate, onchainStocksList, toggleOnchainSort, formatOnchainUsd, formatOnchainFlowUsd, loadOnchainStocks,
     // Watchlist & Groups & Sidebar Live Streamlined Board
     watchlistData, groups, watchlist, quoteStore, providerInfo, currentSession,
     viewMode, extMode, sortField, sortDirection, freezeResort, compactPanelOpen,

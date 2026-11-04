@@ -13,7 +13,7 @@ npm.cmd ci
 npm.cmd start
 ```
 
-默认访问 **http://localhost:5174**（云服务器公网访问使用 `http://<服务器公网IP>:5174`）。默认监听地址为 `0.0.0.0`，已有 `.env` 中的 `PORT` 与 `HOST` 优先；示例配置见 [.env.example](.env.example)。开发时使用 `npm.cmd run dev`。
+默认访问 **http://localhost:5174**。默认监听地址为 `127.0.0.1`，已有 `.env` 中的 `PORT` 与 `HOST` 优先；示例配置见 [.env.example](.env.example)。开发时使用 `npm.cmd run dev`。
 
 不需要为基础功能申请 API Key。Yahoo/Cboe/RSS 是尽力可用的公开端点，可能限流、延迟或改变接口；失败会明确显示错误，存在有效旧缓存时会注明“旧快照”。不生成演示行情填充失败的数据。
 
