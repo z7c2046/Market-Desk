@@ -4615,7 +4615,7 @@ td { color: var(--text-primary); }
   flex-direction: column;
 }
 
-/* Crypto Pending Panel & Card */
+/* Crypto Pending Panel (Legacy & Skeleton Fallback) */
 .crypto-pending-panel {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -4624,6 +4624,835 @@ td { color: var(--text-primary); }
   display: flex;
   flex-direction: column;
   min-height: 480px;
+}
+
+/* ==========================================================================
+   Hyperliquid On-Chain Whale Perpetual Tracker Panel
+   ========================================================================== */
+.crypto-whale-full-wrap {
+  width: 100%;
+  display: block;
+}
+
+.crypto-whale-tracker-panel {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  min-height: 560px;
+  box-shadow: var(--shadow-sm);
+}
+
+.badge-hl-pill {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: rgba(34, 211, 238, 0.12);
+  color: #06b6d4;
+  border: 1px solid rgba(34, 211, 238, 0.35);
+  letter-spacing: 0.5px;
+}
+
+.pulse-dot-cyan {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #06b6d4;
+  box-shadow: 0 0 8px #06b6d4;
+  display: inline-block;
+  animation: pulse-glow 2s infinite ease-in-out;
+}
+
+.whale-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.whale-search-box {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.whale-search-icon {
+  position: absolute;
+  left: 8px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  pointer-events: none;
+}
+
+.whale-search-input {
+  height: 28px;
+  padding: 0 24px 0 26px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  border: 1px solid var(--border);
+  background: var(--surface-hover, rgba(0, 0, 0, 0.05));
+  color: var(--text-primary);
+  width: 190px;
+  transition: all 0.2s ease;
+}
+
+.whale-search-input:focus {
+  outline: none;
+  border-color: #06b6d4;
+  background: var(--surface);
+  box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.2);
+  width: 220px;
+}
+
+.whale-clear-btn {
+  position: absolute;
+  right: 6px;
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.whale-refresh-btn {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.15s ease;
+}
+
+.whale-refresh-btn:hover {
+  background: var(--surface);
+  color: var(--text-primary);
+  border-color: var(--border-strong, var(--border));
+}
+
+.whale-refresh-btn.is-loading .refresh-icon {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  100% { transform: rotate(360deg); }
+}
+
+/* Macro Summary & Sentiment Progress Bar */
+.whale-macro-summary {
+  background: var(--surface-hover, rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--border-subtle, var(--border));
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.macro-summary-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.whale-sentiment-indicator {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.sentiment-indicator-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.sentiment-indicator-dot.dot-long {
+  background: #10b981;
+  box-shadow: 0 0 8px #10b981;
+}
+.sentiment-indicator-dot.dot-short {
+  background: #f43f5e;
+  box-shadow: 0 0 8px #f43f5e;
+}
+.sentiment-indicator-dot.dot-neutral {
+  background: #06b6d4;
+  box-shadow: 0 0 8px #06b6d4;
+}
+
+.sentiment-title {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.sentiment-badge {
+  font-size: 12px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+.sentiment-badge.bias-long {
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+.sentiment-badge.bias-short {
+  background: rgba(244, 63, 94, 0.12);
+  color: #f43f5e;
+  border: 1px solid rgba(244, 63, 94, 0.3);
+}
+.sentiment-badge.bias-neutral {
+  background: rgba(6, 182, 212, 0.12);
+  color: #06b6d4;
+  border: 1px solid rgba(6, 182, 212, 0.3);
+}
+
+.macro-summary-stats {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 11.5px;
+}
+
+.macro-summary-stats .stat-pill {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.text-cyan {
+  color: #06b6d4;
+}
+
+/* Ratio Progress Bar */
+.whale-ratio-bar-wrap {
+  width: 100%;
+}
+
+.whale-ratio-progress {
+  display: flex;
+  width: 100%;
+  height: 22px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border);
+}
+
+.ratio-segment {
+  display: flex;
+  align-items: center;
+  font-size: 10.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: width 0.3s ease;
+  overflow: hidden;
+}
+
+.ratio-segment.ratio-long {
+  background: linear-gradient(90deg, #059669, #10b981);
+  color: #ffffff;
+  padding-left: 8px;
+}
+
+.ratio-segment.ratio-short {
+  background: linear-gradient(90deg, #e11d48, #f43f5e);
+  color: #ffffff;
+  justify-content: flex-end;
+  padding-right: 8px;
+}
+
+.whale-token-chips-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding-top: 6px;
+  border-top: 1px dashed var(--border-subtle, var(--border));
+}
+
+.token-chips-title {
+  font-size: 11px;
+  margin-right: 2px;
+}
+
+.whale-coin-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 11px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.whale-coin-chip:hover {
+  background: var(--surface-hover);
+  border-color: #06b6d4;
+}
+
+.whale-coin-chip.active {
+  background: rgba(6, 182, 212, 0.15);
+  border-color: #06b6d4;
+  color: #06b6d4;
+}
+
+.chip-coin {
+  font-weight: 800;
+}
+
+.chip-val {
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+
+.chip-bias-mini {
+  font-size: 9.5px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-weight: 700;
+}
+
+/* Whale Filter Tabs */
+.whale-filter-tabs {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-subtle, var(--border));
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.whale-filter-tabs .tab-buttons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.whale-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 5px;
+  font-size: 11.5px;
+  font-weight: 600;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.whale-tab-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.whale-tab-btn.active {
+  background: var(--surface-hover);
+  border-color: var(--border-strong, var(--border));
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.whale-tab-btn.tab-btn-long.active {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.35);
+  color: #10b981;
+}
+
+.whale-tab-btn.tab-btn-short.active {
+  background: rgba(244, 63, 94, 0.12);
+  border-color: rgba(244, 63, 94, 0.35);
+  color: #f43f5e;
+}
+
+.whale-tab-btn.tab-btn-feed.active {
+  background: rgba(6, 182, 212, 0.12);
+  border-color: rgba(6, 182, 212, 0.35);
+  color: #06b6d4;
+}
+
+.tab-count-badge {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-tertiary);
+}
+
+/* Whale Cards List */
+.whale-cards-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+  max-height: 580px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.whale-wallet-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  transition: all 0.2s ease;
+  overflow: hidden;
+}
+
+.whale-wallet-card:hover {
+  border-color: var(--border-strong, #555);
+}
+
+.whale-wallet-card.is-expanded {
+  border-color: rgba(6, 182, 212, 0.4);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+}
+
+.whale-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  cursor: pointer;
+  background: var(--surface-hover, rgba(255, 255, 255, 0.02));
+  transition: background 0.15s ease;
+}
+
+.whale-card-header:hover {
+  background: var(--surface-active, rgba(255, 255, 255, 0.05));
+}
+
+.whale-info-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.whale-avatar {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.whale-title-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.whale-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.whale-name {
+  font-size: 13px;
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.whale-category-tag {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+
+.whale-addr-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.whale-address-chip {
+  font-size: 10.5px;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: var(--surface);
+  padding: 1px 4px;
+  border-radius: 3px;
+  border: 1px dashed var(--border);
+}
+
+.whale-address-chip:hover {
+  color: #06b6d4;
+  border-color: #06b6d4;
+}
+
+.copy-tag {
+  font-size: 9px;
+  color: #06b6d4;
+}
+
+.whale-equity-text {
+  font-size: 10.5px;
+}
+
+.whale-info-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.whale-stat-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.whale-exposure-pill {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+
+.exposure-long {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+}
+
+.exposure-short {
+  background: rgba(244, 63, 94, 0.15);
+  color: #f43f5e;
+}
+
+.whale-pos-total {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.whale-caret {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  transition: transform 0.2s ease;
+}
+
+.whale-caret.is-open {
+  transform: rotate(180deg);
+}
+
+/* Positions Table */
+.whale-positions-wrap {
+  border-top: 1px solid var(--border-subtle, var(--border));
+  background: var(--surface);
+  padding: 4px 8px 8px 8px;
+}
+
+.positions-table-container {
+  overflow-x: auto;
+}
+
+.whale-positions-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+}
+
+.whale-positions-table th {
+  padding: 6px 8px;
+  color: var(--text-tertiary);
+  font-size: 10.5px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border-subtle, var(--border));
+  white-space: nowrap;
+}
+
+.whale-positions-table td {
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--border-subtle, var(--border));
+  vertical-align: middle;
+}
+
+.whale-positions-table tr:last-child td {
+  border-bottom: none;
+}
+
+.pos-coin-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pos-coin-avatar {
+  font-size: 9.5px;
+  font-weight: 800;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: rgba(120, 120, 120, 0.15);
+  color: var(--text-secondary);
+}
+
+.pos-coin-name {
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.pos-dir-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pos-side-badge {
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+  width: fit-content;
+}
+
+.badge-long {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+}
+
+.badge-short {
+  background: rgba(244, 63, 94, 0.15);
+  color: #f43f5e;
+}
+
+.pos-lev-badge {
+  font-size: 9.5px;
+  color: var(--text-tertiary);
+}
+
+.pos-val-cell, .pos-px-cell, .pos-pnl-cell, .pos-liq-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.pos-val-num {
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.pos-size-sub {
+  font-size: 10px;
+}
+
+.pos-roe-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 3px;
+  width: fit-content;
+  margin-left: auto;
+}
+
+.pos-liq-price {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.pos-cushion-pill {
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 3px;
+  width: fit-content;
+  margin-left: auto;
+}
+
+.cushion-warn {
+  background: rgba(244, 63, 94, 0.15);
+  color: #f43f5e;
+}
+
+.cushion-safe {
+  background: rgba(6, 182, 212, 0.15);
+  color: #06b6d4;
+}
+
+.pos-safe-pill {
+  font-size: 10px;
+  color: var(--text-tertiary);
+}
+
+.pos-jump-btn, .feed-jump-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pos-jump-btn:hover, .feed-jump-btn:hover {
+  background: var(--surface-active);
+  color: #06b6d4;
+  border-color: #06b6d4;
+}
+
+/* Activity Feed */
+.whale-feed-container {
+  margin-top: 10px;
+  max-height: 580px;
+  overflow-y: auto;
+}
+
+.whale-feed-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.whale-feed-item {
+  display: grid;
+  grid-template-columns: 70px 1fr 100px;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  transition: all 0.15s ease;
+}
+
+.whale-feed-item:hover {
+  border-color: var(--border-strong, #555);
+}
+
+.feed-time-tag {
+  font-size: 10.5px;
+  color: var(--text-tertiary);
+}
+
+.feed-main-col {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.feed-actor-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.feed-whale-name {
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.feed-addr-pill {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  cursor: pointer;
+}
+
+.feed-action-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 11px;
+}
+
+.feed-action-pill {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+.feed-pill-long {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+}
+
+.feed-pill-short {
+  background: rgba(244, 63, 94, 0.15);
+  color: #f43f5e;
+}
+
+.feed-token-name {
+  font-size: 11.5px;
+  color: var(--text-primary);
+}
+
+.feed-value-pill {
+  font-size: 10.5px;
+  color: var(--text-secondary);
+  background: var(--surface-hover);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.feed-pnl-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.feed-pnl-val {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.whale-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 16px;
+  text-align: center;
+  color: var(--text-tertiary);
+  gap: 10px;
+  font-size: 12px;
+}
+
+.empty-icon {
+  font-size: 28px;
+}
+
+.btn-reset-filter {
+  padding: 4px 10px;
+  border-radius: 4px;
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  font-size: 11.5px;
+  cursor: pointer;
 }
 
 .badge-pending-pill {

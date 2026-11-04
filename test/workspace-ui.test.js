@@ -56,6 +56,92 @@ const fixture = url => {
   if (u.pathname === '/api/news') return { symbol: u.searchParams.get('symbol'), fetchedAt: '2026-10-22T00:00:00Z', unavailable: [], items: [{ title: 'A test headline', url: 'https://example.com', source: 'Test', publishedAt: '2026-10-21T21:00:00Z' }] };
   if (u.pathname.endsWith('chart')) return { ...q, symbol: u.searchParams.get('symbol'), currency: 'USD', range: u.searchParams.get('range'), bars: [{ time: 1792612800, open: 99, close: 100, low: 98, high: 101, volume: 1000 }] };
   if (u.pathname === '/api/crypto') return { items: [{ symbol: 'BTC-USD', code: 'BTC', name: 'Bitcoin 比特币', price: 68000, changePercent: 1.5, marketCap: '1.3T', vol24h: '30B', high24h: 69000, low24h: 67000 }] };
+  if (u.pathname === '/api/crypto/whales') {
+    return {
+      ok: true,
+      aggregate: {
+        totalTrackedWhales: 2,
+        totalEquity: 50000000,
+        totalOI: 150000000,
+        totalLongNotional: 50000000,
+        totalShortNotional: 100000000,
+        longRatio: 33.3,
+        shortRatio: 66.7,
+        sentiment: '巨鲸显著看空 BEARISH',
+        sentimentColor: 'short',
+        topCoins: [{ coin: 'BTC', totalNtl: 100000000, longPct: 40, shortPct: 60 }]
+      },
+      whales: [
+        {
+          address: '0xecb63caa47c7c4e77f60f1ce858cf28dc2b82b00',
+          shortAddress: '0xecb6...2b00',
+          name: 'HL 亿级多空对冲巨鲸',
+          tag: '机构级对冲基金',
+          avatar: '🐋',
+          accountValue: 43000000,
+          totalNtlPos: 124000000,
+          netExposure: -25000000,
+          netBiasLabel: '净空',
+          positions: [
+            {
+              coin: 'ETH',
+              chartSymbol: 'ETH-USD',
+              side: 'SHORT',
+              sideLabel: '做空',
+              isLong: false,
+              size: 13685,
+              entryPx: 2328.55,
+              markPx: 2330.1,
+              positionValue: 31800000,
+              unrealizedPnl: 185000,
+              roePct: 12.5,
+              leverage: 10,
+              leverageType: '全仓',
+              leverageLabel: '10x 全仓',
+              liquidationPx: 4850,
+              liqDistancePct: 108.2
+            },
+            {
+              coin: 'BTC',
+              chartSymbol: 'BTC-USD',
+              side: 'LONG',
+              sideLabel: '做多',
+              isLong: true,
+              size: 88.2,
+              entryPx: 78550,
+              markPx: 78600,
+              positionValue: 6930000,
+              unrealizedPnl: 24500,
+              roePct: 7.1,
+              leverage: 20,
+              leverageType: '全仓',
+              leverageLabel: '20x 全仓',
+              liquidationPx: 54200,
+              liqDistancePct: 31.0
+            }
+          ]
+        }
+      ],
+      activityLogs: [
+        {
+          id: 'log-1',
+          timeAgo: '12分钟前',
+          whaleName: 'HL 亿级多空对冲巨鲸',
+          whaleAddress: '0xecb63caa47c7c4e77f60f1ce858cf28dc2b82b00',
+          shortAddress: '0xecb6...2b00',
+          action: '开仓做空',
+          isLong: false,
+          coin: 'ETH',
+          chartSymbol: 'ETH-USD',
+          amountText: '13,685 ETH',
+          valueText: '$31.8M',
+          leverageText: '10x',
+          entryPx: 2328.55,
+          pnlText: '+$185,000'
+        }
+      ]
+    };
+  }
   if (u.pathname === '/api/options') return { symbol: 'SPY', spot: 100, expiration: '2026-10-23', expirations: ['2026-10-23'], callWall: [105], putWall: [95], callOi: 100, putOi: 50, putCallRatio: .5, netGex: 10000, missingOi: 0, missingGamma: 0, contracts: 2, rows: [{ strike: 105, callOi: 100, putOi: 50, callGex: 20000, putGex: -10000 }], asOf: '2026-10-22 00:00:00' };
   if (u.pathname.includes('/watchlist/quotes')) return {
     quotes: {
@@ -1149,31 +1235,40 @@ test('Mobile Workspace Redesign: 5 bottom tabs, dedicated search overlay, more f
   assert.deepEqual(ui.errors, []);
 });
 
-test('Crypto Workspace: right side shows pending panel instead of crypto-chart, clicking coin navigates directly to chart (个股)', async t => {
+test('Crypto Workspace: crypto market cap table is converted into watchlist crypto group and removed from crypto page; right/lower area is full-width Hyperliquid Whale Tracker', async t => {
   const ui = await mount(t, async url => ({ ok: true, json: async () => fixture(url) }));
 
   // 1. Navigate to Crypto module
   await ui.click('加密货币');
   await tick();
+  await tick();
 
-  // 2. Verify right side does NOT render #crypto-chart
-  assert.equal(ui.w.document.querySelector('#crypto-chart'), null, 'crypto-chart is not rendered on the right side');
+  // 2. Verify crypto-table is removed from crypto page, and #crypto-chart is not rendered
+  assert.equal(ui.w.document.querySelector('.crypto-table'), null, 'crypto-table is removed from crypto dashboard');
+  assert.equal(ui.w.document.querySelector('#crypto-chart'), null, 'crypto-chart is not rendered');
 
-  // 3. Verify right side renders crypto-pending-panel with 待定 badge
-  const pendingPanel = ui.w.document.querySelector('.crypto-pending-panel');
-  assert.ok(pendingPanel, 'Crypto pending panel exists');
-  assert.match(pendingPanel.textContent, /待定/);
-  assert.match(pendingPanel.textContent, /该区域功能待定/);
+  // 3. Verify lower area renders full-width crypto-whale-tracker-panel with Hyperliquid L1 & positions
+  const whalePanel = ui.w.document.querySelector('.crypto-whale-tracker-panel');
+  assert.ok(whalePanel, 'Full-width Crypto whale tracker panel exists');
+  assert.match(whalePanel.textContent, /Hyperliquid/);
+  assert.match(whalePanel.textContent, /巨鲸合约持仓追踪/);
+  assert.match(whalePanel.textContent, /做多/);
+  assert.match(whalePanel.textContent, /做空/);
 
-  // 4. Click a coin row (BTC)
-  const btcRow = ui.w.document.querySelector('.crypto-table tbody tr');
-  assert.ok(btcRow, 'Crypto BTC row exists');
-  btcRow.click();
+  // 4. Verify Watchlist sidebar contains the '加密货币' group
+  const rwSidebar = ui.w.document.querySelector('.right-watchlist-sidebar');
+  assert.ok(rwSidebar, 'Right watchlist sidebar exists');
+  assert.match(rwSidebar.textContent, /加密货币/, 'Watchlist has crypto group');
+
+  // 5. Click a position jump button (e.g. ETH or BTC)
+  const jumpBtn = ui.w.document.querySelector('.pos-jump-btn');
+  assert.ok(jumpBtn, 'Whale position jump button exists');
+  jumpBtn.click();
   await tick();
   await tick();
 
-  // 5. Verify direct navigation to 'chart' (个股) with BTC-USD
-  assert.equal(ui.w.document.querySelector('main').textContent.includes('BTC-USD'), true, 'Navigated to individual stock chart with BTC-USD');
+  // 6. Verify direct navigation to 'chart' (个股)
+  assert.equal(ui.w.document.querySelector('main').textContent.includes('USD'), true, 'Navigated to individual stock/crypto chart');
 
   assert.deepEqual(ui.errors, []);
 });

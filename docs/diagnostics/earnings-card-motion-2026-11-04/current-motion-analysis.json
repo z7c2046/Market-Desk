@@ -1,0 +1,101 @@
+{
+  "kind": "static-css-interpolation-analysis",
+  "documentDate": "2026-11-04 Asia/Shanghai",
+  "browserVerified": false,
+  "assumptions": [
+    "The declared animation runs normally, without reduced-motion or other overriding styles.",
+    "Transform easing applies independently across each adjacent transform keyframe interval.",
+    "Opacity has only 0% and 100% keyframes, so it uses the entire duration.",
+    "These are transform parameters, not projected pixel bounds, rendered frames, or measured FPS."
+  ],
+  "sourceHashes": {
+    "public/app.js": "4c4e8ec710cbfdbc5e271fb784d49205d0d43660f7b9b74a339570770baa6c51",
+    "public/index.html": "c788a66d51b54ed43352cb4d0276adb7d9bb9571c39a19db06752eecc0e6e3d3",
+    "public/styles.css": "4690f19540440453cf6b4974d35b62f8ebc500d6a9512ca622a6936dca794af5",
+    "src/server.js": "d41cd0c319659f8b9225d9fa6cf49e9255d8f5f568ca867a9750abfca27eff99",
+    "test/workspace-ui.test.js": "0f80f6eae58e2710ac4df0fc6c9b9335748eec88ab51a3acef9d766ed87f8002"
+  },
+  "durationMs": 360,
+  "cubicBezier": [
+    0.16,
+    1,
+    0.3,
+    1
+  ],
+  "keyframes": [
+    {
+      "offset": 0,
+      "angle": -24,
+      "scale": 0.72,
+      "opacity": 0
+    },
+    {
+      "offset": 0.6,
+      "angle": 3,
+      "scale": 1.015,
+      "opacity": null
+    },
+    {
+      "offset": 1,
+      "angle": 0,
+      "scale": 1,
+      "opacity": 1
+    }
+  ],
+  "samples": [
+    {
+      "timeMs": 0,
+      "rotateYDegrees": -24,
+      "scale": 0.72,
+      "opacity": 0
+    },
+    {
+      "timeMs": 36,
+      "rotateYDegrees": -5.4773,
+      "scale": 0.9224,
+      "opacity": 0.4944
+    },
+    {
+      "timeMs": 72,
+      "rotateYDegrees": 0.3775,
+      "scale": 0.9863,
+      "opacity": 0.7521
+    },
+    {
+      "timeMs": 108,
+      "rotateYDegrees": 2.238,
+      "scale": 1.0067,
+      "opacity": 0.8772
+    },
+    {
+      "timeMs": 144,
+      "rotateYDegrees": 2.8315,
+      "scale": 1.0132,
+      "opacity": 0.9398
+    },
+    {
+      "timeMs": 180,
+      "rotateYDegrees": 2.9834,
+      "scale": 1.0148,
+      "opacity": 0.9718
+    },
+    {
+      "timeMs": 216,
+      "rotateYDegrees": 3,
+      "scale": 1.015,
+      "opacity": 0.988
+    },
+    {
+      "timeMs": 270,
+      "rotateYDegrees": 0.2166,
+      "scale": 1.0011,
+      "opacity": 0.9977
+    },
+    {
+      "timeMs": 360,
+      "rotateYDegrees": 0,
+      "scale": 1,
+      "opacity": 1
+    }
+  ]
+}

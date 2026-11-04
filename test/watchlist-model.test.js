@@ -25,7 +25,8 @@ test('WatchlistManager: migrations from v1 array and creates preset groups', () 
 
   const manager = new WatchlistManager({ storage });
   const groups = manager.getGroups();
-  assert.equal(groups.length, 7); // default, storage, chips, optics, datacenter, etf, trillion
+  assert.equal(groups.length, 8); // default, storage, chips, optics, datacenter, etf, trillion, crypto
+  assert.ok(manager.getGroup('crypto'), 'Crypto group exists');
   const defaultGroup = manager.getGroup('default');
   assert.deepEqual(defaultGroup.symbolIds, ['AAPL', 'TSLA', 'NVDA']);
 

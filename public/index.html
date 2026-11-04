@@ -1335,30 +1335,32 @@
         <div class="kpi-foot-stats"><span class="sk sk-small" style="width: 85px;"></span><span class="sk sk-small" style="width: 85px;"></span></div>
       </div>
     </div>
-    <div class="crypto-workspace-grid" style="margin-top: 16px;">
-      <section class="panel crypto-table-panel">
+    <div class="crypto-whale-full-wrap" style="margin-top: 16px;">
+      <section class="panel crypto-whale-tracker-panel crypto-whale-skeleton">
         <div class="panel-heading">
-          <span class="sk sk-strong" style="width: 200px; height: 20px;"></span>
-        </div>
-        <div style="padding: 12px 16px;">
-          <div v-for="i in 6" :key="i" style="display:flex; align-items:center; gap:12px; padding: 12px 0; border-bottom: 1px solid var(--border-subtle);">
-            <span class="sk sk-pill" style="width: 24px; height: 24px; border-radius: 6px;"></span>
-            <div style="flex:1;"><span class="sk sk-line" style="width: 70px; margin-bottom: 4px;"></span><span class="sk sk-small" style="width: 100px;"></span></div>
-            <span class="sk sk-strong" style="width: 75px; height: 18px;"></span>
-            <span class="sk sk-pill" style="width: 50px; height: 20px;"></span>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span class="sk sk-strong" style="width: 240px; height: 20px;"></span>
+            <span class="sk sk-pill" style="width: 90px; height: 18px;"></span>
           </div>
+          <span class="sk sk-pill" style="width: 70px; height: 24px;"></span>
         </div>
-      </section>
-      <section class="panel crypto-pending-panel crypto-pending-skeleton">
-        <div class="panel-heading">
-          <span class="sk sk-strong" style="width: 120px; height: 20px;"></span>
-          <span class="sk sk-pill" style="width: 48px; height: 18px;"></span>
-        </div>
-        <div style="padding: 48px 20px; display:flex; flex-direction:column; align-items:center; gap:14px; text-align:center;">
-          <span class="sk sk-pill" style="width: 52px; height: 52px; border-radius: 16px;"></span>
-          <span class="sk sk-strong" style="width: 150px; height: 20px;"></span>
-          <span class="sk sk-line" style="width: 240px; height: 14px;"></span>
-          <span class="sk sk-small" style="width: 180px; height: 12px;"></span>
+        <div style="padding: 16px; display:flex; flex-direction:column; gap:12px;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span class="sk sk-strong" style="width: 160px; height: 18px;"></span>
+            <span class="sk sk-strong" style="width: 120px; height: 18px;"></span>
+          </div>
+          <span class="sk sk-line" style="width: 100%; height: 18px; border-radius: 6px;"></span>
+          <div style="display:flex; gap:8px; margin: 4px 0 8px 0;">
+            <span v-for="i in 6" :key="i" class="sk sk-pill" style="width: 76px; height: 24px;"></span>
+          </div>
+          <div v-for="i in 3" :key="i" style="padding: 12px; border: 1px solid var(--border-subtle); border-radius: 8px; display:flex; flex-direction:column; gap:8px;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span class="sk sk-strong" style="width: 180px; height: 18px;"></span>
+              <span class="sk sk-pill" style="width: 90px; height: 18px;"></span>
+            </div>
+            <span class="sk sk-line" style="width: 100%; height: 24px;"></span>
+            <span class="sk sk-small" style="width: 50%; height: 14px;"></span>
+          </div>
         </div>
       </section>
     </div>
@@ -1479,103 +1481,260 @@
       </div>
     </div>
 
-    <!-- 主流加密货币行情表与走势图 -->
-    <div class="crypto-workspace-grid">
-      <!-- 左侧：前 6 大市值加密货币列表 -->
-      <section class="panel crypto-table-panel">
-        <div class="panel-heading">
-          <div>
-            <div class="heading-row">
-              <h2>主流加密货币市值排行榜</h2>
-              <span class="badge-blue-pill">TOP 6 CORE COINS</span>
-            </div>
-          </div>
-          <span class="live-pulse-badge"><i class="pulse-dot"></i> 24/7 实时行情</span>
-        </div>
-
-        <div class="crypto-table-container">
-          <table class="crypto-table">
-            <thead>
-              <tr>
-                <th class="col-rank">#</th>
-                <th class="col-coin">币种资产</th>
-                <th class="col-price text-right">最新价格 (USD)</th>
-                <th class="col-chg text-right">24h 涨跌</th>
-                <th class="col-range">24h 振幅区间</th>
-                <th class="col-mcap text-right">市值</th>
-                <th class="col-vol text-right">24h 成交额</th>
-                <th class="col-action text-right">走势</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="c in cryptoList" :key="c.symbol" :class="{selected: selectedCrypto === c.symbol}" @click="selectCryptoCoin(c.symbol)" style="cursor:pointer;" :title="'点击进入个股查看 ' + c.code + ' 走势'">
-                <td class="col-rank">
-                  <span class="rank-num-badge">#{{ c.rank }}</span>
-                </td>
-                <td class="col-coin">
-                  <div class="coin-identity-cell">
-                    <span class="coin-symbol-avatar" :style="{ backgroundColor: c.iconColor + '20', color: c.iconColor }">{{ c.icon }}</span>
-                    <div class="coin-title-col">
-                      <strong class="coin-symbol-text">{{ c.code }}</strong>
-                      <span class="coin-fullname-text">{{ c.name.split(' ')[1] || c.name }}</span>
-                    </div>
-                  </div>
-                </td>
-                <td class="col-price text-right font-mono">
-                  <strong class="crypto-price-text">${{ formatCryptoPrice(c.price) }}</strong>
-                </td>
-                <td class="col-chg text-right">
-                  <span class="crypto-pct-pill" :class="c.changePercent != null ? (c.changePercent >= 0 ? 'badge-pos' : 'badge-neg') : 'badge-neutral'">
-                    {{ pct(c.changePercent) }}
-                  </span>
-                </td>
-                <td class="col-range">
-                  <div class="crypto-range-mini">
-                    <div class="range-mini-nums">
-                      <span>${{ formatCryptoPrice(c.low24h) }}</span>
-                      <span>${{ formatCryptoPrice(c.high24h) }}</span>
-                    </div>
-                    <div class="range-mini-track">
-                      <div class="range-mini-point" :style="{ left: getCryptoRangePct(c) + '%' }"></div>
-                    </div>
-                  </div>
-                </td>
-                <td class="col-mcap text-right font-mono">${{ c.marketCap }}</td>
-                <td class="col-vol text-right font-mono">${{ c.vol24h }}</td>
-                <td class="col-action text-right">
-                  <button class="crypto-jump-btn" :title="'前往个股查看 ' + c.code + ' 走势'" @click.stop="selectCryptoCoin(c.symbol)">
-                    <span>个股</span>
-                    <span class="jump-arrow">↗</span>
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <!-- 右侧：待定区域 -->
-      <section class="panel crypto-pending-panel">
+    <!-- 下方全宽：Hyperliquid 链上巨鲸合约持仓追踪 -->
+    <div class="crypto-whale-full-wrap" style="margin-top: 16px;">
+      <section class="panel crypto-whale-tracker-panel">
         <div class="panel-heading">
           <div class="heading-row">
-            <h2>扩展观察区</h2>
-            <span class="badge-pending-pill">待定</span>
+            <h2>Hyperliquid 链上巨鲸合约持仓追踪</h2>
+            <span class="badge-hl-pill">HYPERLIQUID L1</span>
+            <span class="live-pulse-badge"><i class="pulse-dot"></i> 实时链上穿透</span>
           </div>
-          <span class="pending-status-tag">TBD</span>
+          <div class="whale-head-actions">
+            <div class="whale-search-box">
+              <span class="whale-search-icon">🔍</span>
+              <input type="text" v-model="cryptoWhaleSearch" class="whale-search-input" placeholder="搜索币种/巨鲸/地址 (BTC, ETH...)" />
+              <button v-if="cryptoWhaleSearch" class="whale-clear-btn" @click="cryptoWhaleSearch = ''">×</button>
+            </div>
+            <button class="whale-refresh-btn" :class="{ 'is-loading': cryptoWhaleLoading }" @click="loadCryptoWhales({ force: true })" title="强制从 Hyperliquid 节点拉取最新数据">
+              <span class="refresh-icon">↻</span>
+              <span>刷新</span>
+            </button>
+          </div>
         </div>
 
-        <div class="crypto-pending-card">
-          <div class="pending-card-icon-wrap">
-            <span class="pending-card-icon">⏳</span>
+        <!-- 巨鲸多空偏向与宏观汇总条 -->
+        <div class="whale-macro-summary">
+          <div class="macro-summary-top">
+            <div class="whale-sentiment-indicator">
+              <span class="sentiment-indicator-dot" :class="'dot-' + whaleAggregate.sentimentColor"></span>
+              <span class="sentiment-title">巨鲸整体偏向:</span>
+              <strong class="sentiment-badge font-mono" :class="'bias-' + whaleAggregate.sentimentColor">{{ whaleAggregate.sentiment }}</strong>
+            </div>
+            <div class="macro-summary-stats font-mono">
+              <span class="stat-pill"><span class="muted">持仓总规模:</span> <strong class="text-cyan">${{ formatWhaleUsd(whaleAggregate.totalOI) }}</strong></span>
+              <span class="stat-pill"><span class="muted">追踪巨鲸:</span> <strong>{{ whaleAggregate.totalTrackedWhales }} 席</strong></span>
+              <span class="stat-pill"><span class="muted">净值规模:</span> <strong>${{ formatWhaleUsd(whaleAggregate.totalEquity) }}</strong></span>
+            </div>
           </div>
-          <h3 class="pending-card-title">该区域功能待定</h3>
-          <p class="pending-card-desc">
-            加密资产实时走势与深度指标已整合至「个股行情」模块。<br>
-            点击左侧任意标的，可立即跳转至个股页面查看 24/7 专业走势图。
-          </p>
-          <div class="pending-tip-box">
-            <span class="tip-dot"></span>
-            <span>当前区域处于规划阶段，后续将支持自定义看板或链上深度数据</span>
+
+          <!-- 双色多空持仓占比条 -->
+          <div class="whale-ratio-bar-wrap">
+            <div class="whale-ratio-progress">
+              <div class="ratio-segment ratio-long" :style="{ width: whaleAggregate.longRatio + '%' }">
+                <span class="ratio-label">做多 {{ whaleAggregate.longRatio }}% (${{ formatWhaleUsd(whaleAggregate.totalLongNotional) }})</span>
+              </div>
+              <div class="ratio-segment ratio-short" :style="{ width: whaleAggregate.shortRatio + '%' }">
+                <span class="ratio-label">做空 {{ whaleAggregate.shortRatio }}% (${{ formatWhaleUsd(whaleAggregate.totalShortNotional) }})</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 核心代币快捷筛选标签 -->
+          <div class="whale-token-chips-bar" v-if="whaleAggregate.topCoins && whaleAggregate.topCoins.length">
+            <span class="token-chips-title muted small">核心博弈标的:</span>
+            <button
+              v-for="tc in whaleAggregate.topCoins"
+              :key="tc.coin"
+              class="whale-coin-chip"
+              :class="{ active: cryptoWhaleSearch.toUpperCase() === tc.coin.toUpperCase() }"
+              @click="cryptoWhaleSearch = (cryptoWhaleSearch.toUpperCase() === tc.coin.toUpperCase() ? '' : tc.coin)"
+            >
+              <strong class="chip-coin font-mono">{{ tc.coin }}</strong>
+              <span class="chip-val font-mono">${{ formatWhaleUsd(tc.totalNtl) }}</span>
+              <span class="chip-bias-mini" :class="tc.longPct >= 50 ? 'badge-pos' : 'badge-neg'">{{ tc.longPct >= 50 ? '多 ' + tc.longPct + '%' : '空 ' + tc.shortPct + '%' }}</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 切换 Tab 栏 -->
+        <div class="whale-filter-tabs">
+          <div class="tab-buttons">
+            <button class="whale-tab-btn" :class="{ active: cryptoWhaleFilter === 'all' }" @click="cryptoWhaleFilter = 'all'">
+              <span>全部巨鲸</span>
+              <span class="tab-count-badge">{{ allWhales.length }}</span>
+            </button>
+            <button class="whale-tab-btn tab-btn-long" :class="{ active: cryptoWhaleFilter === 'long' }" @click="cryptoWhaleFilter = 'long'">
+              <span>🟢 仅看做多</span>
+            </button>
+            <button class="whale-tab-btn tab-btn-short" :class="{ active: cryptoWhaleFilter === 'short' }" @click="cryptoWhaleFilter = 'short'">
+              <span>🔴 仅看做空</span>
+            </button>
+            <button class="whale-tab-btn tab-btn-feed" :class="{ active: cryptoWhaleFilter === 'feed' }" @click="cryptoWhaleFilter = 'feed'">
+              <span>⚡ 调仓异动流</span>
+              <span class="tab-count-badge">{{ whaleActivityLogs.length }}</span>
+            </button>
+          </div>
+          <span class="whale-sync-time muted font-mono small">
+            节点已联通 · {{ cryptoWhaleData?.fetchedAt ? formatWatchlistTime(cryptoWhaleData.fetchedAt) : '实时' }}
+          </span>
+        </div>
+
+        <!-- Tab 内容 1: 巨鲸持仓列表 -->
+        <div v-if="cryptoWhaleFilter !== 'feed'" class="whale-cards-list">
+          <div v-if="filteredWhales.length === 0" class="whale-empty-state">
+            <span class="empty-icon">🔍</span>
+            <p>未找到匹配条件的巨鲸钱包或仓位 (当前筛选: {{ cryptoWhaleSearch || cryptoWhaleFilter }})</p>
+            <button class="btn-reset-filter" @click="cryptoWhaleSearch = ''; cryptoWhaleFilter = 'all'">重置筛选条件</button>
+          </div>
+
+          <div
+            v-for="w in filteredWhales"
+            :key="w.address"
+            class="whale-wallet-card"
+            :class="{ 'is-expanded': expandedWhaleAddress === w.address }"
+          >
+            <!-- 巨鲸卡片头部 -->
+            <div class="whale-card-header" @click="toggleWhaleExpand(w.address)">
+              <div class="whale-info-left">
+                <span class="whale-avatar">{{ w.avatar }}</span>
+                <div class="whale-title-col">
+                  <div class="whale-name-row">
+                    <strong class="whale-name">{{ w.name }}</strong>
+                    <span class="whale-category-tag">{{ w.tag }}</span>
+                  </div>
+                  <div class="whale-addr-row">
+                    <span
+                      class="whale-address-chip font-mono"
+                      @click.stop="copyWhaleAddress(w.address)"
+                      :title="'点击复制完整链上地址: ' + w.address"
+                    >
+                      {{ w.shortAddress }}
+                      <span class="copy-tag" v-if="copiedWhaleAddress === w.address">已复制!</span>
+                      <span class="copy-tag" v-else>📋</span>
+                    </span>
+                    <span class="whale-equity-text muted font-mono">净值 ${{ formatWhaleUsd(w.accountValue) }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="whale-info-right">
+                <div class="whale-stat-col text-right">
+                  <div class="whale-badge-row">
+                    <span class="whale-exposure-pill" :class="w.netExposure >= 0 ? 'exposure-long' : 'exposure-short'">
+                      {{ w.netBiasLabel }} ${{ formatWhaleUsd(w.netExposure) }}
+                    </span>
+                  </div>
+                  <span class="whale-pos-total font-mono">总持仓 ${{ formatWhaleUsd(w.totalNtlPos) }} ({{ w.positions.length }}笔)</span>
+                </div>
+                <span class="whale-caret" :class="{ 'is-open': expandedWhaleAddress === w.address }">▼</span>
+              </div>
+            </div>
+
+            <!-- 巨鲸仓位展开详情表 -->
+            <div class="whale-positions-wrap" v-show="expandedWhaleAddress === w.address || filteredWhales.length <= 2">
+              <div class="positions-table-container">
+                <table class="whale-positions-table">
+                  <thead>
+                    <tr>
+                      <th class="th-coin">合约标的</th>
+                      <th class="th-dir">方向 / 杠杆</th>
+                      <th class="th-val text-right">仓位规模 / 数量</th>
+                      <th class="th-px text-right">开仓均价 / 现价</th>
+                      <th class="th-pnl text-right">未实现盈亏</th>
+                      <th class="th-liq text-right">强平价 / 安全垫</th>
+                      <th class="th-jump text-center">走势</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="p in w.displayPositions" :key="p.coin" class="pos-row" :class="p.isLong ? 'row-long' : 'row-short'">
+                      <td class="col-coin">
+                        <div class="pos-coin-cell">
+                          <span class="pos-coin-avatar font-mono">{{ p.coin.slice(0, 3) }}</span>
+                          <strong class="pos-coin-name font-mono">{{ p.coin }}</strong>
+                        </div>
+                      </td>
+                      <td class="col-dir">
+                        <div class="pos-dir-cell">
+                          <span class="pos-side-badge" :class="p.isLong ? 'badge-long' : 'badge-short'">
+                            {{ p.isLong ? '🟢 多' : '🔴 空' }}
+                          </span>
+                          <span class="pos-lev-badge font-mono">{{ p.leverageLabel }}</span>
+                        </div>
+                      </td>
+                      <td class="col-val text-right font-mono">
+                        <div class="pos-val-cell">
+                          <strong class="pos-val-num">${{ formatWhaleUsd(p.positionValue) }}</strong>
+                          <span class="pos-size-sub muted">{{ formatWhaleCoinSize(p.size, p.coin) }}</span>
+                        </div>
+                      </td>
+                      <td class="col-px text-right font-mono">
+                        <div class="pos-px-cell">
+                          <span class="muted small">入: ${{ p.entryPx.toLocaleString() }}</span>
+                          <span class="text-cyan">现: ${{ p.markPx.toLocaleString() }}</span>
+                        </div>
+                      </td>
+                      <td class="col-pnl text-right font-mono">
+                        <div class="pos-pnl-cell">
+                          <strong :class="p.unrealizedPnl >= 0 ? 'text-pos' : 'text-neg'">
+                            {{ (p.unrealizedPnl >= 0 ? '+' : '') + '$' + Math.round(p.unrealizedPnl).toLocaleString() }}
+                          </strong>
+                          <span class="pos-roe-badge" :class="p.roePct >= 0 ? 'badge-pos' : 'badge-neg'">
+                            {{ (p.roePct >= 0 ? '+' : '') + p.roePct + '%' }}
+                          </span>
+                        </div>
+                      </td>
+                      <td class="col-liq text-right font-mono">
+                        <div class="pos-liq-cell">
+                          <template v-if="p.liquidationPx">
+                            <span class="pos-liq-price">${{ p.liquidationPx.toLocaleString() }}</span>
+                            <span class="pos-cushion-pill" :class="p.liqDistancePct < 15 ? 'cushion-warn' : 'cushion-safe'">
+                              垫 {{ p.liqDistancePct }}%
+                            </span>
+                          </template>
+                          <span v-else class="pos-safe-pill">无风险</span>
+                        </div>
+                      </td>
+                      <td class="col-jump text-center">
+                        <button class="pos-jump-btn" @click.stop="selectCryptoCoin(p.chartSymbol)" :title="'前往个股行情查看 ' + p.coin + ' 走势'">
+                          <span>走势</span>
+                          <span class="jump-arrow">↗</span>
+                        </button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 内容 2: 链上调仓异动流 -->
+        <div v-else class="whale-feed-container">
+          <div v-if="whaleActivityLogs.length === 0" class="whale-empty-state">
+            <span class="empty-icon">⚡</span>
+            <p>暂无调仓异动动态记录</p>
+          </div>
+          <div class="whale-feed-list">
+            <div
+              v-for="log in whaleActivityLogs"
+              :key="log.id"
+              class="whale-feed-item"
+              :class="log.isLong ? 'feed-item-long' : 'feed-item-short'"
+            >
+              <div class="feed-time-col">
+                <span class="feed-time-tag font-mono">{{ log.timeAgo }}</span>
+              </div>
+              <div class="feed-main-col">
+                <div class="feed-actor-row">
+                  <strong class="feed-whale-name">{{ log.whaleName }}</strong>
+                  <span class="feed-addr-pill font-mono" @click="copyWhaleAddress(log.whaleAddress)" :title="'复制地址: ' + log.whaleAddress">{{ log.shortAddress }}</span>
+                </div>
+                <div class="feed-action-row">
+                  <span class="feed-action-pill" :class="log.isLong ? 'feed-pill-long' : 'feed-pill-short'">
+                    {{ log.action }}
+                  </span>
+                  <strong class="feed-token-name font-mono">{{ log.coin }}</strong>
+                  <span class="feed-amount font-mono">{{ log.amountText }}</span>
+                  <span class="feed-value-pill font-mono">规模 {{ log.valueText }}</span>
+                  <span class="feed-entry-px muted font-mono">@ ${{ log.entryPx.toLocaleString() }} ({{ log.leverageText }})</span>
+                </div>
+              </div>
+              <div class="feed-pnl-col text-right font-mono">
+                <span class="feed-pnl-val" :class="log.pnlText.startsWith('+') ? 'text-pos' : 'text-neg'">{{ log.pnlText }}</span>
+                <button class="feed-jump-btn" @click="selectCryptoCoin(log.chartSymbol)" :title="'查看 ' + log.coin + ' 走势'">走势 ↗</button>
+              </div>
+            </div>
           </div>
         </div>
       </section>

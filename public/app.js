@@ -1149,6 +1149,143 @@ createApp({ setup() {
     selectSymbol(sym, { source: 'crypto' });
   }
 
+  // --------------------------------------------------------------------------
+  // Hyperliquid On-Chain Whale Perpetual Tracker State & Computed
+  // --------------------------------------------------------------------------
+  const cryptoWhaleData = ref(null);
+  const cryptoWhaleLoading = ref(false);
+  const cryptoWhaleError = ref('');
+  const cryptoWhaleFilter = ref('all'); // 'all' | 'long' | 'short' | 'feed'
+  const cryptoWhaleSearch = ref('');
+  const expandedWhaleAddress = ref('');
+  const copiedWhaleAddress = ref('');
+
+  const whaleAggregate = computed(() => {
+    return cryptoWhaleData.value?.aggregate || {
+      totalTrackedWhales: 0,
+      totalEquity: 0,
+      totalOI: 0,
+      totalLongNotional: 0,
+      totalShortNotional: 0,
+      longRatio: 50,
+      shortRatio: 50,
+      sentiment: '多空均衡',
+      sentimentColor: 'neutral',
+      topCoins: []
+    };
+  });
+
+  const allWhales = computed(() => {
+    return cryptoWhaleData.value?.whales || [];
+  });
+
+  const filteredWhales = computed(() => {
+    const list = allWhales.value;
+    const filter = cryptoWhaleFilter.value;
+    const q = cryptoWhaleSearch.value.trim().toUpperCase();
+
+    return list.filter(w => {
+      // 1. Text search
+      if (q) {
+        const matchName = (w.name || '').toUpperCase().includes(q);
+        const matchAddr = (w.address || '').toUpperCase().includes(q);
+        const matchTag = (w.tag || '').toUpperCase().includes(q);
+        const matchCoin = (w.positions || []).some(p => p.coin.toUpperCase().includes(q));
+        if (!matchName && !matchAddr && !matchTag && !matchCoin) return false;
+      }
+      // 2. Tab filter
+      if (filter === 'long') {
+        return (w.positions || []).some(p => p.isLong);
+      }
+      if (filter === 'short') {
+        return (w.positions || []).some(p => !p.isLong);
+      }
+      return true;
+    }).map(w => {
+      let positions = w.positions || [];
+      if (filter === 'long') positions = positions.filter(p => p.isLong);
+      else if (filter === 'short') positions = positions.filter(p => !p.isLong);
+      if (q) {
+        positions = [...positions].sort((a, b) => (b.coin.toUpperCase().includes(q) ? 1 : 0) - (a.coin.toUpperCase().includes(q) ? 1 : 0));
+      }
+      return {
+        ...w,
+        displayPositions: positions
+      };
+    });
+  });
+
+  const whaleActivityLogs = computed(() => {
+    const logs = cryptoWhaleData.value?.activityLogs || [];
+    const q = cryptoWhaleSearch.value.trim().toUpperCase();
+    if (!q) return logs;
+    return logs.filter(l => l.coin.toUpperCase().includes(q) || l.whaleName.toUpperCase().includes(q) || (l.action && l.action.includes(q)));
+  });
+
+  function formatWhaleUsd(val) {
+    if (val == null || isNaN(val)) return '$0';
+    const num = Math.abs(Number(val));
+    const sign = Number(val) < 0 ? '-' : '';
+    if (num >= 1e6) return `${sign}$${(num / 1e6).toFixed(2)}M`;
+    if (num >= 1e3) return `${sign}$${(num / 1e3).toFixed(1)}K`;
+    return `${sign}$${num.toFixed(0)}`;
+  }
+
+  function formatWhaleCoinSize(size, coin) {
+    if (size == null || isNaN(size)) return `0 ${coin}`;
+    const s = Number(size);
+    if (s >= 1000) return `${Math.round(s).toLocaleString()} ${coin}`;
+    if (s >= 10) return `${s.toFixed(2)} ${coin}`;
+    return `${s.toFixed(4)} ${coin}`;
+  }
+
+  function toggleWhaleExpand(addr) {
+    if (expandedWhaleAddress.value === addr) {
+      expandedWhaleAddress.value = '';
+    } else {
+      expandedWhaleAddress.value = addr;
+    }
+  }
+
+  async function copyWhaleAddress(addr) {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(addr);
+      }
+      copiedWhaleAddress.value = addr;
+      toast.value = `已复制巨鲸钱包地址: ${addr.slice(0, 6)}...${addr.slice(-4)}`;
+      setTimeout(() => {
+        if (copiedWhaleAddress.value === addr) copiedWhaleAddress.value = '';
+      }, 2500);
+    } catch {
+      toast.value = `钱包地址: ${addr}`;
+    }
+  }
+
+  async function loadCryptoWhales({ force = false } = {}) {
+    try {
+      cryptoWhaleLoading.value = true;
+      cryptoWhaleError.value = '';
+      const url = force ? '/api/crypto/whales?force=1' : '/api/crypto/whales';
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.ok && data.whales) {
+          cryptoWhaleData.value = data;
+          if (!expandedWhaleAddress.value && data.whales.length > 0) {
+            expandedWhaleAddress.value = data.whales[0].address;
+          }
+        }
+      } else {
+        cryptoWhaleError.value = `HTTP ${res.status}`;
+      }
+    } catch (e) {
+      cryptoWhaleError.value = e.message || '加载巨鲸数据异常';
+    } finally {
+      cryptoWhaleLoading.value = false;
+    }
+  }
+
   // Watchlist Model & Manager (v2)
   const storage = typeof window !== 'undefined' && window.localStorage ? window.localStorage : null;
   const watchlistMgr = new WatchlistManager({ storage });
@@ -4371,6 +4508,9 @@ createApp({ setup() {
     pollTimer = setInterval(() => {
       if (typeof document !== 'undefined' && document.hidden) return;
       fetchWatchlistQuotes({ silent: true });
+      if (page.value === 'crypto') {
+        loadCryptoWhales();
+      }
     }, 10000);
   }
 
@@ -4562,6 +4702,8 @@ createApp({ setup() {
       await nextTick();
       render();
     }
+    // 并行拉取链上巨鲸合约持仓数据
+    loadCryptoWhales();
   };
   async function loadOptions(reset = false) {
     const raw = optionSymbol.value.trim().toUpperCase();
@@ -5884,6 +6026,9 @@ createApp({ setup() {
     showTreasuryModal, openTreasuryModal, closeTreasuryModal, spread30Y10Y, spread20Y10Y, isCurveInverted,
     cryptoData, cryptoList, selectedCrypto, selectedCryptoItem, cryptoTimeframe,
     formatCryptoPrice, getCryptoRangePct, selectCryptoCoin, loadCrypto, renderCryptoChart,
+    cryptoWhaleData, cryptoWhaleLoading, cryptoWhaleError, cryptoWhaleFilter, cryptoWhaleSearch,
+    expandedWhaleAddress, copiedWhaleAddress, whaleAggregate, allWhales, filteredWhales, whaleActivityLogs,
+    formatWhaleUsd, formatWhaleCoinSize, toggleWhaleExpand, copyWhaleAddress, loadCryptoWhales,
     // Watchlist & Groups & Sidebar Live Streamlined Board
     watchlistData, groups, watchlist, quoteStore, providerInfo, currentSession,
     viewMode, extMode, sortField, sortDirection, freezeResort, compactPanelOpen,

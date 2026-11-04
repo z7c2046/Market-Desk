@@ -83,6 +83,13 @@ export const SYMBOL_NAMES = {
 
 // Global Market Cap Data & Rankings for Trillion Dollar Club & Key Watchlist Stocks
 export const STOCK_MARKET_CAPS = {
+  // Crypto Currencies
+  'BTC-USD': { label: '$1.35T', value: 1350000000000, rank: 7 },
+  'ETH-USD': { label: '$316.8B', value: 316800000000, rank: 25 },
+  'BNB-USD': { label: '$89.2B', value: 89200000000, rank: 95 },
+  'SOL-USD': { label: '$81.4B', value: 81400000000, rank: 110 },
+  'XRP-USD': { label: '$30.7B', value: 30700000000, rank: 220 },
+  'ADA-USD': { label: '$12.8B', value: 12800000000, rank: 350 },
   NVDA: { label: '$3.52T', value: 3520000000000, rank: 1 },
   AAPL: { label: '$3.48T', value: 3480000000000, rank: 2 },
   MSFT: { label: '$3.18T', value: 3180000000000, rank: 3 },
@@ -380,10 +387,17 @@ export const PRESET_GROUPS = [
     symbolIds: ['NVDA', 'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSM', 'BRK-B', 'TSLA', 'AVGO', 'LLY']
   },
   {
+    id: 'crypto',
+    name: '加密货币',
+    collapsed: false,
+    order: 6,
+    symbolIds: ['BTC-USD', 'ETH-USD', 'BNB-USD', 'SOL-USD', 'XRP-USD', 'ADA-USD']
+  },
+  {
     id: 'default',
     name: '未分组',
     collapsed: false,
-    order: 6,
+    order: 7,
     symbolIds: []
   }
 ];
@@ -486,6 +500,17 @@ export class WatchlistManager {
               parsed.groups.splice(insertIdx, 0, {
                 ...trillionGroup,
                 symbolIds: [...trillionGroup.symbolIds]
+              });
+            }
+          }
+          // If existing groups lack the 'crypto' group, inject it automatically
+          if (!parsed.groups.some(g => g.id === 'crypto' || g.name === '加密货币')) {
+            const cryptoGroup = PRESET_GROUPS.find(g => g.id === 'crypto');
+            if (cryptoGroup) {
+              const insertIdx = Math.max(0, parsed.groups.length - 1);
+              parsed.groups.splice(insertIdx, 0, {
+                ...cryptoGroup,
+                symbolIds: [...cryptoGroup.symbolIds]
               });
             }
           }
