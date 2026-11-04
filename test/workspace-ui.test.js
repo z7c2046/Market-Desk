@@ -1112,6 +1112,9 @@ test('UI Palette selection: defaults to terminal, switches to cobalt in preferen
 test('Mobile Workspace Redesign: 5 bottom tabs, dedicated search overlay, more functions sheet, and vertical card list', async t => {
   const ui = await mount(t, async url => ({ ok: true, json: async () => fixture(url) }));
   
+  // 0. Desktop Guard: on desktop viewports, mobile overlay root is not rendered
+  assert.equal(ui.w.document.querySelector('#mobile-overlay-root'), null, 'Mobile overlay root is strictly omitted on desktop');
+
   // 1. Resize to mobile width (390px iPhone standard)
   ui.w.innerWidth = 390;
   ui.w.dispatchEvent(new ui.w.Event('resize'));

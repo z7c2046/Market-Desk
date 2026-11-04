@@ -4,7 +4,54 @@
  * Colors utilize semantic tokens defined in styles.css & color-palettes.css.
  */
 
+/* ==========================================================================
+   Desktop Guard: Strictly hide all mobile-specific overlays, tabs, sheets,
+   and containers on screens >= 1024px so they never disrupt desktop flex flow.
+   ========================================================================== */
+#mobile-overlay-root,
+.mobile-tab-bar,
+.mobile-topbar-nav,
+.mobile-watchlist-container,
+.mobile-chart-overlay,
+.mobile-bottom-sheet,
+.mobile-overlay-scrim,
+.mobile-range-pills,
+.chart-expand-fullscreen {
+  display: none !important;
+}
+
+@media (min-width: 1024px) {
+  #mobile-overlay-root,
+  .mobile-tab-bar,
+  .mobile-topbar-nav,
+  .mobile-watchlist-container,
+  .mobile-chart-overlay,
+  .mobile-bottom-sheet,
+  .mobile-overlay-scrim,
+  .mobile-range-pills,
+  .chart-expand-fullscreen {
+    display: none !important;
+  }
+}
+
 @media (max-width: 1023px) {
+  #mobile-overlay-root {
+    display: block !important;
+    position: relative;
+    z-index: 1000;
+  }
+
+  .mobile-tab-bar {
+    display: flex !important;
+  }
+
+  .mobile-bottom-sheet {
+    display: flex !important;
+  }
+
+  .mobile-overlay-scrim {
+    display: block !important;
+  }
   /* 1. Shell and Workspace Foundation */
   html, body {
     overflow-x: hidden;
