@@ -179,6 +179,31 @@ test('isLeveragedEtf: identifies leveraged ETFs and preserves regular stocks and
   assert.equal(isLeveragedEtf('XLK'), false);
 });
 
+test('isCryptoSymbol: identifies cryptocurrency pairs and preserves regular US stocks', async () => {
+  const { isCryptoSymbol } = await import('../public/watchlist-model.js');
+  // Crypto pairs
+  assert.equal(isCryptoSymbol('BTC-USD'), true);
+  assert.equal(isCryptoSymbol('ETH-USD'), true);
+  assert.equal(isCryptoSymbol('SOL-USD'), true);
+  assert.equal(isCryptoSymbol('BNB-USD'), true);
+  assert.equal(isCryptoSymbol('XRP-USD'), true);
+  assert.equal(isCryptoSymbol('ADA-USD'), true);
+  assert.equal(isCryptoSymbol('BTC'), true);
+  assert.equal(isCryptoSymbol('ETH'), true);
+  assert.equal(isCryptoSymbol('DOGE-USDT'), true);
+  assert.equal(isCryptoSymbol('CUSTOM', '比特币合约'), true);
+
+  // Regular US stocks and ETFs
+  assert.equal(isCryptoSymbol('NVDA'), false);
+  assert.equal(isCryptoSymbol('AAPL'), false);
+  assert.equal(isCryptoSymbol('TSLA'), false);
+  assert.equal(isCryptoSymbol('MSFT'), false);
+  assert.equal(isCryptoSymbol('SPY'), false);
+  assert.equal(isCryptoSymbol('QQQ'), false);
+  assert.equal(isCryptoSymbol('MSTR'), false);
+  assert.equal(isCryptoSymbol('COIN'), false);
+});
+
 test('WatchlistManager: toggleGroupCollapse toggles and persists collapsed state', () => {
   const storage = new MockStorage();
   const manager = new WatchlistManager({ storage });

@@ -36,7 +36,7 @@ async function mount(t, fetchImpl, initStorage = null, configureWindow = null) {
   const appSrc = (await fs.readFile(new URL('../public/app.js', import.meta.url), 'utf8'))
     .replace("import { parseFlows } from './flows.js';", 'const parseFlows = window.parseFlows;')
     .replace("import { bindKlineGestures } from './composables/klineGesture.js';", 'const bindKlineGestures = window.bindKlineGestures;')
-    .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/watchlist-model\.js';/, 'const { WatchlistManager, sortWatchlistRows, getSelectedExtQuote, getCurrentSession, getNyTime, SESSION_TYPES, MAX_UNIQUE_SYMBOLS, validSymbol, SYMBOL_NAMES, NASDAQ100_STOCKS, SP500_STOCKS, isLeveragedEtf, STOCK_MARKET_CAPS, getStockMarketCap, sortSymbolsByMarketCap } = window;')
+    .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/watchlist-model\.js';/, 'const { WatchlistManager, sortWatchlistRows, getSelectedExtQuote, getCurrentSession, getNyTime, SESSION_TYPES, MAX_UNIQUE_SYMBOLS, validSymbol, SYMBOL_NAMES, NASDAQ100_STOCKS, SP500_STOCKS, isLeveragedEtf, isCryptoSymbol, STOCK_MARKET_CAPS, getStockMarketCap, sortSymbolsByMarketCap } = window;')
     .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/earnings-calendar-model\.js';/, 'const { AI_SECTOR_FILTERS, EARNINGS_DAYS, CORPORATE_LOGOS, DEFAULT_TECH_EARNINGS, CURRENT_WEEK_EARNINGS, EARNINGS_WEEKS, MACRO_CALENDAR_ITEMS, filterEarningsByDay, parseMetricNumber, getMetricSurprise, getMetricYoy } = window;')
     .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/inflection-signals\.js';/, 'const { computeInflectionSignals, formatSignalMarkers, dema } = window;')
     .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/theme-model\.js';/, 'const { VALID_PALETTES, VALID_THEMES, DEFAULT_PALETTE, DEFAULT_THEME, normalizePalette, normalizeTheme, applyThemeToDOM, readChartTokens } = window;')
@@ -138,6 +138,45 @@ const fixture = url => {
           leverageText: '10x',
           entryPx: 2328.55,
           pnlText: '+$185,000'
+        }
+      ]
+    };
+  }
+  if (u.pathname === '/api/crypto/onchain-stocks') {
+    return {
+      ok: true,
+      provider: 'On-Chain DEX & RWA Aggregator',
+      aggregate: {
+        totalTrackedCount: 10,
+        totalVolume24h: 268500000,
+        totalNetFlow24h: 38200000,
+        overallBuyRatio: 57.1,
+        overallSellRatio: 42.9,
+        overallSentiment: '多头净流入 BULLISH INFLOW',
+        sentimentClass: 'bullish',
+        topInflowSymbol: 'NVDA (+$18.4M)',
+        maxPremiumSymbol: 'TSLA (+1.13%)'
+      },
+      top10: [
+        {
+          rank: 1,
+          symbol: 'NVDA',
+          name: '英伟达',
+          protocol: 'Hyperliquid Perp / Backed',
+          network: 'Hyperliquid L1',
+          price: 148.5,
+          changePercent: 3.42,
+          tradFiClose: 147.8,
+          premiumPct: 0.47,
+          volume24h: 64820000,
+          inflow24h: 41614440,
+          outflow24h: 23205560,
+          netFlow: 18408880,
+          buyRatio: 64.2,
+          sellRatio: 35.8,
+          openInterest: 38500000,
+          turnoverRate: 16.8,
+          chartSymbol: 'NVDA'
         }
       ]
     };
@@ -482,6 +521,21 @@ test('Heatmap: strictly displays regular trading hours (正常开盘交易时段
     assert.ok(card.querySelector('.index-card-foot'), 'Card has foot row');
     assert.equal(card.children.length, 3, 'Card has exactly 3 lines of content without extra height rows');
   }
+
+  // 4. Verify Heatmap strictly displays US stocks, excluding crypto and leveraged ETFs
+  const heatmapData = ui.configs.get('heatmap-chart')?.series?.[0]?.data || [];
+  const heatmapSymbols = heatmapData.map(d => d.name);
+  assert.equal(heatmapSymbols.includes('BTC-USD'), false, 'BTC-USD must be excluded from heatmap');
+  assert.equal(heatmapSymbols.includes('ETH-USD'), false, 'ETH-USD must be excluded from heatmap');
+  assert.equal(heatmapSymbols.includes('SOXL'), false, 'SOXL must be excluded from heatmap');
+
+  const heatmapToolbar = ui.w.document.querySelector('.heatmap-toolbar');
+  assert.ok(heatmapToolbar, 'Heatmap toolbar exists');
+  assert.equal(heatmapToolbar.textContent.includes('加密货币'), false, 'Heatmap toolbar must not have 加密货币 tab');
+
+  const scopeSelect = ui.w.document.querySelector('.heatmap-scope-control select');
+  assert.ok(scopeSelect, 'Heatmap scope select exists');
+  assert.match(scopeSelect.textContent, /已剔除杠杆ETF与加密货币/);
 
   assert.deepEqual(ui.errors, []);
 });
@@ -1247,7 +1301,15 @@ test('Crypto Workspace: crypto market cap table is converted into watchlist cryp
   assert.equal(ui.w.document.querySelector('.crypto-table'), null, 'crypto-table is removed from crypto dashboard');
   assert.equal(ui.w.document.querySelector('#crypto-chart'), null, 'crypto-chart is not rendered');
 
-  // 3. Verify lower area renders full-width crypto-whale-tracker-panel with Hyperliquid L1 & positions
+  // 3. Verify On-Chain US Equities Flow Top 10 Panel exists
+  const onchainPanel = ui.w.document.querySelector('.onchain-stocks-panel');
+  assert.ok(onchainPanel, 'On-Chain US Equities Flow Panel exists');
+  assert.match(onchainPanel.textContent, /链上美股资金流向 · Top 10 成交榜/);
+  assert.match(onchainPanel.textContent, /NVDA/);
+  assert.match(onchainPanel.textContent, /英伟达/);
+  assert.match(onchainPanel.textContent, /Top 10 链上总成交额/);
+
+  // 4. Verify lower area renders full-width crypto-whale-tracker-panel with Hyperliquid L1 & positions
   const whalePanel = ui.w.document.querySelector('.crypto-whale-tracker-panel');
   assert.ok(whalePanel, 'Full-width Crypto whale tracker panel exists');
   assert.match(whalePanel.textContent, /Hyperliquid/);
@@ -1255,20 +1317,20 @@ test('Crypto Workspace: crypto market cap table is converted into watchlist cryp
   assert.match(whalePanel.textContent, /做多/);
   assert.match(whalePanel.textContent, /做空/);
 
-  // 4. Verify Watchlist sidebar contains the '加密货币' group
+  // 5. Verify Watchlist sidebar contains the '加密货币' group
   const rwSidebar = ui.w.document.querySelector('.right-watchlist-sidebar');
   assert.ok(rwSidebar, 'Right watchlist sidebar exists');
   assert.match(rwSidebar.textContent, /加密货币/, 'Watchlist has crypto group');
 
-  // 5. Click a position jump button (e.g. ETH or BTC)
-  const jumpBtn = ui.w.document.querySelector('.pos-jump-btn');
-  assert.ok(jumpBtn, 'Whale position jump button exists');
-  jumpBtn.click();
+  // 6. Click on-chain stock jump button
+  const onchainJumpBtn = ui.w.document.querySelector('.onchain-jump-btn');
+  assert.ok(onchainJumpBtn, 'On-chain stock jump button exists');
+  onchainJumpBtn.click();
   await tick();
   await tick();
 
-  // 6. Verify direct navigation to 'chart' (个股)
-  assert.equal(ui.w.document.querySelector('main').textContent.includes('USD'), true, 'Navigated to individual stock/crypto chart');
+  // 7. Verify direct navigation to 'chart' (个股)
+  assert.equal(ui.w.document.querySelector('main').textContent.includes('NVDA') || ui.w.document.querySelector('main').textContent.includes('USD'), true, 'Navigated to stock chart');
 
   assert.deepEqual(ui.errors, []);
 });

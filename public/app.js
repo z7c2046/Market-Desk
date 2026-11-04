@@ -40,6 +40,7 @@ import {
   NASDAQ100_STOCKS,
   SP500_STOCKS,
   isLeveragedEtf,
+  isCryptoSymbol,
   STOCK_MARKET_CAPS,
   getStockMarketCap,
   sortSymbolsByMarketCap
@@ -1286,6 +1287,97 @@ createApp({ setup() {
     }
   }
 
+  // ==========================================
+  // 链上美股资金流向 (On-Chain US Equities Flow Top 10)
+  // ==========================================
+  const onchainStocksData = ref(null);
+  const onchainStocksLoading = ref(false);
+  const onchainStocksError = ref('');
+  const onchainStockSearch = ref('');
+  const onchainStockSortField = ref('volume24h'); // 'volume24h' | 'netFlow' | 'premiumPct' | 'price'
+  const onchainStockSortDir = ref('desc');
+
+  const onchainAggregate = computed(() => {
+    return onchainStocksData.value?.aggregate || {
+      totalTrackedCount: 10,
+      totalVolume24h: 0,
+      totalNetFlow24h: 0,
+      overallBuyRatio: 50,
+      overallSellRatio: 50,
+      overallSentiment: '多空均衡 BALANCED',
+      sentimentClass: 'neutral',
+      topInflowSymbol: '--',
+      maxPremiumSymbol: '--',
+      activeTradersCount: 0
+    };
+  });
+
+  const onchainStocksList = computed(() => {
+    const list = onchainStocksData.value?.top10 || [];
+    let filtered = list;
+    const q = onchainStockSearch.value.trim().toUpperCase();
+    if (q) {
+      filtered = filtered.filter(s =>
+        s.symbol.toUpperCase().includes(q) ||
+        (s.name && s.name.includes(q)) ||
+        (s.enName && s.enName.toUpperCase().includes(q)) ||
+        (s.protocol && s.protocol.toUpperCase().includes(q))
+      );
+    }
+    const field = onchainStockSortField.value;
+    const dir = onchainStockSortDir.value === 'asc' ? 1 : -1;
+    return [...filtered].sort((a, b) => {
+      const va = a[field] ?? 0;
+      const vb = b[field] ?? 0;
+      return (va - vb) * dir;
+    });
+  });
+
+  function toggleOnchainSort(field) {
+    if (onchainStockSortField.value === field) {
+      onchainStockSortDir.value = onchainStockSortDir.value === 'desc' ? 'asc' : 'desc';
+    } else {
+      onchainStockSortField.value = field;
+      onchainStockSortDir.value = 'desc';
+    }
+  }
+
+  function formatOnchainUsd(val) {
+    if (val == null || isNaN(val)) return '0';
+    const num = Number(val);
+    if (Math.abs(num) >= 1e9) {
+      return (num / 1e9).toFixed(2) + 'B';
+    }
+    if (Math.abs(num) >= 1e6) {
+      return (num / 1e6).toFixed(2) + 'M';
+    }
+    if (Math.abs(num) >= 1e3) {
+      return (num / 1e3).toFixed(1) + 'K';
+    }
+    return Math.round(num).toLocaleString();
+  }
+
+  async function loadOnchainStocks({ force = false } = {}) {
+    try {
+      onchainStocksLoading.value = true;
+      onchainStocksError.value = '';
+      const url = force ? '/api/crypto/onchain-stocks?force=1' : '/api/crypto/onchain-stocks';
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.ok && data.top10) {
+          onchainStocksData.value = data;
+        }
+      } else {
+        onchainStocksError.value = `HTTP ${res.status}`;
+      }
+    } catch (err) {
+      onchainStocksError.value = err.message || '网络连接异常';
+    } finally {
+      onchainStocksLoading.value = false;
+    }
+  }
+
   // Watchlist Model & Manager (v2)
   const storage = typeof window !== 'undefined' && window.localStorage ? window.localStorage : null;
   const watchlistMgr = new WatchlistManager({ storage });
@@ -1603,7 +1695,17 @@ createApp({ setup() {
     }
   }, { immediate: true });
   const nonLeveragedWatchlist = computed(() => {
-    return (watchlist.value || []).filter(sym => !isLeveragedEtf(sym, SYMBOL_NAMES[sym]));
+    return (watchlist.value || []).filter(sym => {
+      // 1. 严格剔除杠杆 ETF (如 SOXL, TQQQ, NVDL, TSLL 等)
+      if (isLeveragedEtf(sym, SYMBOL_NAMES[sym])) return false;
+      // 2. 严格剔除加密货币标的 (如 BTC-USD, ETH-USD, SOL-USD 等)
+      if (isCryptoSymbol(sym, SYMBOL_NAMES[sym])) return false;
+      // 3. 检查标的是否归属于加密货币分组
+      const groupNames = watchlistMgr.getGroupsForSymbol(sym);
+      const isCryptoGroup = groupNames.some(g => typeof g === 'string' && (g.includes('加密') || g.toLowerCase().includes('crypto')));
+      if (isCryptoGroup) return false;
+      return true;
+    });
   });
   const currentSessionShortLabel = computed(() => {
     const s = currentSession.value?.session;
@@ -1666,22 +1768,28 @@ createApp({ setup() {
     if (heatmapScope.value === 'watchlist') {
       const symbols = nonLeveragedWatchlist.value;
       if (!symbols.length) {
-        return NASDAQ100_STOCKS.map(def => buildHeatmapStockItem({ symbol: def.symbol, name: def.name, sector: def.sector, fallbackStock: def }));
+        return NASDAQ100_STOCKS
+          .filter(def => !isLeveragedEtf(def.symbol) && !isCryptoSymbol(def.symbol))
+          .map(def => buildHeatmapStockItem({ symbol: def.symbol, name: def.name, sector: def.sector, fallbackStock: def }));
       }
       return symbols.map(sym => {
         const overviewStock = (overview.value?.stocks || []).find(s => s.symbol === sym);
         const groupNames = watchlistMgr.getGroupsForSymbol(sym);
-        const groupName = (typeof groupNames[0] === 'string' && groupNames[0]) || (watchlistMgr.data.groups || []).find(g => (g.symbolIds || []).includes(sym))?.name || overviewStock?.sector || '自选标的';
+        const groupName = (typeof groupNames[0] === 'string' && groupNames[0]) || (watchlistMgr.data.groups || []).find(g => (g.symbolIds || []).includes(sym))?.name || overviewStock?.sector || '自选美股';
         return buildHeatmapStockItem({ symbol: sym, sector: groupName, fallbackStock: overviewStock });
       });
     }
 
     if (heatmapScope.value === 'sp500') {
-      return SP500_STOCKS.map(def => buildHeatmapStockItem({ symbol: def.symbol, name: def.name, sector: def.sector, fallbackStock: def }));
+      return SP500_STOCKS
+        .filter(def => !isLeveragedEtf(def.symbol) && !isCryptoSymbol(def.symbol))
+        .map(def => buildHeatmapStockItem({ symbol: def.symbol, name: def.name, sector: def.sector, fallbackStock: def }));
     }
 
     // default / fallback: nasdaq100 (101 constituents)
-    return NASDAQ100_STOCKS.map(def => buildHeatmapStockItem({ symbol: def.symbol, name: def.name, sector: def.sector, fallbackStock: def }));
+    return NASDAQ100_STOCKS
+      .filter(def => !isLeveragedEtf(def.symbol) && !isCryptoSymbol(def.symbol))
+      .map(def => buildHeatmapStockItem({ symbol: def.symbol, name: def.name, sector: def.sector, fallbackStock: def }));
   });
 
   const missingTurnoverCount = computed(() => {
@@ -4510,6 +4618,7 @@ createApp({ setup() {
       fetchWatchlistQuotes({ silent: true });
       if (page.value === 'crypto') {
         loadCryptoWhales();
+        loadOnchainStocks();
       }
     }, 10000);
   }
@@ -4702,8 +4811,9 @@ createApp({ setup() {
       await nextTick();
       render();
     }
-    // 并行拉取链上巨鲸合约持仓数据
+    // 并行拉取链上巨鲸合约持仓与链上美股资金流向数据
     loadCryptoWhales();
+    loadOnchainStocks();
   };
   async function loadOptions(reset = false) {
     const raw = optionSymbol.value.trim().toUpperCase();
@@ -6018,7 +6128,7 @@ createApp({ setup() {
     page, currentNav, onPageEntered,
     overview, chart, options, news, states, searchInput, symbol, chartRange,
     optionSymbol, optionExpiry, optionMetric, strikeRange, optionsSpotQuote, formatExpiryLabel, butterflyOptionRows, callWallDist, putWallDist, newsSymbol, newsSearch, heatSize, sectorFilter,
-    heatmapScope, heatmapSession, currentSessionShortLabel, resolvedHeatmapSession, resolvedHeatmapSessionLabel, heatmapSessionBadgeText, activeHeatmapStocks, onHeatmapScopeChange, onHeatmapSessionChange, setHeatmapSession, cycleHeatmapSession, renderHeatmap, isLeveragedEtf, nonLeveragedWatchlist,
+    heatmapScope, heatmapSession, currentSessionShortLabel, resolvedHeatmapSession, resolvedHeatmapSessionLabel, heatmapSessionBadgeText, activeHeatmapStocks, onHeatmapScopeChange, onHeatmapSessionChange, setHeatmapSession, cycleHeatmapSession, renderHeatmap, isLeveragedEtf, isCryptoSymbol, nonLeveragedWatchlist,
     flowTab, flows, flowDate, flowDates, dayFlows,
     // Macro & Fear/Greed & Gold & Crypto & Treasury
     macroItems, macroMap, fearGreedIndex, goldContract, goldCnyPerGram, usdCnyRate, formatMacroPrice,
@@ -6029,6 +6139,9 @@ createApp({ setup() {
     cryptoWhaleData, cryptoWhaleLoading, cryptoWhaleError, cryptoWhaleFilter, cryptoWhaleSearch,
     expandedWhaleAddress, copiedWhaleAddress, whaleAggregate, allWhales, filteredWhales, whaleActivityLogs,
     formatWhaleUsd, formatWhaleCoinSize, toggleWhaleExpand, copyWhaleAddress, loadCryptoWhales,
+    // On-Chain US Equities Flow Top 10
+    onchainStocksData, onchainStocksLoading, onchainStocksError, onchainStockSearch, onchainStockSortField, onchainStockSortDir,
+    onchainAggregate, onchainStocksList, toggleOnchainSort, formatOnchainUsd, loadOnchainStocks,
     // Watchlist & Groups & Sidebar Live Streamlined Board
     watchlistData, groups, watchlist, quoteStore, providerInfo, currentSession,
     viewMode, extMode, sortField, sortDirection, freezeResort, compactPanelOpen,

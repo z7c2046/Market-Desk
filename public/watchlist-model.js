@@ -221,6 +221,26 @@ export function isLeveragedEtf(symbol, name = '') {
   return false;
 }
 
+export const KNOWN_CRYPTO_SYMBOLS = new Set([
+  'BTC-USD', 'ETH-USD', 'BNB-USD', 'SOL-USD', 'XRP-USD', 'ADA-USD',
+  'DOGE-USD', 'SUI-USD', 'AVAX-USD', 'LINK-USD', 'NEAR-USD', 'HYPE-USD',
+  'BTC', 'ETH', 'BNB', 'SOL', 'XRP', 'ADA', 'DOGE', 'SUI', 'AVAX', 'LINK', 'NEAR', 'HYPE'
+]);
+
+export function isCryptoSymbol(symbol, name = '') {
+  if (!symbol) return false;
+  const cleanSym = String(symbol).trim().toUpperCase();
+  if (KNOWN_CRYPTO_SYMBOLS.has(cleanSym)) return true;
+  if (cleanSym.endsWith('-USD') || cleanSym.endsWith('-USDT') || cleanSym.includes('/USD') || cleanSym.includes('/USDT')) {
+    return true;
+  }
+  const testName = String(name || SYMBOL_NAMES[cleanSym] || '');
+  if (/加密货币|比特币|以太坊|币安币|索拉纳|瑞波|艾达币|狗狗币|Crypto|Bitcoin|Ethereum/i.test(testName)) {
+    return true;
+  }
+  return false;
+}
+
 export const SESSION_TYPES = {
   PRE: 'pre',
   REGULAR: 'regular',

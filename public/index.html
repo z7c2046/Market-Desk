@@ -761,7 +761,7 @@
             <div class="heatmap-scope-control">
               <label>热力池:</label>
               <select v-model="heatmapScope" @change="onHeatmapScopeChange" aria-label="热力图数据范围">
-                <option value="watchlist">★ 我的自选 (已剔除杠杆ETF · {{ nonLeveragedWatchlist?.length || 0 }} 支)</option>
+                <option value="watchlist">★ 我的自选美股 (已剔除杠杆ETF与加密货币 · {{ nonLeveragedWatchlist?.length || 0 }} 支)</option>
                 <option value="nasdaq100">🚀 纳斯达克 100 (Nasdaq 100)</option>
                 <option value="sp500">🏛️ 标普 500 (S&P 500 核心蓝筹)</option>
               </select>
@@ -1335,6 +1335,31 @@
         <div class="kpi-foot-stats"><span class="sk sk-small" style="width: 85px;"></span><span class="sk sk-small" style="width: 85px;"></span></div>
       </div>
     </div>
+    <!-- 链上美股资金流向 Skeleton -->
+    <div class="onchain-stocks-full-wrap" style="margin-top: 16px;">
+      <section class="panel onchain-stocks-panel onchain-stocks-skeleton">
+        <div class="panel-heading">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span class="sk sk-strong" style="width: 220px; height: 20px;"></span>
+            <span class="sk sk-pill" style="width: 100px; height: 18px;"></span>
+          </div>
+          <span class="sk sk-pill" style="width: 70px; height: 24px;"></span>
+        </div>
+        <div style="padding: 16px; display:flex; flex-direction:column; gap:12px;">
+          <div style="display:flex; justify-content:space-between; gap:12px;">
+            <span v-for="i in 5" :key="i" class="sk sk-line" style="flex:1; height: 36px; border-radius: 6px;"></span>
+          </div>
+          <div v-for="i in 6" :key="i" style="display:flex; justify-content:space-between; align-items:center; padding: 10px 0; border-bottom: 1px solid var(--border-subtle);">
+            <span class="sk sk-pill" style="width: 30px; height: 20px;"></span>
+            <span class="sk sk-strong" style="width: 120px; height: 18px;"></span>
+            <span class="sk sk-line" style="width: 90px; height: 16px;"></span>
+            <span class="sk sk-line" style="width: 100px; height: 16px;"></span>
+            <span class="sk sk-pill" style="width: 110px; height: 22px;"></span>
+            <span class="sk sk-pill" style="width: 80px; height: 20px;"></span>
+          </div>
+        </div>
+      </section>
+    </div>
     <div class="crypto-whale-full-wrap" style="margin-top: 16px;">
       <section class="panel crypto-whale-tracker-panel crypto-whale-skeleton">
         <div class="panel-heading">
@@ -1481,6 +1506,162 @@
       </div>
     </div>
 
+    <!-- 链上美股资金流向 · 24H成交榜 TOP 10 -->
+    <div class="onchain-stocks-full-wrap" style="margin-top: 16px;">
+      <section class="panel onchain-stocks-panel">
+        <div class="panel-heading">
+          <div class="heading-row">
+            <h2>链上美股资金流向 · Top 10 成交榜</h2>
+            <span class="badge-rwa-pill">24/7 RWA 合成资产</span>
+            <span class="live-pulse-badge"><i class="pulse-dot"></i> 链上高频流动性</span>
+          </div>
+          <div class="onchain-head-actions">
+            <div class="onchain-search-box">
+              <span class="onchain-search-icon">🔍</span>
+              <input type="text" v-model="onchainStockSearch" class="onchain-search-input" placeholder="搜索美股标的/协议 (NVDA, TSLA...)" />
+              <button v-if="onchainStockSearch" class="onchain-clear-btn" @click="onchainStockSearch = ''">×</button>
+            </div>
+            <button class="onchain-refresh-btn" :class="{ 'is-loading': onchainStocksLoading }" @click="loadOnchainStocks({ force: true })" title="强制刷新链上美股成交与资金流向">
+              <span class="refresh-icon">↻</span>
+              <span>刷新</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 链上美股宏观流向汇总看板 -->
+        <div class="onchain-macro-summary">
+          <div class="onchain-summary-metric">
+            <span class="onchain-sum-label">Top 10 链上总成交额</span>
+            <strong class="onchain-sum-val font-mono">${{ formatOnchainUsd(onchainAggregate.totalVolume24h) }}</strong>
+          </div>
+          <div class="onchain-summary-metric">
+            <span class="onchain-sum-label">全网资金净流向</span>
+            <strong class="onchain-sum-val font-mono" :class="onchainAggregate.totalNetFlow24h >= 0 ? 'text-pos' : 'text-neg'">
+              {{ (onchainAggregate.totalNetFlow24h >= 0 ? '+' : '') + '$' + formatOnchainUsd(onchainAggregate.totalNetFlow24h) }}
+            </strong>
+          </div>
+          <div class="onchain-summary-metric">
+            <span class="onchain-sum-label">买卖盘力量对比</span>
+            <div class="onchain-flow-ratio-wrap">
+              <span class="ratio-text text-pos font-mono">{{ onchainAggregate.overallBuyRatio }}% 买</span>
+              <div class="onchain-flow-ratio-bar">
+                <div class="ratio-buy-fill" :style="{ width: onchainAggregate.overallBuyRatio + '%' }"></div>
+              </div>
+              <span class="ratio-text text-neg font-mono">{{ onchainAggregate.overallSellRatio }}% 卖</span>
+            </div>
+          </div>
+          <div class="onchain-summary-metric">
+            <span class="onchain-sum-label">资金净流入冠军</span>
+            <strong class="onchain-sum-highlight text-pos font-mono">{{ onchainAggregate.topInflowSymbol }}</strong>
+          </div>
+          <div class="onchain-summary-metric">
+            <span class="onchain-sum-label">链上最高溢价标的</span>
+            <strong class="onchain-sum-highlight text-cyan font-mono">{{ onchainAggregate.maxPremiumSymbol }}</strong>
+          </div>
+        </div>
+
+        <!-- 链上美股成交榜 Table -->
+        <div class="onchain-table-container">
+          <table class="onchain-stocks-table">
+            <thead>
+              <tr>
+                <th class="th-rank text-center">#</th>
+                <th class="th-asset">标的资产 / 链上协议</th>
+                <th class="th-price text-right" @click="toggleOnchainSort('price')" style="cursor:pointer;" title="点击按价格排序">
+                  <span>链上现价 / 24H 涨跌</span>
+                  <span class="sort-icon" v-if="onchainStockSortField === 'price'">{{ onchainStockSortDir === 'desc' ? '▼' : '▲' }}</span>
+                </th>
+                <th class="th-vol text-right" @click="toggleOnchainSort('volume24h')" style="cursor:pointer;" title="点击按成交量排序">
+                  <span>24H 链上成交量</span>
+                  <span class="sort-icon" v-if="onchainStockSortField === 'volume24h'">{{ onchainStockSortDir === 'desc' ? '▼' : '▲' }}</span>
+                </th>
+                <th class="th-flow text-right" @click="toggleOnchainSort('netFlow')" style="cursor:pointer;" title="点击按净资金流向排序">
+                  <span>净资金流向 (买/卖盘比)</span>
+                  <span class="sort-icon" v-if="onchainStockSortField === 'netFlow'">{{ onchainStockSortDir === 'desc' ? '▼' : '▲' }}</span>
+                </th>
+                <th class="th-prem text-right" @click="toggleOnchainSort('premiumPct')" style="cursor:pointer;" title="点击按溢折价率排序">
+                  <span>链上溢/折价率 (对比正股)</span>
+                  <span class="sort-icon" v-if="onchainStockSortField === 'premiumPct'">{{ onchainStockSortDir === 'desc' ? '▼' : '▲' }}</span>
+                </th>
+                <th class="th-oi text-right">未平仓合约 (OI)</th>
+                <th class="th-action text-center">走势</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="s in onchainStocksList" :key="s.symbol" class="onchain-stock-row" @click="selectCryptoCoin(s.chartSymbol)">
+                <td class="col-rank text-center">
+                  <span class="rank-badge" :class="'rank-' + s.rank">{{ s.rank }}</span>
+                </td>
+                <td class="col-asset">
+                  <div class="asset-cell">
+                    <span class="stock-avatar font-mono">{{ s.symbol.slice(0, 3) }}</span>
+                    <div class="asset-text-col">
+                      <div class="asset-name-row">
+                        <strong class="stock-symbol font-mono">{{ s.symbol }}</strong>
+                        <span class="stock-name">{{ s.name }}</span>
+                      </div>
+                      <div class="asset-protocol-row">
+                        <span class="protocol-tag">{{ s.protocol }}</span>
+                        <span class="network-tag muted font-mono">{{ s.network }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </td>
+                <td class="col-price text-right font-mono">
+                  <div class="price-cell">
+                    <strong class="price-val">${{ s.price.toFixed(2) }}</strong>
+                    <span class="pct-badge" :class="s.changePercent >= 0 ? 'badge-pos' : 'badge-neg'">
+                      {{ (s.changePercent >= 0 ? '+' : '') + s.changePercent.toFixed(2) + '%' }}
+                    </span>
+                  </div>
+                </td>
+                <td class="col-vol text-right font-mono">
+                  <div class="vol-cell">
+                    <strong class="vol-val">${{ formatOnchainUsd(s.volume24h) }}</strong>
+                    <div class="vol-bar-track">
+                      <div class="vol-bar-fill" :style="{ width: Math.min(100, Math.round((s.volume24h / (onchainStocksList[0]?.volume24h || 1)) * 100)) + '%' }"></div>
+                    </div>
+                  </div>
+                </td>
+                <td class="col-flow text-right font-mono">
+                  <div class="flow-cell">
+                    <strong class="netflow-val" :class="s.netFlow >= 0 ? 'text-pos' : 'text-neg'">
+                      {{ (s.netFlow >= 0 ? '+' : '') + '$' + formatOnchainUsd(s.netFlow) }}
+                    </strong>
+                    <div class="mini-flow-bar">
+                      <div class="flow-buy" :style="{ width: s.buyRatio + '%' }" :title="'主动买入: ' + s.buyRatio + '%'"></div>
+                      <div class="flow-sell" :style="{ width: s.sellRatio + '%' }" :title="'主动卖出: ' + s.sellRatio + '%'"></div>
+                    </div>
+                    <span class="flow-ratio-sub muted small">{{ s.buyRatio }}% 买 / {{ s.sellRatio }}% 卖</span>
+                  </div>
+                </td>
+                <td class="col-prem text-right font-mono">
+                  <div class="prem-cell">
+                    <span class="premium-pill" :class="s.premiumPct >= 0 ? 'pill-premium' : 'pill-discount'">
+                      {{ s.premiumPct >= 0 ? '溢价' : '折价' }} {{ (s.premiumPct >= 0 ? '+' : '') + s.premiumPct.toFixed(2) }}%
+                    </span>
+                    <span class="tradfi-ref muted small">基准: ${{ s.tradFiClose.toFixed(2) }}</span>
+                  </div>
+                </td>
+                <td class="col-oi text-right font-mono">
+                  <div class="oi-cell">
+                    <span class="oi-val">${{ formatOnchainUsd(s.openInterest) }}</span>
+                    <span class="turnover-sub muted small">换手 {{ s.turnoverRate }}%</span>
+                  </div>
+                </td>
+                <td class="col-action text-center">
+                  <button class="onchain-jump-btn" @click.stop="selectCryptoCoin(s.chartSymbol)" :title="'前往查看 ' + s.symbol + ' 实时 K 线行情'">
+                    <span>行情</span>
+                    <span class="jump-arrow">↗</span>
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
     <!-- 下方全宽：Hyperliquid 链上巨鲸合约持仓追踪 -->
     <div class="crypto-whale-full-wrap" style="margin-top: 16px;">
       <section class="panel crypto-whale-tracker-panel">
@@ -1585,7 +1766,11 @@
             :class="{ 'is-expanded': expandedWhaleAddress === w.address }"
           >
             <!-- 巨鲸卡片头部 -->
-            <div class="whale-card-header" @click="toggleWhaleExpand(w.address)">
+            <div
+              class="whale-card-header"
+              @click="toggleWhaleExpand(w.address)"
+              :title="expandedWhaleAddress === w.address ? '点击折叠此巨鲸仓位' : '点击展开查看此巨鲸的详细持仓与杠杆数据'"
+            >
               <div class="whale-info-left">
                 <span class="whale-avatar">{{ w.avatar }}</span>
                 <div class="whale-title-col">
