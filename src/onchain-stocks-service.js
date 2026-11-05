@@ -23,6 +23,21 @@ export const ONCHAIN_STOCK_CANDIDATES = [
     chartSymbol: 'NVDA'
   },
   {
+    symbol: 'MU',
+    name: '美光',
+    enName: 'Micron Technology, Inc.',
+    protocol: 'Hyperliquid Perp / Backed',
+    network: 'Hyperliquid L1 / Arbitrum',
+    basePrice: 684.05,
+    baseVolume24h: 108500000,
+    buyRatio: 0.385,
+    tradFiClose: 795.23,
+    openInterest: 62000000,
+    turnoverRate: 22.4,
+    onchainVolMultiplier: 0.0035,
+    chartSymbol: 'MU'
+  },
+  {
     symbol: 'TSLA',
     name: '特斯拉',
     enName: 'Tesla, Inc.',
@@ -201,6 +216,66 @@ export const ONCHAIN_STOCK_CANDIDATES = [
     turnoverRate: 7.2,
     onchainVolMultiplier: 0.0030,
     chartSymbol: 'GOOGL'
+  },
+  {
+    symbol: 'WDC',
+    name: '西部数据',
+    enName: 'Western Digital Corporation',
+    protocol: 'Hyperliquid Perp / Backed',
+    network: 'Hyperliquid L1 / Base',
+    basePrice: 275.22,
+    baseVolume24h: 22000000,
+    buyRatio: 0.412,
+    tradFiClose: 323.82,
+    openInterest: 15400000,
+    turnoverRate: 14.8,
+    onchainVolMultiplier: 0.0035,
+    chartSymbol: 'WDC'
+  },
+  {
+    symbol: 'STX',
+    name: '希捷科技',
+    enName: 'Seagate Technology Holdings',
+    protocol: 'Hyperliquid Perp / Backed',
+    network: 'Hyperliquid L1 / Base',
+    basePrice: 482.04,
+    baseVolume24h: 18500000,
+    buyRatio: 0.428,
+    tradFiClose: 557.08,
+    openInterest: 12800000,
+    turnoverRate: 12.1,
+    onchainVolMultiplier: 0.0035,
+    chartSymbol: 'STX'
+  },
+  {
+    symbol: 'TSM',
+    name: '台积电',
+    enName: 'Taiwan Semiconductor Manufacturing',
+    protocol: 'Hyperliquid Perp / Backed',
+    network: 'Hyperliquid L1 / Arbitrum',
+    basePrice: 288.60,
+    baseVolume24h: 26000000,
+    buyRatio: 0.515,
+    tradFiClose: 295.40,
+    openInterest: 19800000,
+    turnoverRate: 11.2,
+    onchainVolMultiplier: 0.0035,
+    chartSymbol: 'TSM'
+  },
+  {
+    symbol: 'AVGO',
+    name: '博通',
+    enName: 'Broadcom Inc.',
+    protocol: 'Hyperliquid Perp / Backed',
+    network: 'Hyperliquid L1 / Arbitrum',
+    basePrice: 172.50,
+    baseVolume24h: 24500000,
+    buyRatio: 0.540,
+    tradFiClose: 175.20,
+    openInterest: 17600000,
+    turnoverRate: 10.5,
+    onchainVolMultiplier: 0.0035,
+    chartSymbol: 'AVGO'
   }
 ];
 
@@ -220,6 +295,39 @@ export class OnchainStocksService {
     const sym = item.symbol;
     const isBull = buyRatio >= 0.55;
     const isBear = buyRatio <= 0.48;
+
+    if (sym === 'MU') {
+      const bearVwap = Number((price * 1.018).toFixed(2));
+      const bullVwap = Number((price * 0.965).toFixed(2));
+      return {
+        tacticalMode: '大周期抛压顺势空',
+        tacticalBadge: '🔴 存储芯片巨额抛压 · 反弹逢高沽空',
+        tacticalTone: 'bearish',
+        tacticalPlaybook: `美光 (MU) 日内面临存储芯片大周期剧烈波动与现货踩踏，全网成交额突破 $300 亿夺得第一，链上合约主力呈现极高换手与单边加空特征。主力空头加权防守线密集于 $${bearVwap}，目前现价空头显著控盘。实战指引：日内只要反抽无法收复 $${bearVwap}，应维持顺势逢反弹布空策略；下方短线防守在 $${bullVwap}，跌破将引发连环爆仓踩踏。`,
+        delta24h: {
+          shortDeltaText: '+38.5% (+$32.4M)',
+          longDeltaText: '-19.2% (-$14.8M)',
+          netWhaleBias: '巨额加空',
+          whaleShortRatio: 78.4,
+          whaleLongRatio: 21.6
+        },
+        costBasis: {
+          bearVwap,
+          bullVwap,
+          currentZone: `空方绝对控盘区 (现价承压于空方成本 $${Math.abs(bearVwap - price).toFixed(2)})`
+        },
+        keyWhales: [
+          { name: 'HL 存储半导体先锋对冲基金', style: '周期顺势空', action: '市价加空 +25,000 股', positionVal: 38600000, leverage: '5x 全仓', side: 'SHORT' },
+          { name: '存储芯片高频波段巨鲸', style: '网格沽空', action: '逢反弹挂卖', positionVal: 24200000, leverage: '6x 全仓', side: 'SHORT' },
+          { name: '半导体左侧抄底资金', style: '被动挂买', action: '深幅挂单接针', positionVal: 18400000, leverage: '3x 全仓', side: 'LONG' }
+        ],
+        livePrints: [
+          { time: '01:32:15', whale: 'HL 存储半导体对冲基金', action: '市价加空', shares: '5,000 股', value: Math.round(price * 5) + 'K', price: Number((price * 1.002).toFixed(2)), tactic: '破位追空' },
+          { time: '01:18:40', whale: '存储芯片量化 Desk', action: '限价平多', shares: '3,800 股', value: Math.round(price * 3.8) + 'K', price: price, tactic: '多头止损' },
+          { time: '00:54:22', whale: '半导体左侧抄底资金', action: '限价接单', shares: '4,500 股', value: Math.round(price * 4.5) + 'K', price: Number((price * 0.992).toFixed(2)), tactic: '被动承接' }
+        ]
+      };
+    }
 
     if (sym === 'NVDA') {
       const bearVwap = Number((price * 1.008).toFixed(2));

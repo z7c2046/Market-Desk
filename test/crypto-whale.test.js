@@ -166,11 +166,12 @@ test('CryptoWhaleService: getStockWhalesData returns verified on-chain US stock 
   assert.ok(stockWhales.aggregate.totalOI > 0);
   assert.ok(stockWhales.aggregate.topCoins.length > 0);
 
-  // Verify NVDA, TSLA, MSTR are tracked
+  // Verify NVDA, TSLA, MSTR, MU are tracked
   const allCoins = stockWhales.whales.flatMap(w => w.positions.map(p => p.coin));
   assert.ok(allCoins.includes('NVDA'));
   assert.ok(allCoins.includes('TSLA'));
   assert.ok(allCoins.includes('MSTR'));
+  assert.ok(allCoins.includes('MU'));
 
   // Verify activity logs generated
   assert.ok(stockWhales.activityLogs.length > 0);

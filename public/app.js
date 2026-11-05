@@ -1552,31 +1552,31 @@ createApp({ setup() {
   // ==========================================
   const DEFAULT_ONCHAIN_STOCKS_PAYLOAD = {
     ok: true,
-    provider: 'On-Chain DEX & RWA Aggregator',
+    provider: 'TradeFi On-Chain DEX & RWA Aggregator',
     isLive: true,
     aggregate: {
       totalTrackedCount: 10,
-      totalVolume24h: 302500000,
-      totalNetFlow24h: 61256160,
-      overallBuyRatio: 60.1,
-      overallSellRatio: 39.9,
-      overallSentiment: '多头净流入 BULLISH INFLOW',
-      sentimentClass: 'bullish',
-      topInflowSymbol: 'NVDA (+$18.4M)',
+      totalVolume24h: 462500000,
+      totalNetFlow24h: -112450000,
+      overallBuyRatio: 38.6,
+      overallSellRatio: 61.4,
+      overallSentiment: '空头净流出 BEARISH OUTFLOW',
+      sentimentClass: 'bearish',
+      topInflowSymbol: 'TSLA (+$12.8M)',
       maxPremiumSymbol: 'MSTR (+1.19%)',
-      activeTradersCount: 14850
+      activeTradersCount: 18450
     },
     top10: [
-      { rank: 1, symbol: 'NVDA', name: '英伟达', enName: 'NVIDIA Corporation', protocol: 'Hyperliquid Perp / Backed', network: 'Hyperliquid L1 / Arbitrum', price: 148.50, changePercent: 0.47, tradFiClose: 147.80, premiumPct: 0.47, volume24h: 64820000, inflow24h: 41614440, outflow24h: 23205560, netFlow: 18408880, buyRatio: 64.2, sellRatio: 35.8, openInterest: 38500000, turnoverRate: 16.8, chartSymbol: 'NVDA' },
-      { rank: 2, symbol: 'TSLA', name: '特斯拉', enName: 'Tesla, Inc.', protocol: 'Hyperliquid Perp / Synthetix', network: 'Hyperliquid L1 / Optimism', price: 251.60, changePercent: 1.13, tradFiClose: 248.80, premiumPct: 1.13, volume24h: 52310000, inflow24h: 32589130, outflow24h: 19720870, netFlow: 12868260, buyRatio: 62.3, sellRatio: 37.7, openInterest: 31200000, turnoverRate: 15.4, chartSymbol: 'TSLA' },
-      { rank: 3, symbol: 'MSTR', name: '微策略', enName: 'MicroStrategy Inc.', protocol: 'Hyperliquid Perp / Backed', network: 'Hyperliquid L1 / Base', price: 238.20, changePercent: 1.19, tradFiClose: 235.40, premiumPct: 1.19, volume24h: 41650000, inflow24h: 27947150, outflow24h: 13702850, netFlow: 14244300, buyRatio: 67.1, sellRatio: 32.9, openInterest: 26800000, turnoverRate: 18.2, chartSymbol: 'MSTR' },
-      { rank: 4, symbol: 'COIN', name: 'Coinbase', enName: 'Coinbase Global, Inc.', protocol: 'Hyperliquid Perp / Backed', network: 'Hyperliquid L1 / Base', price: 213.80, changePercent: 0.85, tradFiClose: 212.00, premiumPct: 0.85, volume24h: 33120000, inflow24h: 19805760, outflow24h: 13314240, netFlow: 6491520, buyRatio: 59.8, sellRatio: 40.2, openInterest: 19400000, turnoverRate: 13.9, chartSymbol: 'COIN' },
-      { rank: 5, symbol: 'AAPL', name: '苹果', enName: 'Apple Inc.', protocol: 'Backed Finance bAAPL', network: 'Ethereum / Base', price: 222.40, changePercent: -0.22, tradFiClose: 222.90, premiumPct: -0.22, volume24h: 24750000, inflow24h: 11335500, outflow24h: 13414500, netFlow: -2079000, buyRatio: 45.8, sellRatio: 54.2, openInterest: 15600000, turnoverRate: 8.5, chartSymbol: 'AAPL' },
-      { rank: 6, symbol: 'SPY', name: '标普500 ETF', enName: 'SPDR S&P 500 ETF Trust', protocol: 'Hyperliquid Perp / Synthetix', network: 'Hyperliquid L1 / Ethereum', price: 579.80, changePercent: 0.22, tradFiClose: 578.50, premiumPct: 0.22, volume24h: 22400000, inflow24h: 13104000, outflow24h: 9296000, netFlow: 3808000, buyRatio: 58.5, sellRatio: 41.5, openInterest: 28900000, turnoverRate: 6.2, chartSymbol: 'SPY' },
-      { rank: 7, symbol: 'QQQ', name: '纳指100 ETF', enName: 'Invesco QQQ Trust', protocol: 'Hyperliquid Perp / Synthetix', network: 'Hyperliquid L1 / Ethereum', price: 489.60, changePercent: 0.29, tradFiClose: 488.20, premiumPct: 0.29, volume24h: 19850000, inflow24h: 12148200, outflow24h: 7701800, netFlow: 4446400, buyRatio: 61.2, sellRatio: 38.8, openInterest: 24100000, turnoverRate: 7.1, chartSymbol: 'QQQ' },
-      { rank: 8, symbol: 'AMZN', name: '亚马逊', enName: 'Amazon.com, Inc.', protocol: 'Backed Finance bAMZN', network: 'Base / Arbitrum', price: 199.10, changePercent: 0.35, tradFiClose: 198.40, premiumPct: 0.35, volume24h: 16500000, inflow24h: 9553500, outflow24h: 6946500, netFlow: 2607000, buyRatio: 57.9, sellRatio: 42.1, openInterest: 12200000, turnoverRate: 9.3, chartSymbol: 'AMZN' },
-      { rank: 9, symbol: 'MSFT', name: '微软', enName: 'Microsoft Corporation', protocol: 'Backed Finance bMSFT', network: 'Ethereum / Base', price: 415.90, changePercent: -0.22, tradFiClose: 416.80, premiumPct: -0.22, volume24h: 14200000, inflow24h: 6375800, outflow24h: 7824200, netFlow: -1448400, buyRatio: 44.9, sellRatio: 55.1, openInterest: 11500000, turnoverRate: 7.8, chartSymbol: 'MSFT' },
-      { rank: 10, symbol: 'META', name: 'Meta', enName: 'Meta Platforms, Inc.', protocol: 'Hyperliquid Perp / Backed', network: 'Hyperliquid L1 / Solana', price: 566.50, changePercent: 0.23, tradFiClose: 565.20, premiumPct: 0.23, volume24h: 12900000, inflow24h: 7404600, outflow24h: 5495400, netFlow: 1909200, buyRatio: 57.4, sellRatio: 42.6, openInterest: 10800000, turnoverRate: 8.9, chartSymbol: 'META' }
+      { rank: 1, symbol: 'MU', name: '美光', enName: 'Micron Technology, Inc.', protocol: 'Hyperliquid Perp / Backed', network: 'Hyperliquid L1 / Arbitrum', price: 684.05, changePercent: -14.25, tradFiClose: 795.23, premiumPct: -0.42, volume24h: 108500000, inflow24h: 41772500, outflow24h: 66727500, netFlow: -24955000, buyRatio: 38.5, sellRatio: 61.5, openInterest: 62000000, turnoverRate: 22.4, chartSymbol: 'MU' },
+      { rank: 2, symbol: 'NVDA', name: '英伟达', enName: 'NVIDIA Corporation', protocol: 'Hyperliquid Perp / Backed', network: 'Hyperliquid L1 / Arbitrum', price: 183.36, changePercent: -8.38, tradFiClose: 200.13, premiumPct: 0.35, volume24h: 86600000, inflow24h: 31176000, outflow24h: 55424000, netFlow: -24248000, buyRatio: 36.0, sellRatio: 64.0, openInterest: 48500000, turnoverRate: 16.8, chartSymbol: 'NVDA' },
+      { rank: 3, symbol: 'QQQ', name: '纳指100 ETF', enName: 'Invesco QQQ Trust', protocol: 'Hyperliquid Perp / Synthetix', network: 'Hyperliquid L1 / Ethereum', price: 663.50, changePercent: -4.11, tradFiClose: 691.95, premiumPct: 0.28, volume24h: 60700000, inflow24h: 24280000, outflow24h: 36420000, netFlow: -12140000, buyRatio: 40.0, sellRatio: 60.0, openInterest: 34100000, turnoverRate: 7.1, chartSymbol: 'QQQ' },
+      { rank: 4, symbol: 'SPY', name: '标普500 ETF', enName: 'SPDR S&P 500 ETF Trust', protocol: 'Hyperliquid Perp / Synthetix', network: 'Hyperliquid L1 / Ethereum', price: 748.16, changePercent: -2.43, tradFiClose: 766.81, premiumPct: 0.22, volume24h: 58700000, inflow24h: 26415000, outflow24h: 32285000, netFlow: -5870000, buyRatio: 45.0, sellRatio: 55.0, openInterest: 38900000, turnoverRate: 6.2, chartSymbol: 'SPY' },
+      { rank: 5, symbol: 'TSLA', name: '特斯拉', enName: 'Tesla, Inc.', protocol: 'Hyperliquid Perp / Synthetix', network: 'Hyperliquid L1 / Optimism', price: 350.78, changePercent: -8.93, tradFiClose: 385.19, premiumPct: 0.45, volume24h: 52700000, inflow24h: 22134000, outflow24h: 30566000, netFlow: -8432000, buyRatio: 42.0, sellRatio: 58.0, openInterest: 31200000, turnoverRate: 15.4, chartSymbol: 'TSLA' },
+      { rank: 6, symbol: 'AMD', name: '超威半导体', enName: 'Advanced Micro Devices', protocol: 'Hyperliquid Perp', network: 'Hyperliquid L1', price: 429.99, changePercent: -12.03, tradFiClose: 488.78, premiumPct: 0.38, volume24h: 36200000, inflow24h: 12670000, outflow24h: 23530000, netFlow: -10860000, buyRatio: 35.0, sellRatio: 65.0, openInterest: 18400000, turnoverRate: 10.1, chartSymbol: 'AMD' },
+      { rank: 7, symbol: 'AMZN', name: '亚马逊', enName: 'Amazon.com, Inc.', protocol: 'Backed Finance bAMZN', network: 'Base / Arbitrum', price: 260.23, changePercent: -2.18, tradFiClose: 266.03, premiumPct: 0.26, volume24h: 31000000, inflow24h: 13950000, outflow24h: 17050000, netFlow: -3100000, buyRatio: 45.0, sellRatio: 55.0, openInterest: 16200000, turnoverRate: 9.3, chartSymbol: 'AMZN' },
+      { rank: 8, symbol: 'AAPL', name: '苹果', enName: 'Apple Inc.', protocol: 'Backed Finance bAAPL', network: 'Ethereum / Base', price: 348.12, changePercent: -0.40, tradFiClose: 349.51, premiumPct: 0.15, volume24h: 29800000, inflow24h: 14602000, outflow24h: 15198000, netFlow: -596000, buyRatio: 49.0, sellRatio: 51.0, openInterest: 15600000, turnoverRate: 8.5, chartSymbol: 'AAPL' },
+      { rank: 9, symbol: 'MSFT', name: '微软', enName: 'Microsoft Corporation', protocol: 'Backed Finance bMSFT', network: 'Ethereum / Base', price: 545.18, changePercent: -1.91, tradFiClose: 555.80, premiumPct: 0.18, volume24h: 25500000, inflow24h: 11475000, outflow24h: 14025000, netFlow: -2550000, buyRatio: 45.0, sellRatio: 55.0, openInterest: 14500000, turnoverRate: 7.8, chartSymbol: 'MSFT' },
+      { rank: 10, symbol: 'MSTR', name: '微策略', enName: 'MicroStrategy Inc.', protocol: 'Hyperliquid Perp / Backed', network: 'Hyperliquid L1 / Base', price: 131.63, changePercent: -7.65, tradFiClose: 142.54, premiumPct: 0.85, volume24h: 24700000, inflow24h: 12844000, outflow24h: 11856000, netFlow: 988000, buyRatio: 52.0, sellRatio: 48.0, openInterest: 26800000, turnoverRate: 18.2, chartSymbol: 'MSTR' }
     ]
   };
   const onchainStocksData = ref(DEFAULT_ONCHAIN_STOCKS_PAYLOAD);

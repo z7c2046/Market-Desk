@@ -85,6 +85,7 @@ export const COIN_CHART_SYMBOLS = {
   HYPE: 'HYPE-USD',
   // 链上美股 Top 10 核心标的
   NVDA: 'NVDA',
+  MU: 'MU',
   TSLA: 'TSLA',
   MSTR: 'MSTR',
   COIN: 'COIN',
@@ -95,11 +96,41 @@ export const COIN_CHART_SYMBOLS = {
   MSFT: 'MSFT',
   META: 'META',
   PLTR: 'PLTR',
-  AMD: 'AMD'
+  AMD: 'AMD',
+  WDC: 'WDC',
+  STX: 'STX',
+  GOOGL: 'GOOGL',
+  TSM: 'TSM',
+  AVGO: 'AVGO'
 };
 
 // 精选链上美股 (Top 10 成交标的) 巨鲸与机构大户持仓
 export const CURATED_STOCK_WHALES = [
+  {
+    address: '0x8c5b91a27e314f3b723508194b61a3f591244e82',
+    name: 'HL 存储半导体先锋对冲基金',
+    tag: '存储芯片对冲巨鲸',
+    avatar: '💾',
+    accountValue: 42800000,
+    totalNtlPos: 51000000,
+    positions: [
+      { coin: 'MU', szi: '-56455.5', entryPx: '715.00', markPx: '684.05', positionValue: '38618000', unrealizedPnl: '1747300', returnOnEquity: '0.226', leverage: { value: 5, type: 'cross' }, liquidationPx: '850.00' },
+      { coin: 'WDC', szi: '-45000.0', entryPx: '282.00', markPx: '275.22', positionValue: '12384900', unrealizedPnl: '305100', returnOnEquity: '0.098', leverage: { value: 4, type: 'cross' }, liquidationPx: '345.00' }
+    ]
+  },
+  {
+    address: '0x9e5c467a90f055627685601c238b16c1724f8d55',
+    name: '美光与半导体波段巨鲸',
+    tag: '高胜率波段大户',
+    avatar: '🎯',
+    accountValue: 31200000,
+    totalNtlPos: 38500000,
+    positions: [
+      { coin: 'MU', szi: '35200.0', entryPx: '675.00', markPx: '684.05', positionValue: '24078000', unrealizedPnl: '318560', returnOnEquity: '0.066', leverage: { value: 5, type: 'cross' }, liquidationPx: '540.00' },
+      { coin: 'NVDA', szi: '45600.0', entryPx: '180.20', markPx: '183.36', positionValue: '8361216', unrealizedPnl: '144170', returnOnEquity: '0.086', leverage: { value: 5, type: 'cross' }, liquidationPx: '145.00' },
+      { coin: 'AMD', szi: '-14100.0', entryPx: '435.00', markPx: '429.99', positionValue: '6062859', unrealizedPnl: '70641', returnOnEquity: '0.046', leverage: { value: 4, type: 'cross' }, liquidationPx: '530.00' }
+    ]
+  },
   {
     address: '0x7a250d5630b4cf539739df2c5dacb4c659f2488d',
     name: 'HL 科技股阿尔法对冲基金',

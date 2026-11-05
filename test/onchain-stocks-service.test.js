@@ -35,6 +35,16 @@ describe('OnchainStocksService', () => {
     assert.ok(processed.intradayRadar.livePrints.length > 0);
   });
 
+  it('MU (美光) candidate exists and has tailored intradayRadar', () => {
+    const service = new OnchainStocksService();
+    const muItem = ONCHAIN_STOCK_CANDIDATES.find(c => c.symbol === 'MU');
+    assert.ok(muItem, 'MU candidate exists');
+    const processed = service.processStockItem(muItem);
+    assert.strictEqual(processed.symbol, 'MU');
+    assert.match(processed.intradayRadar.tacticalPlaybook, /美光/);
+    assert.ok(processed.intradayRadar.costBasis.bearVwap > 0);
+  });
+
   it('getOnchainStocksData returns exactly Top 10 sorted by volume24h descending', async () => {
     const service = new OnchainStocksService();
     const data = await service.getOnchainStocksData({ force: true });
