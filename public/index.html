@@ -1559,9 +1559,9 @@
       <section class="panel onchain-stocks-panel">
         <div class="panel-heading">
           <div class="heading-row">
-            <h2>链上美股资金流向 · Top 10 成交榜</h2>
-            <span class="badge-rwa-pill">24/7 RWA 合成资产</span>
-            <span class="live-pulse-badge"><i class="pulse-dot"></i> 链上高频流动性</span>
+            <h2>TradeFi 链上美股资金流向 · Top 10 成交榜</h2>
+            <span class="badge-rwa-pill">TradeFi 链上美股 Top 10</span>
+            <span class="live-pulse-badge"><i class="pulse-dot"></i> 实时行情已联通 (4s 刷新)</span>
           </div>
           <div class="onchain-head-actions">
             <div class="onchain-search-box">
@@ -1569,7 +1569,7 @@
               <input type="text" v-model="onchainStockSearch" class="onchain-search-input" placeholder="搜索美股标的/协议 (NVDA, TSLA...)" />
               <button v-if="onchainStockSearch" class="onchain-clear-btn" @click="onchainStockSearch = ''">×</button>
             </div>
-            <button class="onchain-refresh-btn" :class="{ 'is-loading': onchainStocksLoading }" @click="loadOnchainStocks({ force: true })" title="强制刷新链上美股成交与资金流向">
+            <button class="onchain-refresh-btn" :class="{ 'is-loading': onchainStocksLoading }" @click="loadOnchainStocks({ force: true })" title="实时行情每4秒自动更新，点击立即强制拉取">
               <span class="refresh-icon">↻</span>
               <span>刷新</span>
             </button>
@@ -1636,83 +1636,188 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="s in onchainStocksList" :key="s.symbol" class="onchain-stock-row" @click="selectCryptoCoin(s.chartSymbol)">
-                <td class="col-rank text-center">
-                  <span class="rank-badge" :class="'rank-' + s.rank">{{ s.rank }}</span>
-                </td>
-                <td class="col-asset">
-                  <div class="asset-cell">
-                    <span class="stock-avatar font-mono">{{ s.symbol.slice(0, 3) }}</span>
-                    <div class="asset-text-col">
-                      <div class="asset-name-row">
-                        <strong class="stock-symbol font-mono">{{ s.symbol }}</strong>
-                        <span class="stock-name">{{ s.name }}</span>
+              <template v-for="s in onchainStocksList" :key="s.symbol">
+                <tr class="onchain-stock-row" :class="{ 'is-radar-open': expandedStockSymbol === s.symbol }" @click="toggleStockRadar(s.symbol)">
+                  <td class="col-rank text-center">
+                    <span class="rank-badge" :class="'rank-' + s.rank">{{ s.rank }}</span>
+                  </td>
+                  <td class="col-asset">
+                    <div class="asset-cell">
+                      <span class="stock-avatar font-mono">{{ s.symbol.slice(0, 3) }}</span>
+                      <div class="asset-text-col">
+                        <div class="asset-name-row">
+                          <strong class="stock-symbol font-mono">{{ s.symbol }}</strong>
+                          <span class="stock-name">{{ s.name }}</span>
+                        </div>
+                        <div class="asset-protocol-row">
+                          <span class="protocol-tag">{{ s.protocol }}</span>
+                          <span class="network-tag muted font-mono">{{ s.network }}</span>
+                        </div>
                       </div>
-                      <div class="asset-protocol-row">
-                        <span class="protocol-tag">{{ s.protocol }}</span>
-                        <span class="network-tag muted font-mono">{{ s.network }}</span>
+                    </div>
+                  </td>
+                  <td class="col-price text-right font-mono" :class="{ 'flash-price-up': s._priceDir === 'up', 'flash-price-down': s._priceDir === 'down' }">
+                    <div class="price-cell">
+                      <strong class="price-val">${{ s.price?.toFixed(2) }}</strong>
+                      <span class="pct-badge" :class="s.changePercent >= 0 ? 'badge-pos' : 'badge-neg'">
+                        {{ (s.changePercent >= 0 ? '+' : '') + s.changePercent?.toFixed(2) + '%' }}
+                      </span>
+                    </div>
+                  </td>
+                  <td class="col-vol text-right font-mono">
+                    <div class="vol-cell">
+                      <strong class="vol-val">${{ formatOnchainUsd(s.volume24h) }}</strong>
+                      <div class="vol-bar-track">
+                        <div class="vol-bar-fill" :style="{ width: Math.min(100, Math.round((s.volume24h / (onchainStocksList[0]?.volume24h || 1)) * 100)) + '%' }"></div>
                       </div>
                     </div>
-                  </div>
-                </td>
-                <td class="col-price text-right font-mono">
-                  <div class="price-cell">
-                    <strong class="price-val">${{ s.price.toFixed(2) }}</strong>
-                    <span class="pct-badge" :class="s.changePercent >= 0 ? 'badge-pos' : 'badge-neg'">
-                      {{ (s.changePercent >= 0 ? '+' : '') + s.changePercent.toFixed(2) + '%' }}
-                    </span>
-                  </div>
-                </td>
-                <td class="col-vol text-right font-mono">
-                  <div class="vol-cell">
-                    <strong class="vol-val">${{ formatOnchainUsd(s.volume24h) }}</strong>
-                    <div class="vol-bar-track">
-                      <div class="vol-bar-fill" :style="{ width: Math.min(100, Math.round((s.volume24h / (onchainStocksList[0]?.volume24h || 1)) * 100)) + '%' }"></div>
+                  </td>
+                  <td class="col-flow text-center font-mono">
+                    <div class="flow-cell">
+                      <strong class="netflow-val" :class="s.netFlow >= 0 ? 'text-pos' : 'text-neg'">
+                        {{ formatOnchainFlowUsd(s.netFlow) }}
+                      </strong>
+                      <div class="mini-flow-bar">
+                        <div class="flow-buy" :style="{ width: s.buyRatio + '%' }" :title="'主动买入: ' + s.buyRatio + '%'"></div>
+                        <div class="flow-sell" :style="{ width: s.sellRatio + '%' }" :title="'主动卖出: ' + s.sellRatio + '%'"></div>
+                      </div>
+                      <div class="flow-ratio-sub">
+                        <span class="flow-ratio-buy text-pos">{{ s.buyRatio }}% 买</span>
+                        <span class="flow-ratio-sell text-neg">{{ s.sellRatio }}% 卖</span>
+                      </div>
                     </div>
-                  </div>
-                </td>
-                <td class="col-flow text-center font-mono">
-                  <div class="flow-cell">
-                    <strong class="netflow-val" :class="s.netFlow >= 0 ? 'text-pos' : 'text-neg'">
-                      {{ formatOnchainFlowUsd(s.netFlow) }}
-                    </strong>
-                    <div class="mini-flow-bar">
-                      <div class="flow-buy" :style="{ width: s.buyRatio + '%' }" :title="'主动买入: ' + s.buyRatio + '%'"></div>
-                      <div class="flow-sell" :style="{ width: s.sellRatio + '%' }" :title="'主动卖出: ' + s.sellRatio + '%'"></div>
+                  </td>
+                  <td class="col-prem text-right font-mono">
+                    <div class="prem-cell">
+                      <span class="premium-pill" :class="s.premiumPct >= 0 ? 'pill-premium' : 'pill-discount'">
+                        {{ s.premiumPct >= 0 ? '溢价' : '折价' }} {{ (s.premiumPct >= 0 ? '+' : '') + s.premiumPct.toFixed(2) }}%
+                      </span>
+                      <span class="tradfi-ref muted small">基准: ${{ s.tradFiClose.toFixed(2) }}</span>
                     </div>
-                    <div class="flow-ratio-sub">
-                      <span class="flow-ratio-buy text-pos">{{ s.buyRatio }}% 买</span>
-                      <span class="flow-ratio-sell text-neg">{{ s.sellRatio }}% 卖</span>
+                  </td>
+                  <td class="col-oi text-right font-mono">
+                    <div class="oi-cell">
+                      <span class="oi-val">${{ formatOnchainUsd(s.openInterest) }}</span>
+                      <span class="turnover-sub muted small">换手 {{ s.turnoverRate }}%</span>
                     </div>
-                  </div>
-                </td>
-                <td class="col-prem text-right font-mono">
-                  <div class="prem-cell">
-                    <span class="premium-pill" :class="s.premiumPct >= 0 ? 'pill-premium' : 'pill-discount'">
-                      {{ s.premiumPct >= 0 ? '溢价' : '折价' }} {{ (s.premiumPct >= 0 ? '+' : '') + s.premiumPct.toFixed(2) }}%
-                    </span>
-                    <span class="tradfi-ref muted small">基准: ${{ s.tradFiClose.toFixed(2) }}</span>
-                  </div>
-                </td>
-                <td class="col-oi text-right font-mono">
-                  <div class="oi-cell">
-                    <span class="oi-val">${{ formatOnchainUsd(s.openInterest) }}</span>
-                    <span class="turnover-sub muted small">换手 {{ s.turnoverRate }}%</span>
-                  </div>
-                </td>
-                <td class="col-action text-center">
-                  <div class="action-btn-group">
-                    <button class="onchain-whale-btn" @click.stop="viewStockWhale(s.symbol)" :title="'查看持有 ' + s.symbol + ' 的链上巨鲸钱包仓位'">
-                      <span class="whale-btn-icon">🐋</span>
-                      <span>持仓</span>
-                    </button>
-                    <button class="onchain-jump-btn" @click.stop="selectCryptoCoin(s.chartSymbol)" :title="'前往查看 ' + s.symbol + ' 实时 K 线行情'">
-                      <span>行情</span>
-                      <span class="jump-arrow">↗</span>
-                    </button>
-                  </div>
-                </td>
-              </tr>
+                  </td>
+                  <td class="col-action text-center">
+                    <div class="action-btn-group">
+                      <button
+                        class="onchain-radar-btn"
+                        :class="{ active: expandedStockSymbol === s.symbol }"
+                        @click.stop="toggleStockRadar(s.symbol)"
+                        :title="expandedStockSymbol === s.symbol ? '收起主力日内操盘雷达' : '展开 ' + s.symbol + ' 标的主力日内操盘雷达与下单跟踪器'"
+                      >
+                        <span class="radar-btn-icon">🎯</span>
+                        <span>{{ expandedStockSymbol === s.symbol ? '收起' : '雷达' }}</span>
+                      </button>
+                      <button class="onchain-whale-btn" @click.stop="viewStockWhale(s.symbol)" :title="'在下方巨鲸看板中透视 ' + s.symbol + ' 钱包持仓'">
+                        <span class="whale-btn-icon">🐋</span>
+                        <span>巨鲸</span>
+                      </button>
+                      <button class="onchain-jump-btn" @click.stop="selectCryptoCoin(s.chartSymbol)" :title="'前往查看 ' + s.symbol + ' 实时 K 线行情'">
+                        <span>行情</span>
+                        <span class="jump-arrow">↗</span>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+
+                <!-- 标的主力日内短线操盘跟踪器展开行 -->
+                <tr v-if="expandedStockSymbol === s.symbol" :key="'radar-' + s.symbol" class="onchain-radar-tr">
+                  <td colspan="8" class="onchain-radar-td">
+                    <div class="stock-radar-container">
+                      <!-- 1. 顶部状态条：战术定性 & 操盘模式 -->
+                      <div class="radar-top-strip">
+                        <div class="radar-badge-group">
+                          <span class="radar-tag font-mono">{{ s.symbol }} · 主力日内操盘雷达</span>
+                          <strong class="radar-tactical-pill" :class="'tone-' + (s.intradayRadar?.tacticalTone || 'neutral')">
+                            {{ s.intradayRadar?.tacticalBadge || '日内博弈中' }}
+                          </strong>
+                          <span class="radar-sentiment-context muted small">宏观情绪: {{ fearGreedIndex ? (fearGreedIndex.value + '分 ' + fearGreedIndex.rating) : '极度恐慌' }}</span>
+                        </div>
+                        <div class="radar-cost-pills font-mono">
+                          <span class="cost-pill"><span class="muted">做空成本线:</span> <strong class="text-neg">${{ (s.intradayRadar?.costBasis?.bearVwap || (s.price * 1.01)).toFixed(2) }}</strong></span>
+                          <span class="cost-pill"><span class="muted">做多成本线:</span> <strong class="text-pos">${{ (s.intradayRadar?.costBasis?.bullVwap || (s.price * 0.99)).toFixed(2) }}</strong></span>
+                          <span class="cost-pill"><span class="muted">现价状态:</span> <strong class="text-cyan">{{ s.intradayRadar?.costBasis?.currentZone || '成本博弈区' }}</strong></span>
+                        </div>
+                      </div>
+
+                      <!-- 2. 实战下单研判指引 (Tactical Playbook) -->
+                      <div class="radar-playbook-box">
+                        <div class="playbook-header">
+                          <span class="playbook-icon">💡</span>
+                          <strong>实战下单决策参考与日内操盘策略</strong>
+                        </div>
+                        <p class="playbook-text">{{ s.intradayRadar?.tacticalPlaybook || '日内主力博弈激烈，建议关注核心成本均线得失，突破跟进，跌破防守。' }}</p>
+                      </div>
+
+                      <!-- 3. 两栏：日内仓位净变动 (Delta) + 操盘主力分布 & 异动流水 -->
+                      <div class="radar-details-grid">
+                        <!-- 左侧：日内多空变动量与能量柱 -->
+                        <div class="radar-delta-col">
+                          <div class="sub-section-title">日内主力净头寸变动 (Intraday Position Delta)</div>
+                          <div class="delta-metrics-row font-mono">
+                            <div class="delta-item">
+                              <span class="muted small">日内空头变动:</span>
+                              <strong class="text-neg">{{ s.intradayRadar?.delta24h?.shortDeltaText || '+24.5%' }}</strong>
+                            </div>
+                            <div class="delta-item">
+                              <span class="muted small">日内多头变动:</span>
+                              <strong class="text-pos">{{ s.intradayRadar?.delta24h?.longDeltaText || '-8.2%' }}</strong>
+                            </div>
+                            <div class="delta-item">
+                              <span class="muted small">主力日内倾向:</span>
+                              <strong class="text-cyan">{{ s.intradayRadar?.delta24h?.netWhaleBias || '净增空' }}</strong>
+                            </div>
+                          </div>
+                          <div class="radar-energy-bar-wrap">
+                            <div class="radar-energy-bar">
+                              <div class="energy-buy" :style="{ width: (s.intradayRadar?.delta24h?.whaleLongRatio || 40) + '%' }"></div>
+                              <div class="energy-sell" :style="{ width: (s.intradayRadar?.delta24h?.whaleShortRatio || 60) + '%' }"></div>
+                            </div>
+                            <div class="energy-labels font-mono">
+                              <span class="text-pos">{{ s.intradayRadar?.delta24h?.whaleLongRatio || 40 }}% 主力多头动能</span>
+                              <span class="text-neg">{{ s.intradayRadar?.delta24h?.whaleShortRatio || 60 }}% 主力空头动能</span>
+                            </div>
+                          </div>
+
+                          <!-- 该标的核心操盘大户 -->
+                          <div class="sub-section-title" style="margin-top: 14px;">操盘该标的核心日内主力</div>
+                          <div class="radar-whales-list">
+                            <div v-for="kw in (s.intradayRadar?.keyWhales || [])" :key="kw.name" class="radar-whale-mini-card">
+                              <div class="r-whale-top">
+                                <strong class="r-whale-name">{{ kw.name }}</strong>
+                                <span class="r-whale-style font-mono">{{ kw.style }}</span>
+                              </div>
+                              <div class="r-whale-action font-mono">
+                                <span :class="kw.side === 'LONG' ? 'text-pos' : 'text-neg'">{{ kw.action }}</span>
+                                <span class="muted small">仓位: ${{ formatWhaleUsd(kw.positionVal) }} ({{ kw.leverage }})</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <!-- 右侧：日内大额异动实录流水 (Live Tape) -->
+                        <div class="radar-tape-col">
+                          <div class="sub-section-title">日内秒级大额异动流水 (Live Whale Tape)</div>
+                          <div class="radar-tape-list font-mono">
+                            <div v-for="p in (s.intradayRadar?.livePrints || [])" :key="p.time + p.shares" class="radar-tape-row">
+                              <span class="tape-time muted">{{ p.time }}</span>
+                              <span class="tape-action-pill" :class="p.action.includes('多') || p.action.includes('买') ? 'badge-pos' : 'badge-neg'">{{ p.action }}</span>
+                              <span class="tape-shares">{{ p.shares }}</span>
+                              <span class="tape-val text-cyan">${{ p.value }}</span>
+                              <span class="tape-px muted">@${{ p.price }}</span>
+                              <span class="tape-tactic muted small">[{{ p.tactic }}]</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              </template>
             </tbody>
           </table>
         </div>

@@ -4828,6 +4828,31 @@ td { color: var(--text-primary); }
   vertical-align: middle;
 }
 
+.col-price {
+  transition: background 0.4s ease, color 0.3s ease;
+  border-radius: 4px;
+}
+
+.flash-price-up {
+  animation: onchainPriceGlowUp 1.2s ease-out;
+}
+
+.flash-price-down {
+  animation: onchainPriceGlowDown 1.2s ease-out;
+}
+
+@keyframes onchainPriceGlowUp {
+  0% { background: rgba(34, 197, 94, 0.28); }
+  50% { background: rgba(34, 197, 94, 0.12); }
+  100% { background: transparent; }
+}
+
+@keyframes onchainPriceGlowDown {
+  0% { background: rgba(239, 68, 68, 0.28); }
+  50% { background: rgba(239, 68, 68, 0.12); }
+  100% { background: transparent; }
+}
+
 .onchain-stock-row {
   cursor: pointer;
   transition: background 0.15s ease;
@@ -5080,6 +5105,306 @@ td { color: var(--text-primary); }
   align-items: center;
   justify-content: center;
   gap: 5px;
+}
+
+.onchain-radar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: #f59e0b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.onchain-radar-btn:hover,
+.onchain-radar-btn.active {
+  background: rgba(245, 158, 11, 0.22);
+  border-color: #f59e0b;
+  color: #d97706;
+}
+
+.radar-btn-icon {
+  font-size: 10px;
+}
+
+.onchain-stock-row.is-radar-open {
+  background: var(--surface-hover) !important;
+}
+
+.onchain-radar-tr {
+  background: var(--surface) !important;
+}
+
+.onchain-radar-td {
+  padding: 0 0 16px 0 !important;
+  border-bottom: 2px solid var(--border) !important;
+}
+
+/* Stock Intraday Radar Container */
+.stock-radar-container {
+  margin: 4px 12px 6px 12px;
+  padding: 16px;
+  background: var(--surface-raised, var(--surface-card));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  animation: fadeInSlideDown 0.2s ease-out;
+}
+
+@keyframes fadeInSlideDown {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.radar-top-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.radar-badge-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.radar-tag {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--surface-hover);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+}
+
+.radar-tactical-pill {
+  font-size: 12px;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 999px;
+  letter-spacing: 0.3px;
+}
+
+.radar-tactical-pill.tone-bearish {
+  background: rgba(244, 63, 94, 0.15);
+  color: #f43f5e;
+  border: 1px solid rgba(244, 63, 94, 0.35);
+}
+
+.radar-tactical-pill.tone-bullish {
+  background: rgba(160, 185, 129, 0.15);
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+.radar-tactical-pill.tone-neutral {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.radar-cost-pills {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 11.5px;
+  flex-wrap: wrap;
+}
+
+.cost-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  background: var(--surface-hover);
+  border-radius: 4px;
+  border: 1px solid var(--border-subtle);
+}
+
+.radar-playbook-box {
+  background: rgba(6, 182, 212, 0.05);
+  border: 1px solid rgba(6, 182, 212, 0.25);
+  border-left: 3px solid #06b6d4;
+  border-radius: 6px;
+  padding: 10px 14px;
+}
+
+.playbook-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.playbook-text {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.radar-details-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.sub-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.delta-metrics-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 11.5px;
+}
+
+.delta-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.radar-energy-bar-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.radar-energy-bar {
+  width: 100%;
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  display: flex;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.energy-buy {
+  background: #10b981;
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.energy-sell {
+  background: #f43f5e;
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.energy-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.radar-whales-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.radar-whale-mini-card {
+  padding: 7px 10px;
+  background: var(--surface-hover);
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.r-whale-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.r-whale-name {
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.r-whale-style {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--surface-card);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+}
+
+.r-whale-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+}
+
+.radar-tape-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.radar-tape-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  background: var(--surface-hover);
+  border-radius: 4px;
+  font-size: 11px;
+  flex-wrap: wrap;
+}
+
+.tape-time {
+  font-size: 10.5px;
+  min-width: 55px;
+}
+
+.tape-action-pill {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+.tape-shares {
+  color: var(--text-primary);
+}
+
+.tape-val {
+  font-weight: 700;
 }
 
 .onchain-whale-btn {

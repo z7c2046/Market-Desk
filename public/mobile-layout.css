@@ -946,6 +946,29 @@
     justify-content: center !important;
     white-space: nowrap !important;
   }
+
+  /* On-Chain Stock Intraday Radar Mobile Layout */
+  .stock-radar-container {
+    margin: 4px 6px 8px 6px !important;
+    padding: 12px 10px !important;
+  }
+
+  .radar-details-grid {
+    grid-template-columns: 1fr !important;
+    gap: 14px !important;
+  }
+
+  .radar-cost-pills {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 6px !important;
+  }
+
+  .radar-top-strip {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 8px !important;
+  }
 }
 
 /* Reduced Motion Preference */

@@ -1585,6 +1585,11 @@ createApp({ setup() {
   const onchainStockSearch = ref('');
   const onchainStockSortField = ref('volume24h'); // 'volume24h' | 'netFlow' | 'premiumPct' | 'price'
   const onchainStockSortDir = ref('desc');
+  const expandedStockSymbol = ref('');
+
+  function toggleStockRadar(sym) {
+    expandedStockSymbol.value = (expandedStockSymbol.value === sym ? '' : sym);
+  }
 
   const onchainAggregate = computed(() => {
     return onchainStocksData.value?.aggregate || {
@@ -1673,7 +1678,19 @@ createApp({ setup() {
       if (res.ok) {
         const data = await res.json();
         if (data?.ok && data.top10) {
+          const oldMap = new Map((onchainStocksData.value?.top10 || []).map(x => [x.symbol, x.price]));
+          data.top10.forEach(s => {
+            const oldPx = oldMap.get(s.symbol);
+            if (oldPx != null && Math.abs(oldPx - s.price) >= 0.005) {
+              s._priceDir = s.price > oldPx ? 'up' : 'down';
+            }
+          });
           onchainStocksData.value = data;
+          setTimeout(() => {
+            if (onchainStocksData.value?.top10) {
+              onchainStocksData.value.top10.forEach(s => { delete s._priceDir; });
+            }
+          }, 1500);
         }
       } else {
         onchainStocksError.value = `HTTP ${res.status}`;
@@ -4927,7 +4944,7 @@ createApp({ setup() {
         loadCryptoWhales();
         loadOnchainStocks();
       }
-    }, 10000);
+    }, 4000);
   }
 
   function stopShortPolling() {
@@ -6460,6 +6477,7 @@ createApp({ setup() {
     // On-Chain US Equities Flow Top 10
     onchainStocksData, onchainStocksLoading, onchainStocksError, onchainStockSearch, onchainStockSortField, onchainStockSortDir,
     onchainAggregate, onchainStocksList, toggleOnchainSort, formatOnchainUsd, formatOnchainFlowUsd, loadOnchainStocks,
+    expandedStockSymbol, toggleStockRadar,
     // Watchlist & Groups & Sidebar Live Streamlined Board
     watchlistData, groups, watchlist, quoteStore, providerInfo, currentSession,
     viewMode, extMode, sortField, sortDirection, freezeResort, compactPanelOpen,

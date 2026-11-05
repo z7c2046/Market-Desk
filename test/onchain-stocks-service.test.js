@@ -25,6 +25,14 @@ describe('OnchainStocksService', () => {
     assert.strictEqual(processed.netFlow, processed.inflow24h - processed.outflow24h);
     assert.ok(processed.buyRatio >= 0 && processed.buyRatio <= 100);
     assert.strictEqual(typeof processed.premiumPct, 'number');
+    assert.ok(processed.intradayRadar);
+    assert.ok(processed.intradayRadar.tacticalBadge);
+    assert.ok(processed.intradayRadar.tacticalPlaybook);
+    assert.ok(processed.intradayRadar.costBasis);
+    assert.strictEqual(typeof processed.intradayRadar.costBasis.bearVwap, 'number');
+    assert.strictEqual(typeof processed.intradayRadar.costBasis.bullVwap, 'number');
+    assert.ok(processed.intradayRadar.keyWhales.length > 0);
+    assert.ok(processed.intradayRadar.livePrints.length > 0);
   });
 
   it('getOnchainStocksData returns exactly Top 10 sorted by volume24h descending', async () => {

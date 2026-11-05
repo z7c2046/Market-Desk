@@ -1385,6 +1385,17 @@ test('Crypto Workspace: crypto market cap table is converted into watchlist cryp
   catBtns[0].click();
   await tick();
 
+  // Click "雷达" button in on-chain flow table -> reveals intraday radar
+  const radarBtn = onchainPanel.querySelector('.onchain-radar-btn');
+  assert.ok(radarBtn, 'onchain-radar-btn exists');
+  radarBtn.click();
+  await tick();
+  const radarContainer = onchainPanel.querySelector('.stock-radar-container');
+  assert.ok(radarContainer, 'stock-radar-container is rendered');
+  assert.match(radarContainer.textContent, /主力日内操盘雷达/);
+  assert.match(radarContainer.textContent, /实战下单决策参考/);
+  assert.match(radarContainer.textContent, /做空成本线/);
+
   // Click "持仓" button in on-chain flow table -> triggers viewStockWhale('NVDA')
   const whaleBtn = onchainPanel.querySelector('.onchain-whale-btn');
   assert.ok(whaleBtn, 'onchain-whale-btn exists');
