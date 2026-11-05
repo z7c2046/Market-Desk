@@ -5075,6 +5075,38 @@ td { color: var(--text-primary); }
 }
 
 /* Action Button */
+.action-btn-group {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+
+.onchain-whale-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(6, 182, 212, 0.08);
+  border: 1px solid rgba(6, 182, 212, 0.3);
+  color: #06b6d4;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.onchain-whale-btn:hover {
+  background: rgba(6, 182, 212, 0.18);
+  color: #0891b2;
+  border-color: #06b6d4;
+}
+
+.whale-btn-icon {
+  font-size: 10px;
+}
+
 .onchain-jump-btn {
   display: inline-flex;
   align-items: center;
@@ -5115,6 +5147,70 @@ td { color: var(--text-primary); }
   flex-direction: column;
   min-height: 560px;
   box-shadow: var(--shadow-sm);
+}
+
+.whale-main-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.heading-left-area {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.whale-category-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  background: var(--surface-hover);
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  width: fit-content;
+}
+
+.whale-cat-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 11px;
+  height: 28px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s ease;
+}
+
+.whale-cat-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.whale-cat-btn.active {
+  background: var(--surface);
+  color: var(--text-primary);
+  border-color: var(--border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.cat-badge-new {
+  font-size: 9px;
+  font-weight: 800;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: linear-gradient(135deg, #06b6d4, #3b82f6);
+  color: #fff;
+  letter-spacing: 0.5px;
 }
 
 .badge-hl-pill {

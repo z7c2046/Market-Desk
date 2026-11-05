@@ -1370,6 +1370,28 @@ test('Crypto Workspace: crypto market cap table is converted into watchlist cryp
   coinNames = Array.from(ui.w.document.querySelectorAll('.whale-positions-table .pos-coin-name')).map(el => el.textContent.trim());
   assert.deepEqual(coinNames.slice(0, 2), ['BTC', 'ETH']);
 
+  // 4c. Verify category switcher: toggle to "链上美股 Top 10 巨鲸"
+  const catBtns = ui.w.document.querySelectorAll('.whale-cat-btn');
+  assert.ok(catBtns.length >= 2, 'Whale category tabs exist');
+  assert.match(catBtns[1].textContent, /链上美股 Top 10 巨鲸/);
+
+  // Click on-chain US stocks whale category tab
+  catBtns[1].click();
+  await tick();
+  assert.match(whalePanel.textContent, /链上美股巨鲸持仓追踪/);
+  assert.match(whalePanel.textContent, /NVDA/);
+
+  // Switch back to crypto
+  catBtns[0].click();
+  await tick();
+
+  // Click "持仓" button in on-chain flow table -> triggers viewStockWhale('NVDA')
+  const whaleBtn = onchainPanel.querySelector('.onchain-whale-btn');
+  assert.ok(whaleBtn, 'onchain-whale-btn exists');
+  whaleBtn.click();
+  await tick();
+  assert.match(whalePanel.textContent, /链上美股巨鲸持仓追踪/);
+
   // 5. Verify Watchlist sidebar contains the '加密货币' group
   const rwSidebar = ui.w.document.querySelector('.right-watchlist-sidebar');
   assert.ok(rwSidebar, 'Right watchlist sidebar exists');

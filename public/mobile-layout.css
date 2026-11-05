@@ -926,6 +926,26 @@
     color: var(--selection-text);
     border-color: var(--selection-border);
   }
+
+  /* Hyperliquid Whale Category Tabs on Mobile */
+  .whale-main-heading {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 12px !important;
+  }
+
+  .whale-category-tabs {
+    width: 100% !important;
+    display: flex !important;
+    overflow-x: auto !important;
+    box-sizing: border-box !important;
+  }
+
+  .whale-cat-btn {
+    flex: 1 1 50% !important;
+    justify-content: center !important;
+    white-space: nowrap !important;
+  }
 }
 
 /* Reduced Motion Preference */

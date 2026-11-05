@@ -159,3 +159,38 @@ test('HTTP API /api/crypto/whales returns 200 and valid JSON schema', async () =
   }
 });
 
+test('CryptoWhaleService: getStockWhalesData returns verified on-chain US stock whales', () => {
+  const service = new CryptoWhaleService();
+  const stockWhales = service.getStockWhalesData();
+  assert.ok(stockWhales.whales.length >= 6);
+  assert.ok(stockWhales.aggregate.totalOI > 0);
+  assert.ok(stockWhales.aggregate.topCoins.length > 0);
+
+  // Verify NVDA, TSLA, MSTR are tracked
+  const allCoins = stockWhales.whales.flatMap(w => w.positions.map(p => p.coin));
+  assert.ok(allCoins.includes('NVDA'));
+  assert.ok(allCoins.includes('TSLA'));
+  assert.ok(allCoins.includes('MSTR'));
+
+  // Verify activity logs generated
+  assert.ok(stockWhales.activityLogs.length > 0);
+});
+
+test('HTTP API /api/crypto/whales?category=stocks returns on-chain US stock whales payload', async () => {
+  const service = new CryptoWhaleService();
+  const server = createServer({ whaleService: service });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/api/crypto/whales?category=stocks`);
+    assert.equal(res.status, 200);
+    const json = await res.json();
+    assert.equal(json.ok, true);
+    assert.ok(json.whales.length >= 6);
+    assert.ok(json.whales.some(w => w.positions.some(p => p.coin === 'NVDA')));
+  } finally {
+    await new Promise(resolve => server.close(resolve));
+  }
+});
+

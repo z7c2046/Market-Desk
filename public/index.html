@@ -1632,7 +1632,7 @@
                   <span class="sort-icon" v-if="onchainStockSortField === 'premiumPct'">{{ onchainStockSortDir === 'desc' ? '▼' : '▲' }}</span>
                 </th>
                 <th class="th-oi text-right">未平仓合约 (OI)</th>
-                <th class="th-action text-center">走势</th>
+                <th class="th-action text-center">巨鲸 / 行情</th>
               </tr>
             </thead>
             <tbody>
@@ -1701,10 +1701,16 @@
                   </div>
                 </td>
                 <td class="col-action text-center">
-                  <button class="onchain-jump-btn" @click.stop="selectCryptoCoin(s.chartSymbol)" :title="'前往查看 ' + s.symbol + ' 实时 K 线行情'">
-                    <span>行情</span>
-                    <span class="jump-arrow">↗</span>
-                  </button>
+                  <div class="action-btn-group">
+                    <button class="onchain-whale-btn" @click.stop="viewStockWhale(s.symbol)" :title="'查看持有 ' + s.symbol + ' 的链上巨鲸钱包仓位'">
+                      <span class="whale-btn-icon">🐋</span>
+                      <span>持仓</span>
+                    </button>
+                    <button class="onchain-jump-btn" @click.stop="selectCryptoCoin(s.chartSymbol)" :title="'前往查看 ' + s.symbol + ' 实时 K 线行情'">
+                      <span>行情</span>
+                      <span class="jump-arrow">↗</span>
+                    </button>
+                  </div>
                 </td>
               </tr>
             </tbody>
@@ -1716,19 +1722,52 @@
     <!-- 下方全宽：Hyperliquid 链上巨鲸合约持仓追踪 -->
     <div class="crypto-whale-full-wrap" style="margin-top: 16px;">
       <section class="panel crypto-whale-tracker-panel">
-        <div class="panel-heading">
-          <div class="heading-row">
-            <h2>Hyperliquid 链上巨鲸合约持仓追踪</h2>
-            <span class="badge-hl-pill">HYPERLIQUID L1</span>
-            <span class="live-pulse-badge"><i class="pulse-dot"></i> 实时链上穿透</span>
+        <div class="panel-heading whale-main-heading">
+          <div class="heading-left-area">
+            <div class="heading-row">
+              <h2>{{ whaleCategory === 'stocks' ? 'Hyperliquid & RWA 链上美股巨鲸持仓追踪' : 'Hyperliquid 链上巨鲸合约持仓追踪' }}</h2>
+              <span class="badge-hl-pill">{{ whaleCategory === 'stocks' ? 'RWA / PERP' : 'HYPERLIQUID L1' }}</span>
+              <span class="live-pulse-badge"><i class="pulse-dot"></i> {{ whaleCategory === 'stocks' ? '美股大户穿透' : '实时链上穿透' }}</span>
+            </div>
+
+            <!-- 巨鲸类别切换 Tab: 加密主流币 vs 链上美股 Top10 -->
+            <div class="whale-category-tabs">
+              <button
+                class="whale-cat-btn"
+                :class="{ active: whaleCategory === 'crypto' }"
+                @click="setWhaleCategory('crypto')"
+                role="button"
+                tabindex="0"
+              >
+                <span class="cat-icon">🪙</span>
+                <span>加密主流币巨鲸</span>
+              </button>
+              <button
+                class="whale-cat-btn"
+                :class="{ active: whaleCategory === 'stocks' }"
+                @click="setWhaleCategory('stocks')"
+                role="button"
+                tabindex="0"
+              >
+                <span class="cat-icon">🇺🇸</span>
+                <span>链上美股 Top 10 巨鲸</span>
+                <span class="cat-badge-new">NEW</span>
+              </button>
+            </div>
           </div>
+
           <div class="whale-head-actions">
             <div class="whale-search-box">
               <span class="whale-search-icon">🔍</span>
-              <input type="text" v-model="cryptoWhaleSearch" class="whale-search-input" placeholder="搜索币种/巨鲸/地址 (BTC, ETH...)" />
+              <input
+                type="text"
+                v-model="cryptoWhaleSearch"
+                class="whale-search-input"
+                :placeholder="whaleCategory === 'stocks' ? '搜索美股/巨鲸/地址 (NVDA, TSLA...)' : '搜索币种/巨鲸/地址 (BTC, ETH...)'"
+              />
               <button v-if="cryptoWhaleSearch" class="whale-clear-btn" @click="cryptoWhaleSearch = ''">×</button>
             </div>
-            <button class="whale-refresh-btn" :class="{ 'is-loading': cryptoWhaleLoading }" @click="loadCryptoWhales({ force: true })" title="强制从 Hyperliquid 节点拉取最新数据">
+            <button class="whale-refresh-btn" :class="{ 'is-loading': cryptoWhaleLoading }" @click="loadCryptoWhales({ force: true })" title="强制拉取最新数据">
               <span class="refresh-icon">↻</span>
               <span>刷新</span>
             </button>
@@ -1740,11 +1779,11 @@
           <div class="macro-summary-top">
             <div class="whale-sentiment-indicator">
               <span class="sentiment-indicator-dot" :class="'dot-' + whaleAggregate.sentimentColor"></span>
-              <span class="sentiment-title">巨鲸整体偏向:</span>
+              <span class="sentiment-title">{{ whaleCategory === 'stocks' ? '美股巨鲸偏向:' : '巨鲸整体偏向:' }}</span>
               <strong class="sentiment-badge font-mono" :class="'bias-' + whaleAggregate.sentimentColor">{{ whaleAggregate.sentiment }}</strong>
             </div>
             <div class="macro-summary-stats font-mono">
-              <span class="stat-pill"><span class="muted">持仓总规模:</span> <strong class="text-cyan">${{ formatWhaleUsd(whaleAggregate.totalOI) }}</strong></span>
+              <span class="stat-pill"><span class="muted">{{ whaleCategory === 'stocks' ? '美股持仓规模:' : '持仓总规模:' }}</span> <strong class="text-cyan">${{ formatWhaleUsd(whaleAggregate.totalOI) }}</strong></span>
               <span class="stat-pill"><span class="muted">追踪巨鲸:</span> <strong>{{ whaleAggregate.totalTrackedWhales }} 席</strong></span>
               <span class="stat-pill"><span class="muted">净值规模:</span> <strong>${{ formatWhaleUsd(whaleAggregate.totalEquity) }}</strong></span>
             </div>
@@ -1762,9 +1801,9 @@
             </div>
           </div>
 
-          <!-- 核心代币快捷筛选标签 -->
+          <!-- 核心代币/美股快捷筛选标签 -->
           <div class="whale-token-chips-bar" v-if="whaleAggregate.topCoins && whaleAggregate.topCoins.length">
-            <span class="token-chips-title muted small">核心博弈标的:</span>
+            <span class="token-chips-title muted small">{{ whaleCategory === 'stocks' ? '核心博弈美股:' : '核心博弈标的:' }}</span>
             <button
               v-for="tc in whaleAggregate.topCoins"
               :key="tc.coin"
