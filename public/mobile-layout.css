@@ -8,18 +8,6 @@
    Desktop Guard: Strictly hide all mobile-specific overlays, tabs, sheets,
    and containers on screens >= 1024px so they never disrupt desktop flex flow.
    ========================================================================== */
-#mobile-overlay-root,
-.mobile-tab-bar,
-.mobile-topbar-nav,
-.mobile-watchlist-container,
-.mobile-chart-overlay,
-.mobile-bottom-sheet,
-.mobile-overlay-scrim,
-.mobile-range-pills,
-.chart-expand-fullscreen {
-  display: none !important;
-}
-
 @media (min-width: 1024px) {
   #mobile-overlay-root,
   .mobile-tab-bar,
@@ -237,12 +225,230 @@
     font-weight: 700;
   }
 
-  /* 4. Watchlist Mobile Vertical List */
+  /* 4. Watchlist Mobile Workbench & Vertical List */
+  .watchlist-panel {
+    border-radius: 0 !important;
+    border: none !important;
+    background: transparent !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+  }
+
+  .wl-header-bar {
+    flex-direction: column !important;
+    padding: 12px 14px 10px 14px !important;
+    gap: 10px !important;
+    background: var(--surface) !important;
+    border-bottom: 1px solid var(--border-subtle) !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .wl-title-area {
+    width: 100% !important;
+    gap: 4px !important;
+    flex-shrink: 0 !important;
+  }
+
+  .wl-title-row {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    width: 100% !important;
+    gap: 8px !important;
+    flex-wrap: nowrap !important;
+  }
+
+  .wl-main-title {
+    font-size: 16px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+
+  .wl-summary-badge {
+    font-size: 11px !important;
+    padding: 2px 8px !important;
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+  }
+
+  .wl-sub-desc {
+    display: none !important; /* Hide lengthy desktop-specific sidebar description on mobile */
+  }
+
+  .wl-actions-row {
+    width: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    flex-wrap: wrap !important;
+    flex-shrink: 1 !important;
+  }
+
+  .wl-session-select-wrapper {
+    flex: 1 1 180px !important;
+    min-width: 140px !important;
+    max-width: 100% !important;
+  }
+
+  .wl-session-select {
+    width: 100% !important;
+    height: 34px !important;
+    font-size: 12px !important;
+  }
+
+  .wl-actions-row button {
+    height: 34px !important;
+    padding: 0 10px !important;
+    font-size: 12px !important;
+    flex: 0 0 auto !important;
+    border-radius: 6px !important;
+  }
+
+  /* Secondary Filter Toolbar */
+  .wl-filter-toolbar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    padding: 8px 14px !important;
+    gap: 8px !important;
+    background: var(--surface) !important;
+    border-bottom: 1px solid var(--border-subtle) !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .wl-toolbar-left {
+    width: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    overflow-x: auto !important;
+    flex-wrap: nowrap !important;
+    -webkit-overflow-scrolling: touch !important;
+    scrollbar-width: none !important;
+    padding-bottom: 2px !important;
+  }
+  .wl-toolbar-left::-webkit-scrollbar {
+    display: none;
+  }
+
+  .wl-group-pills {
+    display: flex !important;
+    gap: 6px !important;
+    flex-shrink: 0 !important;
+  }
+
+  .wl-view-pill,
+  .wl-group-jump-pill {
+    flex-shrink: 0 !important;
+    white-space: nowrap !important;
+    height: 30px !important;
+    font-size: 12px !important;
+    padding: 0 10px !important;
+    border-radius: 6px !important;
+  }
+
+  .wl-toolbar-right {
+    width: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding-top: 2px !important;
+  }
+
+  .wl-sort-indicator {
+    font-size: 11px !important;
+    cursor: pointer !important;
+  }
+
+  /* Full table scroll container on mobile */
+  .watchlist-table-wrap {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    width: 100% !important;
+    max-width: 100vw !important;
+    box-sizing: border-box !important;
+    padding: 0 8px !important;
+  }
+
+  .watchlist-table {
+    min-width: 720px !important;
+  }
+
+  /* Watchlist Mobile Vertical List Container */
   .mobile-watchlist-container {
+    display: flex !important;
+    flex-direction: column !important;
+    padding: 10px 12px 20px 12px !important;
+    gap: 10px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .mobile-group-block {
     display: flex;
     flex-direction: column;
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+
+  .mobile-group-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    background: var(--surface-hover);
+    border-radius: 8px;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .m-group-header-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .m-group-icon {
+    font-size: 10px;
+    color: var(--text-tertiary);
+  }
+
+  .m-group-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-main);
+  }
+
+  .m-group-badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: var(--surface-card);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-subtle);
+  }
+
+  .m-group-avg {
+    font-size: 11px;
+    color: var(--text-secondary);
+  }
+
+  .mobile-group-empty {
     padding: 12px;
-    gap: 12px;
+    text-align: center;
+    background: var(--surface-card);
+    border-radius: 8px;
+    border: 1px dashed var(--border-subtle);
+  }
+
+  .mobile-group-cards-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
   }
 
   .mobile-watchlist-toolbar {

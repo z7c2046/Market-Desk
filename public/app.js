@@ -3556,6 +3556,20 @@ createApp({ setup() {
     }));
   });
 
+  const groupedMobileQuoteRows = computed(() => {
+    const res = {};
+    const sess = currentSession.value?.session || 'regular';
+    for (const g of groups.value || []) {
+      const rows = groupedRows.value[g.id] || [];
+      res[g.id] = rows.map(row => toMobileQuoteView(row, {
+        quotes: quoteStore.value || {},
+        session: extMode.value || 'auto',
+        currentMarketSession: sess
+      }));
+    }
+    return res;
+  });
+
   const extShortLabel = computed(() => {
     if (extMode.value === 'auto') {
       const s = currentSession.value?.session;
@@ -6243,7 +6257,7 @@ createApp({ setup() {
     isCompactLayout, isPhoneLayout, activeMobileOverlay, openMobileOverlay, closeMobileOverlay,
     mobileSearchQuery, recentSymbolsList, executeMobileSearch, sourceNavigationPage,
     isChartExpanded, toggleChartExpanded, klineGestureCtrl,
-    mobileViewMode, mobileEarningsDay, mobileQuoteRows, isMoreActive,
+    mobileViewMode, mobileEarningsDay, mobileQuoteRows, groupedMobileQuoteRows, isMoreActive,
     RANGE_OPTIONS, openMobileSearch, mobileTitleInfo,
     // K-Line & Heatmap Color Schemes & Preferences Modal
     klineScheme, klineGridStyle, showPreferencesModal, openPreferencesModal, closePreferencesModal, setKlineScheme, setKlineGrid, klineSchemeOptions, activeKlineScheme, KLINE_SCHEMES,

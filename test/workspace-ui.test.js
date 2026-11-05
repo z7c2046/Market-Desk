@@ -1283,6 +1283,7 @@ test('Mobile Workspace Redesign: 5 bottom tabs, dedicated search overlay, more f
   mobileTabs[1].click();
   await tick();
   assert.equal(ui.w.document.querySelector('.mobile-watchlist-container') !== null, true, 'Mobile vertical stock list is rendered');
+  assert.ok(ui.w.document.querySelector('.mobile-quote-card'), 'Mobile quote cards are rendered in mobile watchlist');
 
   // 4. Click "更多" tab -> opens more functions sheet
   mobileTabs[4].click();

@@ -905,33 +905,83 @@
         </div>
       </div>
       <div v-else class="mobile-stock-list">
-        <div
-          v-for="r in mobileQuoteRows"
-          :key="r.symbol"
-          class="mobile-quote-card"
-          @click="selectSymbol(r.symbol, { source: 'watchlist' })"
-          role="button"
-          tabindex="0"
-          :aria-label="r.symbol + ' ' + r.name"
-        >
-          <div class="mq-col-identity">
-            <span class="mq-sym">{{ r.symbol }}</span>
-            <span class="mq-name">{{ r.name }}</span>
+        <!-- 分组视图 -->
+        <template v-if="viewMode === 'grouped'">
+          <div v-for="g in groups" :key="g.id" :id="'wl-group-' + g.id" class="mobile-group-block">
+            <div class="mobile-group-header" @click="g.collapsed = !g.collapsed" role="button" tabindex="0" :aria-expanded="!g.collapsed">
+              <div class="m-group-header-left">
+                <span class="m-group-icon">{{ g.collapsed ? '▸' : '▾' }}</span>
+                <strong class="m-group-name">{{ getGroupFullTitle(g) }}</strong>
+                <span class="m-group-badge">{{ g.symbolIds.length }}</span>
+              </div>
+              <span class="m-group-avg" v-if="groupedRows[g.id]?.length">
+                {{ extShortLabel }}: <strong :class="tone(groupExtAverages[g.id]?.avg)">{{ groupExtAverages[g.id]?.val || '—' }}</strong>
+              </span>
+            </div>
+            <div v-if="!g.collapsed && !groupedRows[g.id]?.length" class="mobile-group-empty muted small">
+              该分组暂无自选标的
+            </div>
+            <div v-if="!g.collapsed" class="mobile-group-cards-list">
+              <div
+                v-for="r in (groupedMobileQuoteRows[g.id] || [])"
+                :key="r.symbol"
+                class="mobile-quote-card"
+                @click="selectSymbol(r.symbol, { source: 'watchlist' })"
+                role="button"
+                tabindex="0"
+                :aria-label="r.symbol + ' ' + r.name"
+              >
+                <div class="mq-col-identity">
+                  <span class="mq-sym">{{ r.symbol }}</span>
+                  <span class="mq-name">{{ r.name }}</span>
+                </div>
+                <div class="mq-col-price">
+                  <span class="mq-price-val">{{ r.price != null ? ('$' + r.price) : '—' }}</span>
+                  <span class="mq-session-tag">{{ r.displayedSession || '常规' }}</span>
+                </div>
+                <div class="mq-col-change">
+                  <span
+                    class="mq-change-pill"
+                    :class="r.changePercent == null ? 'flat' : (r.changePercent > 0 ? 'up' : (r.changePercent < 0 ? 'down' : 'flat'))"
+                  >
+                    {{ r.changePercent != null ? (r.changePercent > 0 ? '+' : '') + r.changePercent.toFixed(2) + '%' : '—' }}
+                  </span>
+                  <span v-if="r.sourceTime" class="mq-time">{{ r.sourceTime }}</span>
+                </div>
+              </div>
+            </div>
           </div>
-          <div class="mq-col-price">
-            <span class="mq-price-val">{{ r.price != null ? ('$' + r.price) : '—' }}</span>
-            <span class="mq-session-tag">{{ r.displayedSession || '常规' }}</span>
+        </template>
+        <!-- 全部视图 (平铺) -->
+        <template v-else>
+          <div
+            v-for="r in mobileQuoteRows"
+            :key="r.symbol"
+            class="mobile-quote-card"
+            @click="selectSymbol(r.symbol, { source: 'watchlist' })"
+            role="button"
+            tabindex="0"
+            :aria-label="r.symbol + ' ' + r.name"
+          >
+            <div class="mq-col-identity">
+              <span class="mq-sym">{{ r.symbol }}</span>
+              <span class="mq-name">{{ r.name }}</span>
+            </div>
+            <div class="mq-col-price">
+              <span class="mq-price-val">{{ r.price != null ? ('$' + r.price) : '—' }}</span>
+              <span class="mq-session-tag">{{ r.displayedSession || '常规' }}</span>
+            </div>
+            <div class="mq-col-change">
+              <span
+                class="mq-change-pill"
+                :class="r.changePercent == null ? 'flat' : (r.changePercent > 0 ? 'up' : (r.changePercent < 0 ? 'down' : 'flat'))"
+              >
+                {{ r.changePercent != null ? (r.changePercent > 0 ? '+' : '') + r.changePercent.toFixed(2) + '%' : '—' }}
+              </span>
+              <span v-if="r.sourceTime" class="mq-time">{{ r.sourceTime }}</span>
+            </div>
           </div>
-          <div class="mq-col-change">
-            <span
-              class="mq-change-pill"
-              :class="r.changePercent == null ? 'flat' : (r.changePercent > 0 ? 'up' : (r.changePercent < 0 ? 'down' : 'flat'))"
-            >
-              {{ r.changePercent != null ? (r.changePercent > 0 ? '+' : '') + r.changePercent.toFixed(2) + '%' : '—' }}
-            </span>
-            <span v-if="r.sourceTime" class="mq-time">{{ r.sourceTime }}</span>
-          </div>
-        </div>
+        </template>
       </div>
     </div>
 
