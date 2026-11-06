@@ -1881,28 +1881,30 @@
               <span class="live-pulse-badge"><i class="pulse-dot"></i> {{ whaleCategory === 'stocks' ? '美股大户穿透' : '实时链上穿透' }}</span>
             </div>
 
-            <!-- 巨鲸类别切换 Tab: 加密主流币 vs 链上美股 Top10 -->
-            <div class="whale-category-tabs">
+            <!-- 巨鲸类别切换: 加密货币 vs TradFi -->
+            <div class="whale-category-tabs" role="tablist" aria-label="巨鲸持仓类别选择">
               <button
                 class="whale-cat-btn"
                 :class="{ active: whaleCategory === 'crypto' }"
                 @click="setWhaleCategory('crypto')"
-                role="button"
+                role="tab"
+                :aria-selected="whaleCategory === 'crypto'"
                 tabindex="0"
               >
                 <span class="cat-icon">🪙</span>
-                <span>加密主流币巨鲸</span>
+                <span class="cat-title">加密货币</span>
               </button>
               <button
                 class="whale-cat-btn"
                 :class="{ active: whaleCategory === 'stocks' }"
                 @click="setWhaleCategory('stocks')"
-                role="button"
+                role="tab"
+                :aria-selected="whaleCategory === 'stocks'"
                 tabindex="0"
               >
-                <span class="cat-icon">🇺🇸</span>
-                <span>链上美股 Top 10 巨鲸</span>
-                <span class="cat-badge-new">NEW</span>
+                <span class="cat-icon">🏛️</span>
+                <span class="cat-title">TradFi</span>
+                <span class="cat-badge-new">链上美股</span>
               </button>
             </div>
           </div>

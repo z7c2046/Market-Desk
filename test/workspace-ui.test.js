@@ -1370,10 +1370,11 @@ test('Crypto Workspace: crypto market cap table is converted into watchlist cryp
   coinNames = Array.from(ui.w.document.querySelectorAll('.whale-positions-table .pos-coin-name')).map(el => el.textContent.trim());
   assert.deepEqual(coinNames.slice(0, 2), ['BTC', 'ETH']);
 
-  // 4c. Verify category switcher: toggle to "链上美股 Top 10 巨鲸"
+  // 4c. Verify category switcher: toggle to "TradFi" / "加密货币"
   const catBtns = ui.w.document.querySelectorAll('.whale-cat-btn');
   assert.ok(catBtns.length >= 2, 'Whale category tabs exist');
-  assert.match(catBtns[1].textContent, /链上美股 Top 10 巨鲸/);
+  assert.match(catBtns[0].textContent, /加密货币/);
+  assert.match(catBtns[1].textContent, /TradFi/);
 
   // Click on-chain US stocks whale category tab
   catBtns[1].click();

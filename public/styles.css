@@ -5491,10 +5491,10 @@ td { color: var(--text-primary); }
 .whale-category-tabs {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   padding: 3px;
   background: var(--surface-hover);
-  border-radius: 8px;
+  border-radius: 9px;
   border: 1px solid var(--border-subtle);
   width: fit-content;
 }
@@ -5502,30 +5502,37 @@ td { color: var(--text-primary); }
 .whale-cat-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 11px;
-  height: 28px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 600;
+  gap: 7px;
+  padding: 5px 13px;
+  height: 30px;
+  border-radius: 7px;
+  font-size: 12.5px;
+  font-weight: 700;
   color: var(--text-secondary);
   border: 1px solid transparent;
   background: transparent;
   cursor: pointer;
   user-select: none;
-  transition: all 0.15s ease;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .whale-cat-btn:hover {
   color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.05);
+  transform: translateY(-1px);
 }
 
 .whale-cat-btn.active {
   background: var(--surface);
   color: var(--text-primary);
   border-color: var(--border);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+.dark .whale-cat-btn.active {
+  background: var(--surface-raised);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
 }
 
 .cat-badge-new {
@@ -5535,7 +5542,7 @@ td { color: var(--text-primary); }
   border-radius: 4px;
   background: linear-gradient(135deg, #06b6d4, #3b82f6);
   color: #fff;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
 }
 
 .badge-hl-pill {
