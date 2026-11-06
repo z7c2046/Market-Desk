@@ -1420,3 +1420,38 @@ test('Crypto Workspace: crypto market cap table is converted into watchlist cryp
 
   assert.deepEqual(ui.errors, []);
 });
+
+test('Volatility Matrix: Row 1 renders Volatility Twin Card (VIX vs VXN), and clicking opens panoramic modal', async t => {
+  const ui = await mount(t, async url => ({ ok: true, json: async () => fixture(url) }));
+
+  // 1. Verify Volatility Twin Card is rendered in Row 1 index-grid
+  const volCard = ui.w.document.querySelector('.volatility-twin-card');
+  assert.ok(volCard, 'Volatility twin card exists in Row 1');
+  assert.match(volCard.textContent, /波动率指数/);
+  assert.match(volCard.textContent, /VIX \/ VXN/);
+  assert.match(volCard.textContent, /标普 VIX/);
+  assert.match(volCard.textContent, /纳指 VXN/);
+  assert.match(volCard.textContent, /利差/);
+
+  // 2. Verify modal is closed initially
+  assert.equal(ui.w.document.querySelector('.volatility-modal-card'), null, 'Modal is closed initially');
+
+  // 3. Click card to open CBOE Volatility Matrix Modal
+  volCard.click();
+  await tick();
+  const volModal = ui.w.document.querySelector('.volatility-modal-card');
+  assert.ok(volModal, 'Volatility modal opened on click');
+  assert.match(volModal.textContent, /CBOE 波动率指数全景 · VIX vs VXN 联动雷达/);
+  assert.match(volModal.textContent, /标普 500 波动率/);
+  assert.match(volModal.textContent, /纳指 100 波动率/);
+  assert.match(volModal.textContent, /交易员实战指引/);
+
+  // 4. Close modal via close button
+  const closeBtn = volModal.querySelector('.stock-modal-close-btn');
+  assert.ok(closeBtn, 'Close button exists');
+  closeBtn.click();
+  await tick();
+  assert.equal(ui.w.document.querySelector('.volatility-modal-card'), null, 'Modal closed on close button click');
+
+  assert.deepEqual(ui.errors, []);
+});

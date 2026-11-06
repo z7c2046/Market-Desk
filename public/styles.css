@@ -7505,6 +7505,450 @@ td { color: var(--text-primary); }
 }
 
 /* ==========================================================================
+   Volatility Twin Card (VIX vs VXN 首屏双联卡片)
+   ========================================================================== */
+.volatility-twin-card {
+  padding: 10px 14px !important;
+}
+.vol-twin-price-row {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  width: 100% !important;
+  gap: 8px !important;
+}
+.vol-half {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.vol-mini-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+.vol-sym-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  letter-spacing: -0.2px;
+}
+.vol-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.vol-status-dot.dot-warn {
+  background: var(--apple-red);
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.4);
+}
+.vol-status-dot.dot-normal {
+  background: var(--apple-green);
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.3);
+}
+.vol-metric-pair {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px;
+}
+.vol-val-sm {
+  font-size: 15px !important;
+  font-weight: 800 !important;
+  color: var(--text-primary) !important;
+  line-height: 1.15;
+}
+.pct-pill-xs {
+  font-size: 10px !important;
+  padding: 1px 4px !important;
+  border-radius: 4px !important;
+  line-height: 1.2 !important;
+  font-weight: 700 !important;
+}
+.vol-twin-divider {
+  width: 1px;
+  height: 26px;
+  background: var(--border-subtle);
+  flex-shrink: 0;
+}
+.vol-card-foot {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  font-size: 11px !important;
+}
+.vol-spread-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-secondary);
+}
+.vol-spread-indicator strong {
+  color: var(--apple-blue);
+  font-weight: 700;
+}
+.vol-spread-note {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+/* ==========================================================================
+   CBOE Volatility Matrix Modal (VIX vs VXN 全景联动雷达)
+   ========================================================================== */
+.volatility-modal-card {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.24), 0 4px 16px rgba(0, 0, 0, 0.12);
+  width: 820px;
+  max-width: 95vw;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 24px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  animation: stockModalPopIn 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+  box-sizing: border-box;
+}
+.dark .volatility-modal-card {
+  background: var(--surface-card);
+  border-color: var(--border-subtle);
+}
+
+.volatility-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 14px;
+}
+.volatility-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.volatility-flag-badge {
+  background: rgba(147, 51, 234, 0.12);
+  color: #9333ea;
+  font-weight: 800;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(147, 51, 234, 0.25);
+}
+.dark .volatility-flag-badge {
+  color: #c084fc;
+  background: rgba(192, 132, 252, 0.15);
+  border-color: rgba(192, 132, 252, 0.3);
+}
+.volatility-title-wrap h2 {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.4px;
+  margin: 0;
+  color: var(--text-primary);
+}
+.volatility-subtitle {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.volatility-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.volatility-status-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  border: 1px solid transparent;
+}
+.volatility-status-banner.tone-danger {
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+  border-color: rgba(239, 68, 68, 0.25);
+}
+.dark .volatility-status-banner.tone-danger {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+}
+.volatility-status-banner.tone-warning {
+  background: rgba(245, 158, 11, 0.1);
+  color: #d97706;
+  border-color: rgba(245, 158, 11, 0.25);
+}
+.dark .volatility-status-banner.tone-warning {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+}
+.volatility-status-banner.tone-normal {
+  background: rgba(16, 185, 129, 0.1);
+  color: #059669;
+  border-color: rgba(16, 185, 129, 0.25);
+}
+.dark .volatility-status-banner.tone-normal {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+}
+.volatility-status-banner.tone-info {
+  background: rgba(37, 99, 235, 0.1);
+  color: #2563eb;
+  border-color: rgba(37, 99, 235, 0.25);
+}
+.dark .volatility-status-banner.tone-info {
+  background: rgba(37, 99, 235, 0.15);
+  color: #60a5fa;
+}
+
+.volatility-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 8px currentColor;
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+.volatility-status-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.vol-banner-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.vol-banner-title-row strong {
+  font-weight: 700;
+  font-size: 14px;
+}
+.vol-diagnostic-badge {
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.06);
+  font-weight: 600;
+}
+.dark .vol-diagnostic-badge {
+  background: rgba(255, 255, 255, 0.12);
+}
+.volatility-status-info span {
+  font-size: 12px;
+  opacity: 0.95;
+  line-height: 1.45;
+}
+
+/* 2-Column Cards Grid */
+.volatility-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+.vol-rate-card {
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  position: relative;
+  transition: all 0.2s ease;
+}
+.vol-rate-card:hover {
+  border-color: rgba(147, 51, 234, 0.35);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+}
+.vol-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.vol-term-pill {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+  background: var(--surface-raised);
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border-subtle);
+}
+.vol-role-tag {
+  font-size: 10.5px;
+  color: var(--apple-blue);
+  font-weight: 600;
+}
+.vol-symbol {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.vol-price-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.vol-big-price {
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+.vol-metrics-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 10px;
+}
+.vol-metric-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11.5px;
+}
+.vol-metric-row .label {
+  color: var(--text-secondary);
+}
+.vol-metric-row .val {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* Volatility Curve / Spread Panel */
+.vol-curve-panel {
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.vol-bars-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.vol-bar-col {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.vol-bar-label {
+  width: 90px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+  flex-shrink: 0;
+}
+.vol-bar-track {
+  flex: 1;
+  height: 22px;
+  background: var(--surface-card);
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+  overflow: hidden;
+  position: relative;
+}
+.vol-bar-fill {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 8px;
+  border-radius: 5px;
+  transition: width 0.4s ease;
+}
+.vol-bar-fill.fill-vix {
+  background: linear-gradient(90deg, #3b82f6, #6366f1);
+}
+.vol-bar-fill.fill-vxn {
+  background: linear-gradient(90deg, #8b5cf6, #ec4899);
+}
+.vol-bar-val {
+  color: #ffffff;
+  font-size: 11.5px;
+  font-weight: 800;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+.vol-bar-sub {
+  width: 75px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-align: right;
+  flex-shrink: 0;
+}
+
+/* Tactical Guidelines */
+.vol-tactical-box {
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.vol-tactical-title {
+  font-size: 12.5px;
+  font-weight: 750;
+  color: var(--text-primary);
+}
+.vol-tactical-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+.vol-tactical-card {
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.vol-tactical-card .tac-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.vol-tactical-card p {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+.vol-tactical-card p strong {
+  color: var(--text-primary);
+}
+
+@media (max-width: 768px) {
+  .volatility-cards-grid {
+    grid-template-columns: 1fr;
+  }
+  .vol-tactical-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ==========================================================================
    Tech & AI Earnings Calendar (Earnings Whispers 原版视觉周历)
    ========================================================================== */
 .news-main-switch-bar {

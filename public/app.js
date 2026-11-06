@@ -76,6 +76,7 @@ const nav = [
 
 const DEFAULT_MACRO = [
   { symbol: '^VIX', displaySymbol: 'VIX', name: '波动率指数', category: 'volatility', icon: '🇺🇸', price: 19.22, changePercent: 1.05 },
+  { symbol: '^VXN', displaySymbol: 'VXN', name: '纳指波动率', category: 'volatility', icon: '🇺🇸', price: 22.85, changePercent: 2.15 },
   { symbol: '^TNX', displaySymbol: 'US10Y', name: '10年期美债收益率', category: 'rates', icon: '🇺🇸', price: 4.990, changePercent: 0.58 },
   { symbol: 'US20Y', displaySymbol: 'US20Y', name: '20年期美债收益率', category: 'rates', icon: '🇺🇸', price: 5.360, changePercent: 0.66 },
   { symbol: '^TYX', displaySymbol: 'US30Y', name: '30年期美债收益率', category: 'rates', icon: '🇺🇸', price: 5.314, changePercent: 0.53 },
@@ -1847,6 +1848,89 @@ createApp({ setup() {
     return 0.297;
   });
   const isCurveInverted = computed(() => spread30Y10Y.value < 0);
+
+  // CBOE Volatility Matrix Modal (VIX vs VXN 全景矩阵)
+  const showVolatilityModal = ref(false);
+  function openVolatilityModal() {
+    showVolatilityModal.value = true;
+  }
+  function closeVolatilityModal() {
+    showVolatilityModal.value = false;
+  }
+
+  const vixQuote = computed(() => {
+    const findBench = sym => (overview.value?.benchmarks || []).find(b => b.symbol === sym);
+    const item = findBench('^VIX') || macroMap.value['VIX'] || macroMap.value['^VIX'];
+    return {
+      symbol: '^VIX',
+      displaySymbol: 'VIX',
+      name: '标普 500 波动率',
+      price: item?.price != null ? Number(item.price) : 18.42,
+      changePercent: item?.changePercent != null ? Number(item.changePercent) : 1.05,
+      previousClose: item?.previousClose != null ? Number(item.previousClose) : 18.23,
+      asOf: item?.asOf || '实时'
+    };
+  });
+
+  const vxnQuote = computed(() => {
+    const item = macroMap.value['VXN'] || macroMap.value['^VXN'];
+    return {
+      symbol: '^VXN',
+      displaySymbol: 'VXN',
+      name: '纳斯达克 100 波动率',
+      price: item?.price != null ? Number(item.price) : 22.85,
+      changePercent: item?.changePercent != null ? Number(item.changePercent) : 2.15,
+      previousClose: item?.previousClose != null ? Number(item.previousClose) : 22.37,
+      asOf: item?.asOf || '实时'
+    };
+  });
+
+  const volatilitySpread = computed(() => {
+    const vxn = Number(vxnQuote.value?.price || 0);
+    const vix = Number(vixQuote.value?.price || 0);
+    return Number((vxn - vix).toFixed(2));
+  });
+
+  const volatilitySpreadRatio = computed(() => {
+    const vxn = Number(vxnQuote.value?.price || 0);
+    const vix = Number(vixQuote.value?.price || 0);
+    return vix > 0 ? Number((vxn / vix).toFixed(2)) : 1.0;
+  });
+
+  const volatilityDiagnostic = computed(() => {
+    const spread = volatilitySpread.value;
+    const ratio = volatilitySpreadRatio.value;
+    if (spread >= 5.0 || ratio >= 1.35) {
+      return {
+        title: '科技股单边恐慌踩踏 (Tech Panic Outlier)',
+        badge: '🚨 科技溢价极端走阔',
+        tone: 'danger',
+        desc: '纳指期权隐含波动率显著脱离标普大盘走阔，科技与成长股面临单边抛压与强烈对冲诉求，需严密防范高估值蓝筹多杀多风险。'
+      };
+    }
+    if (spread >= 3.0) {
+      return {
+        title: '常态科技风险溢价 (Normal Tech Beta Premium)',
+        badge: '⚡ 科技股常态高贝塔',
+        tone: 'warning',
+        desc: '纳指波动率适度高于标普大盘，属于美股高贝塔科技成长资产的健康风险溢价区间，多空博弈处于可控秩序中。'
+      };
+    }
+    if (spread >= 0) {
+      return {
+        title: '全市场波动率收敛平衡 (Volatility Convergence)',
+        badge: '⚖️ 风险跨板块均衡',
+        tone: 'normal',
+        desc: '科技股与标普大盘波动率接近平价，反映避险情绪已扩散至全行业普跌，或整体市场处于相对平静的震荡博弈阶段。'
+      };
+    }
+    return {
+      title: '大盘防御溢价反超 (Defensive Panic Inversion)',
+      badge: '🔄 传统权重非典型恐慌',
+      tone: 'info',
+      desc: '标普 VIX 罕见高于纳指 VXN，通常出现在银行、能源、工业等传统权重股遭深度抛售而科技股逆势抗跌的非典型避险期。'
+    };
+  });
 
   function getFearGreedRatingText(score) {
     if (score == null) return 'Neutral 中性';
@@ -6467,6 +6551,7 @@ createApp({ setup() {
     macroItems, macroMap, fearGreedIndex, goldContract, goldCnyPerGram, usdCnyRate, formatMacroPrice,
     showFearGreedModal, openFearGreedModal, closeFearGreedModal, getFearGreedRatingText, getFearGreedTone, fearGreedIndicators,
     showTreasuryModal, openTreasuryModal, closeTreasuryModal, spread30Y10Y, spread20Y10Y, isCurveInverted,
+    showVolatilityModal, openVolatilityModal, closeVolatilityModal, vixQuote, vxnQuote, volatilitySpread, volatilitySpreadRatio, volatilityDiagnostic,
     cryptoData, cryptoList, selectedCrypto, selectedCryptoItem, cryptoTimeframe,
     formatCryptoPrice, getCryptoRangePct, selectCryptoCoin, loadCrypto, renderCryptoChart,
     cryptoWhaleData, cryptoWhaleLoading, cryptoWhaleError, cryptoWhaleFilter, cryptoWhaleSearch,

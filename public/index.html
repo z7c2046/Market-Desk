@@ -584,13 +584,13 @@
       </div>
     </div>
 
-    <!-- Row 1: 美股核心基准与市场情绪 (5张卡片: 标普500、纳指100、道琼斯、VIX、CNN恐慌贪婪) -->
+    <!-- Row 1: 美股核心基准与市场情绪 (5张卡片: 标普500、纳指100、道琼斯、VIX/VXN双联波动率、CNN恐慌贪婪) -->
     <div class="index-grid">
-      <button v-for="q in overview.benchmarks" :key="q.symbol" class="index-card" @click="selectSymbol(q.symbol)">
+      <!-- 1-3. 标普500、纳指100、道琼斯工业指数 -->
+      <button v-for="q in (overview.benchmarks || []).filter(b => b.symbol !== '^VIX')" :key="q.symbol" class="index-card" @click="selectSymbol(q.symbol)">
         <div class="index-card-head">
           <div class="index-name"><strong>{{q.name}}</strong> <span>{{q.symbol}}</span></div>
-          <div v-if="q.symbol==='^VIX'" class="vix-warn-badge" :class="q.price > 20 ? 'vix-warn' : 'vix-normal'">{{ q.price > 20 ? '恐慌抬升' : '常态波动' }}</div>
-          <svg v-else class="index-sparkline" viewBox="0 0 80 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <svg class="index-sparkline" viewBox="0 0 80 22" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path :d="getSparkline(q.symbol, q.changePercent)" :stroke="q.changePercent >= 0 ? 'var(--apple-green)' : 'var(--apple-red)'" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
           </svg>
         </div>
@@ -599,10 +599,56 @@
           <span class="pct-pill" :class="q.changePercent >= 0 ? 'badge-pos' : 'badge-neg'">{{pct(q.changePercent)}}</span>
         </div>
         <div class="index-card-foot">
-          <span v-if="q.symbol==='^VIX'">{{ q.price > 20 ? '中等风险区间' : '低波动区间' }} · {{time(q.asOf)}}</span>
-          <span v-else-if="q.turnover">成交: ${{compact(q.turnover)}} · {{time(q.asOf)}}</span>
+          <span v-if="q.turnover">成交: ${{compact(q.turnover)}} · {{time(q.asOf)}}</span>
           <span v-else>指数点位 · {{time(q.asOf)}}</span>
           <span v-if="q.stale" class="warning">· 旧快照</span>
+        </div>
+      </button>
+
+      <!-- 4. 双联波动率指数 (VIX 标普 / VXN 纳指 · 点击打开 CBOE 波动率全景矩阵) -->
+      <button class="index-card macro-compact-card volatility-twin-card clickable" @click="openVolatilityModal" aria-label="查看 VIX 与 VXN 波动率指数矩阵全景">
+        <div class="index-card-head">
+          <div class="index-name">
+            <strong>波动率指数</strong>
+            <span class="macro-badge-tag">VIX / VXN</span>
+          </div>
+          <div class="vix-warn-badge" :class="vixQuote.price > 20 || vxnQuote.price > 24 ? 'vix-warn' : 'vix-normal'">
+            {{ vixQuote.price > 20 || vxnQuote.price > 24 ? '恐慌抬升' : '常态波动' }}
+          </div>
+        </div>
+        <div class="index-price-row vol-twin-price-row">
+          <div class="vol-half vol-half-vix">
+            <div class="vol-mini-head">
+              <span class="vol-sym-label">标普 VIX</span>
+              <span class="vol-status-dot" :class="vixQuote.price > 20 ? 'dot-warn' : 'dot-normal'"></span>
+            </div>
+            <div class="vol-metric-pair">
+              <span class="price-val vol-val-sm font-mono">{{ num(vixQuote.price) }}</span>
+              <span class="pct-pill pct-pill-xs" :class="vixQuote.changePercent >= 0 ? 'badge-pos' : 'badge-neg'">
+                {{ pct(vixQuote.changePercent) }}
+              </span>
+            </div>
+          </div>
+          <div class="vol-twin-divider"></div>
+          <div class="vol-half vol-half-vxn">
+            <div class="vol-mini-head">
+              <span class="vol-sym-label">纳指 VXN</span>
+              <span class="vol-status-dot" :class="vxnQuote.price > 24 ? 'dot-warn' : 'dot-normal'"></span>
+            </div>
+            <div class="vol-metric-pair">
+              <span class="price-val vol-val-sm font-mono">{{ num(vxnQuote.price) }}</span>
+              <span class="pct-pill pct-pill-xs" :class="vxnQuote.changePercent >= 0 ? 'badge-pos' : 'badge-neg'">
+                {{ pct(vxnQuote.changePercent) }}
+              </span>
+            </div>
+          </div>
+        </div>
+        <div class="index-card-foot vol-card-foot">
+          <span class="vol-spread-indicator" :title="'纳指与标普波动率利差 (VXN - VIX)：' + volatilitySpread">
+            利差 <strong>{{ volatilitySpread >= 0 ? '+' : '' }}{{ volatilitySpread }}</strong>
+            <span class="vol-spread-note">({{ volatilitySpread >= 4 ? '科技溢价走阔' : '常态溢价' }})</span>
+          </span>
+          <span class="macro-open-hint">全景 ↗</span>
         </div>
       </button>
 
@@ -4844,6 +4890,178 @@
           <li><strong>银行与金融板块（XLF / JPM）</strong>：关注 10Y-2Y 与 30Y-10Y 利差。收益率曲线正常陡峭有利于商业银行“借短贷长”实现净息差（NIM）扩张。</li>
           <li><strong>超长端赤字压力（20Y / 30Y）</strong>：若 20Y 与 30Y 收益率相对 10Y 居高不下，往往反映财政部大规模发行超长债带来的期限溢价补偿与避险承接能力考验。</li>
         </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: CBOE Volatility Matrix Panoramic Dashboard (CBOE VIX vs VXN 波动率全景矩阵) -->
+<div v-if="showVolatilityModal" class="modal-backdrop" @click.self="closeVolatilityModal" @keydown.esc="closeVolatilityModal">
+  <div class="volatility-modal-card" role="dialog" aria-modal="true" aria-label="CBOE 波动率指数全景矩阵">
+    <div class="volatility-modal-header">
+      <div class="volatility-title-wrap">
+        <div class="volatility-brand">
+          <span class="volatility-flag-badge">⚡ CBOE VOLATILITY MATRIX</span>
+          <h2>CBOE 波动率指数全景 · VIX vs VXN 联动雷达</h2>
+        </div>
+        <p class="volatility-subtitle">标普 500 系统性风险中枢与纳斯达克 100 科技股期权恐慌定价全景透视</p>
+      </div>
+      <button class="stock-modal-close-btn" aria-label="关闭弹窗" @click="closeVolatilityModal">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+
+    <div class="volatility-modal-body">
+      <!-- 利差诊断状态横幅 -->
+      <div class="volatility-status-banner" :class="'tone-' + volatilityDiagnostic.tone">
+        <span class="volatility-status-dot"></span>
+        <div class="volatility-status-info">
+          <div class="vol-banner-title-row">
+            <strong>{{ volatilityDiagnostic.title }}</strong>
+            <span class="vol-diagnostic-badge">{{ volatilityDiagnostic.badge }}</span>
+          </div>
+          <span>VXN - VIX 实时利差: <strong>{{ volatilitySpread >= 0 ? '+' : '' }}{{ volatilitySpread }} pt</strong> · 科技/大盘波动率比值: <strong>{{ volatilitySpreadRatio }}x</strong> · {{ volatilityDiagnostic.desc }}</span>
+        </div>
+      </div>
+
+      <!-- 2列核心对比卡片 (VIX vs VXN) -->
+      <div class="volatility-cards-grid">
+        <!-- 标普 500 波动率 (VIX) -->
+        <div class="vol-rate-card card-highlight">
+          <div class="vol-card-top">
+            <div class="vol-term-pill">标普 500 波动率 (30D)</div>
+            <span class="vol-role-tag">全球大盘恐慌总舵</span>
+          </div>
+          <div class="vol-symbol font-mono">CBOE VIX · ^VIX</div>
+          <div class="vol-price-row">
+            <span class="vol-big-price font-mono">{{ num(vixQuote.price) }}</span>
+            <span class="pct-pill" :class="(vixQuote.changePercent || 0) >= 0 ? 'badge-pos' : 'badge-neg'">
+              {{ pct(vixQuote.changePercent) }}
+            </span>
+          </div>
+          <div class="vol-metrics-list">
+            <div class="vol-metric-row">
+              <span class="label">跟踪核心标的</span>
+              <span class="val font-mono">标普 500 指数 (^GSPC)</span>
+            </div>
+            <div class="vol-metric-row">
+              <span class="label">当前恐慌定性</span>
+              <span class="val font-mono" :class="vixQuote.price > 20 ? 'text-warn' : 'text-pos'">
+                {{ vixQuote.price < 15 ? '极度低波 (贪婪亢奋)' : vixQuote.price <= 20 ? '常态低波 (平稳博弈)' : vixQuote.price <= 30 ? '恐慌抬升 (加仓对冲)' : '极度恐慌 (多杀多危机)' }}
+              </span>
+            </div>
+            <div class="vol-metric-row">
+              <span class="label">50 日均线对比 (18.2)</span>
+              <span class="val font-mono">{{ vixQuote.price >= 18.2 ? '▲ 均线上方 · 避险升温' : '▼ 均线下方 · 情绪受控' }}</span>
+            </div>
+            <div class="vol-metric-row">
+              <span class="label">历史常态中枢</span>
+              <span class="val font-mono">12.0 ~ 20.0 (基准 16.0)</span>
+            </div>
+            <div class="vol-metric-row">
+              <span class="label">期权隐含年化波动率</span>
+              <span class="val font-mono">{{ num(vixQuote.price) }}%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 纳斯达克 100 波动率 (VXN) -->
+        <div class="vol-rate-card card-highlight">
+          <div class="vol-card-top">
+            <div class="vol-term-pill">纳指 100 波动率 (30D)</div>
+            <span class="vol-role-tag">高贝塔科技期权定价</span>
+          </div>
+          <div class="vol-symbol font-mono">CBOE VXN · ^VXN</div>
+          <div class="vol-price-row">
+            <span class="vol-big-price font-mono">{{ num(vxnQuote.price) }}</span>
+            <span class="pct-pill" :class="(vxnQuote.changePercent || 0) >= 0 ? 'badge-pos' : 'badge-neg'">
+              {{ pct(vxnQuote.changePercent) }}
+            </span>
+          </div>
+          <div class="vol-metrics-list">
+            <div class="vol-metric-row">
+              <span class="label">跟踪核心标的</span>
+              <span class="val font-mono">纳斯达克 100 指数 (^NDX)</span>
+            </div>
+            <div class="vol-metric-row">
+              <span class="label">当前恐慌定性</span>
+              <span class="val font-mono" :class="vxnQuote.price > 24 ? 'text-warn' : 'text-pos'">
+                {{ vxnQuote.price < 18 ? '低估值波动' : vxnQuote.price <= 24 ? '常态科技溢价' : vxnQuote.price <= 34 ? '科技重仓踩踏' : '极度恐慌 (爆仓挤兑)' }}
+              </span>
+            </div>
+            <div class="vol-metric-row">
+              <span class="label">高贝塔敏感弹性</span>
+              <span class="val font-mono">~ 1.25x 标普弹性 (高弹性)</span>
+            </div>
+            <div class="vol-metric-row">
+              <span class="label">历史常态中枢</span>
+              <span class="val font-mono">16.0 ~ 25.0 (基准 20.5)</span>
+            </div>
+            <div class="vol-metric-row">
+              <span class="label">期权隐含年化波动率</span>
+              <span class="val font-mono">{{ num(vxnQuote.price) }}%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 波动率点位与利差柱状条对比 -->
+      <div class="vol-curve-panel">
+        <div class="curve-panel-header">
+          <strong>波动率对比与科技溢价利差柱 (VIX ➔ VXN)</strong>
+          <span class="curve-badge">跨品种相对价值</span>
+        </div>
+        <div class="vol-bars-wrap">
+          <div class="vol-bar-col">
+            <div class="vol-bar-label font-mono">VIX (标普)</div>
+            <div class="vol-bar-track">
+              <div class="vol-bar-fill fill-vix" :style="{ width: Math.min(100, Math.max(20, (vixQuote.price / 40.0) * 100)) + '%' }">
+                <span class="vol-bar-val font-mono">{{ num(vixQuote.price) }}</span>
+              </div>
+            </div>
+            <div class="vol-bar-sub">S&P 500</div>
+          </div>
+          <div class="vol-bar-col">
+            <div class="vol-bar-label font-mono">VXN (纳指)</div>
+            <div class="vol-bar-track">
+              <div class="vol-bar-fill fill-vxn" :style="{ width: Math.min(100, Math.max(20, (vxnQuote.price / 40.0) * 100)) + '%' }">
+                <span class="vol-bar-val font-mono">{{ num(vxnQuote.price) }}</span>
+              </div>
+            </div>
+            <div class="vol-bar-sub">Nasdaq 100</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 实战交易员策略与风控指引 -->
+      <div class="vol-tactical-box">
+        <div class="vol-tactical-title">🎯 交易员实战指引：VIX 与 VXN 联动如何指导操作</div>
+        <div class="vol-tactical-grid">
+          <div class="vol-tactical-card">
+            <div class="tac-header">
+              <span class="tac-icon">📈</span>
+              <strong>正股与 ETF 现货风控</strong>
+            </div>
+            <p>当 <strong>VXN - VIX 利差 &gt; 4.0</strong> 时，科技股正遭遇集中单边抛压（如半导体与存储芯片踩踏）。此时纳指科技股日内反弹面临极重空头均价防守，切忌盲目左侧抄底，应以逢高控仓或向大盘防御板块轮动为主。</p>
+          </div>
+          <div class="vol-tactical-card">
+            <div class="tac-header">
+              <span class="tac-icon">⚡</span>
+              <strong>期权 IV 溢价与 Vega 风险</strong>
+            </div>
+            <p>当 <strong>VXN 处于高位（&gt; 25）</strong> 时，科技股看跌期权（Put）隐含波动率极度高企。此时追空单腿买 Put 成本极贵且面临严重的“波动率压制（IV Crush）”亏损风险；推荐采用垂直价差（Bear Put Spread）降低 Vega 敞口。</p>
+          </div>
+          <div class="vol-tactical-card">
+            <div class="tac-header">
+              <span class="tac-icon">🔄</span>
+              <strong>极值情绪反转与均值回归</strong>
+            </div>
+            <p>当 <strong>VXN 突破 35 且利差超过 8 点</strong> 时，通常反映市场对科技成长股出现非理性的极度恐慌与踩踏逼仓。历史表明该极端读数往往对应阶段性恐慌高潮，左侧量化与对冲基金可能在企稳后发起爆发性超跌反弹。</p>
+          </div>
+        </div>
       </div>
     </div>
   </div>

@@ -21,6 +21,7 @@ export const STOCKS = [
 
 export const MACRO_INDICATORS = [
   { symbol: '^VIX', displaySymbol: 'VIX', name: '波动率指数', category: 'volatility', icon: '🇺🇸', defaultPrice: 19.22, defaultChange: 1.05 },
+  { symbol: '^VXN', displaySymbol: 'VXN', name: '纳指波动率', category: 'volatility', icon: '🇺🇸', defaultPrice: 22.85, defaultChange: 2.15 },
   { symbol: '^TNX', displaySymbol: 'US10Y', name: '10年期美债收益率', category: 'rates', icon: '🇺🇸', defaultPrice: 4.990, defaultChange: 0.58 },
   { symbol: 'US20Y', displaySymbol: 'US20Y', name: '20年期美债收益率', category: 'rates', icon: '🇺🇸', defaultPrice: 5.360, defaultChange: 0.66 },
   { symbol: '^TYX', displaySymbol: 'US30Y', name: '30年期美债收益率', category: 'rates', icon: '🇺🇸', defaultPrice: 5.314, defaultChange: 0.53 },
