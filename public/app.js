@@ -47,11 +47,9 @@ import {
 } from './watchlist-model.js';
 import {
   AI_SECTOR_FILTERS,
-  EARNINGS_DAYS,
   CORPORATE_LOGOS,
-  DEFAULT_TECH_EARNINGS,
-  CURRENT_WEEK_EARNINGS,
-  EARNINGS_WEEKS,
+  getEarningsCalendarDate,
+  getEarningsWeeks,
   MACRO_CALENDAR_ITEMS,
   filterEarningsByDay,
   parseMetricNumber,
@@ -110,6 +108,8 @@ const DEFAULT_CRYPTOS = [
 ];
 
 const num = v => Number.isFinite(v) ? v.toLocaleString('en-US', { maximumFractionDigits: 2, minimumFractionDigits: 2 }) : '—';
+// Display labels only; retain the full symbol for quotes, navigation and storage.
+const formatWatchlistSymbol = symbol => isCryptoSymbol(symbol) ? String(symbol).replace(/[-/]USDT?$/i, '') : symbol;
 const compact = v => Number.isFinite(v) ? new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 2 }).format(v) : '—';
 const pct = v => Number.isFinite(v) ? `${v > 0 ? '+' : ''}${v.toFixed(2)}%` : '—';
 const pctNoPlus = v => Number.isFinite(v) ? `${v.toFixed(2)}%` : '-';
@@ -1920,7 +1920,7 @@ createApp({ setup() {
   const onchainStocksLoading = ref(false);
   const onchainStocksError = ref('');
   const onchainStockSearch = ref('');
-  const onchainStockSortField = ref('volume24h'); // 'volume24h' | 'netFlow' | 'premiumPct' | 'price'
+  const onchainStockSortField = ref('volume24h'); // 'volume24h' | 'netFlow' | 'buyRatio' | 'premiumPct' | 'price'
   const onchainStockSortDir = ref('desc');
   const expandedStockSymbol = ref('');
 
@@ -3675,7 +3675,8 @@ createApp({ setup() {
   // News Sub-Views: 'stream' (实时财经快讯流), 'earnings' (科技与AI财报周历), 'macro' (宏观重磅经济日历)
   const newsSubView = ref('stream');
   const activeEarningsWeek = ref('current');
-  const earningsWeeks = EARNINGS_WEEKS;
+  const earningsToday = computed(() => getEarningsCalendarDate(clock.value));
+  const earningsWeeks = computed(() => getEarningsWeeks(earningsToday.value));
   const earningsSectorFilter = ref('all');
   const earningsTimingFilter = ref('all');
   const earningsAiOnly = ref(false);
@@ -3683,34 +3684,68 @@ createApp({ setup() {
   const showEarningsModal = ref(false);
   const selectedEarningsItem = ref(null);
 
-  const earningsList = ref((EARNINGS_WEEKS && EARNINGS_WEEKS.current && EARNINGS_WEEKS.current.items) || CURRENT_WEEK_EARNINGS || DEFAULT_TECH_EARNINGS);
+  const earningsResponse = ref(null);
+  const earningsLoading = ref(false);
+  const earningsError = ref('');
+  const earningsList = computed(() => earningsResponse.value?.items || []);
+  const earningsCache = new Map();
+  let earningsRequestId = 0, earningsController = null, earningsRefreshTimer = null;
+  let earningsTrigger = null;
   const macroCalendarList = ref(MACRO_CALENDAR_ITEMS);
 
-  const currentEarningsWeekInfo = computed(() => {
-    if (EARNINGS_WEEKS && EARNINGS_WEEKS[activeEarningsWeek.value]) {
-      return EARNINGS_WEEKS[activeEarningsWeek.value];
-    }
-    if (EARNINGS_WEEKS && EARNINGS_WEEKS.current) {
-      return EARNINGS_WEEKS.current;
-    }
-    return {
-      id: 'current',
-      label: '本周 (11/02 - 11/06)',
-      rangeText: '2026 Q3/Q4 核心披露周 · 11月02日 - 11月06日',
-      theme: '芯片、AI边缘与企业软件周',
-      days: EARNINGS_DAYS,
-      items: earningsList.value
-    };
-  });
+  const currentEarningsWeekInfo = computed(() => earningsWeeks.value[activeEarningsWeek.value] || earningsWeeks.value.current);
 
-  const currentEarningsDays = computed(() => {
-    return currentEarningsWeekInfo.value.days || EARNINGS_DAYS;
-  });
+  const currentEarningsDays = computed(() => currentEarningsWeekInfo.value.days.map(day => ({
+    ...day, status: earningsResponse.value?.days?.find(result => result.date === day.fullDate)?.status || 'unavailable'
+  })));
+
+  async function loadEarningsCalendar(force = false) {
+    if (page.value !== 'news' || newsSubView.value !== 'earnings') return;
+    const weekStart = currentEarningsWeekInfo.value.weekStart;
+    const cached = earningsCache.get(weekStart);
+    const requestId = ++earningsRequestId;
+    earningsController?.abort();
+    earningsError.value = '';
+    if (!force && cached && Date.now() - cached.loadedAt < 10 * 60_000) {
+      earningsResponse.value = cached.data;
+      earningsLoading.value = false;
+      return;
+    }
+    earningsController = new AbortController();
+    if (earningsResponse.value?.weekStart !== weekStart) earningsResponse.value = cached?.data || null;
+    earningsLoading.value = true;
+    earningsError.value = '';
+    try {
+      const response = await fetch(`/api/earnings/calendar?weekStart=${weekStart}${force ? '&force=1' : ''}`, { signal: earningsController.signal });
+      if (!response.ok) throw new Error(`财报日历请求失败（HTTP ${response.status}）`);
+      const data = await response.json();
+      if (requestId !== earningsRequestId) return;
+      if (data.weekStart !== weekStart || !Array.isArray(data.items) || !Array.isArray(data.days)) throw new Error('财报日历返回格式异常');
+      earningsResponse.value = data;
+      if (data.status !== 'unavailable') earningsCache.set(weekStart, { data, loadedAt: Date.now() });
+      while (earningsCache.size > 6) earningsCache.delete(earningsCache.keys().next().value);
+    } catch (error) {
+      if (requestId !== earningsRequestId || error.name === 'AbortError') return;
+      earningsError.value = error.message;
+      if (earningsResponse.value?.weekStart === weekStart) {
+        earningsResponse.value = { ...earningsResponse.value, status: 'partial',
+          items: earningsResponse.value.items.map(item => ({ ...item, stale: true })),
+          days: earningsResponse.value.days.map(day => ({ ...day, status: day.fetchedAt ? 'stale' : 'unavailable' })) };
+        earningsCache.delete(weekStart);
+      }
+    } finally {
+      if (requestId === earningsRequestId) earningsLoading.value = false;
+    }
+  }
+
+  function refreshVisibleEarnings() {
+    if (!document.hidden) loadEarningsCalendar();
+  }
 
   function setEarningsWeek(wKey) {
-    if (!EARNINGS_WEEKS || !EARNINGS_WEEKS[wKey]) return;
+    if (!earningsWeeks.value[wKey]) return;
+    closeEarningsModal();
     activeEarningsWeek.value = wKey;
-    earningsList.value = EARNINGS_WEEKS[wKey].items;
   }
 
   function getEarningsSectorCount(secId) {
@@ -4159,41 +4194,40 @@ createApp({ setup() {
     return earningsList.value.filter(item => item.day === dayId).length;
   }
 
-  const flippedEarningsCards = ref({});
-
-  function isCardFlipped(sym) {
-    return Boolean(flippedEarningsCards.value[sym]);
-  }
-
-  function toggleCardFlip(item, event) {
-    if (event && event.defaultPrevented) return;
-    const sym = typeof item === 'string' ? item : item?.symbol;
-    if (!sym) return;
-    flippedEarningsCards.value = {
-      ...flippedEarningsCards.value,
-      [sym]: !flippedEarningsCards.value[sym]
-    };
-  }
-
-  function flipAllCards(state = false) {
-    const next = {};
-    if (state && Array.isArray(earningsList.value)) {
-      earningsList.value.forEach(it => { next[it.symbol] = true; });
-    }
-    flippedEarningsCards.value = next;
-  }
-
-  function openEarningsModal(item) {
+  async function openEarningsModal(item, event) {
+    earningsTrigger = event?.currentTarget || document.activeElement;
     selectedEarningsItem.value = item;
     showEarningsModal.value = true;
+    document.body.classList.add('earnings-detail-open');
+    await nextTick();
+    document.querySelector('.earnings-hero-expanded-card')?.focus({ preventScroll: true });
   }
 
   function closeEarningsModal() {
     showEarningsModal.value = false;
   }
 
+  function finishClosingEarningsModal() {
+    if (showEarningsModal.value) return;
+    document.body.classList.remove('earnings-detail-open');
+    selectedEarningsItem.value = null;
+    if (earningsTrigger?.isConnected) earningsTrigger.focus({ preventScroll: true });
+    earningsTrigger = null;
+  }
+
+  function handleEarningsDialogKeydown(event) {
+    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeEarningsModal(); return; }
+    if (event.key !== 'Tab') return;
+    const dialog = event.currentTarget.querySelector('[role="dialog"]');
+    const targets = [...dialog.querySelectorAll('button:not(:disabled), a[href], [tabindex="0"]')];
+    const first = targets[0], last = targets.at(-1);
+    if (!first) { event.preventDefault(); return; }
+    if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog)) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && (document.activeElement === last || document.activeElement === dialog)) { event.preventDefault(); first.focus(); }
+  }
+
   function viewStockFromEarnings(sym) {
-    showEarningsModal.value = false;
+    closeEarningsModal();
     selectSymbol(sym);
   }
 
@@ -7175,6 +7209,8 @@ createApp({ setup() {
     document.addEventListener('visibilitychange', handleVisibilityChange);
     systemTheme?.addEventListener?.('change', followSystemTheme);
     clockTimer = setInterval(() => { clock.value = getAuthoritativeTime(); }, 1000);
+    earningsRefreshTimer = setInterval(refreshVisibleEarnings, 60_000);
+    document.addEventListener('visibilitychange', refreshVisibleEarnings);
     window.addEventListener('click', e => {
       if (showRwMoreMenu.value) {
         const wrap = document.querySelector('.rw-more-wrap');
@@ -7186,6 +7222,11 @@ createApp({ setup() {
   });
 
   onUnmounted(() => {
+    earningsRequestId++;
+    earningsController?.abort();
+    clearInterval(earningsRefreshTimer);
+    document.removeEventListener('visibilitychange', refreshVisibleEarnings);
+    document.body.classList.remove('earnings-detail-open');
     clearTimeout(aiSearchTimer);
     aiSearchController?.abort();
     aiSearchSequence++;
@@ -7215,6 +7256,15 @@ createApp({ setup() {
     }
     if (value === 'tree_news' && treeNewsList.value.length === 0) {
       await fetchTreeNewsHistory();
+    }
+  });
+  watch([page, newsSubView, activeEarningsWeek, earningsToday], () => {
+    if (page.value === 'news' && newsSubView.value === 'earnings') loadEarningsCalendar();
+    else {
+      earningsRequestId++;
+      earningsController?.abort();
+      earningsLoading.value = false;
+      closeEarningsModal();
     }
   });
   watch([page, newsSubView, aiSearchAutoRefresh], scheduleAiSearchRefresh);
@@ -7288,18 +7338,19 @@ createApp({ setup() {
     isPageLoading, isWatchlistSkeleton, rwSkeletonRows, skeletonPattern, butterflySkeletonRows, klineCandleSkeletons, flowsBubbleSkeletons, triggerPageLoadingPulse,
     isDeleteMode, pendingDeleteSymbol, toggleDeleteMode, handleChipClick,
     breadcrumbLabel, upSectorsCount, downSectorsCount, upSectorsRatio, isStockGainer, getSparkline,
-    stockSectors, rankedSectors, quoteWindow, breadth, findQuote, barWidth, getSectorBarHeight, walls, num, compact, pct, pctNoPlus, tone, time,
+    stockSectors, rankedSectors, quoteWindow, breadth, findQuote, barWidth, getSectorBarHeight, walls, num, formatWatchlistSymbol, compact, pct, pctNoPlus, tone, time,
     SECTOR_LEADERS, topGainerSector, topLoserSector, mostActiveSector, totalSectorTurnover, avgSectorTurnover, sectorBullBearRatio,
     newsCategory, newsCategories, filteredNews, getNewsSentiment, getNewsTags, getDayRange, getDayRangeWidth, missingTurnoverCount,
     savedNewsUrls, isBookmarked, toggleBookmark, showNewsMoreMenu, formatRelativeTime, getSourceMeta, getNewsImage, getTagColorClass, handleImgError, openNewsUrl, onNewsSearchSubmit,
     // Earnings & Macro & Geopolitics Calendars
-    newsSubView, activeEarningsWeek, earningsWeeks, EARNINGS_WEEKS, currentEarningsWeekInfo, currentEarningsDays, setEarningsWeek, getEarningsSectorCount,
+    newsSubView, activeEarningsWeek, earningsWeeks, currentEarningsWeekInfo, currentEarningsDays, setEarningsWeek, getEarningsSectorCount,
+    earningsResponse, earningsLoading, earningsError, loadEarningsCalendar,
     earningsSectorFilter, earningsTimingFilter, earningsAiOnly, earningsSearch,
     showEarningsModal, selectedEarningsItem, earningsList, macroCalendarList,
     GEOPOLITICAL_HOTSPOTS, GEOPOLITICAL_ASSET_MATRIX, filterGeopoliticsTopic,
-    AI_SECTOR_FILTERS, EARNINGS_DAYS, CORPORATE_LOGOS,
+    AI_SECTOR_FILTERS, CORPORATE_LOGOS,
     getCompanyLogoSvg, getDayEarnings, countDayTotal, openEarningsModal, closeEarningsModal, viewStockFromEarnings,
-    flippedEarningsCards, isCardFlipped, toggleCardFlip, flipAllCards,
+    finishClosingEarningsModal, handleEarningsDialogKeydown,
     parseMetricNumber, getMetricSurprise, getMetricYoy,
     // AI News Search Module
     aiSearchQuery, aiSearchEngine, aiSearchSource, aiSearchResults, aiSearchLoading, aiSearchError, aiSearchTelemetry, aiSearchCopiedId,

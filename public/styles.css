@@ -1540,7 +1540,8 @@ main { min-width: 0; }
 /* Benchmark Cards Grid */
 .index-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  /* Follow the space left by the watchlist, not the browser viewport. */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
   gap: 12px;
   margin-bottom: 16px;
 }
@@ -1553,8 +1554,9 @@ main { min-width: 0; }
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  gap: 8px;
   min-height: 104px;
-  height: 104px;
+  height: auto;
   box-sizing: border-box;
   transition: transform .22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow .22s ease, border-color .2s ease;
   box-shadow: var(--shadow-sm);
@@ -1573,6 +1575,7 @@ main { min-width: 0; }
 }
 .index-card-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
@@ -1581,6 +1584,8 @@ main { min-width: 0; }
   font-size: 12px;
   color: var(--text-primary);
   display: flex;
+  flex-wrap: wrap;
+  min-width: 0;
   align-items: center;
   gap: 6px;
   white-space: nowrap;
@@ -1743,6 +1748,26 @@ main { min-width: 0; }
   font-weight: 700;
   padding: 1px 6px;
   border-radius: 4px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.treasury-overview-card .index-price-row,
+.treasury-overview-card .macro-compact-val {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+.treasury-overview-card .price-val,
+.treasury-overview-card .price-val-unit,
+.treasury-overview-card .pct-pill {
+  white-space: nowrap;
+}
+.treasury-overview-card .index-card-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+.treasury-tenor {
+  white-space: nowrap;
 }
 .macro-asset-tag.gold-tag {
   background: rgba(234, 179, 8, 0.12);
@@ -2423,7 +2448,6 @@ td { color: var(--text-primary); }
   .sector-row { padding: 11px 0; }
 }
 @media (max-width:1200px) {
-  .index-grid { grid-template-columns: repeat(3,minmax(0,1fr)); }
   .dashboard-grid, .bottom-grid { grid-template-columns: minmax(0,1fr); }
   .news-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .sector-list { display: grid; grid-template-columns: 1fr 1fr; column-gap: 22px; }
@@ -8500,12 +8524,12 @@ td { color: var(--text-primary); }
 .earnings-wall-card:hover {
   border-color: var(--apple-blue, #2563eb);
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12), 0 0 16px rgba(37, 99, 235, 0.18);
-  transform: translateY(-3px) scale(1.02);
+  transform: none;
 }
 .dark .earnings-wall-card:hover {
   border-color: #3b82f6;
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.5), 0 0 20px rgba(59, 130, 246, 0.25);
-  transform: translateY(-3px) scale(1.02);
+  transform: none;
 }
 .earnings-wall-card:hover .flip-hint-badge {
   color: #2563eb;
@@ -9016,19 +9040,63 @@ td { color: var(--text-primary); }
    3D Expanded Company Earnings Hero Card (绉戞妧涓?AI 璐㈡姤鍏ㄦ櫙娣卞害鍗＄墖)
    ========================================================================== */
 
-/* 3D Expand Keyframe */
-@keyframes heroCard3dExpand {
-  0% {
-    opacity: 0;
-    transform: perspective(1200px) rotateY(-24deg) scale(0.72) translateY(28px);
+.earnings-detail-enter-active,
+.earnings-detail-leave-active {
+  transition: opacity 180ms ease;
+}
+.earnings-detail-enter-active .earnings-hero-expanded-card,
+.earnings-detail-leave-active .earnings-hero-expanded-card {
+  transition: opacity 180ms ease, transform 180ms cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+.earnings-detail-enter-from,
+.earnings-detail-leave-to {
+  opacity: 0;
+}
+.earnings-detail-enter-from .earnings-hero-expanded-card,
+.earnings-detail-leave-to .earnings-hero-expanded-card {
+  opacity: 0;
+  transform: translateY(6px) scale(0.985);
+}
+@media (prefers-reduced-motion: reduce) {
+  .earnings-detail-enter-active,
+  .earnings-detail-leave-active,
+  .earnings-detail-enter-active .earnings-hero-expanded-card,
+  .earnings-detail-leave-active .earnings-hero-expanded-card {
+    transition: none;
   }
-  60% {
-    transform: perspective(1200px) rotateY(3deg) scale(1.015) translateY(-2px);
+  .earnings-detail-enter-from .earnings-hero-expanded-card,
+  .earnings-detail-leave-to .earnings-hero-expanded-card {
+    transform: none;
   }
-  100% {
-    opacity: 1;
-    transform: perspective(1200px) rotateY(0deg) scale(1) translateY(0);
-  }
+}
+body.earnings-detail-open,
+body.earnings-detail-open .workspace-main-wrapper,
+body.earnings-detail-open .workspace-content {
+  overflow: hidden !important;
+}
+.earnings-data-status,
+.earnings-detail-source {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  margin-bottom: 12px;
+}
+.earnings-data-status a,
+.earnings-detail-source a {
+  color: var(--accent-text);
+}
+.earnings-source-note { flex-basis: 100%; }
+.earnings-unknown-subcol { grid-column: 1 / -1; }
+.earnings-unknown-subcol .subcol-cards-flow {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.earnings-wall-card:focus-visible {
+  outline: 2px solid var(--apple-blue);
+  outline-offset: 2px;
 }
 
 /* Frosted Blurred Backdrop */
@@ -9072,7 +9140,7 @@ body[data-theme="light"] .earnings-hero-backdrop {
   overflow-y: auto;
   box-sizing: border-box;
   transform-origin: center center;
-  animation: heroCard3dExpand 0.36s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  overscroll-behavior: contain;
 }
 
 :root[data-theme="light"] .earnings-hero-expanded-card,
@@ -9250,7 +9318,7 @@ body[data-theme="light"] .earnings-hero-expanded-card {
   background: rgba(239, 68, 68, 0.15);
   border-color: rgba(239, 68, 68, 0.4);
   color: #f43f5e;
-  transform: rotate(90deg);
+  transform: none;
 }
 
 /* Status Announcement Banner */
@@ -12676,6 +12744,8 @@ body[data-theme="light"] .hero-catalyst-block {
     flex: 1;
     min-width: 0;
     overflow-y: auto;
+    /* Keep the same content width when a modal locks scrolling with overflow: hidden. */
+    scrollbar-gutter: stable;
     padding: 16px 20px 32px 20px;
     background: var(--surface-canvas);
     scrollbar-width: thin;
@@ -14795,14 +14865,14 @@ body[data-theme="light"] .hero-catalyst-block {
   min-width: 0;
 }
 
-.butterfly-side-put,
+.butterfly-side-call,
 .butterfly-col-left {
   justify-content: flex-end;
   padding-right: 14px;
   gap: 8px;
 }
 
-.butterfly-side-call,
+.butterfly-side-put,
 .butterfly-col-right {
   justify-content: flex-start;
   padding-left: 14px;
@@ -14819,10 +14889,10 @@ body[data-theme="light"] .hero-catalyst-block {
   flex-shrink: 0;
   min-width: 42px;
 }
-.butterfly-side-put .butterfly-val-label {
+.butterfly-side-call .butterfly-val-label {
   text-align: right;
 }
-.butterfly-side-call .butterfly-val-label {
+.butterfly-side-put .butterfly-val-label {
   text-align: left;
 }
 
@@ -14832,10 +14902,10 @@ body[data-theme="light"] .hero-catalyst-block {
   display: flex;
   align-items: center;
 }
-.butterfly-side-put .butterfly-bar-wrap {
+.butterfly-side-call .butterfly-bar-wrap {
   justify-content: flex-end;
 }
-.butterfly-side-call .butterfly-bar-wrap {
+.butterfly-side-put .butterfly-bar-wrap {
   justify-content: flex-start;
 }
 
@@ -14849,23 +14919,23 @@ body[data-theme="light"] .hero-catalyst-block {
 }
 
 .butterfly-bar-put,
-.bar-fill-left {
+.bar-fill-right {
   background: #F43F5E;
 }
 
 .butterfly-bar-put.wall-highlight,
-.bar-fill-left.wall-highlight {
+.bar-fill-right.wall-highlight {
   background: #E11D48;
   box-shadow: 0 0 10px rgba(225, 29, 72, 0.4);
 }
 
 .butterfly-bar-call,
-.bar-fill-right {
+.bar-fill-left {
   background: #10B981;
 }
 
 .butterfly-bar-call.wall-highlight,
-.bar-fill-right.wall-highlight {
+.bar-fill-left.wall-highlight {
   background: #059669;
   box-shadow: 0 0 10px rgba(5, 150, 105, 0.4);
 }
@@ -15722,11 +15792,11 @@ body.is-loading .top-progress,
   border-radius: 4px;
 }
 .sk-butterfly-put {
-  margin-left: auto;
+  margin-right: auto;
   background: rgba(240, 110, 117, 0.28);
 }
 .sk-butterfly-call {
-  margin-right: auto;
+  margin-left: auto;
   background: rgba(49, 195, 154, 0.28);
 }
 .sk-strike-pill {
@@ -16275,47 +16345,6 @@ body.is-loading .top-progress,
    TradingView 测距尺系统 (Measure / Ruler Tool)
    ========================================================================== */
 
-.chart-ruler-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
-  font-size: 12px;
-  border-radius: var(--radius-sm, 6px);
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.chart-ruler-btn .ruler-btn-icon {
-  font-size: 13px;
-  line-height: 1;
-}
-
-.chart-ruler-btn.active {
-  background: rgba(56, 189, 248, 0.16);
-  border-color: rgba(56, 189, 248, 0.5);
-  color: #38bdf8;
-  box-shadow: 0 0 8px rgba(56, 189, 248, 0.25);
-}
-
-.chart-ruler-btn .ruler-badge-active {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 14px;
-  height: 14px;
-  font-size: 10px;
-  border-radius: 50%;
-  background: rgba(239, 68, 68, 0.85);
-  color: #ffffff;
-  margin-left: 2px;
-  cursor: pointer;
-}
-
-.chart-ruler-btn .ruler-badge-active:hover {
-  background: #ef4444;
-}
-
 /* TradingView 侧边垂直工具栏 */
 .tv-left-toolbar {
   position: absolute;
@@ -16580,9 +16609,13 @@ body.is-loading .top-progress,
   appearance: none;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  align-items: stretch;
+  justify-content: center;
   gap: 7px;
   min-width: 172px;
+  /* Override the legacy 30px tab height to fit the label and ratio bar. */
+  height: auto;
+  min-height: 42px;
   padding: 9px 13px;
   border-radius: 8px;
   background: var(--surface-card);
@@ -16614,26 +16647,31 @@ html.dark .cw-market-card.active {
 
 .cw-mc-top {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
   gap: 12px;
+  line-height: 1.2;
 }
 
 .cw-mc-title {
   font-size: 13px;
   font-weight: 600;
   letter-spacing: -0.01em;
+  white-space: nowrap;
 }
 
 .cw-mc-val {
   font-size: 12.5px;
   font-weight: 600;
   color: var(--text-primary);
+  white-space: nowrap;
 }
 
 .cw-mc-bar {
   width: 100%;
   height: 3px;
+  flex-shrink: 0;
   border-radius: 999px;
   background: rgba(244, 63, 94, 0.42);
   overflow: hidden;
@@ -17025,6 +17063,13 @@ html.dark .cw-drawer-table thead th {
   margin-left: 3px;
   font-size: 10px;
   color: var(--apple-blue, #3b82f6);
+}
+.cw-sort-arrow.is-idle {
+  color: var(--text-muted);
+}
+.cw-sortable:focus-visible {
+  outline: 2px solid var(--apple-blue);
+  outline-offset: -3px;
 }
 
 .cw-flow-row {

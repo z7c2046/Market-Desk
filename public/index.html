@@ -293,7 +293,7 @@
                 <div class="card-head">
                   <div class="card-left">
                     <span class="card-drag-grip" title="按住拖拽排序或跨组移动" aria-hidden="true">⠿</span>
-                    <strong class="card-sym">{{ r.symbol }}</strong>
+                    <strong class="card-sym">{{ formatWatchlistSymbol(r.symbol) }}</strong>
                     <span v-if="r.delayStatus === 'delayed'" class="tv-delay-badge" title="行情延迟 15 分钟 (Delayed) · 来自公开备用数据源">D</span>
                     <span class="card-name" :title="r.name">{{ r.name }}</span>
                     <span v-if="r.marketCap" class="card-mcap-pill" :title="'总市值: ' + r.marketCap">{{ r.marketCap }}</span>
@@ -374,7 +374,7 @@
             <div class="card-head">
               <div class="card-left">
                 <span class="card-drag-grip" title="按住拖拽排序" aria-hidden="true">⠿</span>
-                <strong class="card-sym">{{ r.symbol }}</strong>
+                <strong class="card-sym">{{ formatWatchlistSymbol(r.symbol) }}</strong>
                 <span v-if="r.delayStatus === 'delayed'" class="tv-delay-badge" title="行情延迟 15 分钟 (Delayed) · 来自公开备用数据源">D</span>
                 <span class="card-name" :title="r.name">{{ r.name }}</span>
                 <span v-if="r.marketCap" class="card-mcap-pill" :title="'总市值: ' + r.marketCap">{{ r.marketCap }}</span>
@@ -545,8 +545,9 @@
         <h2 class="overview-main-title">市场概览</h2>
       </div>
     </div>
-    <div class="index-grid">
-      <div v-for="i in 10" :key="i" class="index-card metric-skeleton-card">
+    <!-- Match the two live groups so auto-fit cannot turn ten placeholders into a 6+4 grid. -->
+    <div v-for="row in 2" :key="row" class="index-grid" :class="{ 'macro-index-grid': row === 2 }">
+      <div v-for="i in 5" :key="i" class="index-card metric-skeleton-card">
         <div class="index-card-head"><span class="sk sk-line" style="width: 45%;"></span><span class="sk sk-pill" style="width: 50px;"></span></div>
         <div class="index-price-row" style="margin: 10px 0;"><span class="sk sk-strong" style="width: 60%;"></span></div>
         <div class="index-card-foot"><span class="sk sk-small" style="width: 70%;"></span></div>
@@ -706,11 +707,10 @@
       </button>
 
       <!-- 2. 美债收益率 10Y/20Y/30Y (点击展开全景) -->
-      <button class="index-card macro-compact-card clickable" @click="openTreasuryModal" aria-label="查看 10年、20年、30年美债收益率全景">
+      <button class="index-card macro-compact-card treasury-overview-card clickable" @click="openTreasuryModal" aria-label="查看 10年、20年、30年美债收益率全景">
         <div class="index-card-head">
           <div class="index-name">
             <strong>美债收益率</strong>
-            <span class="macro-badge-tag">10Y/20Y/30Y</span>
           </div>
           <span class="macro-asset-tag rates-tag">曲线全景 ↗</span>
         </div>
@@ -724,8 +724,8 @@
           </span>
         </div>
         <div class="index-card-foot">
-          <span>20Y: {{ formatMacroPrice(macroMap.US20Y) }} · 30Y: {{ formatMacroPrice(macroMap.US30Y) }}</span>
-          <span class="macro-open-hint">点击展开 ↗</span>
+          <span class="treasury-tenor">20Y: {{ formatMacroPrice(macroMap.US20Y) }}</span>
+          <span class="treasury-tenor">30Y: {{ formatMacroPrice(macroMap.US30Y) }}</span>
         </div>
       </button>
 
@@ -973,10 +973,10 @@
                 @click="selectSymbol(r.symbol, { source: 'watchlist' })"
                 role="button"
                 tabindex="0"
-                :aria-label="r.symbol + ' ' + r.name"
+                :aria-label="formatWatchlistSymbol(r.symbol) + ' ' + r.name"
               >
                 <div class="mq-col-identity">
-                  <span class="mq-sym">{{ r.symbol }}</span>
+                  <span class="mq-sym">{{ formatWatchlistSymbol(r.symbol) }}</span>
                   <span class="mq-name">{{ r.name }}</span>
                 </div>
                 <div class="mq-col-price">
@@ -1005,10 +1005,10 @@
             @click="selectSymbol(r.symbol, { source: 'watchlist' })"
             role="button"
             tabindex="0"
-            :aria-label="r.symbol + ' ' + r.name"
+            :aria-label="formatWatchlistSymbol(r.symbol) + ' ' + r.name"
           >
             <div class="mq-col-identity">
-              <span class="mq-sym">{{ r.symbol }}</span>
+              <span class="mq-sym">{{ formatWatchlistSymbol(r.symbol) }}</span>
               <span class="mq-name">{{ r.name }}</span>
             </div>
             <div class="mq-col-price">
@@ -1106,7 +1106,7 @@
                 <!-- Col 1: Symbol / Name / Mcap -->
                 <td class="wl-cell-symbol">
                   <div class="wl-symbol-wrapper">
-                    <strong class="wl-sym-code">{{ r.symbol }}</strong>
+                    <strong class="wl-sym-code">{{ formatWatchlistSymbol(r.symbol) }}</strong>
                     <span class="wl-sym-name muted" :title="r.name">{{ r.name }}</span>
                     <span v-if="r.marketCap" class="wl-mcap-pill" :title="'总市值: ' + r.marketCap">{{ r.marketCap }}</span>
                   </div>
@@ -1168,7 +1168,7 @@
             <!-- Col 1: Symbol / Name / Mcap -->
             <td class="wl-cell-symbol">
               <div class="wl-symbol-wrapper">
-                <strong class="wl-sym-code">{{ r.symbol }}</strong>
+                <strong class="wl-sym-code">{{ formatWatchlistSymbol(r.symbol) }}</strong>
                 <span class="wl-sym-name muted" :title="r.name">{{ r.name }}</span>
                 <span v-if="r.marketCap" class="wl-mcap-pill" :title="'总市值: ' + r.marketCap">{{ r.marketCap }}</span>
                 <span class="group-tags"><span v-for="tag in r.groups" :key="tag" class="group-tag">{{ tag }}</span></span>
@@ -1253,11 +1253,6 @@
         <div class="chart-actions-row">
           <button class="chart-watch-btn" @click="addWatch(symbol)">{{watchlist.includes(symbol)?'✓ 已在自选':'+ 加入自选'}}</button>
           <button class="topbar-btn chart-reset-btn" @click="resetPriceChartZoom" title="复位视角 (也可双击图表)">⟲ 复位</button>
-          <button class="topbar-btn chart-ruler-btn" :class="{ active: isRulerActive || rulerMeasurement }" @click="toggleRulerTool" title="TradingView 风格测距尺 (快捷键: 按住 Shift 并在图表上拖拽)">
-            <span class="ruler-btn-icon">📐</span>
-            <span>测距尺</span>
-            <span v-if="rulerMeasurement" class="ruler-badge-active" @click.stop="clearRuler" title="清除测距标注">✕</span>
-          </button>
           <!-- K线周期选择器 (15分, 1小时, 4小时, 日K) -->
           <div class="desktop-only panel-tools chart-interval-tools" role="tablist" aria-label="K线周期切换">
             <span class="tools-divider-label">周期</span>
@@ -1775,11 +1770,24 @@
                 <span>24H 成交</span>
                 <span v-if="onchainStockSortField === 'volume24h'" class="cw-sort-arrow">{{ onchainStockSortDir === 'desc' ? '↓' : '↑' }}</span>
               </th>
-              <th class="th-flow text-center cw-sortable" @click="toggleOnchainSort('netFlow')">
+              <th class="th-flow text-center cw-sortable" tabindex="0"
+                  :aria-sort="onchainStockSortField === 'netFlow' ? (onchainStockSortDir === 'desc' ? 'descending' : 'ascending') : 'none'"
+                  title="按净流向金额排序，点击切换升序或降序"
+                  @click="toggleOnchainSort('netFlow')"
+                  @keydown.enter.prevent="toggleOnchainSort('netFlow')"
+                  @keydown.space.prevent="toggleOnchainSort('netFlow')">
                 <span>净流向</span>
-                <span v-if="onchainStockSortField === 'netFlow'" class="cw-sort-arrow">{{ onchainStockSortDir === 'desc' ? '↓' : '↑' }}</span>
+                <span class="cw-sort-arrow" :class="{ 'is-idle': onchainStockSortField !== 'netFlow' }" aria-hidden="true">{{ onchainStockSortField === 'netFlow' ? (onchainStockSortDir === 'desc' ? '↓' : '↑') : '↕' }}</span>
               </th>
-              <th class="th-ls text-center">多空比</th>
+              <th class="th-ls text-center cw-sortable" tabindex="0"
+                  :aria-sort="onchainStockSortField === 'buyRatio' ? (onchainStockSortDir === 'desc' ? 'descending' : 'ascending') : 'none'"
+                  title="按多头占比排序，点击切换升序或降序"
+                  @click="toggleOnchainSort('buyRatio')"
+                  @keydown.enter.prevent="toggleOnchainSort('buyRatio')"
+                  @keydown.space.prevent="toggleOnchainSort('buyRatio')">
+                <span>多空比</span>
+                <span class="cw-sort-arrow" :class="{ 'is-idle': onchainStockSortField !== 'buyRatio' }" aria-hidden="true">{{ onchainStockSortField === 'buyRatio' ? (onchainStockSortDir === 'desc' ? '↓' : '↑') : '↕' }}</span>
+              </th>
               <th class="th-oi text-right">OI</th>
               <th class="th-action text-right"></th>
             </tr>
@@ -2386,11 +2394,11 @@
           <div v-for="(row, idx) in butterflySkeletonRows" :key="idx" 
                class="butterfly-row" 
                :class="{ 'is-spot-row': row.isSpot }">
-            <!-- Left Side: Put OI (Red bar extends from center to left) -->
-            <div class="butterfly-side butterfly-side-put">
+            <!-- Left Side: Call (green bar extends from center to left) -->
+            <div class="butterfly-side butterfly-side-call">
               <span class="sk sk-small" style="width: 28px; margin-right: 8px;"></span>
               <div class="butterfly-bar-wrap">
-                <div class="sk sk-butterfly-bar sk-butterfly-put" :style="{ width: row.putWidth + '%' }"></div>
+                <div class="sk sk-butterfly-bar sk-butterfly-call" :style="{ width: row.callWidth + '%' }"></div>
               </div>
             </div>
 
@@ -2399,10 +2407,10 @@
               <span class="sk sk-strike-pill" :style="{ width: row.isSpot ? '110px' : '58px', height: '22px' }"></span>
             </div>
 
-            <!-- Right Side: Call OI (Green bar extends from center to right) -->
-            <div class="butterfly-side butterfly-side-call">
+            <!-- Right Side: Put (red bar extends from center to right) -->
+            <div class="butterfly-side butterfly-side-put">
               <div class="butterfly-bar-wrap">
-                <div class="sk sk-butterfly-bar sk-butterfly-call" :style="{ width: row.callWidth + '%' }"></div>
+                <div class="sk sk-butterfly-bar sk-butterfly-put" :style="{ width: row.putWidth + '%' }"></div>
               </div>
               <span class="sk sk-small" style="width: 28px; margin-left: 8px;"></span>
             </div>
@@ -2501,8 +2509,8 @@
           <button class="tiny-btn" :class="{active: optionMetric==='gex', selected: optionMetric==='gex'}" @click="optionMetric='gex'">估算 Gamma 敞口 (GEX)<span class="sr-only">估算 GEX</span></button>
         </div>
         <div class="options-legend-group">
-          <span class="legend-item"><span class="legend-box legend-call"></span> Call 看涨期权持仓 (上方/右侧)</span>
-          <span class="legend-item"><span class="legend-box legend-put"></span> Put 看跌期权持仓 (下方/左侧)</span>
+          <span class="opt-legend-item"><span class="opt-legend-box box-green"></span> Call 看涨期权（左侧）</span>
+          <span class="opt-legend-item"><span class="opt-legend-box box-red"></span> Put 看跌期权（右侧）</span>
         </div>
       </div>
 
@@ -2518,11 +2526,11 @@
                  'is-call-wall': row.isCallWall, 
                  'is-put-wall': row.isPutWall 
                }">
-            <!-- Left Side: Put OI (Red bar extends from center to left) -->
-            <div class="butterfly-side butterfly-side-put">
-              <span class="butterfly-val-label font-mono">{{ row.putText }}</span>
+            <!-- Left Side: Call (green bar extends from center to left) -->
+            <div class="butterfly-side butterfly-side-call">
+              <span class="butterfly-val-label font-mono">{{ row.callText }}</span>
               <div class="butterfly-bar-wrap">
-                <div class="butterfly-bar butterfly-bar-put" :style="{ width: row.putWidthPct + '%' }"></div>
+                <div class="butterfly-bar butterfly-bar-call" :style="{ width: row.callWidthPct + '%' }"></div>
               </div>
             </div>
 
@@ -2537,12 +2545,12 @@
               </span>
             </div>
 
-            <!-- Right Side: Call OI (Green bar extends from center to right) -->
-            <div class="butterfly-side butterfly-side-call">
+            <!-- Right Side: Put (red bar extends from center to right) -->
+            <div class="butterfly-side butterfly-side-put">
               <div class="butterfly-bar-wrap">
-                <div class="butterfly-bar butterfly-bar-call" :style="{ width: row.callWidthPct + '%' }"></div>
+                <div class="butterfly-bar butterfly-bar-put" :style="{ width: row.putWidthPct + '%' }"></div>
               </div>
-              <span class="butterfly-val-label font-mono">{{ row.callText }}</span>
+              <span class="butterfly-val-label font-mono">{{ row.putText }}</span>
             </div>
           </div>
         </div>
@@ -2577,7 +2585,7 @@
       </button>
       <button class="news-view-btn" :class="{ active: newsSubView === 'earnings' }" @click="newsSubView = 'earnings'">
         <span class="btn-icon">📅</span> 科技与 AI 财报周历
-        <span class="badge-fire-pill">Earnings Whispers 原版</span>
+        <span class="badge-fire-pill">Nasdaq 日历</span>
       </button>
       <button class="news-view-btn" :class="{ active: newsSubView === 'macro' }" @click="newsSubView = 'macro'">
         <span class="btn-icon">📊</span> 宏观重磅经济日历 (CPI / PPI)
@@ -2596,7 +2604,7 @@
     </div>
     <div v-if="newsSubView === 'earnings'" class="earnings-header-stats">
       <div class="earnings-week-tabs">
-        <button v-for="(w, wKey) in EARNINGS_WEEKS" :key="wKey"
+        <button v-for="(w, wKey) in earningsWeeks" :key="wKey"
                 class="week-tab-btn"
                 :class="{ active: activeEarningsWeek === wKey, 'is-current-badge': wKey === 'current' }"
                 @click="setEarningsWeek(wKey)">
@@ -2605,7 +2613,7 @@
         </button>
       </div>
       <span class="stat-pill">📅 {{ currentEarningsWeekInfo.rangeText }}</span>
-      <span class="stat-pill stat-accent">🔥 覆盖 {{ earningsList.length }} 家核心科技与 AI 标的 ({{ currentEarningsWeekInfo.theme }})</span>
+      <span class="stat-pill stat-accent">科技与 AI 关注池 · 该周 {{ earningsList.length }} 家披露</span>
     </div>
     <div v-if="newsSubView === 'geopolitics'" class="earnings-header-stats">
       <span class="stat-pill"><span class="pulse-dot"></span> 全球地缘风险指数：高位戒备 (84.6)</span>
@@ -2615,6 +2623,16 @@
 
   <!-- ================= SUBVIEW 1: TECH & AI EARNINGS CALENDAR (Earnings Whispers Style) ================= -->
   <section v-if="newsSubView === 'earnings'" class="earnings-calendar-section">
+    <div class="earnings-data-status" role="status" aria-live="polite">
+      <a href="https://www.nasdaq.com/market-activity/earnings" target="_blank" rel="noopener noreferrer">来源：Nasdaq 财报日历 ↗</a>
+      <span v-if="earningsLoading">正在更新…</span>
+      <span v-else-if="earningsError" class="warning">{{ earningsError }}</span>
+      <span v-else-if="earningsResponse?.status === 'unavailable'" class="warning">该周数据暂不可用，请稍后重试</span>
+      <span v-else-if="earningsResponse?.status === 'partial'" class="warning">部分日期未更新，旧数据已标注</span>
+      <span v-if="earningsResponse?.fetchedAt">数据获取：{{ time(earningsResponse.fetchedAt) }}</span>
+      <button type="button" class="text-button" :disabled="earningsLoading" @click="loadEarningsCalendar(true)">刷新日历</button>
+      <span class="earnings-source-note">披露日期及时段以公司公告为准；缺失指标显示 —。</span>
+    </div>
     <!-- Filter Bar: AI Sectors, Timing, and Search -->
     <div class="earnings-filter-bar">
       <!-- Sector Chips -->
@@ -2635,6 +2653,7 @@
           <button :class="{ active: earningsTimingFilter === 'all' }" @click="earningsTimingFilter = 'all'">全部时段</button>
           <button :class="{ active: earningsTimingFilter === 'BMO' }" @click="earningsTimingFilter = 'BMO'">☀️ 盘前 (BMO)</button>
           <button :class="{ active: earningsTimingFilter === 'AMC' }" @click="earningsTimingFilter = 'AMC'">🌙 盘后 (AMC)</button>
+          <button :class="{ active: earningsTimingFilter === 'UNKNOWN' }" @click="earningsTimingFilter = 'UNKNOWN'">时段未提供</button>
         </div>
 
         <!-- AI Supply Chain Only Toggle -->
@@ -2651,9 +2670,8 @@
         </div>
 
         <!-- Quick Action Hint Pill -->
-        <div class="earnings-hint-pill" title="点击任意公司卡片以 3D 翻页动效展开全屏财报">
-          <span class="pulse-dot"></span>
-          <span>点击卡片 3D 展开全景财报</span>
+        <div class="earnings-hint-pill" title="点击公司卡片查看详情，点击卡片外关闭">
+          <span>点击卡片查看财报详情</span>
         </div>
       </div>
     </div>
@@ -2673,6 +2691,7 @@
             </div>
           </div>
           <span v-if="d.highlight" class="day-highlight-tag">{{ d.highlight }}</span>
+          <span v-if="d.status === 'stale'" class="warning small">旧快照 · 更新失败</span>
         </div>
 
         <!-- Day Split Subcolumns: Left 盘前 (BMO) | Right 盘后 (AMC) -->
@@ -2688,32 +2707,36 @@
               <div v-for="item in getDayEarnings(d.id, 'BMO')" :key="item.symbol"
                    class="earnings-wall-card"
                    :class="['status-' + (item.reportStatus || 'pending')]"
-                   @click="openEarningsModal(item)"
-                   :title="'点击 3D 展开 ' + item.name + ' (' + item.symbol + ') 财报全景详情'">
+                   role="button" tabindex="0"
+                   @click="openEarningsModal(item, $event)"
+                   @keydown.enter.prevent="openEarningsModal(item, $event)"
+                   @keydown.space.prevent="openEarningsModal(item, $event)"
+                   :title="'查看 ' + item.name + ' (' + item.symbol + ') 财报详情'">
                 
                 <!-- Top-Right Glowing Corner Mask (Green = Beat, Red = Miss) -->
                 <div v-if="item.reportStatus === 'beat' || item.reportStatus === 'miss'"
                      class="card-corner-mask"
                      :class="'mask-' + item.reportStatus"
-                     :title="item.reportStatus === 'beat' ? ('财报大捷 · ' + (item.statusBadgeText || '超预期')) : ('财报承压 · ' + (item.statusBadgeText || '爆雷/不及预期'))">
+                     :title="item.statusBadgeText">
                   <div class="corner-ribbon-content">
                     <span class="corner-status-text">{{ item.reportStatus === 'beat' ? 'BEAT' : 'MISS' }}</span>
                   </div>
                 </div>
 
                 <!-- Company Official Logo -->
-                <div class="front-logo-wrapper" v-html="getCompanyLogoSvg(item.symbol)"></div>
+                <div v-if="getCompanyLogoSvg(item.symbol)" class="front-logo-wrapper" v-html="getCompanyLogoSvg(item.symbol)"></div>
+                <div v-else class="front-logo-wrapper">{{ item.name }}</div>
 
                 <!-- Ticker Symbol & Hover Action Hint -->
                 <div class="front-ticker-row">
                   <span class="front-ticker">{{ item.symbol }}</span>
-                  <span class="flip-hint-badge" title="点击 3D 展开全景财报">⤢ 展开</span>
+                  <span class="flip-hint-badge">⤢ 展开</span>
                 </div>
               </div>
 
               <!-- Empty state if no BMO earnings -->
               <div v-if="!getDayEarnings(d.id, 'BMO').length" class="subcol-empty-card">
-                <span>无披露</span>
+                <span>{{ earningsLoading ? '加载中…' : d.status === 'unavailable' ? '暂未获取数据' : '暂无匹配披露' }}</span>
               </div>
             </div>
           </div>
@@ -2729,32 +2752,55 @@
               <div v-for="item in getDayEarnings(d.id, 'AMC')" :key="item.symbol"
                    class="earnings-wall-card"
                    :class="['status-' + (item.reportStatus || 'pending')]"
-                   @click="openEarningsModal(item)"
-                   :title="'点击 3D 展开 ' + item.name + ' (' + item.symbol + ') 财报全景详情'">
+                   role="button" tabindex="0"
+                   @click="openEarningsModal(item, $event)"
+                   @keydown.enter.prevent="openEarningsModal(item, $event)"
+                   @keydown.space.prevent="openEarningsModal(item, $event)"
+                   :title="'查看 ' + item.name + ' (' + item.symbol + ') 财报详情'">
                 
                 <!-- Top-Right Glowing Corner Mask (Green = Beat, Red = Miss) -->
                 <div v-if="item.reportStatus === 'beat' || item.reportStatus === 'miss'"
                      class="card-corner-mask"
                      :class="'mask-' + item.reportStatus"
-                     :title="item.reportStatus === 'beat' ? ('财报大捷 · ' + (item.statusBadgeText || '超预期')) : ('财报承压 · ' + (item.statusBadgeText || '爆雷/不及预期'))">
+                     :title="item.statusBadgeText">
                   <div class="corner-ribbon-content">
                     <span class="corner-status-text">{{ item.reportStatus === 'beat' ? 'BEAT' : 'MISS' }}</span>
                   </div>
                 </div>
 
                 <!-- Company Official Logo -->
-                <div class="front-logo-wrapper" v-html="getCompanyLogoSvg(item.symbol)"></div>
+                <div v-if="getCompanyLogoSvg(item.symbol)" class="front-logo-wrapper" v-html="getCompanyLogoSvg(item.symbol)"></div>
+                <div v-else class="front-logo-wrapper">{{ item.name }}</div>
 
                 <!-- Ticker Symbol & Hover Action Hint -->
                 <div class="front-ticker-row">
                   <span class="front-ticker">{{ item.symbol }}</span>
-                  <span class="flip-hint-badge" title="点击 3D 展开全景财报">⤢ 展开</span>
+                  <span class="flip-hint-badge">⤢ 展开</span>
                 </div>
               </div>
 
               <!-- Empty state if no AMC earnings -->
               <div v-if="!getDayEarnings(d.id, 'AMC').length" class="subcol-empty-card">
-                <span>无披露</span>
+                <span>{{ earningsLoading ? '加载中…' : d.status === 'unavailable' ? '暂未获取数据' : '暂无匹配披露' }}</span>
+              </div>
+            </div>
+          </div>
+          <div v-if="getDayEarnings(d.id, 'UNKNOWN').length" class="earnings-subcol earnings-unknown-subcol">
+            <div class="subcol-header">
+              <span class="subcol-title">时段未提供</span>
+              <span class="subcol-count">{{ getDayEarnings(d.id, 'UNKNOWN').length }}</span>
+            </div>
+            <div class="subcol-cards-flow">
+              <div v-for="item in getDayEarnings(d.id, 'UNKNOWN')" :key="item.symbol"
+                   class="earnings-wall-card" role="button" tabindex="0"
+                   @click="openEarningsModal(item, $event)"
+                   @keydown.enter.prevent="openEarningsModal(item, $event)"
+                   @keydown.space.prevent="openEarningsModal(item, $event)"
+                   :title="'查看 ' + item.name + ' (' + item.symbol + ') 财报详情'">
+                <div v-if="getCompanyLogoSvg(item.symbol)" class="front-logo-wrapper" v-html="getCompanyLogoSvg(item.symbol)"></div>
+                <div v-else class="front-logo-wrapper">{{ item.name }}</div>
+                <div class="front-ticker-row"><span class="front-ticker">{{ item.symbol }}</span><span class="flip-hint-badge">⤢ 展开</span></div>
+                <span class="small muted">{{ item.statusBadgeText }}</span>
               </div>
             </div>
           </div>
@@ -5027,14 +5073,16 @@
   </div>
 </div>
 
-<!-- Modal: 3D Expanded Company Earnings Hero Card (科技与 AI 财报全景深度卡片) -->
+<!-- Earnings detail: a subtle expansion with a blurred, dismissible backdrop. -->
+<Transition name="earnings-detail" @after-leave="finishClosingEarningsModal">
 <div v-if="showEarningsModal && selectedEarningsItem"
      class="earnings-hero-backdrop modal-backdrop"
      @click.self="closeEarningsModal"
-     @keydown.esc="closeEarningsModal">
+     @keydown="handleEarningsDialogKeydown">
   <div class="earnings-hero-expanded-card"
        :class="['status-' + (selectedEarningsItem.reportStatus || 'pending')]"
        role="dialog"
+       tabindex="-1"
        aria-modal="true"
        :aria-label="selectedEarningsItem.name + ' (' + selectedEarningsItem.symbol + ') 财报全景详情'">
 
@@ -5042,19 +5090,19 @@
     <div v-if="selectedEarningsItem.reportStatus === 'beat' || selectedEarningsItem.reportStatus === 'miss'"
          class="hero-ribbon-badge"
          :class="'ribbon-' + selectedEarningsItem.reportStatus">
-      <span>{{ selectedEarningsItem.reportStatus === 'beat' ? '★ BEAT 业绩超预期' : '⚠ MISS 业绩爆雷承压' }}</span>
+      <span>{{ selectedEarningsItem.reportStatus === 'beat' ? 'EPS 超预期' : 'EPS 低于预期' }}</span>
     </div>
 
     <!-- 1. Header Section: Logo, Title, Symbol, Disclosure Timing, AI Sector & Role -->
     <div class="earnings-hero-header">
       <div class="hero-brand-group">
-        <div class="hero-logo-slot" v-html="getCompanyLogoSvg(selectedEarningsItem.symbol)"></div>
+        <div v-if="getCompanyLogoSvg(selectedEarningsItem.symbol)" class="hero-logo-slot" v-html="getCompanyLogoSvg(selectedEarningsItem.symbol)"></div>
         <div class="hero-brand-meta">
           <div class="hero-title-line">
             <h2 class="hero-company-name">{{ selectedEarningsItem.name }}</h2>
             <span class="hero-symbol-tag">{{ selectedEarningsItem.symbol }}</span>
             <span class="hero-timing-pill" :class="selectedEarningsItem.timing === 'BMO' ? 'bmo-pill' : 'amc-pill'">
-              {{ selectedEarningsItem.timing === 'BMO' ? '☀️ 盘前披露 (BMO)' : '🌙 盘后披露 (AMC)' }}
+              {{ selectedEarningsItem.timing === 'BMO' ? '☀️ 盘前披露 (BMO)' : selectedEarningsItem.timing === 'AMC' ? '🌙 盘后披露 (AMC)' : '披露时段未提供' }}
             </span>
           </div>
           <div class="hero-sub-meta">
@@ -5062,7 +5110,7 @@
             <span class="hero-meta-sep">/</span>
             <span class="hero-meta-pill ai-role-pill">⚡ {{ selectedEarningsItem.aiTag }}</span>
             <span class="hero-meta-sep">/</span>
-            <span class="hero-meta-pill season-pill">2026 Q3/Q4 财报季</span>
+            <span class="hero-meta-pill season-pill">财季截至 {{ selectedEarningsItem.fiscalQuarter || '—' }}</span>
           </div>
         </div>
       </div>
@@ -5074,12 +5122,19 @@
       </button>
     </div>
 
+    <div class="earnings-detail-source">
+      <a :href="selectedEarningsItem.sourceUrl" target="_blank" rel="noopener noreferrer">{{ selectedEarningsItem.source }} ↗</a>
+      <span>{{ selectedEarningsItem.fullDate }} · 美东日期</span>
+      <span>获取于 {{ time(selectedEarningsItem.fetchedAt) }}</span>
+      <span v-if="selectedEarningsItem.stale" class="warning">旧快照</span>
+    </div>
+
     <!-- 2. Status Announcement Banner -->
     <div class="hero-status-banner" :class="'banner-' + (selectedEarningsItem.reportStatus || 'pending')">
       <div class="banner-left">
         <span class="banner-status-dot"></span>
         <span class="banner-status-title">
-          {{ selectedEarningsItem.reportStatus === 'beat' ? '超预期大捷 · BEAT' : selectedEarningsItem.reportStatus === 'miss' ? '业绩承压 / 爆雷 · MISS' : '财报披露前瞻 · PENDING' }}
+          {{ selectedEarningsItem.epsActual ? '每股收益已更新' : '每股收益实际值待更新' }}
         </span>
         <span class="banner-desc">{{ selectedEarningsItem.statusBadgeText }}</span>
       </div>
@@ -5100,7 +5155,7 @@
         <div class="kpi-card-top">
           <div class="kpi-title-group">
             <span class="kpi-type-icon">📊</span>
-            <span class="kpi-title-text">每股收益 (EPS - Diluted)</span>
+            <span class="kpi-title-text">每股收益 (EPS)</span>
           </div>
           <span v-if="getMetricSurprise(selectedEarningsItem.epsActual, selectedEarningsItem.epsConsensus)"
                 class="kpi-surprise-pill"
@@ -5113,11 +5168,11 @@
           <div class="hero-num-cell">
             <span class="num-lbl">{{ selectedEarningsItem.epsActual ? '实际值 (Actual)' : '一致预期 (Consensus)' }}</span>
             <span class="num-val-main" :class="selectedEarningsItem.reportStatus === 'beat' ? 'txt-up' : selectedEarningsItem.reportStatus === 'miss' ? 'txt-down' : ''">
-              {{ selectedEarningsItem.epsActual || selectedEarningsItem.epsConsensus }}
+              {{ selectedEarningsItem.epsActual || selectedEarningsItem.epsConsensus || '—' }}
             </span>
           </div>
           <div v-if="getMetricSurprise(selectedEarningsItem.epsActual, selectedEarningsItem.epsConsensus)" class="hero-diff-cell">
-            <span class="num-lbl">超预期差额</span>
+            <span class="num-lbl">与预期差额</span>
             <span class="num-val-diff" :class="getMetricSurprise(selectedEarningsItem.epsActual, selectedEarningsItem.epsConsensus).isPositive ? 'txt-up' : 'txt-down'">
               {{ getMetricSurprise(selectedEarningsItem.epsActual, selectedEarningsItem.epsConsensus).diff }}
             </span>
@@ -5127,7 +5182,7 @@
         <div class="kpi-compare-row">
           <div class="compare-col">
             <span class="c-lbl">一致预期</span>
-            <span class="c-val">{{ selectedEarningsItem.epsConsensus }}</span>
+            <span class="c-val">{{ selectedEarningsItem.epsConsensus || '—' }}</span>
           </div>
           <div class="compare-sep"></div>
           <div class="compare-col">
@@ -5137,8 +5192,8 @@
           <div class="compare-sep"></div>
           <div class="compare-col">
             <span class="c-lbl">EPS 同比增幅</span>
-            <span class="c-val" :class="getMetricYoy(selectedEarningsItem.epsActual || selectedEarningsItem.epsConsensus, selectedEarningsItem.epsPrev)?.startsWith('+') ? 'txt-up' : 'txt-down'">
-              {{ getMetricYoy(selectedEarningsItem.epsActual || selectedEarningsItem.epsConsensus, selectedEarningsItem.epsPrev) || '-' }}
+            <span class="c-val" :class="selectedEarningsItem.epsActual && getMetricYoy(selectedEarningsItem.epsActual, selectedEarningsItem.epsPrev) ? (getMetricYoy(selectedEarningsItem.epsActual, selectedEarningsItem.epsPrev).startsWith('+') ? 'txt-up' : 'txt-down') : ''">
+              {{ getMetricYoy(selectedEarningsItem.epsActual, selectedEarningsItem.epsPrev) || '—' }}
             </span>
           </div>
         </div>
@@ -5162,7 +5217,7 @@
           <div class="hero-num-cell">
             <span class="num-lbl">{{ selectedEarningsItem.revActual ? '实际值 (Actual)' : '一致预期 (Consensus)' }}</span>
             <span class="num-val-main" :class="selectedEarningsItem.reportStatus === 'beat' ? 'txt-up' : selectedEarningsItem.reportStatus === 'miss' ? 'txt-down' : ''">
-              {{ selectedEarningsItem.revActual || selectedEarningsItem.revConsensus }}
+              {{ selectedEarningsItem.revActual || selectedEarningsItem.revConsensus || '—' }}
             </span>
           </div>
           <div v-if="getMetricSurprise(selectedEarningsItem.revActual, selectedEarningsItem.revConsensus)" class="hero-diff-cell">
@@ -5176,7 +5231,7 @@
         <div class="kpi-compare-row">
           <div class="compare-col">
             <span class="c-lbl">一致预期</span>
-            <span class="c-val">{{ selectedEarningsItem.revConsensus }}</span>
+            <span class="c-val">{{ selectedEarningsItem.revConsensus || '—' }}</span>
           </div>
           <div class="compare-sep"></div>
           <div class="compare-col">
@@ -5202,7 +5257,7 @@
     </div>
 
     <!-- 4. AI Catalyst & Capex Guidance Block -->
-    <div class="hero-catalyst-block">
+    <div v-if="selectedEarningsItem.aiCatalyst" class="hero-catalyst-block">
       <div class="catalyst-header">
         <span class="catalyst-icon">⚡</span>
         <h4 class="catalyst-title">华尔街机构核心博弈焦点与资本开支指引 (AI Catalyst & Capex Guidance)</h4>
@@ -5224,6 +5279,7 @@
 
   </div>
 </div>
+</Transition>
 
 
 </main>
@@ -5413,7 +5469,7 @@
              @click="selectSymbol(r.symbol)">
           <span v-if="symbol === r.symbol" class="rw-selected-bar"></span>
           <div class="rw-cell-code">
-            <strong class="rw-sym">{{ r.symbol }}</strong>
+            <strong class="rw-sym">{{ formatWatchlistSymbol(r.symbol) }}</strong>
           </div>
           <span class="rw-cell-price">{{ num(r.regularPrice) }}</span>
           <span class="rw-cell-change" :class="tone(r.regularChange)">{{ pctNoPlus(r.regularChange) }}</span>
@@ -5505,7 +5561,7 @@
                @click="selectSymbol(r.symbol)">
             <span v-if="symbol === r.symbol" class="rw-selected-bar"></span>
             <div class="rw-cell-code">
-              <strong class="rw-sym">{{ r.symbol }}</strong>
+              <strong class="rw-sym">{{ formatWatchlistSymbol(r.symbol) }}</strong>
             </div>
             <span class="rw-cell-price">{{ num(r.regularPrice) }}</span>
             <span class="rw-cell-change" :class="tone(r.regularChange)">{{ pctNoPlus(r.regularChange) }}</span>

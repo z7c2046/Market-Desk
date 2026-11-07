@@ -13,6 +13,114 @@ import * as mobileQuoteView from '../public/mobile-quote-view.js';
 import { AiSearchService } from '../src/ai-search-service.js';
 import { createServer } from '../src/server.js';
 const tick = () => new Promise(resolve => setTimeout(resolve, 30));
+
+function earningsFixture(weekStart, symbol = 'PLTR', epsActual = '$0.32') {
+  const week = earningsCalendarModel.getEarningsWeeks(weekStart).current;
+  const fetchedAt = new Date().toISOString();
+  return { weekStart, weekEnd: week.weekEnd, status: 'ready', fetchedAt,
+    source: 'Nasdaq 财报日历', days: week.days.map(day => ({ date: day.fullDate, status: 'ready', fetchedAt })),
+    items: [{ symbol, name: symbol === 'PLTR' ? 'Palantir' : 'Apple', day: 'mon', fullDate: weekStart,
+      timing: 'UNKNOWN', sectorId: 'cloud', sectorName: '云计算', aiTag: '企业软件', isAiSupplyChain: true,
+      epsActual, epsConsensus: '$0.30', epsPrev: null, revActual: null, revConsensus: null,
+      reportStatus: 'beat', statusBadgeText: 'EPS 超预期', fiscalQuarter: 'Sep/2026', fetchedAt,
+      source: 'Nasdaq 财报日历', sourceUrl: 'https://www.nasdaq.com/market-activity/earnings' }] };
+}
+
+test('earnings calendar loads live weeks, labels missing data, refreshes, and closes via backdrop/Escape with focus restored', async t => {
+  const requests = [];
+  let fail = false, now = Date.now(), refreshTimer;
+  const ui = await mount(t, async url => {
+    const u = new URL(url, 'http://localhost');
+    if (u.pathname !== '/api/earnings/calendar') return { ok: true, json: async () => fixture(url) };
+    requests.push(u);
+    if (fail) throw new Error('测试断网');
+    return { ok: true, json: async () => earningsFixture(u.searchParams.get('weekStart'), 'PLTR', requests.length > 1 ? '$0.40' : '$0.32') };
+  }, null, w => {
+    const setInterval = w.setInterval;
+    w.setInterval = (fn, ms, ...args) => {
+      if (fn.name === 'refreshVisibleEarnings') refreshTimer = fn;
+      return setInterval(fn, ms, ...args);
+    };
+    w.Date.now = () => now;
+    Object.defineProperty(w.document, 'hidden', { configurable: true, value: false });
+  });
+  await ui.click('新闻资讯');
+  [...ui.w.document.querySelectorAll('.news-view-btn')].find(el => el.textContent.includes('财报周历')).click();
+  await tick();
+  const document = ui.w.document;
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].searchParams.get('weekStart'), earningsCalendarModel.getEarningsWeeks(new Date(now)).current.weekStart);
+  assert.equal(document.querySelectorAll('.earnings-wall-card').length, 1, 'No static demo rows');
+  assert.match(document.querySelector('.earnings-unknown-subcol').textContent, /时段未提供.*PLTR/s);
+  const trigger = document.querySelector('.earnings-wall-card');
+  trigger.focus(); trigger.click(); await tick(); await tick();
+  let dialog = document.querySelector('.earnings-hero-expanded-card');
+  assert.equal(document.activeElement, dialog);
+  assert.equal(document.body.classList.contains('earnings-detail-open'), true);
+  assert.match(dialog.querySelector('.eps-card').textContent, /\$0\.32/);
+  assert.match(dialog.querySelector('.rev-card').textContent, /—/);
+  assert.equal(dialog.querySelector('.hero-catalyst-block'), null);
+  dialog.click(); await tick();
+  assert.ok(document.querySelector('.earnings-hero-backdrop'), 'Clicking content keeps detail open');
+  dialog.dispatchEvent(new ui.w.KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
+  assert.equal(document.activeElement, dialog.querySelector('.hero-close-btn'));
+  document.querySelector('.earnings-hero-backdrop').click(); await tick(); await tick(); await tick();
+  assert.equal(document.querySelector('.earnings-hero-backdrop'), null);
+  assert.equal(document.activeElement, trigger);
+  assert.equal(document.body.classList.contains('earnings-detail-open'), false);
+  trigger.dispatchEvent(new ui.w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+  await tick(); await tick();
+  document.activeElement.dispatchEvent(new ui.w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  await tick(); await tick(); await tick();
+  assert.equal(document.querySelector('.earnings-hero-backdrop'), null);
+  await ui.click('刷新日历');
+  assert.equal(requests.at(-1).searchParams.get('force'), '1');
+  trigger.click(); await tick(); await tick();
+  assert.match(document.querySelector('.eps-card').textContent, /\$0\.40/);
+  document.querySelector('.hero-close-btn').click(); await tick(); await tick(); await tick();
+  assert.ok(refreshTimer);
+  refreshTimer(); await tick();
+  assert.equal(requests.length, 2, 'Fresh cache avoids polling upstream');
+  now += 11 * 60_000;
+  refreshTimer(); await tick();
+  assert.equal(requests.length, 3, 'Visible stale cache refreshes automatically');
+  fail = true;
+  await ui.click('刷新日历');
+  assert.match(document.querySelector('.earnings-data-status').textContent, /测试断网/);
+  assert.match(document.querySelector('.earnings-day-header').textContent, /旧快照/);
+  assert.equal(document.querySelectorAll('.earnings-wall-card').length, 1);
+  assert.deepEqual(ui.errors, []);
+});
+
+test('earnings week switching rejects late responses, including when returning to a cached week', async t => {
+  const pending = [];
+  const ui = await mount(t, async url => {
+    const u = new URL(url, 'http://localhost');
+    if (u.pathname !== '/api/earnings/calendar') return { ok: true, json: async () => fixture(url) };
+    return new Promise(resolve => pending.push({ weekStart: u.searchParams.get('weekStart'), resolve }));
+  });
+  await ui.click('新闻资讯');
+  [...ui.w.document.querySelectorAll('.news-view-btn')].find(el => el.textContent.includes('财报周历')).click();
+  await tick();
+  const document = ui.w.document;
+  assert.equal(document.querySelectorAll('.earnings-wall-card').length, 0);
+  assert.match(document.querySelector('.earnings-data-status').textContent, /正在更新/);
+  pending[0].resolve({ ok: true, json: async () => earningsFixture(pending[0].weekStart) }); await tick();
+  const weekButton = label => [...document.querySelectorAll('.week-tab-btn')].find(el => el.textContent.includes(label));
+  weekButton('下周').click(); await tick();
+  assert.equal(document.querySelectorAll('.earnings-wall-card').length, 0, 'Old week cards clear immediately');
+  weekButton('本周').click(); await tick();
+  assert.equal(pending.length, 2, 'Returning to cached week makes no request');
+  assert.match(document.querySelector('.earnings-wall-card').textContent, /PLTR/);
+  pending[1].resolve({ ok: true, json: async () => earningsFixture(pending[1].weekStart, 'AAPL') }); await tick();
+  assert.match(document.querySelector('.earnings-wall-card').textContent, /PLTR/);
+  weekButton('上周').click(); await tick();
+  pending[2].resolve({ ok: true, json: async () => ({ ...earningsFixture(pending[2].weekStart), status: 'unavailable', fetchedAt: null, items: [], days: [] }) }); await tick();
+  assert.equal(document.querySelectorAll('.earnings-wall-card').length, 0);
+  assert.match(document.querySelector('.earnings-data-status').textContent, /数据暂不可用/);
+  assert.match(document.querySelector('.subcol-empty-card').textContent, /暂未获取数据/);
+  assert.deepEqual(ui.errors, []);
+});
 async function mount(t, fetchImpl, initStorage = null, configureWindow = null) {
   const errors = [], configs = new Map();
   const virtualConsole = new VirtualConsole(); virtualConsole.on('jsdomError', e => errors.push(e.message)); virtualConsole.on('error', e => errors.push(String(e)));
@@ -37,7 +145,7 @@ async function mount(t, fetchImpl, initStorage = null, configureWindow = null) {
     .replace("import { parseFlows } from './flows.js';", 'const parseFlows = window.parseFlows;')
     .replace("import { bindKlineGestures } from './composables/klineGesture.js';", 'const bindKlineGestures = window.bindKlineGestures;')
     .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/watchlist-model\.js';/, 'const { WatchlistManager, sortWatchlistRows, getSelectedExtQuote, getCurrentSession, getNyTime, SESSION_TYPES, MAX_UNIQUE_SYMBOLS, validSymbol, SYMBOL_NAMES, NASDAQ100_STOCKS, SP500_STOCKS, isLeveragedEtf, isCryptoSymbol, STOCK_MARKET_CAPS, getStockMarketCap, sortSymbolsByMarketCap } = window;')
-    .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/earnings-calendar-model\.js';/, 'const { AI_SECTOR_FILTERS, EARNINGS_DAYS, CORPORATE_LOGOS, DEFAULT_TECH_EARNINGS, CURRENT_WEEK_EARNINGS, EARNINGS_WEEKS, MACRO_CALENDAR_ITEMS, filterEarningsByDay, parseMetricNumber, getMetricSurprise, getMetricYoy } = window;')
+    .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/earnings-calendar-model\.js';/, 'const { AI_SECTOR_FILTERS, CORPORATE_LOGOS, getEarningsCalendarDate, getEarningsWeeks, MACRO_CALENDAR_ITEMS, filterEarningsByDay, parseMetricNumber, getMetricSurprise, getMetricYoy } = window;')
     .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/inflection-signals\.js';/, 'const { computeInflectionSignals, formatSignalMarkers, dema } = window;')
     .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/theme-model\.js';/, 'const { VALID_PALETTES, VALID_THEMES, DEFAULT_PALETTE, DEFAULT_THEME, normalizePalette, normalizeTheme, applyThemeToDOM, readChartTokens } = window;')
     .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/mobile-workspace\.js';/, 'const { isPhone, isCompact, getRecentSymbols, addRecentSymbol, clearRecentSymbols, createHistoryState, captureViewState, getViewState, clearViewState, lockBodyScroll, unlockBodyScroll } = window;')
@@ -1041,6 +1149,25 @@ test('Options page: syncs with selected watchlist symbol (e.g. SNDK) instead of 
   assert.equal(optInput.value, 'SNDK');
   assert.equal(lastRequested, 'SNDK', 'Options loaded selected SNDK');
 
+  // Verify the visible DOM board, including both metrics, not only the hidden ECharts chart.
+  const row = ui.w.document.querySelector('.butterfly-row.is-call-wall');
+  assert.ok(row, 'Actual strike row exists');
+  const [left, strike, right] = row.children;
+  assert.ok(left.classList.contains('butterfly-side-call'));
+  assert.ok(strike.classList.contains('butterfly-strike-center'));
+  assert.ok(right.classList.contains('butterfly-side-put'));
+  assert.equal(left.querySelector('.butterfly-val-label').textContent, '1K');
+  assert.equal(right.querySelector('.butterfly-val-label').textContent, '900');
+  assert.equal(left.querySelector('.butterfly-bar-call').style.width, '75%');
+  assert.equal(right.querySelector('.butterfly-bar-put').style.width, '56.25%');
+  const legend = ui.w.document.querySelector('.options-legend-group');
+  assert.match(legend.children[0].textContent, /Call.*左侧/);
+  assert.match(legend.children[1].textContent, /Put.*右侧/);
+  await ui.click('估算 GEX');
+  assert.equal(left.querySelector('.butterfly-val-label').textContent, '5K');
+  assert.equal(right.querySelector('.butterfly-val-label').textContent, '3K');
+  assert.equal(right.querySelector('.butterfly-bar-put').style.width, '45%');
+
   assert.deepEqual(ui.errors, []);
 });
 
@@ -1301,7 +1428,16 @@ test('Mobile Workspace Redesign: 5 bottom tabs, dedicated search overlay, more f
 });
 
 test('Crypto Workspace: graphic-first zero-bloat capital flow matrix, SVG telemetry, unified Crypto/TradFi switcher, and inline whale drawer', async t => {
-  const ui = await mount(t, async url => ({ ok: true, json: async () => fixture(url) }));
+  const ui = await mount(t, async url => ({ ok: true, json: async () => {
+    const data = fixture(url);
+    if (new URL(url, 'http://localhost').pathname !== '/api/crypto/onchain-stocks') return data;
+    const nvda = data.top10[0];
+    return { ...data, top10: [
+      nvda,
+      { ...nvda, symbol: 'AMD', chartSymbol: 'AMD', name: '超威半导体', volume24h: 8000000, netFlow: 350000, buyRatio: 80, sellRatio: 20 },
+      { ...nvda, symbol: 'TSLA', chartSymbol: 'TSLA', name: '特斯拉', volume24h: 20000000, netFlow: -3000000, buyRatio: 20, sellRatio: 80 }
+    ] };
+  } }));
 
   // 1. Navigate to Crypto module
   await ui.click('加密货币');
@@ -1335,6 +1471,34 @@ test('Crypto Workspace: graphic-first zero-bloat capital flow matrix, SVG teleme
   assert.ok(firstColFlow.querySelector('.cw-diverging-track'), 'diverging zero-axis flow bar rendered');
   assert.ok(onchainPanel.querySelector('.cw-ls-capsule'), 'split L/S capsule bar rendered');
   assert.ok(firstColFlow.querySelector('.netflow-val'), 'netflow-val numeric label rendered');
+
+  const flowSymbols = () => [...onchainPanel.querySelectorAll('.cw-flow-row .cw-ticker')].map(el => el.textContent.trim());
+  const checkFlowSort = async (selector, descending, ascending) => {
+    const header = onchainPanel.querySelector(selector);
+    assert.equal(header.getAttribute('aria-sort'), 'none');
+    assert.equal(header.querySelector('.cw-sort-arrow').textContent, '↕');
+    header.click();
+    await tick();
+    assert.deepEqual(flowSymbols(), descending);
+    assert.equal(header.getAttribute('aria-sort'), 'descending');
+    assert.equal(header.querySelector('.cw-sort-arrow').textContent, '↓');
+    header.click();
+    await tick();
+    assert.deepEqual(flowSymbols(), ascending);
+    assert.equal(header.getAttribute('aria-sort'), 'ascending');
+    assert.equal(header.querySelector('.cw-sort-arrow').textContent, '↑');
+    header.dispatchEvent(new ui.w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await tick();
+    assert.deepEqual(flowSymbols(), descending);
+    header.dispatchEvent(new ui.w.KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    await tick();
+    assert.deepEqual(flowSymbols(), ascending);
+  };
+  // The six-coin list includes fallback rows; BTC is long and ETH is short.
+  await checkFlowSort('.th-flow', ['SOL', 'BTC', 'BNB', 'ADA', 'XRP', 'ETH'], ['ETH', 'XRP', 'ADA', 'BNB', 'BTC', 'SOL']);
+  await checkFlowSort('.th-ls', ['BTC', 'BNB', 'SOL', 'ADA', 'XRP', 'ETH'], ['ETH', 'XRP', 'BNB', 'SOL', 'ADA', 'BTC']);
+  onchainPanel.querySelector('.th-vol').click();
+  await tick();
 
   // 5. Verify Whale Positions Panel & column sorting in Crypto mode
   const whalePanel = ui.w.document.querySelector('.crypto-whale-tracker-panel');
@@ -1384,6 +1548,12 @@ test('Crypto Workspace: graphic-first zero-bloat capital flow matrix, SVG teleme
   assert.match(onchainPanel.textContent, /英伟达/);
   assert.match(whalePanel.textContent, /NVDA/);
   assert.match(onchainPanel.querySelector('.netflow-val').textContent, /^\+\$[0-9]/, 'positive TradFi net flow formatted cleanly');
+
+  // Sort signed raw amounts across M/K units, and sort long share independently.
+  await checkFlowSort('.th-flow', ['NVDA', 'AMD', 'TSLA'], ['TSLA', 'AMD', 'NVDA']);
+  await checkFlowSort('.th-ls', ['AMD', 'NVDA', 'TSLA'], ['TSLA', 'NVDA', 'AMD']);
+  onchainPanel.querySelector('.th-vol').click();
+  await tick();
 
   // 7. Expand inline whale drawer under NVDA row -> verify horizontal price axis graphic + whale positions
   const radarBtn = onchainPanel.querySelector('.onchain-radar-btn');
@@ -1497,9 +1667,8 @@ test('K-Line TradingView Ruler Tool & 15m Default Timeframe', async t => {
   await tick();
   assert.ok(dailyBtn.classList.contains('active'), '日K active again');
 
-  // 3. Verify TradingView ruler buttons exist
-  const topRulerBtn = ui.w.document.querySelector('.chart-ruler-btn');
-  assert.ok(topRulerBtn, 'Top chart ruler button exists');
+  // 3. Keep the ruler in the chart toolbar without a duplicate header button.
+  assert.equal(ui.w.document.querySelector('.chart-ruler-btn'), null);
   const tvToolbar = ui.w.document.querySelector('.tv-left-toolbar');
   assert.ok(tvToolbar, 'TradingView left vertical toolbar exists');
   const tvRulerBtn = tvToolbar.querySelector('.tv-tool-btn');
@@ -1507,7 +1676,7 @@ test('K-Line TradingView Ruler Tool & 15m Default Timeframe', async t => {
 
   // 4. Ruler tool toggle
   assert.equal(ui.w.document.querySelector('.chart-ruler-layer'), null, 'Ruler layer closed initially');
-  topRulerBtn.click();
+  tvRulerBtn.click();
   await tick();
   assert.ok(ui.w.document.querySelector('.chart-ruler-layer'), 'Ruler layer active after click');
   assert.match(ui.w.document.querySelector('.ruler-hint-pill').textContent, /在图表上点击并拖动以测量/);

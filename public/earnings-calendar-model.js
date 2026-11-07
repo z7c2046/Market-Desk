@@ -13,6 +13,30 @@ export const AI_SECTOR_FILTERS = [
   { id: 'interconnect', label: '🔌 高速互联与通信', count: 2, color: '#ec4899' }
 ];
 
+// Calendar dates follow the US reporting day; date arithmetic stays in UTC to avoid DST shifts.
+export function getEarningsCalendarDate(now = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+}
+
+export function getEarningsWeeks(now = new Date()) {
+  const today = typeof now === 'string' ? now : getEarningsCalendarDate(now);
+  const base = new Date(`${today}T12:00:00Z`);
+  base.setUTCDate(base.getUTCDate() - ((base.getUTCDay() + 6) % 7));
+  const ids = ['mon', 'tue', 'wed', 'thu', 'fri'];
+  const labels = ['周一 (Monday)', '周二 (Tuesday)', '周三 (Wednesday)', '周四 (Thursday)', '周五 (Friday)'];
+  return Object.fromEntries([['current', 0, '本周'], ['prev', -7, '上周'], ['next', 7, '下周']].map(([id, offset, label]) => {
+    const days = ids.map((dayId, index) => {
+      const day = new Date(base);
+      day.setUTCDate(day.getUTCDate() + offset + index);
+      const fullDate = day.toISOString().slice(0, 10);
+      return { id: dayId, label: labels[index], fullDate, dateStr: `${fullDate.slice(5, 7)}月${fullDate.slice(8)}日`, isToday: fullDate === today };
+    });
+    const weekStart = days[0].fullDate, weekEnd = days[4].fullDate;
+    return [id, { id, weekStart, weekEnd, label: `${label} (${weekStart.slice(5).replace('-', '/')} - ${weekEnd.slice(5).replace('-', '/')})`,
+      rangeText: `${weekStart} — ${weekEnd} · 美东日期`, days }];
+  }));
+}
+
 export const CURRENT_WEEK_DAYS = [
   { id: 'mon', label: '周一 (Monday)', dateStr: '11月02日', fullDate: '2026-11-02', isKeyDay: false, highlight: 'Palantir · 恩智浦 · 莱迪思' },
   { id: 'tue', label: '周二 (Tuesday)', dateStr: '11月03日', fullDate: '2026-11-03', isToday: true, isKeyDay: true, highlight: '超微电脑 · 格芯 · 优步' },

@@ -10,6 +10,7 @@ import { getAiSearchService } from './ai-search-service.js';
 import { getTreeNewsService } from './tree-news-service.js';
 import { getCryptoWhaleService } from './crypto-whale-service.js';
 import { getOnchainStocksService } from './onchain-stocks-service.js';
+import { createEarningsCalendarService } from './earnings-calendar-service.js';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const publicDir = path.join(root, 'public');
 const vendor = {
@@ -19,7 +20,7 @@ const vendor = {
 };
 const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.json': 'application/json', '.csv': 'text/csv; charset=utf-8' };
 function json(res, status, data) { res.writeHead(status, { 'Content-Type': mime['.json'], 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' }); res.end(JSON.stringify(data)); }
-export function createServer({ workspace = createMarketWorkspace(), watchlist = fetchWatchlistSymbols, quoteService = getWatchlistQuoteService(), aiSearchService = getAiSearchService(), treeNewsService = null, whaleService = getCryptoWhaleService(), onchainStockService = getOnchainStocksService() } = {}) {
+export function createServer({ workspace = createMarketWorkspace(), watchlist = fetchWatchlistSymbols, quoteService = getWatchlistQuoteService(), aiSearchService = getAiSearchService(), treeNewsService = null, whaleService = getCryptoWhaleService(), onchainStockService = getOnchainStocksService(), earningsService = createEarningsCalendarService() } = {}) {
   const treeNews = treeNewsService;
   return http.createServer(async (req, res) => {
     try {
@@ -58,6 +59,7 @@ export function createServer({ workspace = createMarketWorkspace(), watchlist = 
         '/api/crypto/whales': () => whaleService.getWhaleTrackerData({ force: params.force === '1', category: params.category }),
         '/api/crypto/onchain-stocks': () => onchainStockService.getOnchainStocksData({ force: params.force === '1' }),
         '/api/news': () => workspace.news(params),
+        '/api/earnings/calendar': () => earningsService.getWeek({ weekStart: params.weekStart, force: params.force === '1' }),
         '/api/news/ai-search': () => aiSearchService.search(params),
         '/api/news/live/history': () => (treeNews?.getHistory ? treeNews.getHistory(params) : { ok: true, items: [] }),
         '/api/news/live/status': () => (treeNews?.getStatus ? treeNews.getStatus() : { ok: false, status: 'unconfigured' }),
