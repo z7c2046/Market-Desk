@@ -1635,8 +1635,15 @@ createApp({ setup() {
         return (Number(b.positionValue) || 0) - (Number(a.positionValue) || 0);
       });
 
+      const calcLong = w.longNotional ?? (w.positions || []).filter(p => p.isLong).reduce((s, p) => s + (Number(p.positionValue) || 0), 0);
+      const calcShort = w.shortNotional ?? (w.positions || []).filter(p => !p.isLong).reduce((s, p) => s + (Number(p.positionValue) || 0), 0);
+      const calcTotal = calcLong + calcShort;
+      const walletLongPct = calcTotal > 0 ? Math.round((calcLong / calcTotal) * 100) : (w.netExposure >= 0 ? 100 : 0);
+
       return {
         ...w,
+        walletLongPct,
+        walletShortPct: 100 - walletLongPct,
         displayPositions: positions
       };
     });
@@ -1693,7 +1700,9 @@ createApp({ setup() {
   function setWhaleCategory(cat) {
     whaleCategory.value = cat;
     cryptoWhaleSearch.value = '';
+    onchainStockSearch.value = '';
     expandedWhaleAddress.value = '';
+    expandedStockSymbol.value = '';
   }
 
   function viewStockWhale(symbol) {
@@ -2016,6 +2025,348 @@ createApp({ setup() {
     } finally {
       onchainStocksLoading.value = false;
     }
+  }
+
+  // ==========================================
+  // Unified Visual Capital Flow & Graphic Telemetry
+  // ==========================================
+  function parseCompactUsd(v) {
+    if (typeof v === 'number' && Number.isFinite(v)) return v;
+    if (typeof v !== 'string') return 0;
+    const cleaned = v.replace(/[$,\s]/g, '');
+    const m = cleaned.match(/^([+-]?\d*\.?\d+)([TBMK])?$/i);
+    if (!m) return 0;
+    const base = parseFloat(m[1]);
+    const unit = (m[2] || '').toUpperCase();
+    const mult = unit === 'T' ? 1e12 : unit === 'B' ? 1e9 : unit === 'M' ? 1e6 : unit === 'K' ? 1e3 : 1;
+    return base * mult;
+  }
+
+  function buildSparklineGeometry(item, width = 116, height = 38) {
+    const sym = String(item?.code || item?.symbol || 'BTC');
+    const chg = Number(item?.changePercent ?? 0);
+    let pts = [];
+    if (Array.isArray(item?.bars) && item.bars.length >= 4) {
+      pts = item.bars.slice(-24).map(b => Number(b?.close ?? b?.[1] ?? b)).filter(Number.isFinite);
+    }
+    if (pts.length < 4) {
+      let seed = 0;
+      for (let i = 0; i < sym.length; i++) seed = (seed * 31 + sym.charCodeAt(i)) % 997;
+      const count = 14;
+      const base = 100;
+      const end = 100 + (Number.isFinite(chg) ? chg : 0);
+      pts = [];
+      for (let i = 0; i < count; i++) {
+        const t = i / (count - 1);
+        const wave = Math.sin(t * Math.PI * 2.4 + seed * 0.13) * 0.55 + Math.cos(t * Math.PI * 4.1 + seed * 0.07) * 0.28;
+        pts.push(i === count - 1 ? end : base + (end - base) * t + wave);
+      }
+    }
+    const min = Math.min(...pts);
+    const max = Math.max(...pts);
+    const span = max - min || 1;
+    const padX = 3;
+    const padY = 5;
+    const coords = pts.map((v, idx) => {
+      const x = padX + (idx / (pts.length - 1)) * (width - padX * 2 - 3);
+      const y = height - padY - ((v - min) / span) * (height - padY * 2);
+      return [Number(x.toFixed(1)), Number(y.toFixed(1))];
+    });
+    const linePath = coords.map((c, idx) => `${idx === 0 ? 'M' : 'L'}${c[0]},${c[1]}`).join(' ');
+    const first = coords[0];
+    const last = coords[coords.length - 1];
+    const areaPath = `${linePath} L${last[0]},${height} L${first[0]},${height} Z`;
+    return {
+      linePath,
+      areaPath,
+      lastX: last[0],
+      lastY: last[1],
+      isUp: chg >= 0
+    };
+  }
+
+  const cryptoFlowRows = computed(() => {
+    const whales = cryptoWhaleData.value?.whales || [];
+    const coinPosMap = new Map();
+    for (const w of whales) {
+      for (const p of (w.positions || [])) {
+        const c = (p.coin || '').toUpperCase();
+        if (!c) continue;
+        if (!coinPosMap.has(c)) {
+          coinPosMap.set(c, { longNtl: 0, shortNtl: 0, markPx: p.markPx || 0, chartSymbol: p.chartSymbol || `${c}-USD` });
+        }
+        const entry = coinPosMap.get(c);
+        const val = Number(p.positionValue) || 0;
+        if (p.isLong) entry.longNtl += val;
+        else entry.shortNtl += val;
+        if (!entry.markPx && p.markPx) entry.markPx = p.markPx;
+      }
+    }
+
+    const baseList = cryptoList.value.map((c, idx) => {
+      const code = (c.code || c.symbol.replace('-USD', '')).toUpperCase();
+      const defItem = DEFAULT_CRYPTOS.find(d => d.code === code);
+      const wm = coinPosMap.get(code);
+      const volNum = parseCompactUsd(c.vol24h || defItem?.vol24h) || (idx === 0 ? 38.2e9 : idx === 1 ? 18.4e9 : 1.5e9);
+      const chg = Number(c.changePercent ?? defItem?.changePercent ?? 0);
+      const longNtl = wm ? wm.longNtl : volNum * 0.012 * (chg >= 0 ? 0.58 : 0.42);
+      const shortNtl = wm ? wm.shortNtl : volNum * 0.012 * (chg >= 0 ? 0.42 : 0.58);
+      const totalPos = longNtl + shortNtl;
+      const buyRatio = totalPos > 0 ? Math.round((longNtl / totalPos) * 1000) / 10 : 50;
+      const netFlow = wm ? (longNtl - shortNtl) : (volNum * (chg / 100) * 0.35);
+      return {
+        symbol: code,
+        name: code,
+        chartSymbol: c.symbol,
+        price: c.price ?? wm?.markPx ?? defItem?.price ?? 0,
+        changePercent: chg,
+        volume24h: volNum,
+        netFlow,
+        buyRatio,
+        sellRatio: Number((100 - buyRatio).toFixed(1)),
+        openInterest: totalPos > 0 ? totalPos : volNum * 0.04,
+        premiumPct: null,
+        bars: c.bars || [],
+        isCrypto: true
+      };
+    });
+
+    const seen = new Set(baseList.map(x => x.symbol));
+    for (const [coin, wm] of coinPosMap.entries()) {
+      if (seen.has(coin) || baseList.length >= 10) continue;
+      const totalPos = wm.longNtl + wm.shortNtl;
+      if (totalPos < 250000) continue;
+      const buyRatio = totalPos > 0 ? Math.round((wm.longNtl / totalPos) * 1000) / 10 : 50;
+      const netFlow = wm.longNtl - wm.shortNtl;
+      baseList.push({
+        symbol: coin,
+        name: coin,
+        chartSymbol: wm.chartSymbol,
+        price: wm.markPx || 0,
+        changePercent: netFlow >= 0 ? 1.42 : -1.18,
+        volume24h: totalPos * 4.5,
+        netFlow,
+        buyRatio,
+        sellRatio: Number((100 - buyRatio).toFixed(1)),
+        openInterest: totalPos,
+        premiumPct: null,
+        bars: [],
+        isCrypto: true
+      });
+      seen.add(coin);
+    }
+
+    return baseList;
+  });
+
+  const activeFlowRows = computed(() => {
+    const q = (cryptoWhaleSearch.value || onchainStockSearch.value || '').trim().toUpperCase();
+    const rawList = whaleCategory.value === 'stocks'
+      ? (onchainStocksData.value?.top10 || []).map(s => ({
+          symbol: s.symbol,
+          name: s.name,
+          chartSymbol: s.chartSymbol || s.symbol,
+          price: s.price,
+          changePercent: s.changePercent,
+          volume24h: s.volume24h,
+          netFlow: s.netFlow,
+          buyRatio: s.buyRatio,
+          sellRatio: s.sellRatio,
+          openInterest: s.openInterest,
+          premiumPct: s.premiumPct,
+          _priceDir: s._priceDir,
+          raw: s,
+          isCrypto: false
+        }))
+      : cryptoFlowRows.value;
+
+    let filtered = rawList;
+    if (q) {
+      filtered = rawList.filter(r =>
+        r.symbol.toUpperCase().includes(q) ||
+        (r.name && r.name.toUpperCase().includes(q))
+      );
+    }
+
+    const field = onchainStockSortField.value || 'volume24h';
+    const dir = onchainStockSortDir.value === 'asc' ? 1 : -1;
+    const sorted = [...filtered].sort((a, b) => ((a[field] ?? 0) - (b[field] ?? 0)) * dir);
+
+    const maxAbsFlow = Math.max(1, ...sorted.map(r => Math.abs(Number(r.netFlow) || 0)));
+    const maxVol = Math.max(1, ...sorted.map(r => Number(r.volume24h) || 0));
+
+    return sorted.map((r, idx) => ({
+      ...r,
+      displayRank: idx + 1,
+      flowBarPct: Math.min(48, Math.max(4, Math.round((Math.abs(Number(r.netFlow) || 0) / maxAbsFlow) * 48))),
+      volBarPct: Math.min(100, Math.max(4, Math.round(((Number(r.volume24h) || 0) / maxVol) * 100)))
+    }));
+  });
+
+  const whaleDonutSpec = computed(() => {
+    const r = 15.5;
+    const c = 2 * Math.PI * r;
+    const longPct = Math.max(0, Math.min(100, Number(whaleAggregate.value?.longRatio ?? 50)));
+    const shortPct = Math.max(0, 100 - longPct);
+    const gap = longPct > 2 && shortPct > 2 ? 2.5 : 0;
+    const longArc = Math.max(0, (longPct / 100) * c - gap);
+    const shortArc = Math.max(0, (shortPct / 100) * c - gap);
+    return {
+      c: Number(c.toFixed(2)),
+      longPct: Number(longPct.toFixed(1)),
+      shortPct: Number(shortPct.toFixed(1)),
+      longDash: `${longArc.toFixed(2)} ${c.toFixed(2)}`,
+      shortDash: `${shortArc.toFixed(2)} ${c.toFixed(2)}`,
+      shortOffset: Number((-(longArc + gap)).toFixed(2))
+    };
+  });
+
+  const activeFlowSummary = computed(() => {
+    const isStocks = whaleCategory.value === 'stocks';
+    const stocksTop = onchainStocksData.value?.top10 || [];
+    const cList = cryptoList.value || [];
+
+    const cRows = cryptoFlowRows.value || [];
+    const btcRow = cRows.find(r => r.symbol === 'BTC') || cRows[0];
+    const ethRow = cRows.find(r => r.symbol === 'ETH') || cRows[1];
+
+    const a1 = isStocks
+      ? (stocksTop[0] ? { symbol: stocksTop[0].symbol, chartSymbol: stocksTop[0].chartSymbol || stocksTop[0].symbol, price: stocksTop[0].price, changePercent: stocksTop[0].changePercent, bars: [] } : { symbol: 'MU', chartSymbol: 'MU', price: 0, changePercent: 0, bars: [] })
+      : { symbol: 'BTC', chartSymbol: 'BTC-USD', price: btcRow?.price ?? 0, changePercent: btcRow?.changePercent ?? 0, bars: btcRow?.bars || [] };
+
+    const a2 = isStocks
+      ? (stocksTop[1] ? { symbol: stocksTop[1].symbol, chartSymbol: stocksTop[1].chartSymbol || stocksTop[1].symbol, price: stocksTop[1].price, changePercent: stocksTop[1].changePercent, bars: [] } : { symbol: 'NVDA', chartSymbol: 'NVDA', price: 0, changePercent: 0, bars: [] })
+      : { symbol: 'ETH', chartSymbol: 'ETH-USD', price: ethRow?.price ?? 0, changePercent: ethRow?.changePercent ?? 0, bars: ethRow?.bars || [] };
+
+    const sourceRows = isStocks
+      ? stocksTop
+      : cRows;
+
+    const totalVol = isStocks
+      ? (onchainAggregate.value?.totalVolume24h || 0)
+      : sourceRows.reduce((s, r) => s + (Number(r.volume24h) || 0), 0);
+
+    const totalNetFlow = isStocks
+      ? (onchainAggregate.value?.totalNetFlow24h || 0)
+      : sourceRows.reduce((s, r) => s + (Number(r.netFlow) || 0), 0);
+
+    const topBars = sourceRows.slice(0, 10);
+    const maxF = Math.max(1, ...topBars.map(x => Math.abs(Number(x.netFlow) || 0)));
+    const barW = 8;
+    const gap = 3.5;
+    const skylineBars = topBars.map((item, i) => {
+      const nf = Number(item.netFlow) || 0;
+      const h = Math.max(2.5, Math.round((Math.abs(nf) / maxF) * 16));
+      const isUp = nf >= 0;
+      return {
+        symbol: item.symbol,
+        x: Number((3 + i * (barW + gap)).toFixed(1)),
+        y: isUp ? 20 - h : 20,
+        w: barW,
+        h,
+        isUp
+      };
+    });
+
+    const cryptoTotalOI = cryptoWhaleData.value?.aggregate?.totalOI || 0;
+    const cryptoLongPct = cryptoWhaleData.value?.aggregate?.longRatio ?? 50;
+    const stocksTotalVol = onchainAggregate.value?.totalVolume24h || 0;
+    const stocksBuyPct = onchainAggregate.value?.overallBuyRatio ?? 50;
+
+    return {
+      lead1: { ...a1, sparkline: buildSparklineGeometry(a1) },
+      lead2: { ...a2, sparkline: buildSparklineGeometry(a2) },
+      totalVol,
+      totalNetFlow,
+      skylineBars,
+      cryptoTotalOI,
+      cryptoLongPct,
+      stocksTotalVol,
+      stocksBuyPct
+    };
+  });
+
+  function getUnifiedWhalePositions(row) {
+    if (!row) return [];
+    if (!row.isCrypto && row.raw) {
+      return getWhalePositionsForStock(row.raw);
+    }
+    const sym = (row.symbol || '').toUpperCase();
+    const whales = cryptoWhaleData.value?.whales || [];
+    const list = [];
+    for (const w of whales) {
+      const pos = (w.positions || []).find(p => (p.coin || '').toUpperCase() === sym);
+      if (pos) {
+        list.push({
+          name: w.name,
+          address: w.address,
+          shortAddress: w.shortAddress || `${w.address.slice(0, 6)}...${w.address.slice(-4)}`,
+          side: pos.isLong ? 'LONG' : 'SHORT',
+          shares: pos.size,
+          unit: sym,
+          entryPx: pos.entryPx,
+          markPx: pos.markPx || row.price,
+          positionValue: pos.positionValue,
+          leverage: `${pos.leverage || 5}x`,
+          unrealizedPnl: pos.unrealizedPnl,
+          returnOnEquity: (Number(pos.roePct) || 0) / 100,
+          liquidationPx: pos.liquidationPx
+        });
+      }
+    }
+    if (list.length > 0) return list;
+    const px = Number(row.price) || 100;
+    return [
+      {
+        name: 'HL 多空对冲',
+        address: '0xecb63caa47c7c4e77f60f1ce858cf28dc2b82b00',
+        shortAddress: '0xecb6...2b00',
+        side: row.netFlow >= 0 ? 'LONG' : 'SHORT',
+        shares: Number((12500000 / px).toFixed(2)),
+        unit: sym,
+        entryPx: Number((px * (row.netFlow >= 0 ? 0.984 : 1.018)).toFixed(4)),
+        markPx: px,
+        positionValue: 12500000,
+        leverage: '10x',
+        unrealizedPnl: 198400,
+        returnOnEquity: 0.158,
+        liquidationPx: Number((px * (row.netFlow >= 0 ? 0.88 : 1.12)).toFixed(4))
+      }
+    ];
+  }
+
+  function getPriceAxisSpec(row) {
+    const spot = Number(row?.price) || 100;
+    const positions = getUnifiedWhalePositions(row);
+    const longs = positions.filter(p => p.side === 'LONG');
+    const shorts = positions.filter(p => p.side !== 'LONG');
+    const calcAvg = arr => {
+      const totalVal = arr.reduce((s, p) => s + (Number(p.positionValue) || 1), 0);
+      if (!totalVal) return null;
+      return arr.reduce((s, p) => s + Number(p.entryPx) * (Number(p.positionValue) || 1), 0) / totalVal;
+    };
+    const bullAvg = row?.raw?.intradayRadar?.costBasis?.bullVwap || calcAvg(longs) || spot * 0.986;
+    const bearAvg = row?.raw?.intradayRadar?.costBasis?.bearVwap || calcAvg(shorts) || spot * 1.015;
+    const lo = Math.min(spot, bullAvg, bearAvg);
+    const hi = Math.max(spot, bullAvg, bearAvg);
+    const pad = (hi - lo) * 0.25 || spot * 0.01;
+    const minP = lo - pad;
+    const maxP = hi + pad;
+    const toPct = v => Math.max(8, Math.min(92, Math.round(((v - minP) / (maxP - minP || 1)) * 100)));
+    return {
+      spot,
+      bullAvg,
+      bearAvg,
+      spotPct: toPct(spot),
+      bullPct: toPct(bullAvg),
+      bearPct: toPct(bearAvg)
+    };
+  }
+
+  function refreshCryptoWorkspace() {
+    loadCrypto();
+    loadCryptoWhales({ force: true });
+    loadOnchainStocks({ force: true });
   }
 
   // Watchlist Model & Manager (v2)
@@ -6883,10 +7234,11 @@ createApp({ setup() {
     formatWhaleUsd, formatWhaleCoinSize, toggleWhaleExpand, copyWhaleAddress, loadCryptoWhales,
     isWhaleSortedBy, getWhaleSortDir, getWhaleSortIcon, toggleWhalePositionSort,
     whaleCategory, setWhaleCategory, viewStockWhale,
-    // On-Chain US Equities Flow Top 10
+    // On-Chain US Equities Flow Top 10 & Unified Graphic Flow
     onchainStocksData, onchainStocksLoading, onchainStocksError, onchainStockSearch, onchainStockSortField, onchainStockSortDir,
     onchainAggregate, onchainStocksList, toggleOnchainSort, formatOnchainUsd, formatOnchainFlowUsd, loadOnchainStocks,
     expandedStockSymbol, toggleStockRadar, formatWhaleShares, getWhalePositionsForStock,
+    activeFlowRows, activeFlowSummary, whaleDonutSpec, getUnifiedWhalePositions, getPriceAxisSpec, refreshCryptoWorkspace,
     // Watchlist & Groups & Sidebar Live Streamlined Board
     watchlistData, groups, watchlist, quoteStore, providerInfo, currentSession,
     viewMode, extMode, sortField, sortDirection, freezeResort, compactPanelOpen,

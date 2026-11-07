@@ -1300,7 +1300,7 @@ test('Mobile Workspace Redesign: 5 bottom tabs, dedicated search overlay, more f
   assert.deepEqual(ui.errors, []);
 });
 
-test('Crypto Workspace: crypto market cap table is converted into watchlist crypto group and removed from crypto page; right/lower area is full-width Hyperliquid Whale Tracker', async t => {
+test('Crypto Workspace: graphic-first zero-bloat capital flow matrix, SVG telemetry, unified Crypto/TradFi switcher, and inline whale drawer', async t => {
   const ui = await mount(t, async url => ({ ok: true, json: async () => fixture(url) }));
 
   // 1. Navigate to Crypto module
@@ -1308,116 +1308,113 @@ test('Crypto Workspace: crypto market cap table is converted into watchlist cryp
   await tick();
   await tick();
 
-  // 2. Verify crypto-table is removed from crypto page, and #crypto-chart is not rendered
+  // 2. Verify legacy crypto-table and verbose marketing slogans are absent
   assert.equal(ui.w.document.querySelector('.crypto-table'), null, 'crypto-table is removed from crypto dashboard');
   assert.equal(ui.w.document.querySelector('#crypto-chart'), null, 'crypto-chart is not rendered');
+  const mainText = ui.w.document.querySelector('main').textContent;
+  assert.doesNotMatch(mainText, /市值霸主|智能合约|实时行情已联通|仅精选 BTC/);
 
-  // 3. Verify On-Chain US Equities Flow Top 10 Panel exists
+  // 3. Verify 4 Graphic Telemetry Cards (2 SVG sparklines + 1 diverging histogram + 1 dual-arc donut)
+  assert.equal(ui.w.document.querySelectorAll('.cw-telemetry-card').length, 4, '4 graphic telemetry cards rendered');
+  assert.equal(ui.w.document.querySelectorAll('.cw-sparkline-svg').length, 2, '2 SVG area sparklines rendered');
+  assert.ok(ui.w.document.querySelector('.cw-skyline-svg'), 'Diverging flow histogram SVG rendered');
+  assert.ok(ui.w.document.querySelector('.cw-donut-svg'), 'Whale L/S dual-arc donut SVG rendered');
+
+  // 4. Verify Capital Flow Matrix in default Crypto mode
   const onchainPanel = ui.w.document.querySelector('.onchain-stocks-panel');
-  assert.ok(onchainPanel, 'On-Chain US Equities Flow Panel exists');
-  assert.match(onchainPanel.textContent, /链上美股资金流向 · Top 10 成交榜/);
-  assert.match(onchainPanel.textContent, /NVDA/);
-  assert.match(onchainPanel.textContent, /英伟达/);
-  assert.match(onchainPanel.textContent, /Top 10 链上总成交额/);
+  assert.ok(onchainPanel, 'Capital Flow Matrix panel exists');
+  assert.match(onchainPanel.textContent, /资金流向/);
+  assert.match(onchainPanel.textContent, /BTC/);
+  assert.match(onchainPanel.textContent, /ETH/);
 
-  // 3b. Verify On-Chain flow column header & cell are centered and aligned with buy/sell bar
+  // Verify diverging zero-axis flow graphic & split L/S capsule bar
   const thFlow = onchainPanel.querySelector('.th-flow');
-  assert.ok(thFlow, 'th-flow header exists');
-  assert.ok(thFlow.classList.contains('text-center'), 'th-flow has text-center class');
+  assert.ok(thFlow && thFlow.classList.contains('text-center'), 'th-flow centered header exists');
   const firstColFlow = onchainPanel.querySelector('.col-flow');
-  assert.ok(firstColFlow, 'first col-flow cell exists');
-  assert.ok(firstColFlow.classList.contains('text-center'), 'col-flow cell has text-center class');
-  const flowRatioSub = firstColFlow.querySelector('.flow-ratio-sub');
-  assert.ok(flowRatioSub, 'flow-ratio-sub container exists');
-  assert.ok(flowRatioSub.querySelector('.flow-ratio-buy'), 'flow-ratio-buy element exists');
-  assert.ok(flowRatioSub.querySelector('.flow-ratio-sell'), 'flow-ratio-sell element exists');
-  const netflowVal = firstColFlow.querySelector('.netflow-val');
-  assert.match(netflowVal.textContent, /^\+[0-9$]/, 'positive net flow has valid sign');
+  assert.ok(firstColFlow && firstColFlow.classList.contains('text-center'), 'col-flow centered cell exists');
+  assert.ok(firstColFlow.querySelector('.cw-diverging-track'), 'diverging zero-axis flow bar rendered');
+  assert.ok(onchainPanel.querySelector('.cw-ls-capsule'), 'split L/S capsule bar rendered');
+  assert.ok(firstColFlow.querySelector('.netflow-val'), 'netflow-val numeric label rendered');
 
-  // 4. Verify lower area renders full-width crypto-whale-tracker-panel with Hyperliquid L1 & positions
+  // 5. Verify Whale Positions Panel & column sorting in Crypto mode
   const whalePanel = ui.w.document.querySelector('.crypto-whale-tracker-panel');
-  assert.ok(whalePanel, 'Full-width Crypto whale tracker panel exists');
-  assert.match(whalePanel.textContent, /Hyperliquid/);
-  assert.match(whalePanel.textContent, /巨鲸合约持仓追踪/);
+  assert.ok(whalePanel, 'Full-width whale tracker panel exists');
+  assert.match(whalePanel.textContent, /巨鲸持仓/);
   assert.match(whalePanel.textContent, /做多/);
   assert.match(whalePanel.textContent, /做空/);
+  assert.ok(whalePanel.querySelector('.cw-wallet-exp-bar'), 'Graphical wallet exposure bar rendered');
 
-  // 4b. Verify whale positions table sorting on "仓位规模 / 数量" and "未实现盈亏"
   const thVal = ui.w.document.querySelector('.th-val.sortable-th');
   const thPnl = ui.w.document.querySelector('.th-pnl.sortable-th');
-  assert.ok(thVal, 'Sortable 仓位规模 / 数量 header exists');
-  assert.ok(thPnl, 'Sortable 未实现盈亏 header exists');
+  assert.ok(thVal, 'Sortable 仓位 header exists');
+  assert.ok(thPnl, 'Sortable 盈亏 header exists');
 
   // Initial order is positionValue desc: ETH ($31.8M), BTC ($6.93M)
   let coinNames = Array.from(ui.w.document.querySelectorAll('.whale-positions-table .pos-coin-name')).map(el => el.textContent.trim());
   assert.deepEqual(coinNames.slice(0, 2), ['ETH', 'BTC']);
 
-  // Click 仓位规模 to sort asc (smallest first)
+  // Click 仓位 to sort asc (smallest first)
   thVal.click();
   await tick();
   coinNames = Array.from(ui.w.document.querySelectorAll('.whale-positions-table .pos-coin-name')).map(el => el.textContent.trim());
   assert.deepEqual(coinNames.slice(0, 2), ['BTC', 'ETH']);
 
-  // Click 未实现盈亏 to sort pnl desc (185000 > 24500)
+  // Click 盈亏 to sort pnl desc (185000 > 24500)
   thPnl.click();
   await tick();
   coinNames = Array.from(ui.w.document.querySelectorAll('.whale-positions-table .pos-coin-name')).map(el => el.textContent.trim());
   assert.deepEqual(coinNames.slice(0, 2), ['ETH', 'BTC']);
 
-  // Click 未实现盈亏 again to sort pnl asc (24500 < 185000)
+  // Click 盈亏 again to sort pnl asc (24500 < 185000)
   thPnl.click();
   await tick();
   coinNames = Array.from(ui.w.document.querySelectorAll('.whale-positions-table .pos-coin-name')).map(el => el.textContent.trim());
   assert.deepEqual(coinNames.slice(0, 2), ['BTC', 'ETH']);
 
-  // 4c. Verify category switcher: toggle to "TradFi" / "加密货币"
+  // 6. Verify unified clickable market cards: switch to "TradFi"
   const catBtns = ui.w.document.querySelectorAll('.whale-cat-btn');
-  assert.ok(catBtns.length >= 2, 'Whale category tabs exist');
+  assert.equal(catBtns.length, 2, 'Two clean clickable market cards exist');
   assert.match(catBtns[0].textContent, /加密货币/);
   assert.match(catBtns[1].textContent, /TradFi/);
 
-  // Click on-chain US stocks whale category tab
   catBtns[1].click();
   await tick();
-  assert.match(whalePanel.textContent, /链上美股巨鲸持仓追踪/);
+  assert.match(onchainPanel.textContent, /TradFi/);
+  assert.match(onchainPanel.textContent, /NVDA/);
+  assert.match(onchainPanel.textContent, /英伟达/);
   assert.match(whalePanel.textContent, /NVDA/);
+  assert.match(onchainPanel.querySelector('.netflow-val').textContent, /^\+\$[0-9]/, 'positive TradFi net flow formatted cleanly');
 
-  // Switch back to crypto
-  catBtns[0].click();
-  await tick();
-
-  // Click "雷达" button in on-chain flow table -> reveals intraday radar
+  // 7. Expand inline whale drawer under NVDA row -> verify horizontal price axis graphic + whale positions
   const radarBtn = onchainPanel.querySelector('.onchain-radar-btn');
   assert.ok(radarBtn, 'onchain-radar-btn exists');
   radarBtn.click();
   await tick();
   const radarContainer = onchainPanel.querySelector('.stock-radar-container');
-  assert.ok(radarContainer, 'stock-radar-container is rendered');
-  assert.match(radarContainer.textContent, /巨鲸真实持仓/);
-  assert.match(radarContainer.textContent, /机构 \/ 巨鲸钱包/);
-  assert.match(radarContainer.textContent, /空方均价/);
+  assert.ok(radarContainer, 'stock-radar-container inline drawer is rendered');
+  assert.ok(radarContainer.querySelector('.cw-axis-rail'), 'Horizontal price cost/spot axis graphic rendered');
+  assert.match(radarContainer.textContent, /多均/);
+  assert.match(radarContainer.textContent, /空均/);
 
-  // Click "持仓" button in on-chain flow table -> triggers viewStockWhale('NVDA')
-  const whaleBtn = onchainPanel.querySelector('.onchain-whale-btn');
+  // Click "钱包 ↘" filter link inside inline drawer -> filters whale panel to NVDA
+  const whaleBtn = radarContainer.querySelector('.onchain-whale-btn');
   assert.ok(whaleBtn, 'onchain-whale-btn exists');
   whaleBtn.click();
   await tick();
-  assert.match(whalePanel.textContent, /链上美股巨鲸持仓追踪/);
+  assert.match(whalePanel.textContent, /NVDA/);
 
-  // 5. Verify Watchlist sidebar contains the '加密货币' group
+  // 8. Verify Watchlist sidebar contains the '加密货币' group
   const rwSidebar = ui.w.document.querySelector('.right-watchlist-sidebar');
   assert.ok(rwSidebar, 'Right watchlist sidebar exists');
   assert.match(rwSidebar.textContent, /加密货币/, 'Watchlist has crypto group');
 
-  // 6. Click on-chain stock jump button
-  const onchainJumpBtn = ui.w.document.querySelector('.onchain-jump-btn');
-  assert.ok(onchainJumpBtn, 'On-chain stock jump button exists');
+  // 9. Click row K-line jump button -> navigates directly to 'chart' (个股)
+  const onchainJumpBtn = onchainPanel.querySelector('.onchain-jump-btn');
+  assert.ok(onchainJumpBtn, 'On-chain jump button exists');
   onchainJumpBtn.click();
   await tick();
   await tick();
-
-  // 7. Verify direct navigation to 'chart' (个股)
-  assert.equal(ui.w.document.querySelector('main').textContent.includes('NVDA') || ui.w.document.querySelector('main').textContent.includes('USD'), true, 'Navigated to stock chart');
+  assert.equal(ui.w.document.querySelector('main').textContent.includes('NVDA') || ui.w.document.querySelector('main').textContent.includes('USD'), true, 'Navigated to K-line chart');
 
   assert.deepEqual(ui.errors, []);
 });
