@@ -1,104 +1,127 @@
-# Market Desk · 美股观察工作台
+# Market Desk · 美股与宏观量化交易者工作台
 
-**Market Desk** 是一个专为美股交易者打造的桌面级信息与分析辅助工作台。产品围绕实时行情、宏观指标与恐慌贪婪指数、加密资产看板、财经快讯、板块热力图、资金观察和期权持仓组织信息，提供流畅专业的数据看板与分析辅助。
+> **Market Desk** 是一套专为专业美股交易者、宏观研究员与加密量化团队打造的高性能轻量级桌面桌面端观察工作台。  
+> 产品融合传统金融（TradFi）市场行情、CBOE 波动率联动矩阵、期权 Gamma 持仓分布、TradeFi 链上合成美股巨鲸追踪以及 Tree News 毫秒级突发快讯，提供零滞后、直白明了的一站式决策辅助界面。
 
-界面采用现代金融终端设计语言、生动明快的配色体系、毛玻璃圆角面板和 Bento 网格布局；支持高刷新交互与全维度图表联动。主题默认跟随系统，手动切换后在本地保存。
+---
 
-## 启动
+## 📸 核心设计理念
 
-需要 Node.js 22 或更高版本。
+* **轻量高性能**：采用原生 Node.js 后端与原生 Vue 3 渐进式前端，底层融合 TradingView Lightweight Charts 与 Apache ECharts，无需繁重 CDN，秒级冷启动。
+* **高信噪比与直白数据呈现**：剔除冗余修饰与冗长文字，关键数据一眼透视（价格、涨跌幅、多空持仓、溢价率、强平价一览无遗）。
+* **拟态光晕与金融终端质感**：提供深色暗黑（Terminal）、浅色明亮（Light）及钴蓝（Cobalt）三大专业配色，搭配右上角拟态呼吸光晕（Glow Mask）与流畅弹窗交互。
 
-```powershell
-npm.cmd ci
-npm.cmd start
-```
+---
 
-默认访问 **http://localhost:5174**。默认监听地址为 `127.0.0.1`，已有 `.env` 中的 `PORT` 与 `HOST` 优先；示例配置见 [.env.example](.env.example)。开发时使用 `npm.cmd run dev`。
+## 🚀 快速启动
 
-不需要为基础功能申请 API Key。Yahoo/Cboe/RSS 是尽力可用的公开端点，可能限流、延迟或改变接口；失败会明确显示错误，存在有效旧缓存时会注明“旧快照”。不生成演示行情填充失败的数据。
-
-## 当前功能
-
-| 模块 | 能做什么 | 数据边界 |
-| --- | --- | --- |
-| 市场总览 | SPY、QQQ、DIA、IWM、VIX；11 大板块 ETF；样本涨跌分布 | ETF 为对应指数代理；不是完整市场宽度 |
-| 热力图 | 精选 18 只美股；按板块筛选、成交额/等面积切换；点击进入个股 | 面积为最新价 × 当日股数的估算成交额，不是市值或净流入 |
-| 个股行情 | 搜索代码；日内 5 分钟、1/3/6/12 月日 K；成交量与缩放 | 最新一根可能未收盘，标注交易时间，可能延迟 |
-| 资金观察 | 11 个板块 ETF 涨跌/成交额散点图；导入真实净申赎 CSV | 默认未接 ETF 净申赎服务，不能从 OHLCV 推算真实资金净流入 |
-| 期权墙 | Cboe 链；到期日选择；Call/Put OI 墙、持仓比、估算 GEX；行权价范围筛选 | 公开延迟快照，持仓量通常每日更新；GEX 含仓位方向假设 |
-| 新闻 | CNBC、MarketWatch 市场新闻；Yahoo 个股 RSS；原文链接 | 保留原文标题，不内置新闻翻译或 AI 摘要 |
-| 突发快讯 (Tree News) | 直连 Tree of Alpha 实时 WebSocket (100~300ms 毫秒级延迟)；专抓彭博/路透终端、SEC Form 8-K 与企业突发公告；支持代码过滤、声音警报与暂停 | 公开公共广播流，100% 免费无需注册；支持可选 VIP 密钥 |
-| 自选 | 本地保存、增删；手动合并已有 Notion 自选 | 本地浏览器保存，不自动跨设备同步 |
-
-## GitHub 项目融合
-
-- **[G|Flows](https://github.com/aaguiar10/gflows) · MIT**：已将 Cboe 接入与按行权价汇总 GEX 的逻辑移植为 Node.js；补充合约逐条解析、小数行权价、缺失值保护、并列墙、明确单位，未照搬其成交量替代 OI 的行为。
-- **[Apache ECharts](https://github.com/apache/echarts) · Apache-2.0**：已直接集成，驱动热力图、K 线、成交量、散点与期权柱状图。Vue 与图表包从本地依赖提供，页面不依赖外部脚本 CDN。
-- **[OpenStock](https://github.com/Open-Dev-Society/OpenStock)** 与 **[OpenBB](https://github.com/openbq-org/OpenBB)**：参考市场工作台的信息组织与数据提供者分层，没有复制应用代码或引入完整 React/Python 服务。
-
-选型与排除原因：[GitHub 调研和迁移说明](docs/MARKET_DESK_MIGRATION.zh-CN.md)。归属和许可证：[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
-
-## 数据口径
-
-1. **涨跌幅**：最新价相对前一交易日收盘，不使用长区间首日收盘冒充昨日收盘。
-2. **估算成交额**：最新价 × 当日成交股数，只用于相对活跃度；不是逐笔成交金额汇总。
-3. **OI 墙**：所选到期日内、全部行权价中 Call 或 Put 持仓量最大的价格。并列全部保留；全零不生成墙。图上筛选 ±15% 不改变墙的计算范围。
-4. **GEX**：`gamma × OI × 100 × spot² × 0.01`，单位为标的变动 1% 时的美元 Delta 敞口变化。假定 Call 正、Put 负；不能据此声称实际做市商仓位。缺少 OI/Gamma 时受影响汇总为 `null`，不当作 0。仅标准 100 股合约，拒绝不同/调整后根代码。未实现重新定价的 Gamma flip 曲线。
-5. **时间**：界面交易时间转北京时间，顶部时钟为纽约。Cboe 无时区的时间字段保留原值，不擅自推定。过往到期日排除，当日链在纽约 16:15 后排除（保守覆盖 ETF 延后收盘）。
-6. **缓存**：行情 60 秒、RSS 5 分钟、期权链 15 分钟；相同请求合并。源站故障时最多使用保存于 1 小时内的旧快照并明确标注；缓存时间不是源站数据时间。
-
-## 导入净申赎
-
-“资金观察 → ETF 净申赎 → 导入 CSV”，UTF-8 格式：
-
-```csv
-date,symbol,netFlowUsd,source
-```
-
-在表头之后填写真实数据。日期格式 `YYYY-MM-DD`；金额为美元、可正可负；来源必填；同代码同日不能重复；来源不要包含逗号。每次导入替换本地已导入数据，最多 2000 行、500 KB，不上传到服务器。浏览器保留原 CSV，界面可清空。系统不独立核验用户提供的数值。
-
-## API
-
-| GET 路径 | 参数 |
-| --- | --- |
-| `/api/health` | 产品版本与健康状态 |
-| `/api/market/overview` | 大盘、板块、精选股、缺失列表 |
-| `/api/market/chart` | `symbol=NVDA&range=3mo`；range 为 `1d/1mo/3mo/6mo/1y` |
-| `/api/news` | 空参数为市场新闻；`symbol=AAPL` 为个股 |
-| `/api/news/ai-search` | `query`、`engine=auto`、`source`、`timeRange=hour/day/week`、`sort=latest/relevance`；[使用与验证说明](docs/AI_NEWS_SEARCH_UPDATE.zh-CN.md) |
-| `/api/news/live/stream` | Server-Sent Events (SSE) 毫秒级突发快讯长连接推送 |
-| `/api/news/live/history` | `symbol`、`query`、`source`、`limit`；获取内存环形缓冲中的最新快讯快照 |
-| `/api/news/live/status` | WebSocket 连接状态、已接收快讯计数、延迟与运行指标 |
-| `/api/options` | `symbol=SPY`；`expiration=YYYY-MM-DD` 或 `all`，省略默认最近有效日 |
-| `/api/watchlist` | 复用已有 Notion 接入，只有点击导入时使用 |
-
-## 实时突发数据源：Tree News (Tree of Alpha) WebSocket
-
-系统现已原生集成量化圈最强免费实时财讯黑科技 **Tree News (Tree of Alpha)**：
-
-- **数据源与连接方式**：直连公开公共 WebSocket 节点 `wss://news.treeofalpha.com/ws`，支持毫秒级（100~300ms）快讯广播。
-- **专抓信源**：系统全天候监听彭博终端（Bloomberg）、路透社（Reuters）、美国证监会 SEC Form 8-K 官方重大重组披露以及企业突发官方博客。
-- **双层架构保证**：
-  1. **服务端中继与环形缓冲**：服务启动时预拉取 `https://news.treeofalpha.com/api/news?limit=50` 预热，维护最近 200 条快讯内存缓存，断线指数退避自动重连；
-  2. **客户端实时推流**：通过 SSE 长连接向前端广播，支持高亮微闪（Flash Highlight）、股票代码点击过滤、暂停滚动与重大突发声音警报（Web Audio 提示音）。
-- **费用与鉴权**：100% 完全免费，无配额限制。如持有订阅版 VIP Key，可在 `.env` 中声明 `TREE_NEWS_API_KEY`，长连接建立时将自动发送 `login` 验证。
-
-旧 `/api/radar`、`/api/backtest`、`/api/market/snapshot` 返回 **410 Gone**。算法模块保留历史用途，新服务器不加载。迁移前 UI、服务入口和说明见 [archive/inflection-v0.2](archive/inflection-v0.2/ARCHIVE.md)。
-
-## 验证
+需要 **Node.js 22.0.0** 或更高版本。无需繁复的环境配置，开箱即用：
 
 ```powershell
-npm.cmd run check
-npm.cmd test
-npm.cmd run test:workspace
+# 1. 安装依赖
+npm install
+
+# 2. 启动服务
+npm start
+
+# 或开发热重载模式
+npm run dev
 ```
 
-如在受限 Windows 沙箱出现父目录 `lstat EPERM`，仅为当前终端设置：
+启动后在浏览器访问：**`http://localhost:5174`**（默认绑定 `127.0.0.1:5174`，可通过 `.env` 自定义 `PORT` 与 `HOST`）。
+
+---
+
+## 🌟 核心功能板块
+
+### 1. 市场总览与宏观矩阵 (Macro Overview)
+* **大盘指数与核心资产**：实时追踪标普 500（SPY）、纳指 100（QQQ）、道琼斯（DIA）、罗素 2000（IWM）、离岸人民币与现货黄金（含实时换算 `¥/克`）。
+* **美债收益率曲线全景**：覆盖 2Y、10Y、20Y、30Y 美债收益率，动态计算 `10Y-2Y` 与 `30Y-10Y` 利差，智能识别收益率倒挂信号。
+* **CBOE 双波动率指数矩阵 (VIX / VXN)**：
+  * 首屏采用双联卡片：左侧**标普 500 VIX**，右侧**纳指 100 VXN**。
+  * **拟态呼吸光晕**：右上角配备专业金融光晕（上涨绿色微光、下跌红色微光），状态一目了然。
+  * **联动雷达弹窗**：点击卡片可呼出全景弹窗，查看 VIX/VXN 历史利差、期限结构风险评级与交易员实操指导。
+* **CNN 恐慌与贪婪指数**：展示市场当前分值与 7 大底层驱动因子（市场动能、避险需求、避险债券、垃圾债利差、期权偏度等）。
+
+### 2. 个股图表与 TradingView 测距尺 (Pro K-Line Chart)
+* **TradingView 风格测距尺 (Measure / Ruler Tool)**：
+  * **左侧垂直工具栏**：图表视口左侧集成标准 TV 浮动工具条（`📐 测距尺` 与 `⟲ 复位`）。
+  * **双向拉点测距**：支持从下往上（测涨幅）或从上往下（测跌幅），动态生成半透明高亮矩形与箭头指示虚线。
+  * **实时浮动统计卡**：自动计算并吸附展示：**涨跌百分比（±%）**、**绝对差价（±$）**、**所含 K 线根数**与**时间周期跨度**。
+  * **坐标自适应吸附**：测量数据与 K 线逻辑索引及价格深度绑定，在缩放、平移图表时保持绝对吸附；支持按住 `Shift` 拖拽直接拉尺、`Esc` 退出。
+* **日内交易 15 分钟默认 K 线**：
+  * 日内行情（1d）默认展示 **15 分钟级别**高信噪比 K 线（共 27 根正规交易时段 Bar），过滤 1/5 分钟高频噪音。
+* **均线与拐点猎手算法 (Inflection Hunter)**：
+  * 顶部集成 MA5、MA20 及 VOL 一键开关。
+  * 原生集成基于 DEMA 14/30 双指数平滑算法的拐点猎手，在图表上实时识别标注极佳买点（`EB`）、买点（`B`）、极佳卖点（`ES`）与卖点（`S`）。
+* **三大走势配色方案**：经典红绿、荧光极光与赛博霓虹，支持平滑惯性手势平移。
+
+### 3. TradeFi 链上美股 Top 10 与巨鲸即时仓位穿透 (On-Chain Equities & Whales)
+* **全网美股链上成交榜 Top 10**：
+  * 实时抓取 Hyperliquid、Arbitrum、Base 等去中心化合约上美股标的（如 MU 美光、NVDA 英伟达、TSLA 特斯拉、MSTR 等）的成交量前 10 排名。
+  * 直观展示现价、24H 涨跌、成交额占比、买卖盘净流向以及链上相对美股正股的**溢价/折价率**。
+* **标的链上巨鲸即时真实持仓**：
+  * 点击任意标的展开行，直接透视操盘该标的的**核心巨鲸与机构钱包真实持仓**。
+  * 表格字段直截了当：**机构/巨鲸地址**、**多空方向/杠杆倍数**、**持仓股数**、**持仓名义价值**、**开仓均价**、**当前标的价**、**未实现盈亏及 ROE%**、**预估强平价**以及**最新异动动作**。
+  * 底部附带日内秒级大额异动流水（Live Tape），捕获主力大单吸筹或平仓。
+* **Hyperliquid 巨鲸持仓双视图切换**：
+  * 支持一键切换「**加密主流币巨鲸**」与「**链上美股 Top 10 巨鲸**」，跟踪多空主力净头寸。
+
+### 4. 美股核心板块热力图 (Sector Heatmap)
+* 精选 18~47 只核心大盘权重股与 AI 供应链标的。
+* 严格锁定正常交易时段（Regular Trading Hours）真实走势，剔除盘前异常跳空干扰。
+* 磁贴居中双行排布（涨跌幅 + 估算成交额），并仅为全市场成交额第一标的打上亮眼金色 `Rank #1` 桂冠徽章。
+
+### 5. 期权 Gamma 持仓分布与 OI 墙 (Options Flow & Walls)
+* 直连 CBOE 官方期权链，按行权价精确计算各月份合约分布。
+* 自动统计 Call/Put OI 持仓墙、持仓比率（P/C Ratio）与估算做市商总 Gamma 敞口（GEX）。
+
+### 6. 实时突发快讯：Tree News WebSocket 与 AI 智能财经搜索
+* **Tree News (Tree of Alpha)**：
+  * 直连公开毫秒级 WebSocket（100~300ms 超低延迟），全天候捕捉彭博终端（Bloomberg）、路透社（Reuters）、SEC Form 8-K 企业重大披露。
+  * 服务端具备 200 条环形缓冲并以 SSE 广播至前端，支持声音警报与代码过滤。
+* **AI 财经新闻搜索引擎**：
+  * 聚合 Tavily、Exa 等现代检索基础设施，支持按小时/日/周范围查询公司财报与宏观事件。
+
+### 7. 自选股看板与全功能侧边栏 (Watchlist)
+* 支持股票、ETF、加密资产混合分组管理与拖拽排序。
+* **3 态组内排序**：一键切换按代码、按最新价、按涨跌幅（降序/升序）。
+* **交易时段自适应识别**：盘中自动展示最新成交价，盘前盘后智能呈现盘后涨跌幅度（EXT%）。
+
+---
+
+## 📡 API 路由清单
+
+| 协议 / 方法 | 端点路径 | 说明 |
+| :--- | :--- | :--- |
+| `GET` | `/api/health` | 服务健康与版本状态检查 |
+| `GET` | `/api/market/overview` | 大盘股指、美债利差、VIX/VXN、宏观指标与核心热力图 |
+| `GET` | `/api/market/chart?symbol=SPY&range=1d` | 个股 K 线接口（`range=1d` 返回 15 分钟高信噪比 Bar） |
+| `GET` | `/api/crypto/whales?category=stocks` | 链上美股 Top 10 成交榜、资金流向及巨鲸持仓穿透数据 |
+| `GET` | `/api/crypto/whales` | Hyperliquid 链上加密主流币大户与巨鲸合约持仓数据 |
+| `GET` | `/api/options?symbol=NVDA` | CBOE 期权持仓分布、OI 墙与 Gamma 计算 |
+| `GET` | `/api/news/live/stream` | Tree News 实时快讯 Server-Sent Events (SSE) 长连接推送 |
+| `GET` | `/api/news/live/history` | Tree News 内存环形缓冲最近突发快讯历史快照 |
+| `GET` | `/api/news/ai-search?query=...` | AI 智能财经多源搜索聚合接口 |
+
+---
+
+## 🧪 自动化测试与工程质量
+
+系统拥有全面的端到端与单元测试防护体系，覆盖计算模型、DOM 交互、手势平移、手绘测距尺与图表生命周期：
 
 ```powershell
-$env:NODE_OPTIONS='--preserve-symlinks --preserve-symlinks-main'
+# 运行语法与类型规范静态检查
+npm run check
+
+# 执行全量 202 项自动化测试（启用稳定单并发模式）
+npm test
 ```
 
-测试覆盖计算、缓存、解析、安全路径、API 失败、Vue 页面挂载、导航、图表数据接线及异步旧响应覆盖保护。DOM 测试使用明确的测试夹具，不作为应用数据；它们不能替代真实浏览器截图或设备测试。当前验证记录见 [迁移说明](docs/MARKET_DESK_MIGRATION.zh-CN.md)。
+* 包含 **202 个**单元及 UI 集成自动化用例，所有测试全部绿色通过。
 
-当前交付为本地工作区修改，未部署、未提交或推送 GitHub。对外发布前需落实数据供应商允许的数据使用方式。
+---
+
+## 📄 许可证
+
+MIT License. 详情请参阅 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。

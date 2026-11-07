@@ -1393,9 +1393,9 @@ test('Crypto Workspace: crypto market cap table is converted into watchlist cryp
   await tick();
   const radarContainer = onchainPanel.querySelector('.stock-radar-container');
   assert.ok(radarContainer, 'stock-radar-container is rendered');
-  assert.match(radarContainer.textContent, /主力日内操盘雷达/);
-  assert.match(radarContainer.textContent, /实战下单决策参考/);
-  assert.match(radarContainer.textContent, /做空成本线/);
+  assert.match(radarContainer.textContent, /巨鲸真实持仓/);
+  assert.match(radarContainer.textContent, /机构 \/ 巨鲸钱包/);
+  assert.match(radarContainer.textContent, /空方均价/);
 
   // Click "持仓" button in on-chain flow table -> triggers viewStockWhale('NVDA')
   const whaleBtn = onchainPanel.querySelector('.onchain-whale-btn');
@@ -1453,6 +1453,60 @@ test('Volatility Matrix: Row 1 renders Volatility Twin Card (VIX vs VXN), and cl
   closeBtn.click();
   await tick();
   assert.equal(ui.w.document.querySelector('.volatility-modal-card'), null, 'Modal closed on close button click');
+
+  assert.deepEqual(ui.errors, []);
+});
+
+test('K-Line TradingView Ruler Tool & 15m Default Timeframe', async t => {
+  const ui = await mount(t, async url => ({ ok: true, json: async () => fixture(url) }));
+
+  // 1. Navigate to '个股行情'
+  await ui.click('个股行情');
+  await tick();
+
+  // 2. Verify 15m timeframe button is labeled '15分' and select has '日内 · 15 分钟'
+  const rangeTools = ui.w.document.querySelector('.chart-range-tools');
+  assert.ok(rangeTools, 'chart-range-tools exists');
+  assert.match(rangeTools.textContent, /15分/, 'Shows 15分 label for intraday');
+  const rangeSelect = ui.w.document.querySelector('.chart-range-select');
+  assert.match(rangeSelect.textContent, /日内 · 15 分钟/, 'Select contains 日内 · 15 分钟');
+
+  // 3. Verify TradingView ruler buttons exist
+  const topRulerBtn = ui.w.document.querySelector('.chart-ruler-btn');
+  assert.ok(topRulerBtn, 'Top chart ruler button exists');
+  const tvToolbar = ui.w.document.querySelector('.tv-left-toolbar');
+  assert.ok(tvToolbar, 'TradingView left vertical toolbar exists');
+  const tvRulerBtn = tvToolbar.querySelector('.tv-tool-btn');
+  assert.ok(tvRulerBtn, 'TV toolbar ruler button exists');
+
+  // 4. Ruler tool toggle
+  assert.equal(ui.w.document.querySelector('.chart-ruler-layer'), null, 'Ruler layer closed initially');
+  topRulerBtn.click();
+  await tick();
+  assert.ok(ui.w.document.querySelector('.chart-ruler-layer'), 'Ruler layer active after click');
+  assert.match(ui.w.document.querySelector('.ruler-hint-pill').textContent, /在图表上点击并拖动以测量/);
+
+  // 5. Simulate measurement drag
+  const rulerLayer = ui.w.document.querySelector('.chart-ruler-layer');
+  rulerLayer.dispatchEvent(new ui.w.PointerEvent('pointerdown', { clientX: 100, clientY: 200, bubbles: true }));
+  await tick();
+  rulerLayer.dispatchEvent(new ui.w.PointerEvent('pointermove', { clientX: 250, clientY: 120, bubbles: true }));
+  await tick();
+  rulerLayer.dispatchEvent(new ui.w.PointerEvent('pointerup', { clientX: 250, clientY: 120, bubbles: true }));
+  await tick();
+
+  // 6. Verify measurement card and svg shapes are rendered
+  assert.ok(ui.w.document.querySelector('.ruler-tooltip-card'), 'Ruler tooltip card is rendered');
+  assert.ok(ui.w.document.querySelector('.chart-ruler-svg rect'), 'Ruler svg rect is rendered');
+  assert.ok(ui.w.document.querySelector('.chart-ruler-svg line'), 'Ruler svg line is rendered');
+  assert.match(ui.w.document.querySelector('.ruler-tooltip-card').textContent, /根 K线/);
+
+  // 7. Clear measurement via close button
+  const closeBtn = ui.w.document.querySelector('.ruler-close-pill');
+  assert.ok(closeBtn, 'Ruler close pill exists');
+  closeBtn.click();
+  await tick();
+  assert.equal(ui.w.document.querySelector('.chart-ruler-layer'), null, 'Ruler layer cleared after close button click');
 
   assert.deepEqual(ui.errors, []);
 });

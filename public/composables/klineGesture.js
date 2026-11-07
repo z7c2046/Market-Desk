@@ -254,6 +254,7 @@ export function bindKlineGestures(element, chart, series, options = {}) {
   function onPointerDown(e) {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     if (active || dead) return;
+    if (e.shiftKey || element.dataset.rulerMode === 'active' || (typeof options.isRulerActive === 'function' && options.isRulerActive())) return;
     const policy = getInputPolicy();
     if (policy === 'reading' && e.pointerType === 'touch') {
       return;
