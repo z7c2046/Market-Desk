@@ -1258,7 +1258,22 @@
             <span>测距尺</span>
             <span v-if="rulerMeasurement" class="ruler-badge-active" @click.stop="clearRuler" title="清除测距标注">✕</span>
           </button>
+          <!-- K线周期选择器 (15分, 1小时, 4小时, 日K) -->
+          <div class="desktop-only panel-tools chart-interval-tools" role="tablist" aria-label="K线周期切换">
+            <span class="tools-divider-label">周期</span>
+            <button v-for="opt in INTERVAL_OPTIONS"
+                    :key="opt.value"
+                    type="button"
+                    class="tiny-btn"
+                    :class="{ active: chartInterval === opt.value }"
+                    :title="opt.desc || opt.label"
+                    @click="setChartInterval(opt.value)">
+              {{ opt.label }}
+            </button>
+          </div>
+          <div class="tools-v-separator desktop-only"></div>
           <div class="desktop-only panel-tools chart-range-tools" role="tablist" aria-label="行情周期切换">
+            <span class="tools-divider-label">范围</span>
             <button v-for="opt in [
                       { value: '1d', label: '15分' },
                       { value: '1mo', label: '1月' },
@@ -1294,24 +1309,41 @@
       </div>
     </div>
 
-    <!-- Mobile Timeframe Range Pill Tabs -->
-    <div class="mobile-range-pills mobile-only" role="tablist" aria-label="行情周期切换">
-      <button v-for="opt in RANGE_OPTIONS" 
-              :key="opt.value" 
-              type="button"
-              role="tab"
-              :aria-selected="chartRange === opt.value"
-              class="mobile-range-pill" 
-              :class="{ active: chartRange === opt.value }" 
-              @click="chartRange = opt.value">
-        {{ opt.label }}
-      </button>
+    <!-- Mobile Timeframe Range & Interval Pill Tabs -->
+    <div class="mobile-chart-pills mobile-only">
+      <div class="mobile-range-pills mobile-interval-pills" role="tablist" aria-label="K线周期切换">
+        <span class="mobile-pills-label">周期</span>
+        <button v-for="opt in INTERVAL_OPTIONS" 
+                :key="opt.value" 
+                type="button" 
+                role="tab" 
+                :aria-selected="chartInterval === opt.value" 
+                class="mobile-range-pill" 
+                :class="{ active: chartInterval === opt.value }" 
+                @click="setChartInterval(opt.value)">
+          {{ opt.label }}
+        </button>
+      </div>
+      <div class="mobile-range-pills" role="tablist" aria-label="行情周期切换">
+        <span class="mobile-pills-label">范围</span>
+        <button v-for="opt in RANGE_OPTIONS" 
+                :key="opt.value" 
+                type="button" 
+                role="tab" 
+                :aria-selected="chartRange === opt.value" 
+                class="mobile-range-pill" 
+                :class="{ active: chartRange === opt.value }" 
+                @click="chartRange = opt.value">
+          {{ opt.label }}
+        </button>
+      </div>
     </div>
 
     <!-- Top Chart Legend Bar matching Crypto Chart style -->
     <div v-if="chart" class="kline-legend-bar chart-readout-strip" id="chart-readout-strip">
       <div class="legend-left readout-left">
         <span class="chart-currency-tag">{{ chart.currency || 'USD' }}</span>
+        <span class="chart-interval-tag">{{ formatIntervalLabel(chartInterval) }}</span>
         <span class="readout-state-tag" :class="klineInteractionMode === 'history' ? 'mode-history' : 'mode-latest'">{{ klineInteractionMode === 'history' ? '历史' : '最新' }}</span>
         <span class="readout-ohlc" id="chart-readout-text">移动光标探索 K 线</span>
       </div>

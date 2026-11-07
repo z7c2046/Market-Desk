@@ -557,10 +557,12 @@ createApp({ setup() {
   let lwChartResizeObserver = null;
   let lastRenderedSymbol = '';
   let lastRenderedRange = '';
+  let lastRenderedInterval = '';
 
   function disposePriceChart() {
     lastRenderedSymbol = '';
     lastRenderedRange = '';
+    lastRenderedInterval = '';
     if (klineGestureCtrl) {
       klineGestureCtrl.dispose();
       klineGestureCtrl = null;
@@ -648,6 +650,13 @@ createApp({ setup() {
     { value: '6mo', label: '6月' },
     { value: '1y', label: '1年' },
     { value: '2y', label: '2年' }
+  ];
+
+  const INTERVAL_OPTIONS = [
+    { value: '15m', label: '15分', desc: '15 分钟 K 线' },
+    { value: '1h', label: '1小时', desc: '1 小时 K 线' },
+    { value: '4h', label: '4小时', desc: '4 小时 K 线' },
+    { value: '1d', label: '日K', desc: '日 K 线 (默认)' }
   ];
 
   // ==========================================
@@ -1230,7 +1239,16 @@ createApp({ setup() {
   const currentNav = computed(() => nav.find(n => n.id === page.value) || nav[0]);
   const overview = ref(null), chart = ref(null), options = ref(null), news = ref(null);
   const states = reactive(Object.fromEntries(['overview', 'chart', 'options', 'news', 'watchlist', 'crypto'].map(k => [k, { loading: false, error: '' }])));
-  const searchInput = ref(''), symbol = ref('SPY'), chartRange = ref('3mo');
+  const searchInput = ref(''), symbol = ref('SPY'), chartRange = ref('3mo'), chartInterval = ref('1d');
+  function setChartInterval(intv) {
+    if (intv && intv !== chartInterval.value) {
+      chartInterval.value = intv;
+    }
+  }
+  function formatIntervalLabel(val) {
+    const map = { '15m': '15分', '1h': '1小时', '4h': '4小时', '1d': '日K' };
+    return map[val] || val || '日K';
+  }
   const optionSymbol = ref(toOptionSymbol(symbol.value) || 'SPY'), optionExpiry = ref(''), optionMetric = ref('oi'), strikeRange = ref('0.15');
   const newsSymbol = ref(''), newsSearch = ref(''), heatSize = ref('turnover'), sectorFilter = ref('全部');
   const heatmapScope = ref(readStorage('market-desk-heatmap-scope', 'watchlist'));
@@ -5850,7 +5868,7 @@ createApp({ setup() {
   }
 
   const loadOverview = () => request('overview', '/api/market/overview', {}, overview);
-  const loadChart = () => request('chart', '/api/market/chart', { symbol: symbol.value, range: chartRange.value }, chart);
+  const loadChart = () => request('chart', '/api/market/chart', { symbol: symbol.value, range: chartRange.value, interval: chartInterval.value }, chart);
   const loadNews = () => request('news', '/api/news', { symbol: page.value === 'overview' ? '' : newsSymbol.value }, news);
   const loadCrypto = async () => {
     try {
@@ -6482,9 +6500,10 @@ createApp({ setup() {
     const bars = d.bars || [];
     if (!bars.length) return;
 
-    const isNewSymbolOrRange = (d.symbol !== lastRenderedSymbol || d.range !== lastRenderedRange);
+    const isNewSymbolOrRange = (d.symbol !== lastRenderedSymbol || d.range !== lastRenderedRange || d.interval !== lastRenderedInterval);
     lastRenderedSymbol = d.symbol;
     lastRenderedRange = d.range;
+    lastRenderedInterval = d.interval || '';
 
     // 1. Production TradingView + OKX Engine via Lightweight Charts 5.2
     if (LW && typeof LW.createChart === 'function') {
@@ -6514,7 +6533,7 @@ createApp({ setup() {
           },
           leftPriceScale: { visible: false },
           timeScale: {
-            timeVisible: d.range === '1d',
+            timeVisible: (d.interval ? d.interval !== '1d' : d.range === '1d'),
             secondsVisible: false,
             borderColor: gridColorValue,
             rightOffset: 4,
@@ -6653,7 +6672,7 @@ createApp({ setup() {
         },
         timeScale: {
           borderColor: gridColorValue,
-          timeVisible: d.range === '1d'
+          timeVisible: (d.interval ? d.interval !== '1d' : d.range === '1d')
         }
       });
 
@@ -7109,7 +7128,7 @@ createApp({ setup() {
     render();
   });
 
-  watch([symbol, chartRange], () => { if (page.value === 'chart') loadChart(); });
+  watch([symbol, chartRange, chartInterval], () => { if (page.value === 'chart') loadChart(); });
   watch([selectedCrypto, cryptoTimeframe], async () => { if (page.value === 'crypto') { await nextTick(); renderCryptoChart(); } });
   watch(newsSymbol, () => { if (page.value === 'news') loadNews(); });
   watch(optionExpiry, value => { if (page.value === 'options' && value && value !== options.value?.expiration) loadOptions(); });
@@ -7218,7 +7237,7 @@ createApp({ setup() {
     klineMaVisibility, MA_CONFIGS, toggleMa, setAllMaVisibility, showInflectionSignals, toggleInflectionSignals,
     defaultPage, defaultPageOptions, setDefaultPage,
     page, currentNav, onPageEntered,
-    overview, chart, options, news, states, searchInput, symbol, chartRange,
+    overview, chart, options, news, states, searchInput, symbol, chartRange, chartInterval, INTERVAL_OPTIONS, RANGE_OPTIONS, setChartInterval, formatIntervalLabel,
     optionSymbol, optionExpiry, optionMetric, strikeRange, optionsSpotQuote, formatExpiryLabel, butterflyOptionRows, callWallDist, putWallDist, newsSymbol, newsSearch, heatSize, sectorFilter,
     heatmapScope, heatmapSession, currentSessionShortLabel, resolvedHeatmapSession, resolvedHeatmapSessionLabel, heatmapSessionBadgeText, activeHeatmapStocks, onHeatmapScopeChange, onHeatmapSessionChange, setHeatmapSession, cycleHeatmapSession, renderHeatmap, isLeveragedEtf, isCryptoSymbol, nonLeveragedWatchlist,
     flowTab, flows, flowDate, flowDates, dayFlows,

@@ -1468,6 +1468,35 @@ test('K-Line TradingView Ruler Tool & 15m Default Timeframe', async t => {
   const rangeSelect = ui.w.document.querySelector('.chart-range-select');
   assert.match(rangeSelect.textContent, /日内 · 15 分钟/, 'Select contains 日内 · 15 分钟');
 
+  // 2b. Verify K-line interval tools (15分, 1小时, 4小时, 日K) and default to 日K
+  const intervalTools = ui.w.document.querySelector('.chart-interval-tools');
+  assert.ok(intervalTools, 'chart-interval-tools exists');
+  const intervalBtns = Array.from(intervalTools.querySelectorAll('.tiny-btn'));
+  assert.equal(intervalBtns.length, 4, 'Has 4 interval options');
+  assert.match(intervalTools.textContent, /15分/);
+  assert.match(intervalTools.textContent, /1小时/);
+  assert.match(intervalTools.textContent, /4小时/);
+  assert.match(intervalTools.textContent, /日K/);
+  const dailyBtn = intervalBtns.find(b => b.textContent.includes('日K'));
+  assert.ok(dailyBtn.classList.contains('active'), '日K is active by default');
+
+  // Click 1小时
+  const h1Btn = intervalBtns.find(b => b.textContent.includes('1小时'));
+  h1Btn.click();
+  await tick();
+  assert.ok(h1Btn.classList.contains('active'), '1小时 is active after click');
+  assert.ok(!dailyBtn.classList.contains('active'), '日K is no longer active');
+
+  // Verify chart interval tag in readout strip
+  const intervalTag = ui.w.document.querySelector('.chart-interval-tag');
+  assert.ok(intervalTag, 'chart-interval-tag exists');
+  assert.match(intervalTag.textContent, /1小时/);
+
+  // Restore daily K
+  dailyBtn.click();
+  await tick();
+  assert.ok(dailyBtn.classList.contains('active'), '日K active again');
+
   // 3. Verify TradingView ruler buttons exist
   const topRulerBtn = ui.w.document.querySelector('.chart-ruler-btn');
   assert.ok(topRulerBtn, 'Top chart ruler button exists');

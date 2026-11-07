@@ -35,3 +35,48 @@ test('all provider failures produce an error instead of made-up data', async () 
   const api = createMarketWorkspace({ fetchImpl: async () => new Response('', { status: 503 }) });
   await assert.rejects(api.overview(), /暂不可用/); await assert.rejects(api.news({}), /暂未取得/); await assert.rejects(api.options({ symbol: 'SPY' }));
 });
+
+test('chart endpoint supports intervals (15m, 1h, 4h, 1d) with default 1d and rejects invalid interval', async () => {
+  const fetchImpl = async url => {
+    const u = new URL(url);
+    const timestamps = [1793975400, 1793979000, 1793982600, 1793986200, 1793989800, 1793993400, 1793997000, 1793998800];
+    const quoteData = {
+      open: [100, 102, 101, 103, 104, 103, 102, 101],
+      high: [103, 105, 104, 106, 107, 105, 104, 102],
+      low: [99, 101, 100, 102, 103, 101, 100, 100],
+      close: [102, 101, 103, 104, 103, 102, 101, 101],
+      volume: [1000, 1200, 800, 1500, 2000, 1100, 900, 500]
+    };
+    return Response.json({
+      chart: {
+        result: [{
+          meta: { regularMarketPrice: 101, previousClose: 100, regularMarketTime: 1793998800 },
+          timestamp: timestamps,
+          indicators: { quote: [quoteData] }
+        }]
+      }
+    });
+  };
+  const api = createMarketWorkspace({ fetchImpl });
+
+  const defChart = await api.chart({ symbol: 'AAPL' });
+  assert.equal(defChart.interval, '1d');
+  assert.equal(defChart.range, '3mo');
+
+  const c15m = await api.chart({ symbol: 'AAPL', range: '1mo', interval: '15m' });
+  assert.equal(c15m.interval, '15m');
+
+  const c1h = await api.chart({ symbol: 'AAPL', range: '1mo', interval: '1h' });
+  assert.equal(c1h.interval, '1h');
+
+  const c4h = await api.chart({ symbol: 'AAPL', range: '1mo', interval: '4h' });
+  assert.equal(c4h.interval, '4h');
+  assert.equal(c4h.bars.length, 2);
+  assert.equal(c4h.bars[0].open, 100);
+  assert.equal(c4h.bars[0].high, 106);
+  assert.equal(c4h.bars[0].low, 99);
+  assert.equal(c4h.bars[0].close, 104);
+  assert.equal(c4h.bars[0].volume, 4500);
+
+  await assert.rejects(api.chart({ symbol: 'AAPL', interval: '5m' }), /不支持/);
+});

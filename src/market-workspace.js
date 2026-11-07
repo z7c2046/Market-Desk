@@ -2,6 +2,34 @@ import { BENCHMARKS, SECTORS, STOCKS, MACRO_INDICATORS, CRYPTO_CURRENCIES, getFe
 import { buildOptionsWall } from './options-wall.js';
 import { normalizeYahooSymbol } from './watchlist-quotes.js';
 
+export function aggregateBarsTo4H(bars) {
+  if (!Array.isArray(bars) || bars.length === 0) return [];
+  const groups = new Map();
+  for (const b of bars) {
+    const ny = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(b.time * 1000));
+    const hour = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', hourCycle: 'h23' }).format(new Date(b.time * 1000)));
+    const slot = (hour >= 9 && hour < 13) ? 'morn' : ((hour >= 13 && hour <= 16) ? 'aft' : `slot_${Math.floor(hour / 4)}`);
+    const key = `${ny}_${slot}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(b);
+  }
+  const result = [];
+  for (const list of groups.values()) {
+    if (!list.length) continue;
+    const first = list[0];
+    const last = list[list.length - 1];
+    result.push({
+      time: first.time,
+      open: first.open,
+      high: Math.max(...list.map(b => b.high)),
+      low: Math.min(...list.map(b => b.low)),
+      close: last.close,
+      volume: list.reduce((sum, b) => sum + (b.volume || 0), 0)
+    });
+  }
+  return result.sort((a, b) => a.time - b.time);
+}
+
 export function createMarketWorkspace({ fetchImpl = fetch, now = () => new Date(), cache = new DataCache() } = {}) {
   const read = (url, options) => remote(url, { ...options, fetchImpl });
   async function quote(symbol, range = '5d', interval = '1d') {
@@ -128,11 +156,33 @@ export function createMarketWorkspace({ fetchImpl = fetch, now = () => new Date(
     };
   }
   async function chart(params) {
-    const symbol = ticker(params.symbol); const range = params.range || '3mo';
-    const ranges = { '1d': '15m', '1mo': '1d', '3mo': '1d', '6mo': '1d', '1y': '1d', '2y': '1d' };
-    if (!ranges[range]) throw Object.assign(new Error('不支持该图表周期。'), { status: 400 });
-    const data = await quote(symbol, range, ranges[range]);
-    return { ...data, range };
+    const symbol = ticker(params.symbol);
+    const range = params.range || '3mo';
+    const validRanges = ['1d', '1mo', '3mo', '6mo', '1y', '2y'];
+    const validIntervals = ['15m', '1h', '4h', '1d'];
+
+    if (!validRanges.includes(range)) throw Object.assign(new Error('不支持该图表周期。'), { status: 400 });
+
+    const interval = params.interval || (range === '1d' ? '15m' : '1d');
+    if (!validIntervals.includes(interval)) throw Object.assign(new Error('不支持该K线周期。'), { status: 400 });
+
+    let upstreamInterval = interval;
+    let upstreamRange = range;
+
+    if (interval === '4h') {
+      upstreamInterval = '1h';
+    } else if (interval === '15m') {
+      if (['3mo', '6mo', '1y', '2y'].includes(range)) {
+        upstreamRange = '60d';
+      }
+    }
+
+    const data = await quote(symbol, upstreamRange, upstreamInterval);
+    let bars = data.bars || [];
+    if (interval === '4h') {
+      bars = aggregateBarsTo4H(bars);
+    }
+    return { ...data, bars, range, interval };
   }
   async function news(params) {
     const symbol = params.symbol ? ticker(params.symbol) : '';
