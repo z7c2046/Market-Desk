@@ -1,5 +1,6 @@
 import { parseFlows } from './flows.js';
 import { bindKlineGestures } from './composables/klineGesture.js';
+import { createChartDerivedData } from './composables/chartDerivedData.js';
 import {
   VALID_PALETTES,
   VALID_THEMES,
@@ -469,17 +470,22 @@ createApp({ setup() {
 
   function applyInflectionMarkers() {
     const bars = chart.value?.bars;
-    if (!bars || !bars.length) {
+    if (!bars || !bars.length || !showInflectionSignals.value) {
       clearInflectionMarkers();
       return;
     }
-    if (!showInflectionSignals.value) {
-      clearInflectionMarkers();
-      return;
-    }
-    const signals = computeInflectionSignals(bars);
-    const markers = formatSignalMarkers(signals);
-    setChartMarkers(markers);
+    const snapshot = chartDerivedCache.getSnapshot(
+      {
+        symbol: chart.value?.symbol || '',
+        interval: chart.value?.interval || '',
+        range: chart.value?.range || '',
+        dataRevision: chartDataRevision.value,
+        showSignals: true
+      },
+      bars,
+      { computeSignals: computeInflectionSignals, formatMarkers: formatSignalMarkers, dema }
+    );
+    setChartMarkers(snapshot.markers);
   }
 
   function applyDemaLinesData() {
@@ -495,28 +501,25 @@ createApp({ setup() {
       return;
     }
 
-    const closes = bars.map(b => Number(b.close));
-    const fastVals = dema(closes, 14);
-    const slowVals = dema(closes, 30);
-
-    const fastData = [];
-    const slowData = [];
-    for (let i = 0; i < bars.length; i++) {
-      if (fastVals[i] !== null && Number.isFinite(fastVals[i])) {
-        fastData.push({ time: bars[i].time, value: Number(fastVals[i].toFixed(2)) });
-      }
-      if (slowVals[i] !== null && Number.isFinite(slowVals[i])) {
-        slowData.push({ time: bars[i].time, value: Number(slowVals[i].toFixed(2)) });
-      }
-    }
+    const snapshot = chartDerivedCache.getSnapshot(
+      {
+        symbol: chart.value?.symbol || '',
+        interval: chart.value?.interval || '',
+        range: chart.value?.range || '',
+        dataRevision: chartDataRevision.value,
+        showSignals: true
+      },
+      bars,
+      { computeSignals: computeInflectionSignals, formatMarkers: formatSignalMarkers, dema }
+    );
 
     if (lwDemaFastSeries) {
       lwDemaFastSeries.applyOptions({ visible: true });
-      lwDemaFastSeries.setData(fastData);
+      lwDemaFastSeries.setData(snapshot.fastDemaLineData);
     }
     if (lwDemaSlowSeries) {
       lwDemaSlowSeries.applyOptions({ visible: true });
-      lwDemaSlowSeries.setData(slowData);
+      lwDemaSlowSeries.setData(snapshot.slowDemaLineData);
     }
   }
 
@@ -549,6 +552,12 @@ createApp({ setup() {
   }
 
   const klineInteractionMode = ref('follow-latest');
+  const chartDataRevision = ref(0);
+  const chartDerivedCache = createChartDerivedData({
+    computeSignals: computeInflectionSignals,
+    formatMarkers: formatSignalMarkers,
+    dema: dema
+  });
   let lwPriceChart = null;
   let lwCandleSeries = null;
   let lwVolumeSeries = null;
@@ -563,6 +572,7 @@ createApp({ setup() {
     lastRenderedSymbol = '';
     lastRenderedRange = '';
     lastRenderedInterval = '';
+    chartDerivedCache.invalidate();
     if (klineGestureCtrl) {
       klineGestureCtrl.dispose();
       klineGestureCtrl = null;
@@ -747,6 +757,9 @@ createApp({ setup() {
   });
 
   function toggleRulerTool() {
+    if (klineGestureCtrl && typeof klineGestureCtrl.cancelMotion === 'function') {
+      klineGestureCtrl.cancelMotion('ruler-toggled');
+    }
     if (isRulerActive.value) {
       clearRuler();
     } else {
@@ -912,8 +925,11 @@ createApp({ setup() {
 
   function toggleChartExpanded() {
     isChartExpanded.value = !isChartExpanded.value;
-    if (klineGestureCtrl?.setInputPolicy) {
-      klineGestureCtrl.setInputPolicy(isChartExpanded.value ? 'expanded' : (isPhoneLayout.value ? 'reading' : 'desktop'));
+    if (klineGestureCtrl) {
+      if (klineGestureCtrl.cancelMotion) klineGestureCtrl.cancelMotion('toggleChartExpanded');
+      if (klineGestureCtrl.setInputPolicy) {
+        klineGestureCtrl.setInputPolicy(isChartExpanded.value ? 'expanded' : (isPhoneLayout.value ? 'reading' : 'desktop'));
+      }
     }
     nextTick(() => {
       if (lwPriceChart) lwPriceChart.resize();
@@ -1029,8 +1045,11 @@ createApp({ setup() {
     isPhoneLayout.value = isPhone(w);
     isWide.value = w >= 1600;
     if (!isMobile.value) showSettings.value = false;
-    if (klineGestureCtrl?.setInputPolicy) {
-      klineGestureCtrl.setInputPolicy(isChartExpanded.value ? 'expanded' : (isPhoneLayout.value ? 'reading' : 'desktop'));
+    if (klineGestureCtrl) {
+      if (klineGestureCtrl.invalidateGeometry) klineGestureCtrl.invalidateGeometry('resizeLayout');
+      if (klineGestureCtrl.setInputPolicy) {
+        klineGestureCtrl.setInputPolicy(isChartExpanded.value ? 'expanded' : (isPhoneLayout.value ? 'reading' : 'desktop'));
+      }
     }
   }
 
@@ -5921,14 +5940,22 @@ createApp({ setup() {
       const response = await fetch(endpoint + '?' + new URLSearchParams(params), { signal: controller.signal });
       calibrateClock(response?.headers?.get?.('date'));
       const data = await response.json(); if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
-      if (seq === sequences[key]) target.value = data;
+      if (seq === sequences[key]) {
+        target.value = data;
+        if (key === 'chart') chartDataRevision.value++;
+      }
     } catch (e) { if (seq === sequences[key]) states[key].error = e.name === 'AbortError' ? '请求超时，请重试。' : e.message; }
     finally { clearTimeout(timer); if (seq === sequences[key]) { states[key].loading = false; await nextTick(); render(); } }
     return seq === sequences[key] ? target.value : null;
   }
 
   const loadOverview = () => request('overview', '/api/market/overview', {}, overview);
-  const loadChart = () => request('chart', '/api/market/chart', { symbol: symbol.value, range: chartRange.value, interval: chartInterval.value }, chart);
+  const loadChart = () => {
+    if (klineGestureCtrl && typeof klineGestureCtrl.cancelMotion === 'function') {
+      klineGestureCtrl.cancelMotion('loadChart');
+    }
+    return request('chart', '/api/market/chart', { symbol: symbol.value, range: chartRange.value, interval: chartInterval.value }, chart);
+  };
   const loadNews = () => request('news', '/api/news', { symbol: page.value === 'overview' ? '' : newsSymbol.value }, news);
   const loadCrypto = async () => {
     try {
@@ -6471,69 +6498,28 @@ createApp({ setup() {
     }
     if (!bar) return;
 
-    const o = Number(bar.open).toFixed(2);
-    const h = Number(bar.high).toFixed(2);
-    const l = Number(bar.low).toFixed(2);
-    const c = Number(bar.close).toFixed(2);
-    const diff = Number(bar.close - bar.open).toFixed(2);
-    const diffPct = bar.open > 0 ? ((bar.close - bar.open) / bar.open * 100).toFixed(2) + '%' : '0.00%';
-    const curKline = KLINE_SCHEMES[klineScheme.value] || KLINE_SCHEMES.classic;
-    const toneColor = bar.close >= bar.open ? curKline.up : curKline.down;
+    const snapshot = chartDerivedCache.getSnapshot(
+      {
+        symbol: chart.value?.symbol || '',
+        interval: chart.value?.interval || '',
+        range: chart.value?.range || '',
+        dataRevision: chartDataRevision.value,
+        showSignals: !!showInflectionSignals.value
+      },
+      bars,
+      { computeSignals: computeInflectionSignals, formatMarkers: formatSignalMarkers, dema }
+    );
 
-    const dateStr = bar.time
-      ? new Intl.DateTimeFormat('zh-CN', {
-          timeZone: 'America/New_York',
-          month: '2-digit',
-          day: '2-digit',
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: false
-        }).format(new Date(bar.time * 1000))
-      : '';
+    const html = chartDerivedCache.formatReadoutHtml(bar, snapshot, {
+      klineScheme: KLINE_SCHEMES[klineScheme.value] || KLINE_SCHEMES.classic,
+      klineSchemeKey: klineScheme.value,
+      isDark: isDark.value,
+      showSignals: !!showInflectionSignals.value
+    });
 
-    let demaReadout = '';
-    let inflectionTag = '';
-    if (showInflectionSignals.value && bars && bars.length) {
-      let fVal = null;
-      let sVal = null;
-      if (param && param.seriesData && lwDemaFastSeries && lwDemaSlowSeries) {
-        const fp = param.seriesData.get(lwDemaFastSeries);
-        const sp = param.seriesData.get(lwDemaSlowSeries);
-        if (fp && typeof fp.value === 'number') fVal = fp.value;
-        if (sp && typeof sp.value === 'number') sVal = sp.value;
-      }
-      if (fVal === null || sVal === null) {
-        const idx = bars.findIndex(b => b.time === bar.time);
-        if (idx >= 0) {
-          const closes = bars.map(b => Number(b.close));
-          const fastVals = dema(closes, 14);
-          const slowVals = dema(closes, 30);
-          if (fastVals[idx] !== null && Number.isFinite(fastVals[idx])) fVal = fastVals[idx];
-          if (slowVals[idx] !== null && Number.isFinite(slowVals[idx])) sVal = slowVals[idx];
-        }
-      }
-      if (fVal !== null && sVal !== null) {
-        demaReadout = ` <span style="color:#38bdf8;font-weight:600;margin-left:8px;">快(DEMA14) <b>${fVal.toFixed(2)}</b></span>` +
-          ` <span style="color:#fb923c;font-weight:600;margin-left:6px;">慢(DEMA30) <b>${sVal.toFixed(2)}</b></span>`;
-      }
-
-      const sigs = computeInflectionSignals(bars);
-      const sig = sigs.find(s => s.time === bar.time);
-      if (sig) {
-        const isBuy = sig.side.includes('B');
-        const isEarly = sig.side.startsWith('e') || sig.side.startsWith('E');
-        const sigColor = isBuy ? (isEarly ? '#38bdf8' : '#10b981') : (isEarly ? '#f59e0b' : '#ef4444');
-        const sigLabel = sig.side === 'EB' ? 'EB 买入观察' : sig.side === 'B' ? 'B 确认买入' : sig.side === 'ES' ? 'ES 卖出观察' : 'S 确认卖出';
-        inflectionTag = ` <span style="background:${sigColor}22;color:${sigColor};border:1px solid ${sigColor}55;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:700;margin-left:6px;">⚡ ${sigLabel}</span>`;
-      }
+    if (textEl.innerHTML !== html) {
+      textEl.innerHTML = html;
     }
-
-    textEl.innerHTML = `<span style="color:var(--text-tertiary);margin-right:8px;">${dateStr}</span>` +
-      `开 <b style="color:var(--text-primary)">${o}</b> 高 <b style="color:var(--text-primary)">${h}</b> ` +
-      `低 <b style="color:var(--text-primary)">${l}</b> 收 <b style="color:${toneColor}">${c}</b> ` +
-      `涨跌 <b style="color:${toneColor}">${diff} (${diffPct})</b>` +
-      demaReadout +
-      inflectionTag;
   }
 
   function renderPrice() {
@@ -6675,7 +6661,7 @@ createApp({ setup() {
         });
 
         chartInstance.subscribeCrosshairMove(param => {
-          updateReadoutFromCrosshair(param, candleSeries, maSeriesMap, bars);
+          updateReadoutFromCrosshair(param, candleSeries, maSeriesMap, chart.value?.bars || bars);
         });
 
         chartInstance.timeScale().subscribeVisibleLogicalRangeChange(() => {
@@ -6695,7 +6681,8 @@ createApp({ setup() {
           rightAtBars: 300,
           rightFraction: 0.94,
           onState: (state) => {
-            klineInteractionMode.value = state === 'history' ? 'history' : 'follow-latest';
+            const nav = typeof state === 'string' ? state : state?.navigation;
+            klineInteractionMode.value = nav === 'history' ? 'history' : 'follow-latest';
           }
         });
 
@@ -6782,43 +6769,35 @@ createApp({ setup() {
       }
       lwVolumeSeries.setData(volData);
 
+      const snapshot = chartDerivedCache.getSnapshot(
+        {
+          symbol: d.symbol || '',
+          interval: d.interval || '',
+          range: d.range || '',
+          dataRevision: chartDataRevision.value,
+          showSignals: !!showInflectionSignals.value
+        },
+        bars,
+        { computeSignals: computeInflectionSignals, formatMarkers: formatSignalMarkers, dema }
+      );
+
       const maPeriods = { ma5: 5, ma20: 20, ma60: 60, ma120: 120, ma250: 250 };
       for (const [key, period] of Object.entries(maPeriods)) {
         if (lwMaSeriesMap[key]) {
           lwMaSeriesMap[key].applyOptions({ visible: klineMaVisibility[key] !== false });
-          lwMaSeriesMap[key].setData(calcMALineData(bars, period));
+          lwMaSeriesMap[key].setData(snapshot.maByKey[key] || []);
         }
       }
 
       if (isNewSymbolOrRange) {
-        if (lwPriceChart) {
-          try { lwPriceChart.timeScale().fitContent(); } catch (_) {}
-        }
         if (klineGestureCtrl) {
-          if (typeof klineGestureCtrl.reset === 'function') {
-            klineGestureCtrl.reset();
-            requestAnimationFrame(() => {
-              try {
-                if (lwPriceChart) lwPriceChart.timeScale().fitContent();
-                klineGestureCtrl.reset();
-              } catch (_) {}
-            });
-          } else if (typeof klineGestureCtrl.showAll === 'function') {
-            klineGestureCtrl.showAll();
-          }
+          klineGestureCtrl.reset();
         }
-      }
-
-      if (isNewSymbolOrRange) {
-        try {
-          const scale = lwPriceChart.priceScale('right');
-          if (typeof scale.setAutoScale === 'function') scale.setAutoScale(true);
-          if (typeof scale.applyOptions === 'function') scale.applyOptions({ autoScale: true });
-        } catch (_) {}
-      }
-      if (isNewSymbolOrRange) {
         clearRuler();
       } else {
+        if (klineGestureCtrl && typeof klineGestureCtrl.replaceData === 'function') {
+          klineGestureCtrl.replaceData({ revision: chartDataRevision.value, symbol: d.symbol, interval: d.interval, bars });
+        }
         updateRulerCoordinates();
       }
       updateReadoutFromCrosshair(null, lwCandleSeries, lwMaSeriesMap, bars);

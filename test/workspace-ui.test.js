@@ -10,6 +10,7 @@ import * as inflectionSignals from '../public/inflection-signals.js';
 import * as themeModel from '../public/theme-model.js';
 import * as mobileWorkspace from '../public/mobile-workspace.js';
 import * as mobileQuoteView from '../public/mobile-quote-view.js';
+import * as chartDerivedData from '../public/composables/chartDerivedData.js';
 import { AiSearchService } from '../src/ai-search-service.js';
 import { createServer } from '../src/server.js';
 const tick = () => new Promise(resolve => setTimeout(resolve, 30));
@@ -131,11 +132,27 @@ async function mount(t, fetchImpl, initStorage = null, configureWindow = null) {
   w.EventSource = class { constructor() {} close() {} };
   w.requestAnimationFrame = cb => setTimeout(cb, 16);
   w.cancelAnimationFrame = id => clearTimeout(id);
-  Object.assign(w, watchlistModel, earningsCalendarModel, inflectionSignals, themeModel, mobileWorkspace, mobileQuoteView);
+  Object.assign(w, watchlistModel, earningsCalendarModel, inflectionSignals, themeModel, mobileWorkspace, mobileQuoteView, chartDerivedData);
   Object.defineProperty(w.HTMLElement.prototype, 'clientWidth', { get: () => 800 });
   w.echarts = { init: el => ({ setOption: config => configs.set(el.id, config), off() {}, on() {}, resize() {}, dispose() {}, dispatchAction() {} }) };
   w.eval(await fs.readFile(new URL('../node_modules/vue/dist/vue.global.prod.js', import.meta.url), 'utf8'));
-  w.bindKlineGestures = () => ({ focusLatest() {}, reset() {}, resetPriceScale() {}, setInputPolicy() {}, getInputPolicy() { return 'desktop'; }, zoomIn() {}, zoomOut() {}, dispose() {}, isFollowingLatest() { return true; } });
+  w.bindKlineGestures = () => ({
+    focusLatest() {},
+    reset() {},
+    resetPriceScale() {},
+    cancelMotion() {},
+    replaceData() {},
+    invalidateGeometry() {},
+    setInputPolicy() {},
+    getInputPolicy() { return 'desktop'; },
+    zoomIn() {},
+    zoomOut() {},
+    attachSeriesProvider() {},
+    detachSeriesProvider() {},
+    getState() { return { navigation: 'follow-latest', phase: 'idle', priceMode: 'auto' }; },
+    dispose() {},
+    isFollowingLatest() { return true; }
+  });
   if (initStorage) {
     for (const [k, v] of Object.entries(initStorage)) {
       w.localStorage.setItem(k, JSON.stringify(v));
@@ -144,6 +161,7 @@ async function mount(t, fetchImpl, initStorage = null, configureWindow = null) {
   const appSrc = (await fs.readFile(new URL('../public/app.js', import.meta.url), 'utf8'))
     .replace("import { parseFlows } from './flows.js';", 'const parseFlows = window.parseFlows;')
     .replace("import { bindKlineGestures } from './composables/klineGesture.js';", 'const bindKlineGestures = window.bindKlineGestures;')
+    .replace("import { createChartDerivedData } from './composables/chartDerivedData.js';", 'const { createChartDerivedData } = window;')
     .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/watchlist-model\.js';/, 'const { WatchlistManager, sortWatchlistRows, getSelectedExtQuote, getCurrentSession, getNyTime, SESSION_TYPES, MAX_UNIQUE_SYMBOLS, validSymbol, SYMBOL_NAMES, NASDAQ100_STOCKS, SP500_STOCKS, isLeveragedEtf, isCryptoSymbol, STOCK_MARKET_CAPS, getStockMarketCap, sortSymbolsByMarketCap } = window;')
     .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/earnings-calendar-model\.js';/, 'const { AI_SECTOR_FILTERS, CORPORATE_LOGOS, getEarningsCalendarDate, getEarningsWeeks, MACRO_CALENDAR_ITEMS, filterEarningsByDay, parseMetricNumber, getMetricSurprise, getMetricYoy } = window;')
     .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/inflection-signals\.js';/, 'const { computeInflectionSignals, formatSignalMarkers, dema } = window;')
@@ -1717,5 +1735,62 @@ test('K-Line TradingView Ruler Tool & 15m Default Timeframe', async t => {
   await tick();
   assert.equal(ui.w.document.querySelector('.chart-ruler-layer'), null, 'Ruler layer cleared after close button click');
 
+  assert.deepEqual(ui.errors, []);
+});
+
+test('K-Line Lightweight Charts stub path: mounts LightweightCharts instance and binds gestures controller', async t => {
+  let createdChart = null;
+  const attachedProviders = [];
+  const stubChart = {
+    _hostEl: null,
+    applyOptions() {},
+    resize() {},
+    remove() {},
+    subscribeCrosshairMove(cb) { this._crosshairCb = cb; },
+    timeScale: () => ({
+      subscribeVisibleLogicalRangeChange() {},
+      getVisibleLogicalRange: () => ({ from: 10, to: 100 }),
+      setVisibleLogicalRange() {},
+      fitContent() {}
+    }),
+    priceScale: () => ({
+      applyOptions() {},
+      setAutoScale() {},
+      getVisibleRange: () => ({ from: 100, to: 200 })
+    }),
+    addSeries: () => ({
+      applyOptions: (o) => {
+        if (o?.autoscaleInfoProvider) attachedProviders.push(o.autoscaleInfoProvider);
+      },
+      setData() {},
+      coordinateToPrice: (y) => 200 - y * 0.25,
+      priceToCoordinate: (p) => (200 - p) * 4,
+      priceScale: () => ({ setAutoScale() {}, applyOptions() {} })
+    })
+  };
+
+  const ui = await mount(t, async url => ({ ok: true, json: async () => fixture(url) }), null, w => {
+    w.LightweightCharts = {
+      ColorType: { Solid: 'solid' },
+      CrosshairMode: { Normal: 1 },
+      CandlestickSeries: 'Candlestick',
+      HistogramSeries: 'Histogram',
+      LineSeries: 'Line',
+      createChart: (el) => {
+        stubChart._hostEl = el;
+        createdChart = stubChart;
+        return stubChart;
+      }
+    };
+  });
+
+  const chartNavBtn = [...ui.w.document.querySelectorAll('.nav-item')].find(el => el.dataset.id === 'chart');
+  assert.ok(chartNavBtn, 'Chart nav button exists');
+  chartNavBtn.click();
+  await tick();
+
+  assert.ok(createdChart, 'LightweightCharts createChart was called');
+  assert.ok(ui.w.document.getElementById('price-chart'), 'Price chart container exists');
+  assert.ok(ui.w.klineGestureCtrl, 'klineGestureCtrl was assigned on window');
   assert.deepEqual(ui.errors, []);
 });

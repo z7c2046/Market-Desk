@@ -1,6 +1,6 @@
 /**
- * TradingView + OKX 风格 K 线视口几何数学引擎 (v2.1)
- * 对应蓝图: kline_chart_blueprint_v2.md
+ * TradingView + OKX 风格 K 线视口几何数学引擎 (v2.2)
+ * Lightweight Charts 5.2.1 半柱连续坐标系统与摄像机投影模型
  */
 
 export const EPS = 1e-9;
@@ -15,6 +15,77 @@ export function clamp(v, min, max) {
 
 export function spanOf(r) {
   return r.to - r.from;
+}
+
+export const easeAlpha = (rate, seconds) => -Math.expm1(-rate * Math.max(0, seconds));
+
+/**
+ * 规范化摄像机 (Lightweight Charts 5.2.1 连续坐标模型)
+ * N = to - from + 1
+ * L = from - 0.5
+ */
+export function cameraFromRange(range) {
+  if (!Number.isFinite(range?.from) || !Number.isFinite(range?.to) || range.to < range.from) {
+    throw new RangeError('Invalid logical range');
+  }
+  return { left: range.from - 0.5, count: range.to - range.from + 1 };
+}
+
+export function rangeFromCamera(camera) {
+  if (!(camera?.count >= 1) || !Number.isFinite(camera?.left)) throw new RangeError('Invalid camera');
+  return { from: camera.left + 0.5, to: camera.left + camera.count - 0.5 };
+}
+
+export function pixelFraction(x, width) {
+  if (!(width > 1)) throw new RangeError('Pane is not measurable');
+  return (clamp(x, 0, width - 1) + 1) / width;
+}
+
+export function logicalAtPixel(camera, x, width) {
+  return camera.left + camera.count * pixelFraction(x, width);
+}
+
+export function pixelAtLogical(camera, logical, width) {
+  return (logical - camera.left) * width / camera.count - 1;
+}
+
+export function anchorCamera(camera, count, fraction) {
+  const anchor = camera.left + camera.count * fraction;
+  return { left: anchor - count * fraction, count };
+}
+
+export function zoomPriceAbout(range, anchorPrice, factor) {
+  if (!(factor > 0) || !Number.isFinite(factor)) throw new RangeError('Invalid price factor');
+  return {
+    from: anchorPrice + (range.from - anchorPrice) * factor,
+    to: anchorPrice + (range.to - anchorPrice) * factor,
+  };
+}
+
+export function safeAutoPriceStep(display, target, seconds, rate = 20) {
+  if (!display) return { ...target };
+  const a = easeAlpha(rate, seconds);
+  const dMin = Number.isFinite(display.minValue) ? display.minValue : (display.from ?? 0);
+  const dMax = Number.isFinite(display.maxValue) ? display.maxValue : (display.to ?? 0);
+  const tMin = Number.isFinite(target.minValue) ? target.minValue : (target.from ?? 0);
+  const tMax = Number.isFinite(target.maxValue) ? target.maxValue : (target.to ?? 0);
+  const nextMin = Math.min(tMin, dMin + (tMin - dMin) * a);
+  const nextMax = Math.max(tMax, dMax + (tMax - dMax) * a);
+  return {
+    minValue: nextMin,
+    maxValue: nextMax,
+    from: nextMin,
+    to: nextMax,
+  };
+}
+
+export function stepFling(velocityPxPerSecond, seconds, friction = 12) {
+  if (!(friction > 0) || seconds < 0) throw new RangeError('Invalid fling parameters');
+  const decay = Math.exp(-friction * seconds);
+  return {
+    deltaPx: velocityPxPerSecond * (1 - decay) / friction,
+    velocity: velocityPxPerSecond * decay,
+  };
 }
 
 /**
