@@ -17183,6 +17183,70 @@ html.dark .cw-flow-row.is-open {
   font-weight: 600;
 }
 
+/* TradFi Spread (Premium/Discount) */
+.col-spread {
+  min-width: 110px;
+}
+
+.cw-spread-cell {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.cw-spread-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.cw-spread-badge.is-premium,
+.cw-spread-tag.is-premium {
+  color: var(--semantic-up, #10b981);
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.cw-spread-badge.is-discount,
+.cw-spread-tag.is-discount {
+  color: var(--semantic-down, #f43f5e);
+  background: rgba(244, 63, 94, 0.12);
+  border: 1px solid rgba(244, 63, 94, 0.25);
+}
+
+.cw-spread-badge.is-parity,
+.cw-spread-tag.is-parity {
+  color: var(--text-muted);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-subtle);
+}
+
+.cw-spread-sub {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.cw-spread-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.cw-tradfi-lbl {
+  color: #f59e0b;
+  font-weight: 600;
+}
+
 /* Volume + Slim Proportional Track */
 .cw-vol-inline {
   display: inline-flex;
@@ -17449,6 +17513,16 @@ html.dark .cw-drawer-tr {
 
 .cw-axis-pin.is-bear {
   background: var(--semantic-down, #f43f5e);
+}
+
+.cw-axis-pin.is-tradfi {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #f59e0b;
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.28);
+  z-index: 2;
 }
 
 .cw-filter-link {

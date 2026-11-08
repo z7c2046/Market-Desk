@@ -1766,6 +1766,15 @@
                 <span>现价</span>
                 <span v-if="onchainStockSortField === 'price'" class="cw-sort-arrow">{{ onchainStockSortDir === 'desc' ? '↓' : '↑' }}</span>
               </th>
+              <th v-if="whaleCategory === 'stocks'" class="th-spread text-right cw-sortable" tabindex="0"
+                  :aria-sort="onchainStockSortField === 'premiumPct' ? (onchainStockSortDir === 'desc' ? 'descending' : 'ascending') : 'none'"
+                  title="对比传统美股正股的链上溢价/折价率，点击排序"
+                  @click="toggleOnchainSort('premiumPct')"
+                  @keydown.enter.prevent="toggleOnchainSort('premiumPct')"
+                  @keydown.space.prevent="toggleOnchainSort('premiumPct')">
+                <span>价差 (溢/折)</span>
+                <span class="cw-sort-arrow" :class="{ 'is-idle': onchainStockSortField !== 'premiumPct' }" aria-hidden="true">{{ onchainStockSortField === 'premiumPct' ? (onchainStockSortDir === 'desc' ? '↓' : '↑') : '↕' }}</span>
+              </th>
               <th class="th-vol text-right cw-sortable" @click="toggleOnchainSort('volume24h')">
                 <span>24H 成交</span>
                 <span v-if="onchainStockSortField === 'volume24h'" class="cw-sort-arrow">{{ onchainStockSortDir === 'desc' ? '↓' : '↑' }}</span>
@@ -1810,6 +1819,16 @@
                     <strong class="cw-price-num">${{ formatCryptoPrice(r.price) }}</strong>
                     <span class="cw-chg-pill" :class="r.changePercent >= 0 ? 'is-pos' : 'is-neg'">
                       {{ (r.changePercent >= 0 ? '+' : '') + Number(r.changePercent || 0).toFixed(2) + '%' }}
+                    </span>
+                  </div>
+                </td>
+                <td v-if="whaleCategory === 'stocks'" class="col-spread text-right font-mono">
+                  <div class="cw-spread-cell">
+                    <span class="cw-spread-badge" :class="r.premiumPct > 0.05 ? 'is-premium' : (r.premiumPct < -0.05 ? 'is-discount' : 'is-parity')">
+                      {{ formatSpreadPct(r.premiumPct) }}
+                    </span>
+                    <span class="cw-spread-sub" :title="'正股参考价: $' + formatCryptoPrice(r.tradFiClose)">
+                      {{ formatSpreadDiff(r.priceDiff) }} · 正股 ${{ formatCryptoPrice(r.tradFiClose) }}
                     </span>
                   </div>
                 </td>
@@ -1876,24 +1895,29 @@
 
               <!-- 行内展开：巨鲸持仓与多空成本轴图形 -->
               <tr v-if="expandedStockSymbol === r.symbol" :key="'radar-' + r.symbol" class="cw-drawer-tr">
-                <td colspan="8" class="cw-drawer-td">
+                <td :colspan="whaleCategory === 'stocks' ? 9 : 8" class="cw-drawer-td">
                   <div class="stock-radar-container cw-inline-drawer">
                     <div v-for="axis in [getPriceAxisSpec(r)]" :key="'axis-' + r.symbol" class="cw-axis-bar">
                       <div class="cw-axis-title">
                         <strong class="font-mono">{{ r.symbol }}</strong>
                         <span class="cw-count-pill font-mono">{{ getUnifiedWhalePositions(r).length }}</span>
+                        <span v-if="!r.isCrypto && r.tradFiClose" class="cw-spread-tag font-mono" :class="r.premiumPct > 0.05 ? 'is-premium' : (r.premiumPct < -0.05 ? 'is-discount' : 'is-parity')" :title="'传统美股收盘/对照价: $' + r.tradFiClose">
+                          {{ formatSpreadPct(r.premiumPct) }} ({{ formatSpreadDiff(r.priceDiff) }})
+                        </span>
                       </div>
 
                       <div class="cw-axis-graphic font-mono">
                         <div class="cw-axis-labels">
                           <span class="text-pos">多均 ${{ formatCryptoPrice(axis.bullAvg) }}</span>
                           <span class="cw-spot-lbl">现 ${{ formatCryptoPrice(axis.spot) }}</span>
+                          <span v-if="axis.tradFiClose" class="cw-tradfi-lbl" :title="'正股对照价 $' + formatCryptoPrice(axis.tradFiClose)">正股 ${{ formatCryptoPrice(axis.tradFiClose) }}</span>
                           <span class="text-neg">空均 ${{ formatCryptoPrice(axis.bearAvg) }}</span>
                         </div>
                         <div class="cw-axis-rail" aria-hidden="true">
-                          <i class="cw-axis-pin is-bull" :style="{ left: axis.bullPct + '%' }"></i>
-                          <i class="cw-axis-pin is-spot" :style="{ left: axis.spotPct + '%' }"></i>
-                          <i class="cw-axis-pin is-bear" :style="{ left: axis.bearPct + '%' }"></i>
+                          <i class="cw-axis-pin is-bull" :style="{ left: axis.bullPct + '%' }" title="多头均价"></i>
+                          <i class="cw-axis-pin is-spot" :style="{ left: axis.spotPct + '%' }" title="链上现价"></i>
+                          <i v-if="axis.tradFiPct != null" class="cw-axis-pin is-tradfi" :style="{ left: axis.tradFiPct + '%' }" title="正股对照价"></i>
+                          <i class="cw-axis-pin is-bear" :style="{ left: axis.bearPct + '%' }" title="空头均价"></i>
                         </div>
                       </div>
 

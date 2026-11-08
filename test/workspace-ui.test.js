@@ -1433,9 +1433,9 @@ test('Crypto Workspace: graphic-first zero-bloat capital flow matrix, SVG teleme
     if (new URL(url, 'http://localhost').pathname !== '/api/crypto/onchain-stocks') return data;
     const nvda = data.top10[0];
     return { ...data, top10: [
-      nvda,
-      { ...nvda, symbol: 'AMD', chartSymbol: 'AMD', name: '超威半导体', volume24h: 8000000, netFlow: 350000, buyRatio: 80, sellRatio: 20 },
-      { ...nvda, symbol: 'TSLA', chartSymbol: 'TSLA', name: '特斯拉', volume24h: 20000000, netFlow: -3000000, buyRatio: 20, sellRatio: 80 }
+      { ...nvda, symbol: 'NVDA', chartSymbol: 'NVDA', name: '英伟达', price: 148.5, tradFiClose: 147.8, premiumPct: 0.47, priceDiff: 0.7, volume24h: 64820000, netFlow: 18408880, buyRatio: 64.2, sellRatio: 35.8 },
+      { ...nvda, symbol: 'AMD', chartSymbol: 'AMD', name: '超威半导体', price: 150.0, tradFiClose: 145.0, premiumPct: 3.45, priceDiff: 5.0, volume24h: 8000000, netFlow: 350000, buyRatio: 80, sellRatio: 20 },
+      { ...nvda, symbol: 'TSLA', chartSymbol: 'TSLA', name: '特斯拉', price: 210.0, tradFiClose: 215.0, premiumPct: -2.33, priceDiff: -5.0, volume24h: 20000000, netFlow: -3000000, buyRatio: 20, sellRatio: 80 }
     ] };
   } }));
 
@@ -1462,6 +1462,7 @@ test('Crypto Workspace: graphic-first zero-bloat capital flow matrix, SVG teleme
   assert.match(onchainPanel.textContent, /资金流向/);
   assert.match(onchainPanel.textContent, /BTC/);
   assert.match(onchainPanel.textContent, /ETH/);
+  assert.equal(onchainPanel.querySelector('.th-spread'), null, 'th-spread hidden in Crypto coin mode');
 
   // Verify diverging zero-axis flow graphic & split L/S capsule bar
   const thFlow = onchainPanel.querySelector('.th-flow');
@@ -1549,9 +1550,19 @@ test('Crypto Workspace: graphic-first zero-bloat capital flow matrix, SVG teleme
   assert.match(whalePanel.textContent, /NVDA/);
   assert.match(onchainPanel.querySelector('.netflow-val').textContent, /^\+\$[0-9]/, 'positive TradFi net flow formatted cleanly');
 
+  // Verify Spread header and badges in TradFi mode
+  const thSpread = onchainPanel.querySelector('.th-spread');
+  assert.ok(thSpread, 'th-spread header exists in TradFi mode');
+  assert.match(thSpread.textContent, /价差/);
+  const firstColSpread = onchainPanel.querySelector('.col-spread');
+  assert.ok(firstColSpread, 'col-spread exists in TradFi row');
+  assert.match(firstColSpread.textContent, /溢价|折价/);
+  assert.match(firstColSpread.textContent, /正股/);
+
   // Sort signed raw amounts across M/K units, and sort long share independently.
   await checkFlowSort('.th-flow', ['NVDA', 'AMD', 'TSLA'], ['TSLA', 'AMD', 'NVDA']);
   await checkFlowSort('.th-ls', ['AMD', 'NVDA', 'TSLA'], ['TSLA', 'NVDA', 'AMD']);
+  await checkFlowSort('.th-spread', ['AMD', 'NVDA', 'TSLA'], ['TSLA', 'NVDA', 'AMD']);
   onchainPanel.querySelector('.th-vol').click();
   await tick();
 
@@ -1565,6 +1576,9 @@ test('Crypto Workspace: graphic-first zero-bloat capital flow matrix, SVG teleme
   assert.ok(radarContainer.querySelector('.cw-axis-rail'), 'Horizontal price cost/spot axis graphic rendered');
   assert.match(radarContainer.textContent, /多均/);
   assert.match(radarContainer.textContent, /空均/);
+  assert.match(radarContainer.textContent, /正股/);
+  assert.ok(radarContainer.querySelector('.cw-axis-pin.is-tradfi'), 'TradFi stock reference pin rendered on axis rail');
+  assert.ok(radarContainer.querySelector('.cw-spread-tag'), 'TradFi spread tag rendered in drawer header');
 
   // Click "钱包 ↘" filter link inside inline drawer -> filters whale panel to NVDA
   const whaleBtn = radarContainer.querySelector('.onchain-whale-btn');

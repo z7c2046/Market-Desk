@@ -14,10 +14,11 @@ export const ONCHAIN_STOCK_CANDIDATES = [
     enName: 'NVIDIA Corporation',
     protocol: 'Hyperliquid Perp / Backed',
     network: 'Hyperliquid L1 / Arbitrum',
-    basePrice: 186.50,
+    basePrice: 187.15,
     baseVolume24h: 81800000,
     buyRatio: 0.642,
-    tradFiClose: 200.13,
+    tradFiClose: 186.64,
+    changePercent: 2.78,
     openInterest: 48500000,
     turnoverRate: 16.8,
     onchainVolMultiplier: 0.0035,
@@ -29,10 +30,11 @@ export const ONCHAIN_STOCK_CANDIDATES = [
     enName: 'Micron Technology, Inc.',
     protocol: 'Hyperliquid Perp / Backed',
     network: 'Hyperliquid L1 / Arbitrum',
-    basePrice: 684.05,
+    basePrice: 692.10,
     baseVolume24h: 108500000,
     buyRatio: 0.385,
-    tradFiClose: 795.23,
+    tradFiClose: 690.00,
+    changePercent: 5.12,
     openInterest: 62000000,
     turnoverRate: 22.4,
     onchainVolMultiplier: 0.0035,
@@ -44,10 +46,11 @@ export const ONCHAIN_STOCK_CANDIDATES = [
     enName: 'Tesla, Inc.',
     protocol: 'Hyperliquid Perp / Synthetix',
     network: 'Hyperliquid L1 / Optimism',
-    basePrice: 350.00,
+    basePrice: 351.40,
     baseVolume24h: 51200000,
     buyRatio: 0.623,
-    tradFiClose: 385.19,
+    tradFiClose: 350.50,
+    changePercent: 4.68,
     openInterest: 31200000,
     turnoverRate: 15.4,
     onchainVolMultiplier: 0.0040,
@@ -59,10 +62,11 @@ export const ONCHAIN_STOCK_CANDIDATES = [
     enName: 'Invesco QQQ Trust',
     protocol: 'Hyperliquid Perp / Synthetix',
     network: 'Hyperliquid L1 / Ethereum',
-    basePrice: 660.00,
+    basePrice: 659.20,
     baseVolume24h: 57000000,
     buyRatio: 0.612,
-    tradFiClose: 691.95,
+    tradFiClose: 658.00,
+    changePercent: 1.76,
     openInterest: 34100000,
     turnoverRate: 7.1,
     onchainVolMultiplier: 0.0016,
@@ -74,10 +78,11 @@ export const ONCHAIN_STOCK_CANDIDATES = [
     enName: 'SPDR S&P 500 ETF Trust',
     protocol: 'Hyperliquid Perp / Synthetix',
     network: 'Hyperliquid L1 / Ethereum',
-    basePrice: 745.00,
+    basePrice: 746.10,
     baseVolume24h: 55700000,
     buyRatio: 0.585,
-    tradFiClose: 766.81,
+    tradFiClose: 745.20,
+    changePercent: 0.58,
     openInterest: 38900000,
     turnoverRate: 6.2,
     onchainVolMultiplier: 0.0018,
@@ -89,10 +94,11 @@ export const ONCHAIN_STOCK_CANDIDATES = [
     enName: 'Advanced Micro Devices',
     protocol: 'Hyperliquid Perp',
     network: 'Hyperliquid L1',
-    basePrice: 428.00,
-    baseVolume24h: 34000000,
+    basePrice: 450.15,
+    baseVolume24h: 51200000,
     buyRatio: 0.521,
-    tradFiClose: 488.78,
+    tradFiClose: 449.04,
+    changePercent: 11.04,
     openInterest: 18400000,
     turnoverRate: 10.1,
     onchainVolMultiplier: 0.0025,
@@ -104,10 +110,11 @@ export const ONCHAIN_STOCK_CANDIDATES = [
     enName: 'Amazon.com, Inc.',
     protocol: 'Backed Finance bAMZN',
     network: 'Base / Arbitrum',
-    basePrice: 258.80,
+    basePrice: 259.10,
     baseVolume24h: 29300000,
     buyRatio: 0.579,
-    tradFiClose: 266.03,
+    tradFiClose: 259.30,
+    changePercent: -0.35,
     openInterest: 16200000,
     turnoverRate: 9.3,
     onchainVolMultiplier: 0.0032,
@@ -119,10 +126,11 @@ export const ONCHAIN_STOCK_CANDIDATES = [
     enName: 'Apple Inc.',
     protocol: 'Backed Finance bAAPL',
     network: 'Ethereum / Base',
-    basePrice: 346.40,
+    basePrice: 342.10,
     baseVolume24h: 28700000,
     buyRatio: 0.458,
-    tradFiClose: 349.51,
+    tradFiClose: 342.37,
+    changePercent: -0.52,
     openInterest: 15600000,
     turnoverRate: 8.5,
     onchainVolMultiplier: 0.0030,
@@ -134,10 +142,11 @@ export const ONCHAIN_STOCK_CANDIDATES = [
     enName: 'Microsoft Corporation',
     protocol: 'Backed Finance bMSFT',
     network: 'Ethereum / Base',
-    basePrice: 543.20,
+    basePrice: 544.80,
     baseVolume24h: 24300000,
     buyRatio: 0.449,
-    tradFiClose: 555.80,
+    tradFiClose: 545.18,
+    changePercent: -1.91,
     openInterest: 14500000,
     turnoverRate: 7.8,
     onchainVolMultiplier: 0.0028,
@@ -149,10 +158,11 @@ export const ONCHAIN_STOCK_CANDIDATES = [
     enName: 'MicroStrategy Inc.',
     protocol: 'Hyperliquid Perp / Backed',
     network: 'Hyperliquid L1 / Base',
-    basePrice: 131.20,
+    basePrice: 143.20,
     baseVolume24h: 23500000,
     buyRatio: 0.671,
-    tradFiClose: 142.54,
+    tradFiClose: 142.50,
+    changePercent: -7.65,
     openInterest: 26800000,
     turnoverRate: 18.2,
     onchainVolMultiplier: 0.0150,
@@ -164,10 +174,11 @@ export const ONCHAIN_STOCK_CANDIDATES = [
     enName: 'Meta Platforms, Inc.',
     protocol: 'Hyperliquid Perp / Backed',
     network: 'Hyperliquid L1 / Solana',
-    basePrice: 605.40,
+    basePrice: 606.50,
     baseVolume24h: 22700000,
     buyRatio: 0.574,
-    tradFiClose: 630.00,
+    tradFiClose: 605.40,
+    changePercent: 8.84,
     openInterest: 13800000,
     turnoverRate: 8.9,
     onchainVolMultiplier: 0.0030,
@@ -179,10 +190,11 @@ export const ONCHAIN_STOCK_CANDIDATES = [
     enName: 'Palantir Technologies',
     protocol: 'Hyperliquid Perp / Backed',
     network: 'Hyperliquid L1 / Arbitrum',
-    basePrice: 156.90,
+    basePrice: 157.30,
     baseVolume24h: 20900000,
     buyRatio: 0.635,
-    tradFiClose: 161.20,
+    tradFiClose: 156.90,
+    changePercent: 1.85,
     openInterest: 11200000,
     turnoverRate: 14.5,
     onchainVolMultiplier: 0.0035,
@@ -194,10 +206,11 @@ export const ONCHAIN_STOCK_CANDIDATES = [
     enName: 'Coinbase Global, Inc.',
     protocol: 'Hyperliquid Perp / Backed',
     network: 'Hyperliquid L1 / Base',
-    basePrice: 138.20,
+    basePrice: 138.70,
     baseVolume24h: 19800000,
     buyRatio: 0.598,
-    tradFiClose: 145.30,
+    tradFiClose: 138.20,
+    changePercent: 3.20,
     openInterest: 19400000,
     turnoverRate: 13.9,
     onchainVolMultiplier: 0.0250,
@@ -209,10 +222,11 @@ export const ONCHAIN_STOCK_CANDIDATES = [
     enName: 'Alphabet Inc.',
     protocol: 'Backed Finance bGOOGL',
     network: 'Ethereum / Arbitrum',
-    basePrice: 283.50,
+    basePrice: 284.50,
     baseVolume24h: 18500000,
     buyRatio: 0.556,
-    tradFiClose: 288.93,
+    tradFiClose: 283.93,
+    changePercent: 0.78,
     openInterest: 10400000,
     turnoverRate: 7.2,
     onchainVolMultiplier: 0.0030,
@@ -224,10 +238,11 @@ export const ONCHAIN_STOCK_CANDIDATES = [
     enName: 'Western Digital Corporation',
     protocol: 'Hyperliquid Perp / Backed',
     network: 'Hyperliquid L1 / Base',
-    basePrice: 275.22,
+    basePrice: 264.20,
     baseVolume24h: 22000000,
     buyRatio: 0.412,
-    tradFiClose: 323.82,
+    tradFiClose: 263.78,
+    changePercent: -1.44,
     openInterest: 15400000,
     turnoverRate: 14.8,
     onchainVolMultiplier: 0.0035,
@@ -239,10 +254,11 @@ export const ONCHAIN_STOCK_CANDIDATES = [
     enName: 'Seagate Technology Holdings',
     protocol: 'Hyperliquid Perp / Backed',
     network: 'Hyperliquid L1 / Base',
-    basePrice: 482.04,
+    basePrice: 469.50,
     baseVolume24h: 18500000,
     buyRatio: 0.428,
-    tradFiClose: 557.08,
+    tradFiClose: 468.99,
+    changePercent: -1.19,
     openInterest: 12800000,
     turnoverRate: 12.1,
     onchainVolMultiplier: 0.0035,
@@ -254,10 +270,11 @@ export const ONCHAIN_STOCK_CANDIDATES = [
     enName: 'Taiwan Semiconductor Manufacturing',
     protocol: 'Hyperliquid Perp / Backed',
     network: 'Hyperliquid L1 / Arbitrum',
-    basePrice: 288.60,
+    basePrice: 376.20,
     baseVolume24h: 26000000,
     buyRatio: 0.515,
-    tradFiClose: 295.40,
+    tradFiClose: 375.44,
+    changePercent: 6.33,
     openInterest: 19800000,
     turnoverRate: 11.2,
     onchainVolMultiplier: 0.0035,
@@ -269,10 +286,11 @@ export const ONCHAIN_STOCK_CANDIDATES = [
     enName: 'Broadcom Inc.',
     protocol: 'Hyperliquid Perp / Backed',
     network: 'Hyperliquid L1 / Arbitrum',
-    basePrice: 172.50,
+    basePrice: 173.00,
     baseVolume24h: 24500000,
     buyRatio: 0.540,
-    tradFiClose: 175.20,
+    tradFiClose: 172.50,
+    changePercent: 0.65,
     openInterest: 17600000,
     turnoverRate: 10.5,
     onchainVolMultiplier: 0.0035,
@@ -533,6 +551,7 @@ export class OnchainStocksService {
   processStockItem(item, quote = null, index = 0) {
     let price = item.basePrice;
     let tradFiClose = item.tradFiClose || item.basePrice;
+    let changePercent = item.changePercent ?? 0;
     let volume24h = item.baseVolume24h;
     let buyRatio = item.buyRatio || 0.55;
 
@@ -540,12 +559,22 @@ export class OnchainStocksService {
       const reg = quote.regular || {};
       const rawPrice = reg.price ?? quote.post?.price ?? quote.pre?.price ?? item.basePrice;
       const refClose = reg.referenceClose ?? item.tradFiClose ?? rawPrice;
-      tradFiClose = Number(refClose.toFixed(2));
+
+      // 正股当前有效价格/收盘价（优先常规交易时段收盘价/现价，其次盘后价）
+      tradFiClose = Number(Number(rawPrice).toFixed(2));
 
       // 实时微秒级链上基差微幅跳动 (Tick Jitter)
+      // 链上代币化美股/合成永续合约以正股价格为基准，根据流动性产生小额基差（例如 ±0.1% ~ ±0.5%）
       const microJitter = Math.sin(Date.now() / 3200 + index * 1.5) * 0.0008;
-      const basis = (item.basisRate ?? 0.0035) + microJitter;
-      price = Number((rawPrice * (1 + basis)).toFixed(2));
+      const basis = (item.basisRate ?? 0.0022) + microJitter;
+      price = Number((tradFiClose * (1 + basis)).toFixed(2));
+
+      // 标的自身 24H 涨跌幅（取自正股真实日涨跌幅）
+      if (reg.changePercent != null && !isNaN(reg.changePercent)) {
+        changePercent = Number(Number(reg.changePercent).toFixed(2));
+      } else if (refClose > 0) {
+        changePercent = Number((((tradFiClose - refClose) / refClose) * 100).toFixed(2));
+      }
 
       // 24H 链上成交量联动：基于正股日内换手额估算链上池流动性
       const rawVol = reg.volume;
@@ -556,13 +585,18 @@ export class OnchainStocksService {
       }
 
       // 买卖盘比例动态调整
-      const changeFromRef = (price - tradFiClose) / tradFiClose;
+      const changeFromRef = (tradFiClose - refClose) / (refClose || 1);
       if (changeFromRef > 0) {
         buyRatio = Math.min(0.78, Math.max(0.52, 0.52 + changeFromRef * 2.5));
       } else if (changeFromRef < 0) {
         buyRatio = Math.max(0.28, Math.min(0.48, 0.48 + changeFromRef * 2.5));
       } else {
         buyRatio = 0.50;
+      }
+    } else {
+      // 离线/保底状态：根据提供的 basePrice 与 tradFiClose 计算溢折率
+      if (item.changePercent != null) {
+        changePercent = Number(item.changePercent);
       }
     }
 
@@ -571,9 +605,9 @@ export class OnchainStocksService {
     const outflow24h = volume24h - inflow24h;
     const netFlow = inflow24h - outflow24h; // >0 净流入, <0 净流出
 
-    // 链上溢/折价率 = (链上价格 - 传统美股对照价) / 传统美股对照价 * 100%
+    // 链上相对正股的溢/折价率 = (链上合约现价 - 传统美股正股价) / 传统美股正股价 * 100%
     const premiumPct = Number((((price - tradFiClose) / tradFiClose) * 100).toFixed(2));
-    const changePercent = Number((((price - tradFiClose) / tradFiClose) * 100).toFixed(2));
+    const priceDiff = Number((price - tradFiClose).toFixed(2));
     const intradayRadar = this.buildIntradayRadar(item, price, netFlow, buyRatio);
     const whalePositions = this.getStockWhalePositions(item.symbol, price, intradayRadar);
 
@@ -587,6 +621,7 @@ export class OnchainStocksService {
       changePercent,
       tradFiClose,
       premiumPct,
+      priceDiff,
       volume24h,
       inflow24h,
       outflow24h,

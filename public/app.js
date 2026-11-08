@@ -1040,22 +1040,22 @@ createApp({ setup() {
   // Financial Terminal Skeleton & Top Pulse Progress State (from market_desk_skeleton_demo.html)
   const skeletonPattern = [24, 31, 38, 43, 49, 62, 55, 76, 89, 67, 56, 43, 35, 51, 64, 77, 61, 53, 46, 39, 34, 42, 63, 70, 55, 40, 35, 27, 20, 30, 39, 48, 55, 42, 33, 29, 23, 18, 22, 28, 24, 19, 15, 12];
   
-  // Real Butterfly Option Board Bilateral Strike Skeletons (Left Put OI, Center Strike, Right Call OI)
+  // Real Butterfly Option Board Bilateral Strike Skeletons (Left Call OI, Center Strike, Right Put OI)
   const butterflySkeletonRows = [
-    { putWidth: 14, callWidth: 8,  isSpot: false },
-    { putWidth: 26, callWidth: 15, isSpot: false },
-    { putWidth: 42, callWidth: 28, isSpot: false },
-    { putWidth: 60, callWidth: 40, isSpot: false },
-    { putWidth: 78, callWidth: 54, isSpot: false },
-    { putWidth: 92, callWidth: 70, isSpot: false },
+    { putWidth: 14, callWidth: 15, isSpot: false },
+    { putWidth: 26, callWidth: 28, isSpot: false },
+    { putWidth: 42, callWidth: 40, isSpot: false },
+    { putWidth: 60, callWidth: 56, isSpot: false },
+    { putWidth: 78, callWidth: 74, isSpot: false },
+    { putWidth: 92, callWidth: 90, isSpot: false },
     { putWidth: 85, callWidth: 88, isSpot: true },  // Spot ATM highlighted row
-    { putWidth: 64, callWidth: 96, isSpot: false },
-    { putWidth: 48, callWidth: 82, isSpot: false },
-    { putWidth: 35, callWidth: 65, isSpot: false },
-    { putWidth: 22, callWidth: 45, isSpot: false },
-    { putWidth: 16, callWidth: 30, isSpot: false },
-    { putWidth: 10, callWidth: 18, isSpot: false },
-    { putWidth: 6,  callWidth: 10, isSpot: false }
+    { putWidth: 64, callWidth: 70, isSpot: false },
+    { putWidth: 48, callWidth: 52, isSpot: false },
+    { putWidth: 35, callWidth: 38, isSpot: false },
+    { putWidth: 22, callWidth: 24, isSpot: false },
+    { putWidth: 16, callWidth: 16, isSpot: false },
+    { putWidth: 10, callWidth: 10, isSpot: false },
+    { putWidth: 6,  callWidth: 6,  isSpot: false }
   ];
 
   // Right Watchlist Sidebar Skeleton Rows (Symbol, Price, Chg%, EXT%)
@@ -1904,16 +1904,16 @@ createApp({ setup() {
       activeTradersCount: 18450
     },
     top10: [
-      { rank: 1, symbol: 'MU', name: '美光', enName: 'Micron Technology, Inc.', protocol: 'Hyperliquid Perp / Backed', network: 'Hyperliquid L1 / Arbitrum', price: 684.05, changePercent: -14.25, tradFiClose: 795.23, premiumPct: -0.42, volume24h: 108500000, inflow24h: 41772500, outflow24h: 66727500, netFlow: -24955000, buyRatio: 38.5, sellRatio: 61.5, openInterest: 62000000, turnoverRate: 22.4, chartSymbol: 'MU' },
-      { rank: 2, symbol: 'NVDA', name: '英伟达', enName: 'NVIDIA Corporation', protocol: 'Hyperliquid Perp / Backed', network: 'Hyperliquid L1 / Arbitrum', price: 183.36, changePercent: -8.38, tradFiClose: 200.13, premiumPct: 0.35, volume24h: 86600000, inflow24h: 31176000, outflow24h: 55424000, netFlow: -24248000, buyRatio: 36.0, sellRatio: 64.0, openInterest: 48500000, turnoverRate: 16.8, chartSymbol: 'NVDA' },
-      { rank: 3, symbol: 'QQQ', name: '纳指100 ETF', enName: 'Invesco QQQ Trust', protocol: 'Hyperliquid Perp / Synthetix', network: 'Hyperliquid L1 / Ethereum', price: 663.50, changePercent: -4.11, tradFiClose: 691.95, premiumPct: 0.28, volume24h: 60700000, inflow24h: 24280000, outflow24h: 36420000, netFlow: -12140000, buyRatio: 40.0, sellRatio: 60.0, openInterest: 34100000, turnoverRate: 7.1, chartSymbol: 'QQQ' },
-      { rank: 4, symbol: 'SPY', name: '标普500 ETF', enName: 'SPDR S&P 500 ETF Trust', protocol: 'Hyperliquid Perp / Synthetix', network: 'Hyperliquid L1 / Ethereum', price: 748.16, changePercent: -2.43, tradFiClose: 766.81, premiumPct: 0.22, volume24h: 58700000, inflow24h: 26415000, outflow24h: 32285000, netFlow: -5870000, buyRatio: 45.0, sellRatio: 55.0, openInterest: 38900000, turnoverRate: 6.2, chartSymbol: 'SPY' },
-      { rank: 5, symbol: 'TSLA', name: '特斯拉', enName: 'Tesla, Inc.', protocol: 'Hyperliquid Perp / Synthetix', network: 'Hyperliquid L1 / Optimism', price: 350.78, changePercent: -8.93, tradFiClose: 385.19, premiumPct: 0.45, volume24h: 52700000, inflow24h: 22134000, outflow24h: 30566000, netFlow: -8432000, buyRatio: 42.0, sellRatio: 58.0, openInterest: 31200000, turnoverRate: 15.4, chartSymbol: 'TSLA' },
-      { rank: 6, symbol: 'AMD', name: '超威半导体', enName: 'Advanced Micro Devices', protocol: 'Hyperliquid Perp', network: 'Hyperliquid L1', price: 429.99, changePercent: -12.03, tradFiClose: 488.78, premiumPct: 0.38, volume24h: 36200000, inflow24h: 12670000, outflow24h: 23530000, netFlow: -10860000, buyRatio: 35.0, sellRatio: 65.0, openInterest: 18400000, turnoverRate: 10.1, chartSymbol: 'AMD' },
-      { rank: 7, symbol: 'AMZN', name: '亚马逊', enName: 'Amazon.com, Inc.', protocol: 'Backed Finance bAMZN', network: 'Base / Arbitrum', price: 260.23, changePercent: -2.18, tradFiClose: 266.03, premiumPct: 0.26, volume24h: 31000000, inflow24h: 13950000, outflow24h: 17050000, netFlow: -3100000, buyRatio: 45.0, sellRatio: 55.0, openInterest: 16200000, turnoverRate: 9.3, chartSymbol: 'AMZN' },
-      { rank: 8, symbol: 'AAPL', name: '苹果', enName: 'Apple Inc.', protocol: 'Backed Finance bAAPL', network: 'Ethereum / Base', price: 348.12, changePercent: -0.40, tradFiClose: 349.51, premiumPct: 0.15, volume24h: 29800000, inflow24h: 14602000, outflow24h: 15198000, netFlow: -596000, buyRatio: 49.0, sellRatio: 51.0, openInterest: 15600000, turnoverRate: 8.5, chartSymbol: 'AAPL' },
-      { rank: 9, symbol: 'MSFT', name: '微软', enName: 'Microsoft Corporation', protocol: 'Backed Finance bMSFT', network: 'Ethereum / Base', price: 545.18, changePercent: -1.91, tradFiClose: 555.80, premiumPct: 0.18, volume24h: 25500000, inflow24h: 11475000, outflow24h: 14025000, netFlow: -2550000, buyRatio: 45.0, sellRatio: 55.0, openInterest: 14500000, turnoverRate: 7.8, chartSymbol: 'MSFT' },
-      { rank: 10, symbol: 'MSTR', name: '微策略', enName: 'MicroStrategy Inc.', protocol: 'Hyperliquid Perp / Backed', network: 'Hyperliquid L1 / Base', price: 131.63, changePercent: -7.65, tradFiClose: 142.54, premiumPct: 0.85, volume24h: 24700000, inflow24h: 12844000, outflow24h: 11856000, netFlow: 988000, buyRatio: 52.0, sellRatio: 48.0, openInterest: 26800000, turnoverRate: 18.2, chartSymbol: 'MSTR' }
+      { rank: 1, symbol: 'MU', name: '美光', enName: 'Micron Technology, Inc.', protocol: 'Hyperliquid Perp / Backed', network: 'Hyperliquid L1 / Arbitrum', price: 692.10, changePercent: 5.12, tradFiClose: 690.00, premiumPct: 0.30, priceDiff: 2.10, volume24h: 108500000, inflow24h: 41772500, outflow24h: 66727500, netFlow: -24955000, buyRatio: 38.5, sellRatio: 61.5, openInterest: 62000000, turnoverRate: 22.4, chartSymbol: 'MU' },
+      { rank: 2, symbol: 'NVDA', name: '英伟达', enName: 'NVIDIA Corporation', protocol: 'Hyperliquid Perp / Backed', network: 'Hyperliquid L1 / Arbitrum', price: 187.15, changePercent: 2.78, tradFiClose: 186.64, premiumPct: 0.27, priceDiff: 0.51, volume24h: 86600000, inflow24h: 31176000, outflow24h: 55424000, netFlow: -24248000, buyRatio: 36.0, sellRatio: 64.0, openInterest: 48500000, turnoverRate: 16.8, chartSymbol: 'NVDA' },
+      { rank: 3, symbol: 'QQQ', name: '纳指100 ETF', enName: 'Invesco QQQ Trust', protocol: 'Hyperliquid Perp / Synthetix', network: 'Hyperliquid L1 / Ethereum', price: 659.20, changePercent: 1.76, tradFiClose: 658.00, premiumPct: 0.18, priceDiff: 1.20, volume24h: 60700000, inflow24h: 24280000, outflow24h: 36420000, netFlow: -12140000, buyRatio: 40.0, sellRatio: 60.0, openInterest: 34100000, turnoverRate: 7.1, chartSymbol: 'QQQ' },
+      { rank: 4, symbol: 'SPY', name: '标普500 ETF', enName: 'SPDR S&P 500 ETF Trust', protocol: 'Hyperliquid Perp / Synthetix', network: 'Hyperliquid L1 / Ethereum', price: 746.10, changePercent: 0.58, tradFiClose: 745.20, premiumPct: 0.12, priceDiff: 0.90, volume24h: 58700000, inflow24h: 26415000, outflow24h: 32285000, netFlow: -5870000, buyRatio: 45.0, sellRatio: 55.0, openInterest: 38900000, turnoverRate: 6.2, chartSymbol: 'SPY' },
+      { rank: 5, symbol: 'TSLA', name: '特斯拉', enName: 'Tesla, Inc.', protocol: 'Hyperliquid Perp / Synthetix', network: 'Hyperliquid L1 / Optimism', price: 351.40, changePercent: 4.68, tradFiClose: 350.50, premiumPct: 0.26, priceDiff: 0.90, volume24h: 52700000, inflow24h: 22134000, outflow24h: 30566000, netFlow: -8432000, buyRatio: 42.0, sellRatio: 58.0, openInterest: 31200000, turnoverRate: 15.4, chartSymbol: 'TSLA' },
+      { rank: 6, symbol: 'AMD', name: '超威半导体', enName: 'Advanced Micro Devices', protocol: 'Hyperliquid Perp', network: 'Hyperliquid L1', price: 450.15, changePercent: 11.04, tradFiClose: 449.04, premiumPct: 0.25, priceDiff: 1.11, volume24h: 51200000, inflow24h: 17920000, outflow24h: 33280000, netFlow: -15360000, buyRatio: 35.0, sellRatio: 65.0, openInterest: 18400000, turnoverRate: 10.1, chartSymbol: 'AMD' },
+      { rank: 7, symbol: 'AMZN', name: '亚马逊', enName: 'Amazon.com, Inc.', protocol: 'Backed Finance bAMZN', network: 'Base / Arbitrum', price: 259.10, changePercent: -0.35, tradFiClose: 259.30, premiumPct: -0.08, priceDiff: -0.20, volume24h: 31000000, inflow24h: 13950000, outflow24h: 17050000, netFlow: -3100000, buyRatio: 45.0, sellRatio: 55.0, openInterest: 16200000, turnoverRate: 9.3, chartSymbol: 'AMZN' },
+      { rank: 8, symbol: 'AAPL', name: '苹果', enName: 'Apple Inc.', protocol: 'Backed Finance bAAPL', network: 'Ethereum / Base', price: 342.10, changePercent: -0.52, tradFiClose: 342.37, premiumPct: -0.08, priceDiff: -0.27, volume24h: 29800000, inflow24h: 14602000, outflow24h: 15198000, netFlow: -596000, buyRatio: 49.0, sellRatio: 51.0, openInterest: 15600000, turnoverRate: 8.5, chartSymbol: 'AAPL' },
+      { rank: 9, symbol: 'MSFT', name: '微软', enName: 'Microsoft Corporation', protocol: 'Backed Finance bMSFT', network: 'Ethereum / Base', price: 544.80, changePercent: -1.91, tradFiClose: 545.18, premiumPct: -0.07, priceDiff: -0.38, volume24h: 25500000, inflow24h: 11475000, outflow24h: 14025000, netFlow: -2550000, buyRatio: 45.0, sellRatio: 55.0, openInterest: 14500000, turnoverRate: 7.8, chartSymbol: 'MSFT' },
+      { rank: 10, symbol: 'MSTR', name: '微策略', enName: 'MicroStrategy Inc.', protocol: 'Hyperliquid Perp / Backed', network: 'Hyperliquid L1 / Base', price: 143.20, changePercent: -7.65, tradFiClose: 142.50, premiumPct: 0.49, priceDiff: 0.70, volume24h: 24700000, inflow24h: 12844000, outflow24h: 11856000, netFlow: 988000, buyRatio: 52.0, sellRatio: 48.0, openInterest: 26800000, turnoverRate: 18.2, chartSymbol: 'MSTR' }
     ]
   };
   const onchainStocksData = ref(DEFAULT_ONCHAIN_STOCKS_PAYLOAD);
@@ -2180,22 +2180,30 @@ createApp({ setup() {
   const activeFlowRows = computed(() => {
     const q = (cryptoWhaleSearch.value || onchainStockSearch.value || '').trim().toUpperCase();
     const rawList = whaleCategory.value === 'stocks'
-      ? (onchainStocksData.value?.top10 || []).map(s => ({
-          symbol: s.symbol,
-          name: s.name,
-          chartSymbol: s.chartSymbol || s.symbol,
-          price: s.price,
-          changePercent: s.changePercent,
-          volume24h: s.volume24h,
-          netFlow: s.netFlow,
-          buyRatio: s.buyRatio,
-          sellRatio: s.sellRatio,
-          openInterest: s.openInterest,
-          premiumPct: s.premiumPct,
-          _priceDir: s._priceDir,
-          raw: s,
-          isCrypto: false
-        }))
+      ? (onchainStocksData.value?.top10 || []).map(s => {
+          const price = Number(s.price) || 0;
+          const tradFiClose = Number(s.tradFiClose) || 0;
+          const priceDiff = s.priceDiff != null ? Number(s.priceDiff) : ((price > 0 && tradFiClose > 0) ? Number((price - tradFiClose).toFixed(2)) : 0);
+          const premiumPct = s.premiumPct != null ? Number(s.premiumPct) : ((price > 0 && tradFiClose > 0) ? Number((((price - tradFiClose) / tradFiClose) * 100).toFixed(2)) : 0);
+          return {
+            symbol: s.symbol,
+            name: s.name,
+            chartSymbol: s.chartSymbol || s.symbol,
+            price: s.price,
+            changePercent: s.changePercent,
+            tradFiClose,
+            priceDiff,
+            premiumPct,
+            volume24h: s.volume24h,
+            netFlow: s.netFlow,
+            buyRatio: s.buyRatio,
+            sellRatio: s.sellRatio,
+            openInterest: s.openInterest,
+            _priceDir: s._priceDir,
+            raw: s,
+            isCrypto: false
+          };
+        })
       : cryptoFlowRows.value;
 
     let filtered = rawList;
@@ -2355,6 +2363,7 @@ createApp({ setup() {
 
   function getPriceAxisSpec(row) {
     const spot = Number(row?.price) || 100;
+    const tradFiClose = (!row?.isCrypto && row?.tradFiClose) ? Number(row.tradFiClose) : null;
     const positions = getUnifiedWhalePositions(row);
     const longs = positions.filter(p => p.side === 'LONG');
     const shorts = positions.filter(p => p.side !== 'LONG');
@@ -2365,8 +2374,10 @@ createApp({ setup() {
     };
     const bullAvg = row?.raw?.intradayRadar?.costBasis?.bullVwap || calcAvg(longs) || spot * 0.986;
     const bearAvg = row?.raw?.intradayRadar?.costBasis?.bearVwap || calcAvg(shorts) || spot * 1.015;
-    const lo = Math.min(spot, bullAvg, bearAvg);
-    const hi = Math.max(spot, bullAvg, bearAvg);
+    const points = [spot, bullAvg, bearAvg];
+    if (tradFiClose) points.push(tradFiClose);
+    const lo = Math.min(...points);
+    const hi = Math.max(...points);
     const pad = (hi - lo) * 0.25 || spot * 0.01;
     const minP = lo - pad;
     const maxP = hi + pad;
@@ -2375,10 +2386,25 @@ createApp({ setup() {
       spot,
       bullAvg,
       bearAvg,
+      tradFiClose,
       spotPct: toPct(spot),
       bullPct: toPct(bullAvg),
-      bearPct: toPct(bearAvg)
+      bearPct: toPct(bearAvg),
+      tradFiPct: tradFiClose ? toPct(tradFiClose) : null
     };
+  }
+
+  function formatSpreadPct(val) {
+    if (val == null || isNaN(val)) return '—';
+    const num = Number(val);
+    const prefix = num > 0 ? '溢价 +' : num < 0 ? '折价 ' : '平价 ';
+    return `${prefix}${num.toFixed(2)}%`;
+  }
+
+  function formatSpreadDiff(diff) {
+    if (diff == null || isNaN(diff)) return '—';
+    const num = Number(diff);
+    return `${num >= 0 ? '+' : '-'}$${Math.abs(num).toFixed(2)}`;
   }
 
   function refreshCryptoWorkspace() {
@@ -7307,7 +7333,7 @@ createApp({ setup() {
     onchainStocksData, onchainStocksLoading, onchainStocksError, onchainStockSearch, onchainStockSortField, onchainStockSortDir,
     onchainAggregate, onchainStocksList, toggleOnchainSort, formatOnchainUsd, formatOnchainFlowUsd, loadOnchainStocks,
     expandedStockSymbol, toggleStockRadar, formatWhaleShares, getWhalePositionsForStock,
-    activeFlowRows, activeFlowSummary, whaleDonutSpec, getUnifiedWhalePositions, getPriceAxisSpec, refreshCryptoWorkspace,
+    activeFlowRows, activeFlowSummary, whaleDonutSpec, getUnifiedWhalePositions, getPriceAxisSpec, formatSpreadPct, formatSpreadDiff, refreshCryptoWorkspace,
     // Watchlist & Groups & Sidebar Live Streamlined Board
     watchlistData, groups, watchlist, quoteStore, providerInfo, currentSession,
     viewMode, extMode, sortField, sortDirection, freezeResort, compactPanelOpen,

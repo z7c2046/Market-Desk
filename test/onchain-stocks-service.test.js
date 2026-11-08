@@ -35,6 +35,30 @@ describe('OnchainStocksService', () => {
     assert.ok(processed.intradayRadar.livePrints.length > 0);
   });
 
+  it('processStockItem with quote uses actual stock price (not previous close) as tradFiClose', () => {
+    const service = new OnchainStocksService();
+    const amdCandidate = ONCHAIN_STOCK_CANDIDATES.find(c => c.symbol === 'AMD');
+    const mockAmdQuote = {
+      regular: {
+        price: 449.04,
+        referenceClose: 404.40,
+        changePercent: 11.04,
+        volume: 45600000
+      }
+    };
+    const processed = service.processStockItem(amdCandidate, mockAmdQuote, 0);
+
+    // 正股对照价必须是 AMD 实际收盘价 449.04，而不是前收盘价 404.40
+    assert.strictEqual(processed.tradFiClose, 449.04);
+    // 标的自身涨跌幅为 11.04%
+    assert.strictEqual(processed.changePercent, 11.04);
+    // 链上合约价格围绕 449.04 微幅浮动 (约 450)
+    assert.ok(Math.abs(processed.price - 449.04) < 3);
+    // 溢折价率必须是链上与正股的微幅价差 (约 0.2% - 0.4%)，绝非 11% 整体涨幅
+    assert.ok(Math.abs(processed.premiumPct) < 1.0, `premiumPct (${processed.premiumPct}%) must be < 1.0%`);
+    assert.strictEqual(processed.priceDiff, Number((processed.price - processed.tradFiClose).toFixed(2)));
+  });
+
   it('MU (美光) candidate exists and has tailored intradayRadar', () => {
     const service = new OnchainStocksService();
     const muItem = ONCHAIN_STOCK_CANDIDATES.find(c => c.symbol === 'MU');
