@@ -60,7 +60,7 @@ export const FALLBACK_CHART_TOKENS = Object.freeze({
       text: '#101010',
       muted: '#626262',
       grid: '#cfcfcf',
-      up: '#2e9b63',
+      up: '#38ab70',
       down: '#df4f46',
       accent: '#2976ff',
       tooltipBg: '#ffffff',

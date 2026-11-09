@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>配色系统 · Vue 数据大屏 Color Spec</title>
+<style>
+/* ============ 主题令牌：全部取自项目源码色值 ============ */
+:root{
+  --bg:#e3e3e3;             /* 页面背景 --backGroundColor (浅) */
+  --card:#ffffff;           /* 卡片背景 --divBackGroundColor (浅) */
+  --text:#101010;           /* 主文字 */
+  --text-strong:#000000;    /* 强调文字 --theMainFontCorlor (浅) */
+  --sub:#787878;            /* 辅助文字 (浅) */
+  --line:#cfcfcf;           /* 分隔/网格 */
+  --track:#e8e8e8;          /* 进度条轨道 */
+  --accent:#2976ff;         /* 主题蓝 --theChartColor */
+  --up:#38ab70;             /* 上涨绿 --theArrowRightUP */
+  --down:#df4f46;           /* 下跌红 --theArrowRightDOWN */
+  --ring:rgba(0,0,0,.10);
+  --shadow:0 2px 14px rgba(0,0,0,.07);
+}
+html[data-theme="dark"]{
+  --bg:#101010;             /* --backGroundColor (深) */
+  --card:#2d2d2d;           /* --divBackGroundColor (深) */
+  --text:#ffffff;
+  --text-strong:#ffffff;    /* --theMainFontCorlor (深) */
+  --sub:#afafaf;            /* 辅助文字 (深) */
+  --line:#6c6c6c;
+  --track:rgba(255,255,255,.10);
+  --ring:rgba(255,255,255,.16);
+  --shadow:0 4px 18px rgba(0,0,0,.45);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","MiSans","HarmonyOS Sans SC","Microsoft YaHei","Noto Sans SC",sans-serif;
+  background:var(--bg);color:var(--text);
+  transition:background-color .35s ease,color .35s ease;
+  line-height:1.6;
+}
+code,.mono{font-family:ui-monospace,"SF Mono","JetBrains Mono","Cascadia Code",Consolas,monospace}
+body,header,section,article,button,.chip,.strip,.bar i{transition:background-color .35s ease,color .35s ease,border-color .35s ease,box-shadow .35s ease}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+button{font:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+
+/* ============ 顶栏 ============ */
+.topbar{
+  position:sticky;top:0;z-index:50;
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:12px clamp(16px,4vw,32px);
+  background:color-mix(in srgb,var(--bg) 82%,transparent);
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--ring);
+}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:15px;color:var(--text-strong)}
+.brand .band{width:30px;height:18px;border-radius:5px;flex:none;
+  background:linear-gradient(90deg,#2976ff,#42b983,#f37d42,#9846ec,#df51ad)}
+.brand i{font-style:normal;font-size:11px;letter-spacing:.18em;color:var(--sub);font-weight:500}
+.theme-btn{
+  display:flex;align-items:center;gap:7px;
+  padding:8px 14px;border-radius:99px;border:1px solid var(--ring);
+  background:var(--card);color:var(--text-strong);font-size:13px;font-weight:600;
+  box-shadow:var(--shadow);
+}
+.theme-btn:hover{border-color:var(--accent);color:var(--accent)}
+
+/* ============ 版面 ============ */
+main{max-width:1080px;margin:0 auto;padding:0 clamp(16px,4vw,32px) 80px}
+section{margin-top:clamp(48px,8vw,76px)}
+.eyebrow{font-family:ui-monospace,"SF Mono",Consolas,monospace;font-size:11px;letter-spacing:.22em;color:var(--accent);font-weight:700;text-transform:uppercase}
+.sec-head{margin-bottom:22px}
+.sec-head h2{font-size:clamp(22px,3.4vw,30px);font-weight:800;color:var(--text-strong);margin-top:6px;letter-spacing:.01em}
+.sec-head p{color:var(--sub);font-size:14px;margin-top:4px;max-width:640px}
+
+/* ============ Hero ============ */
+.hero{padding-top:clamp(36px,7vw,64px)}
+.hero h1{
+  font-size:clamp(30px,6vw,54px);font-weight:900;line-height:1.22;
+  color:var(--text-strong);margin:14px 0 14px;letter-spacing:.01em;
+}
+.hero h1 em{
+  font-style:normal;
+  background:linear-gradient(92deg,#2976ff 0%,#42b983 30%,#f37d42 55%,#9846ec 78%,#df51ad 100%);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+.hero .lead{color:var(--sub);font-size:15px;max-width:680px}
+.hero .lead b{color:var(--text-strong);font-weight:600}
+
+.spectrum{
+  display:flex;height:64px;border-radius:14px;overflow:hidden;
+  margin:28px 0 16px;box-shadow:var(--shadow);
+}
+.spectrum button{
+  flex:1;border:none;min-width:0;position:relative;
+  transition:flex .25s ease;padding:0;
+}
+.spectrum button:hover,.spectrum button:focus-visible{flex:4}
+.spectrum button span{
+  position:absolute;left:50%;bottom:6px;transform:translateX(-50%);
+  font-family:ui-monospace,Consolas,monospace;font-size:10px;font-weight:700;
+  padding:2px 6px;border-radius:5px;background:rgba(16,16,16,.78);color:#fff;
+  opacity:0;white-space:nowrap;pointer-events:none;transition:opacity .2s;
+}
+.spectrum button:hover span,.spectrum button:focus-visible span{opacity:1}
+.hint{font-size:12px;color:var(--sub)}
+.toc{display:flex;flex-wrap:wrap;gap:8px;margin-top:22px}
+.toc a{
+  text-decoration:none;font-size:13px;font-weight:600;color:var(--text);
+  background:var(--card);border:1px solid var(--ring);border-radius:99px;
+  padding:7px 14px;
+}
+.toc a:hover{color:var(--accent);border-color:var(--accent)}
+
+/* ============ 色板分组 ============ */
+.group{
+  background:var(--card);border-radius:18px;padding:clamp(18px,3vw,26px);
+  box-shadow:var(--shadow);margin-bottom:18px;
+}
+.group-head{display:flex;align-items:flex-start;gap:12px;margin-bottom:6px}
+.group-head .dot{width:14px;height:14px;border-radius:50%;flex:none;margin-top:7px;box-shadow:inset 0 0 0 1px var(--ring)}
+.group-head h3{font-size:18px;font-weight:800;color:var(--text-strong)}
+.group-head h3 i{font-style:normal;font-size:11px;letter-spacing:.14em;color:var(--sub);font-weight:600;margin-left:8px}
+.group-head p{font-size:13.5px;color:var(--sub);margin-top:2px}
+.vars{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 4px}
+.vars code{
+  font-size:11.5px;color:var(--accent);background:color-mix(in srgb,var(--accent) 9%,transparent);
+  border:1px solid color-mix(in srgb,var(--accent) 25%,transparent);
+  padding:2px 8px;border-radius:6px;
+}
+.swatches{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(146px,1fr));
+  gap:12px;margin-top:14px;
+}
+.swatch{
+  border:1px solid var(--ring);background:var(--card);
+  border-radius:14px;padding:8px;text-align:left;color:inherit;
+}
+.swatch:hover{transform:translateY(-2px);border-color:var(--accent);box-shadow:var(--shadow)}
+.swatch .chip{
+  display:block;height:68px;border-radius:9px;
+  box-shadow:inset 0 0 0 1px var(--ring);position:relative;
+}
+.swatch .chip::after{
+  content:"复制";position:absolute;right:6px;bottom:6px;
+  font-size:10px;padding:2px 7px;border-radius:5px;
+  background:rgba(16,16,16,.72);color:#fff;opacity:0;transition:opacity .2s;
+}
+.swatch:hover .chip::after{opacity:1}
+.swatch .hex{display:block;font-family:ui-monospace,Consolas,monospace;font-size:13px;font-weight:700;margin-top:8px;color:var(--text-strong)}
+.swatch .nm{display:block;font-size:11.5px;color:var(--sub);margin-top:1px;line-height:1.45}
+.files{margin-top:14px;font-size:11.5px;color:var(--sub)}
+.files b{color:var(--text);font-weight:600}
+
+/* ============ 双主题映射 ============ */
+.map-card{background:var(--card);border-radius:18px;box-shadow:var(--shadow);padding:clamp(16px,3vw,24px)}
+.map-row{
+  display:grid;grid-template-columns:minmax(180px,240px) 1fr minmax(120px,180px);
+  gap:14px;align-items:center;padding:13px 4px;border-bottom:1px solid var(--ring);
+}
+.map-row:last-child{border-bottom:none}
+.map-row code{font-size:12.5px;color:var(--text-strong);word-break:break-all}
+.map-cells{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.map-chip{display:flex;align-items:center;gap:7px;padding:5px 10px;border-radius:9px;border:1px solid var(--ring);font-family:ui-monospace,Consolas,monospace;font-size:11.5px;color:var(--text)}
+.map-chip i{width:18px;height:18px;border-radius:5px;box-shadow:inset 0 0 0 1px var(--ring);flex:none}
+.map-chip small{font-family:inherit;color:var(--sub)}
+.arrow{color:var(--sub);font-size:13px}
+html[data-theme="light"] .map-chip.is-light,
+html[data-theme="dark"] .map-chip.is-dark{
+  border-color:var(--accent);
+  box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 28%,transparent);
+}
+.map-desc{font-size:12.5px;color:var(--sub)}
+.live-tag{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--up);font-weight:700;margin-bottom:10px}
+.live-tag::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--up);animation:pulse 1.6s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+/* ============ 孪生色对比 ============ */
+.twin{background:var(--card);border-radius:18px;box-shadow:var(--shadow);padding:clamp(16px,3vw,22px);margin-bottom:16px}
+.twin h4{font-size:15.5px;font-weight:800;color:var(--text-strong)}
+.twin .note{font-size:12.5px;color:var(--sub);margin:2px 0 12px}
+.strip{display:flex;height:92px;border-radius:12px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--ring)}
+.strip i{flex:1}
+.legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:10px}
+.legend span{display:flex;align-items:center;gap:7px;font-family:ui-monospace,Consolas,monospace;font-size:12px;color:var(--text)}
+.legend i{width:15px;height:15px;border-radius:4px;box-shadow:inset 0 0 0 1px var(--ring)}
+.tip{
+  background:color-mix(in srgb,var(--accent) 8%,var(--card));
+  border:1px dashed color-mix(in srgb,var(--accent) 45%,transparent);
+  border-radius:14px;padding:14px 18px;font-size:13px;color:var(--text);
+}
+.tip b{color:var(--accent)}
+
+/* ============ 语义实战 ============ */
+.demo-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(248px,1fr));gap:16px}
+.widget{background:var(--card);border-radius:18px;box-shadow:var(--shadow);padding:20px}
+.widget .label{font-size:12.5px;color:var(--sub);font-weight:600}
+.widget .value{font-size:30px;font-weight:900;color:var(--text-strong);margin:2px 0 4px;font-family:ui-monospace,Consolas,monospace;letter-spacing:-.01em}
+.delta{display:inline-flex;align-items:center;gap:5px;font-size:13px;font-weight:800}
+.delta.up{color:#38ab70}
+.delta.down{color:#df4f46}
+.widget svg{display:block;width:100%;height:54px;margin-top:12px}
+.widget .foot{font-size:11px;color:var(--sub);margin-top:8px}
+.widget .foot code{color:var(--text)}
+/* 深蓝环形卡：固定色，不随主题变化（与原项目一致） */
+.donut-card{background:#3f67bf;border-radius:18px;box-shadow:var(--shadow);padding:20px;display:flex;flex-direction:column}
+.donut-card .label{color:#95b6f9;font-weight:800;font-size:14px;letter-spacing:.04em}
+.donut-wrap{display:flex;align-items:center;gap:18px;margin:14px 0 12px}
+.donut{
+  width:96px;height:96px;border-radius:50%;flex:none;
+  background:conic-gradient(#a8cef5 0 68%,#17468a 0);
+  display:grid;place-items:center;
+}
+.donut b{
+  width:62%;height:62%;border-radius:50%;background:#3f67bf;
+  display:grid;place-items:center;color:#ffffff;font-size:18px;font-weight:900;
+  font-family:ui-monospace,Consolas,monospace;
+}
+.donut-meta{font-size:12px;color:#a8cef5;line-height:1.9}
+.donut-meta .mono{color:#ffffff}
+.donut-foot{margin-top:auto;background:#174789;border-radius:10px;padding:8px 12px;font-size:11.5px;color:#a8cef5}
+
+/* ============ 渐变彩系 ============ */
+.grad-card{background:var(--card);border-radius:18px;box-shadow:var(--shadow);padding:clamp(16px,3vw,24px)}
+.grad-row{padding:14px 0;border-bottom:1px solid var(--ring)}
+.grad-row:last-of-type{border-bottom:none}
+.grad-top{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px;margin-bottom:9px}
+.grad-top b{font-size:14px;color:var(--text-strong)}
+.grad-top b code{font-size:11.5px;color:var(--accent);margin-left:8px}
+.grad-top span{font-family:ui-monospace,Consolas,monospace;font-size:11.5px;color:var(--sub)}
+.bar{height:16px;border-radius:99px;background:var(--track);overflow:hidden}
+.bar i{display:block;height:100%;border-radius:99px}
+.grad-band{height:34px;border-radius:9px;margin-top:9px;box-shadow:inset 0 0 0 1px var(--ring)}
+
+/* ============ 其他 ============ */
+.feature-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(228px,1fr));gap:14px}
+.feature{background:var(--card);border-radius:16px;box-shadow:var(--shadow);padding:18px}
+.feature .ic{font-size:20px}
+.feature b{display:block;font-size:15px;color:var(--text-strong);margin:8px 0 4px}
+.feature p{font-size:12.5px;color:var(--sub)}
+footer{margin-top:64px;padding-top:20px;border-top:1px solid var(--ring);font-size:12px;color:var(--sub);line-height:2}
+footer code{color:var(--text)}
+.toast{
+  position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(16px);
+  background:#2976ff;color:#ffffff;font-family:ui-monospace,Consolas,monospace;
+  font-size:13px;font-weight:700;padding:10px 20px;border-radius:99px;
+  opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;z-index:99;
+  box-shadow:0 6px 22px rgba(41,118,255,.4);
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+@media (max-width:640px){
+  .map-row{grid-template-columns:1fr;gap:6px;padding:14px 2px}
+  .spectrum{height:52px}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand"><span class="band"></span>配色系统<i>COLOR SPEC</i></div>
+  <button class="theme-btn" id="themeBtn" aria-live="polite">☾ 切换深色</button>
+</header>
+
+<main>
+  <!-- Hero -->
+  <section class="hero">
+    <p class="eyebrow">Vue Data Dashboard · 36 Colors · Light / Dark</p>
+    <h1>一套自适应双主题的<br><em>数据大屏配色系统</em></h1>
+    <p class="lead">以下 <b>36 个色值</b>全部提取自项目源码（<b>.vue</b> 组件与 <b>src/js</b> 图表配置）。本页面自身也完全使用这套配色搭建——点击右上角<b>切换主题</b>，即可实时看到整套 CSS 变量的双模式映射；点击任意色块可<b>复制色值</b>。</p>
+    <div class="spectrum" id="spectrum" aria-label="全部色值光谱带"></div>
+    <p class="hint">↑ 全色谱索引 · 悬停查看，点击复制</p>
+    <nav class="toc">
+      <a href="#palette">① 色板总览</a>
+      <a href="#mapping">② 双主题映射</a>
+      <a href="#twins">③ 孪生色对比</a>
+      <a href="#action">④ 语义色实战</a>
+      <a href="#grads">⑤ 渐变彩系</a>
+    </nav>
+  </section>
+
+  <!-- 设计特点 -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Design Principles</p>
+      <h2>三大设计特点</h2>
+    </div>
+    <div class="feature-grid">
+      <div class="feature"><span class="ic">🌗</span><b>双主题自适应</b><p>通过 <code>prefers-color-scheme</code> 媒体查询，将黑、白、灰系核心色绑定到 CSS 变量，自动跟随系统切换浅色 / 深色模式。</p></div>
+      <div class="feature"><span class="ic">📈</span><b>状态语义化</b><p>高饱和绿 <code>#38ab70</code> 表示数据上涨，亮红 <code>#df4f46</code> 警示数据下跌，让数字趋势一眼可辨。</p></div>
+      <div class="feature"><span class="ic">🎆</span><b>炫彩渐变点缀</b><p>橙、紫、粉三族渐变（<code>--gradLinear</code> ~ <code>--gradlinear4</code>）用于进度条等关键组件，营造现代化半拟物风格。</p></div>
+    </div>
+  </section>
+
+  <!-- ① 色板总览 -->
+  <section id="palette">
+    <div class="sec-head">
+      <p class="eyebrow">① Palette</p>
+      <h2>色板总览 · 7 大色系</h2>
+      <p>按相近色系与功能含义分组，点击色块复制色值。</p>
+    </div>
+    <div id="groups"></div>
+  </section>
+
+  <!-- ② 双主题映射 -->
+  <section id="mapping">
+    <div class="sec-head">
+      <p class="eyebrow">② Theme Mapping</p>
+      <h2>双主题变量映射</h2>
+      <p>同一个变量在浅色 / 深色模式下指向不同色值。带蓝色描边的，就是<b>当前页面正在使用</b>的那一侧。</p>
+    </div>
+    <div class="map-card">
+      <span class="live-tag" id="liveTag">当前主题：浅色模式</span>
+      <div id="mapRows"></div>
+    </div>
+  </section>
+
+  <!-- ③ 孪生色对比 -->
+  <section id="twins">
+    <div class="sec-head">
+      <p class="eyebrow">③ Twin Colors</p>
+      <h2>孪生色对比 · 差别到底在哪</h2>
+      <p>系统里存在多组"几乎相同"的颜色。下方色带按 A / B 交替拼接——如果你能看出条纹，说明它们确实不同；看不出，说明差异小于肉眼分辨极限。</p>
+    </div>
+    <div id="twinList"></div>
+    <div class="tip">💡 <b>规范建议：</b>#2976ff / #2879ff、#cfcfcf / #cecece / #cdcdcd 这类孪生色，大概率是同一颜色在不同文件中手写产生的偏差。建议合并为统一的设计令牌（CSS 变量），避免维护成本。</div>
+  </section>
+
+  <!-- ④ 语义色实战 -->
+  <section id="action">
+    <div class="sec-head">
+      <p class="eyebrow">④ Semantic In Action</p>
+      <h2>语义色实战还原</h2>
+      <p>还原项目中 DataWidget、趋势图与第 4 张环形图卡片的真实用色场景。</p>
+    </div>
+    <div class="demo-grid">
+
+      <div class="widget">
+        <span class="label">本月收入 Income</span>
+        <div class="value">¥128,430</div>
+        <span class="delta up">▲ +12.5%</span>
+        <svg viewBox="0 0 240 60" preserveAspectRatio="none" aria-hidden="true">
+          <defs>
+            <linearGradient id="gUp" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#42b983" stop-opacity=".45"/>
+              <stop offset="1" stop-color="#b8f2e6" stop-opacity=".05"/>
+            </linearGradient>
+          </defs>
+          <path d="M0,44 L30,38 L60,41 L90,30 L120,33 L150,20 L180,24 L210,12 L240,15 L240,60 L0,60 Z" fill="url(#gUp)"/>
+          <polyline points="0,44 30,38 60,41 90,30 120,33 150,20 180,24 210,12 240,15" fill="none" stroke="#42b983" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+        </svg>
+        <p class="foot">上涨绿 <code>#38ab70</code> · 渐变 <code>rgb(66,185,131) → rgb(184,242,230)</code></p>
+      </div>
+
+      <div class="widget">
+        <span class="label">团队排名 Rank</span>
+        <div class="value">No.4</div>
+        <span class="delta down">▼ 下降 2 位</span>
+        <svg viewBox="0 0 240 60" preserveAspectRatio="none" aria-hidden="true">
+          <defs>
+            <linearGradient id="gDown" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#df4f46" stop-opacity=".4"/>
+              <stop offset="1" stop-color="#ffbe88" stop-opacity=".06"/>
+            </linearGradient>
+          </defs>
+          <path d="M0,14 L30,20 L60,17 L90,26 L120,23 L150,34 L180,31 L210,44 L240,40 L240,60 L0,60 Z" fill="url(#gDown)"/>
+          <polyline points="0,14 30,20 60,17 90,26 120,23 150,34 180,31 210,44 240,40" fill="none" stroke="#df4f46" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+        </svg>
+        <p class="foot">下跌红 <code>#df4f46</code> · 警戒过渡 <code>rgb(255,190,136)</code></p>
+      </div>
+
+      <div class="donut-card">
+        <span class="label">耗时分析 · TimeSpend</span>
+        <div class="donut-wrap">
+          <div class="donut"><b>68%</b></div>
+          <div class="donut-meta">
+            卡片背景 <span class="mono">#3f67bf</span><br>
+            标题钢蓝 <span class="mono">#95b6f9</span><br>
+            占比文字 <span class="mono">#a8cef5</span>
+          </div>
+        </div>
+        <div class="donut-foot">底部深海蓝 #174789 · 第 4 张卡片专属配色，不随主题切换</div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ⑤ 渐变彩系 -->
+  <section id="grads">
+    <div class="sec-head">
+      <p class="eyebrow">⑤ Gradients</p>
+      <h2>渐变彩系 · 进度条四连</h2>
+      <p>App.vue 中 <code>--gradLinear</code> ~ <code>--gradlinear4</code> 的橙 / 紫 / 洋红 / 粉四族渐变（端点按色族示意组合）。</p>
+    </div>
+    <div class="grad-card" id="gradList"></div>
+  </section>
+
+  <footer>
+    色值来源：<code>App.vue</code> · <code>DataWidget.vue</code> · <code>LeaderBoard.vue</code> · <code>TimeSpend.vue</code> · <code>DonutChart.vue</code> · <code>src/js</code> 图表配置（LineChart / MonthLineChart / HorizontalBarChart / WeekHistogramChart 等）<br>
+    本页面所有界面用色均取自上述色板：背景 <code>#e3e3e3 / #101010</code>，卡片 <code>#ffffff / #2d2d2d</code>，文字 <code>#000000 / #ffffff</code>，辅助 <code>#787878 / #afafaf</code>，强调 <code>#2976ff</code>。
+  </footer>
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* ================= 数据 ================= */
+const groups=[
+ {name:'白色系',en:'White Series',rep:'#ffffff',
+  desc:'浅色模式的卡片底色；深色模式下反转为主要文字色。',
+  vars:['--divBackGroundColor','--theMainFontCorlor（深色）'],
+  files:'App.vue · TimeSpend.vue · DonutChart.vue · 图表 JS',
+  colors:[
+   {hex:'#ffffff',nm:'纯白 · 卡片背景 / 深色主文字'},
+   {hex:'#f9f9f9',nm:'雪白 · 浅灰白底色'},
+   {hex:'#a8cef5',nm:'极浅蓝 · 环形图占比文字'}
+  ]},
+ {name:'黑色系',en:'Black Series',rep:'#101010',
+  desc:'浅色模式的主文字与边框；深色模式下成为整页背景。',
+  vars:['--theMainFontCorlor（浅色）','--borderColor','--backGroundColor（深色）'],
+  files:'App.vue · LineChart.js · MonthLineChart.js · HorizontalBarChart.js',
+  colors:[
+   {hex:'#000000',nm:'纯黑 · 浅色主文字 / 边框 / 折线圆点'},
+   {hex:'#101010',nm:'午夜黑 · 深色页面背景'}
+  ]},
+ {name:'灰色系',en:'Gray Series',rep:'#787878',
+  desc:'承担页面层级：背景、卡片、辅助文字与网格线在双主题间互换角色。',
+  vars:['页面背景 / 辅助文字 / 图表网格'],
+  files:'App.vue · TimeSpend.vue · HorizontalBarChart.js · WeekHistogramChart.js',
+  colors:[
+   {hex:'#e3e3e3',nm:'浅色页面背景'},
+   {hex:'#e8e8e8',nm:'进度轨道 / 未激活柱状底'},
+   {hex:'#cfcfcf',nm:'图表网格线'},
+   {hex:'#cecece',nm:'网格线 · 孪生'},
+   {hex:'#cdcdcd',nm:'网格线 · 孪生'},
+   {hex:'#afafaf',nm:'深色模式辅助文字'},
+   {hex:'#787878',nm:'浅色模式辅助文字'},
+   {hex:'#6c6c6c',nm:'深色图表条形色'},
+   {hex:'#2d2d2d',nm:'深色卡片背景'}
+  ]},
+ {name:'蓝色系',en:'Blue Series',rep:'#2976ff',
+  desc:'系统主色调：图表高亮、展开箭头，以及第 4 张环形图卡片的专属深蓝。',
+  vars:['--theChartColor','--theExpandArrow'],
+  files:'App.vue · TimeSpend.vue · DonutChart.vue · 图表 JS',
+  colors:[
+   {hex:'#2976ff',nm:'主题蓝 · 图表高亮'},
+   {hex:'#2879ff',nm:'主题蓝 · 孪生'},
+   {hex:'#4384ec',nm:'图表蓝'},
+   {hex:'#95b6f9',nm:'浅钢蓝 · 环形卡标题'},
+   {hex:'#3f67bf',nm:'环形卡专属背景'},
+   {hex:'#174789',nm:'深海蓝 · 底部背景'},
+   {hex:'#17468a',nm:'深海蓝 · 孪生'}
+  ]},
+ {name:'绿色系 / 安全色',en:'Green · Safe',rep:'#38ab70',
+  desc:'上涨 / 达成语义：排名提升箭头、目标达成标绿与收入趋势渐变起点。',
+  vars:['--theArrowRightUP'],
+  files:'App.vue · DataWidget.vue · LeaderBoard.vue · TimeSpend.vue · MonthLineChart.js',
+  colors:[
+   {hex:'#38ab70',nm:'上涨绿 · 向上箭头'},
+   {hex:'#31b869',nm:'图表绿 · 目标达成'},
+   {hex:'#42b983',nm:'渐变起点绿 rgb(66,185,131)'},
+   {hex:'#b8f2e6',nm:'极浅绿 · 渐变尾 rgb(184,242,230)'}
+  ]},
+ {name:'警示色 / 红色系',en:'Warning · Red',rep:'#df4f46',
+  desc:'下跌 / 警示语义：排名下降箭头与折线下行的警戒过渡。',
+  vars:['--theArrowRightDOWN'],
+  files:'App.vue · DataWidget.vue · LeaderBoard.vue · MonthLineChart.js',
+  colors:[
+   {hex:'#df4f46',nm:'下跌红 · 向下箭头'},
+   {hex:'#ffbe88',nm:'浅橙 · 警戒过渡 rgb(255,190,136)'}
+  ]},
+ {name:'渐变 & 暖彩系',en:'Gradients · Accents',rep:'#9846ec',
+  desc:'进度条渐变专用的炫彩点缀色，由暖橙、紫色、粉红三族组成。',
+  vars:['--gradLinear','--gradlinear2','--gradlinear3','--gradlinear4'],
+  files:'App.vue',
+  colors:[
+   {hex:'#f37d42',nm:'暖橙'},
+   {hex:'#e4551a',nm:'焦橙'},
+   {hex:'#9846ec',nm:'亮紫'},
+   {hex:'#8938d1',nm:'紫'},
+   {hex:'#5438d1',nm:'蓝紫'},
+   {hex:'#ae41c5',nm:'紫红'},
+   {hex:'#df51ad',nm:'洋红'},
+   {hex:'#eb587d',nm:'粉红'},
+   {hex:'#ec597f',nm:'粉红 · 孪生'}
+  ]}
+];
+
+const mapping=[
+ {v:'--backGroundColor',light:'#e3e3e3',dark:'#101010',d:'页面整体背景'},
+ {v:'--divBackGroundColor',light:'#ffffff',dark:'#2d2d2d',d:'卡片背景'},
+ {v:'--theMainFontCorlor',light:'#000000',dark:'#ffffff',d:'主要文字'},
+ {v:'辅助文字',light:'#787878',dark:'#afafaf',d:'次要说明文字'},
+ {v:'图表网格 / 条形',light:'#cfcfcf',dark:'#6c6c6c',d:'网格线与暗色条形'}
+];
+
+const twins=[
+ {t:'主题蓝双胞胎',c:['#2976ff','#2879ff'],n:'G 通道仅差 3、R 通道差 1——肉眼几乎无法分辨，应为不同文件手写偏差。'},
+ {t:'深海蓝双胞胎',c:['#174789','#17468a'],n:'G、B 通道各差 1，完全无法分辨。'},
+ {t:'网格灰三连',c:['#cfcfcf','#cecece','#cdcdcd'],n:'三档每档各通道仅差 1，是同一根网格线的三种写法。'},
+ {t:'粉红双胞胎',c:['#eb587d','#ec597f'],n:'各通道相差 1~2，视觉上同一颜色。'},
+ {t:'纯白 vs 雪白',c:['#ffffff','#f9f9f9'],n:'各通道差 6，仔细看能察觉到极淡的灰条纹。'},
+ {t:'纯黑 vs 午夜黑',c:['#000000','#101010'],n:'各通道差 16——深色模式背景特意用 #101010 而非纯黑，弱化 OLED 屏的生硬感。'},
+ {t:'三种上涨绿',c:['#38ab70','#31b869','#42b983'],n:'箭头绿、图表绿与渐变绿来自不同文件，色相相近但明度有别，条纹清晰可见。'}
+];
+
+const grads=[
+ {v:'--gradLinear',name:'暖橙渐变',stops:['#f37d42','#e4551a'],w:86,label:'设计完成度'},
+ {v:'--gradlinear2',name:'霓紫渐变',stops:['#9846ec','#5438d1'],w:64,label:'开发进度'},
+ {v:'--gradlinear3',name:'洋红渐变',stops:['#8938d1','#ae41c5','#df51ad'],w:72,label:'测试覆盖'},
+ {v:'--gradlinear4',name:'粉红渐变',stops:['#df51ad','#eb587d','#ec597f'],w:58,label:'上线准备'}
+];
+
+const spectrum=['#2976ff','#2879ff','#4384ec','#3f67bf','#95b6f9','#a8cef5','#b8f2e6','#42b983','#31b869','#38ab70','#f37d42','#e4551a','#ffbe88','#ec597f','#eb587d','#df51ad','#ae41c5','#8938d1','#9846ec','#5438d1','#17468a','#174789','#101010','#000000','#2d2d2d','#6c6c6c','#787878','#afafaf','#cdcdcd','#cecece','#cfcfcf','#e3e3e3','#e8e8e8','#f9f9f9','#ffffff','#df4f46'];
+
+/* ================= 渲染 ================= */
+const $=s=>document.querySelector(s);
+
+$('#spectrum').innerHTML=spectrum.map(h=>
+ `<button style="background:${h}" data-copy="${h}" aria-label="复制 ${h}"><span>${h}</span></button>`).join('');
+
+$('#groups').innerHTML=groups.map(g=>`
+ <article class="group">
+  <div class="group-head">
+   <span class="dot" style="background:${g.rep}"></span>
+   <div>
+    <h3>${g.name}<i>${g.en}</i></h3>
+    <p>${g.desc}</p>
+    <div class="vars">${g.vars.map(v=>`<code>${v}</code>`).join('')}</div>
+   </div>
+  </div>
+  <div class="swatches">
+   ${g.colors.map(c=>`
+    <button class="swatch" data-copy="${c.hex}" aria-label="复制 ${c.hex}">
+     <span class="chip" style="background:${c.hex}"></span>
+     <span class="hex">${c.hex.toUpperCase()}</span>
+     <span class="nm">${c.nm}</span>
+    </button>`).join('')}
+  </div>
+  <p class="files"><b>涉及文件：</b>${g.files}</p>
+ </article>`).join('');
+
+$('#mapRows').innerHTML=mapping.map(m=>`
+ <div class="map-row">
+  <code>${m.v}</code>
+  <div class="map-cells">
+   <button class="map-chip is-light" data-copy="${m.light}"><i style="background:${m.light}"></i>${m.light}<small>浅</small></button>
+   <span class="arrow">⇄</span>
+   <button class="map-chip is-dark" data-copy="${m.dark}"><i style="background:${m.dark}"></i>${m.dark}<small>深</small></button>
+  </div>
+  <span class="map-desc">${m.d}</span>
+ </div>`).join('');
+
+$('#twinList').innerHTML=twins.map(t=>{
+ const SEG=t.c.length===3?9:8;
+ let seg='';
+ for(let i=0;i<SEG;i++){seg+=`<i style="background:${t.c[i%t.c.length]}"></i>`}
+ return `<div class="twin">
+  <h4>${t.t}</h4>
+  <p class="note">${t.n}</p>
+  <div class="strip" role="img" aria-label="${t.c.join(' 与 ')} 交替条纹对比">${seg}</div>
+  <div class="legend">${t.c.map(h=>`<span><i style="background:${h}"></i>${h}</span>`).join('')}</div>
+ </div>`}).join('');
+
+$('#gradList').innerHTML=grads.map(g=>`
+ <div class="grad-row">
+  <div class="grad-top">
+   <b>${g.name}<code>${g.v}</code></b>
+   <span>${g.stops.join(' → ')}</span>
+  </div>
+  <div class="bar" aria-label="${g.label} ${g.w}%"><i style="width:${g.w}%;background:linear-gradient(90deg,${g.stops.join(',')})"></i></div>
+  <div class="grad-band" style="background:linear-gradient(90deg,${g.stops.join(',')})"></div>
+ </div>`).join('');
+
+/* ================= 交互 ================= */
+// 主题切换（默认跟随系统）
+let theme=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';
+const btn=$('#themeBtn'),liveTag=$('#liveTag');
+function applyTheme(){
+ document.documentElement.dataset.theme=theme;
+ btn.textContent=theme==='dark'?'☀ 切换浅色':'☾ 切换深色';
+ liveTag.textContent='当前主题：'+(theme==='dark'?'深色模式 (Dark)':'浅色模式 (Light)');
+}
+btn.addEventListener('click',()=>{theme=theme==='dark'?'light':'dark';applyTheme();});
+applyTheme();
+
+// 点击复制
+const toast=$('#toast');let timer;
+function copy(hex){
+ const done=()=>{
+  toast.textContent='已复制 '+hex;
+  toast.classList.add('show');
+  clearTimeout(timer);timer=setTimeout(()=>toast.classList.remove('show'),1400);
+ };
+ if(navigator.clipboard&&navigator.clipboard.writeText){
+  navigator.clipboard.writeText(hex).then(done).catch(()=>fallback(hex,done));
+ }else{fallback(hex,done)}
+}
+function fallback(hex,done){
+ const ta=document.createElement('textarea');ta.value=hex;
+ ta.style.position='fixed';ta.style.opacity='0';
+ document.body.appendChild(ta);ta.select();
+ try{document.execCommand('copy')}catch(e){}
+ document.body.removeChild(ta);done();
+}
+document.body.addEventListener('click',e=>{
+ const el=e.target.closest('[data-copy]');
+ if(el)copy(el.dataset.copy);
+});
+</script>
+</body>
+</html>

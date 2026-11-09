@@ -84,14 +84,17 @@
   --selection-text: #ffffff;
   --selection-border: var(--cs-blue-panel);
 
-  --semantic-up: #17683f;
-  --semantic-up-soft: rgba(56, 171, 112, .10);
-  --semantic-up-chart: #2e9b63;
-  --semantic-down: #ad302b;
-  --semantic-down-soft: rgba(223, 79, 70, .10);
-  --semantic-down-chart: var(--cs-down);
-  --semantic-warning: #835000;
-  --semantic-warning-soft: rgba(243, 125, 66, .10);
+  --semantic-up: #38ab70;
+  --semantic-up-soft: rgba(56, 171, 112, .13);
+  --semantic-up-border: rgba(56, 171, 112, .30);
+  --semantic-up-chart: #38ab70;
+  --semantic-down: #df4f46;
+  --semantic-down-soft: rgba(223, 79, 70, .13);
+  --semantic-down-border: rgba(223, 79, 70, .30);
+  --semantic-down-chart: #df4f46;
+  --semantic-warning: #f37d42;
+  --semantic-warning-soft: rgba(243, 125, 66, .13);
+  --semantic-warning-border: rgba(243, 125, 66, .30);
   --semantic-info: var(--accent-text);
   --semantic-info-soft: var(--accent-soft);
 
@@ -126,10 +129,13 @@
   --accent-bg: var(--accent-soft);
   --up-text: var(--semantic-up);
   --up-soft: var(--semantic-up-soft);
+  --up-border: var(--semantic-up-border);
   --down-text: var(--semantic-down);
   --down-soft: var(--semantic-down-soft);
+  --down-border: var(--semantic-down-border);
   --warning-text: var(--semantic-warning);
   --warning-soft: var(--semantic-warning-soft);
+  --warning-border: var(--semantic-warning-border);
   --apple-blue: var(--accent-text);
   --apple-blue-lt: var(--cs-blue-soft);
   --apple-green: var(--semantic-up);
@@ -201,13 +207,16 @@
   --accent-soft: rgba(41, 118, 255, .18);
   --focus-ring: var(--cs-blue-soft);
   --selection-border: var(--cs-blue-soft);
-  --semantic-up: #70d6a0;
-  --semantic-up-soft: rgba(56, 171, 112, .14);
+  --semantic-up: #38ab70;
+  --semantic-up-soft: rgba(56, 171, 112, .18);
+  --semantic-up-border: rgba(56, 171, 112, .42);
   --semantic-up-chart: var(--cs-up);
-  --semantic-down: #ff9991;
-  --semantic-down-soft: rgba(223, 79, 70, .14);
-  --semantic-warning: var(--cs-orange-pale);
-  --semantic-warning-soft: rgba(243, 125, 66, .14);
+  --semantic-down: #df4f46;
+  --semantic-down-soft: rgba(223, 79, 70, .18);
+  --semantic-down-border: rgba(223, 79, 70, .42);
+  --semantic-warning: #f37d42;
+  --semantic-warning-soft: rgba(243, 125, 66, .18);
+  --semantic-warning-border: rgba(243, 125, 66, .42);
   --skeleton-base: #383838;
   --skeleton-high: #444444;
   --skeleton-bars-1: #444444;
@@ -323,6 +332,42 @@
   background: var(--accent-fill) !important;
   color: var(--accent-ink) !important;
   border-color: var(--accent-fill) !important;
+}
+
+/* Cobalt Direction Badges & Watchlist Text Colors from color-system.html */
+:root[data-palette="cobalt"] .pct-pill {
+  font-weight: 700 !important;
+  letter-spacing: -0.01em;
+}
+
+:root[data-palette="cobalt"] .pct-pill.badge-pos,
+:root[data-palette="cobalt"] .badge-pos,
+:root[data-palette="cobalt"] .kpi-pill-green,
+:root[data-palette="cobalt"] .cell-flash-up {
+  color: var(--up-text) !important;
+  background: var(--up-soft) !important;
+  border: 1px solid var(--up-border) !important;
+}
+
+:root[data-palette="cobalt"] .pct-pill.badge-neg,
+:root[data-palette="cobalt"] .badge-neg,
+:root[data-palette="cobalt"] .kpi-pill-red,
+:root[data-palette="cobalt"] .cell-flash-down {
+  color: var(--down-text) !important;
+  background: var(--down-soft) !important;
+  border: 1px solid var(--down-border) !important;
+}
+
+:root[data-palette="cobalt"] .rw-cell-change.positive,
+:root[data-palette="cobalt"] .rw-cell-ext.positive,
+:root[data-palette="cobalt"] .rw-group-avg.positive {
+  color: var(--up-text) !important;
+}
+
+:root[data-palette="cobalt"] .rw-cell-change.negative,
+:root[data-palette="cobalt"] .rw-cell-ext.negative,
+:root[data-palette="cobalt"] .rw-group-avg.negative {
+  color: var(--down-text) !important;
 }
 
 /* Palette Preferences Preview Cards (Self-contained, independent of active theme) */

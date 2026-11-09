@@ -62,11 +62,14 @@
   --accent-bg: var(--accent-soft);
   --up-text: var(--semantic-up);
   --up-soft: var(--semantic-up-soft);
+  --up-border: rgba(16, 185, 129, 0.28);
   --down-text: var(--semantic-down);
   --down-soft: var(--semantic-down-soft);
+  --down-border: rgba(239, 68, 68, 0.28);
   --warning-text: var(--semantic-warning);
   --warning-soft: var(--semantic-warning-soft);
-  --apple-blue: #2563eb;       /* 绾绉戞妧鐢靛厜钃?#2563eb */
+  --warning-border: rgba(245, 158, 11, 0.28);
+  --apple-blue: #2563eb;       /* 纯正科技电光蓝 #2563eb */
   --apple-blue-lt: #3b82f6;
   --apple-green: var(--semantic-up);
   --apple-red: var(--semantic-down);
@@ -171,10 +174,13 @@ html:lang(en), [data-script='en'] {
   --accent-bg: var(--accent-soft);
   --up-text: var(--semantic-up);
   --up-soft: var(--semantic-up-soft);
+  --up-border: rgba(49, 195, 154, 0.35);
   --down-text: var(--semantic-down);
   --down-soft: var(--semantic-down-soft);
+  --down-border: rgba(240, 110, 117, 0.35);
   --warning-text: var(--semantic-warning);
   --warning-soft: var(--semantic-warning-soft);
+  --warning-border: rgba(244, 183, 43, 0.35);
   --apple-blue: #548afa;       /* Demo --blue: #548afa */
   --apple-blue-lt: #75a5ff;
   --apple-green: var(--semantic-up);
@@ -1627,26 +1633,28 @@ main { min-width: 0; }
 }
 .pct-pill {
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 700;
   padding: 2px 7px;
   border-radius: 4px;
+  font-family: var(--font-mono, monospace);
   font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: -0.01em;
 }
 .pct-pill.badge-pos {
   background: var(--up-soft);
   color: var(--up-text);
-  border: 1px solid rgba(24, 116, 84, 0.22);
+  border: 1px solid var(--up-border, rgba(16, 185, 129, 0.28));
 }
 .pct-pill.badge-neg {
   background: var(--down-soft);
   color: var(--down-text);
-  border: 1px solid rgba(183, 66, 77, 0.22);
+  border: 1px solid var(--down-border, rgba(239, 68, 68, 0.28));
 }
 :root.dark .pct-pill.badge-pos {
-  border-color: rgba(49, 195, 154, 0.3);
+  border-color: var(--up-border, rgba(49, 195, 154, 0.35));
 }
 :root.dark .pct-pill.badge-neg {
-  border-color: rgba(240, 110, 117, 0.3);
+  border-color: var(--down-border, rgba(240, 110, 117, 0.35));
 }
 .index-card-foot {
   font-size: 10.5px;
@@ -9782,22 +9790,22 @@ body[data-theme="light"] .hero-catalyst-block {
 .badge-pos, .kpi-pill-green, .cell-flash-up {
   color: var(--up-text) !important;
   background: var(--up-soft) !important;
-  border-color: rgba(24, 116, 84, 0.22) !important;
+  border-color: var(--up-border, rgba(16, 185, 129, 0.28)) !important;
 }
 .badge-neg, .kpi-pill-red, .cell-flash-down {
   color: var(--down-text) !important;
   background: var(--down-soft) !important;
-  border-color: rgba(183, 66, 77, 0.22) !important;
+  border-color: var(--down-border, rgba(239, 68, 68, 0.28)) !important;
 }
 :root.dark .badge-pos,
 :root.dark .kpi-pill-green,
 :root.dark .cell-flash-up {
-  border-color: rgba(49, 195, 154, 0.3) !important;
+  border-color: var(--up-border, rgba(49, 195, 154, 0.35)) !important;
 }
 :root.dark .badge-neg,
 :root.dark .kpi-pill-red,
 :root.dark .cell-flash-down {
-  border-color: rgba(240, 110, 117, 0.3) !important;
+  border-color: var(--down-border, rgba(240, 110, 117, 0.35)) !important;
 }
 
 /* 5. News Stream Contrast & Ticker Wrap */
@@ -13335,12 +13343,12 @@ body[data-theme="light"] .hero-catalyst-block {
 }
 
 .badge-pos {
-  background: rgba(16, 185, 129, 0.12);
+  background: var(--up-soft, rgba(16, 185, 129, 0.12));
   color: var(--semantic-up);
 }
 
 .badge-neg {
-  background: rgba(244, 63, 94, 0.12);
+  background: var(--down-soft, rgba(244, 63, 94, 0.12));
   color: var(--semantic-down);
 }
 
