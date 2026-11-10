@@ -9,3 +9,5 @@ logs/
 artifacts/
 *.zip
 .vscode/
+output/
+docs/
