@@ -13637,16 +13637,22 @@ body[data-theme="light"] .hero-catalyst-block {
   display: block;
 }
 
-.toggle-rw-btn.is-collapsed {
-  opacity: 0.75;
-  background: var(--surface-subtle);
+.toggle-rw-btn.is-collapsed,
+:root:not(.dark) .toggle-rw-btn.is-collapsed,
+:root.dark .toggle-rw-btn.is-collapsed {
+  opacity: 0.85;
+  background: var(--surface-sunken, var(--surface-card));
   border-color: var(--border-subtle);
+  color: var(--text-secondary);
 }
 
-.toggle-rw-btn.is-collapsed:hover {
+.toggle-rw-btn.is-collapsed:hover,
+:root:not(.dark) .toggle-rw-btn.is-collapsed:hover,
+:root.dark .toggle-rw-btn.is-collapsed:hover {
   opacity: 1;
   background: var(--surface-hover);
-  border-color: var(--text-main);
+  border-color: var(--border-strong);
+  color: var(--text-main);
 }
 
 /* Floating Expand Watchlist Tab pinned to right screen edge when collapsed */

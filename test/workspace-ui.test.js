@@ -1794,3 +1794,39 @@ test('K-Line Lightweight Charts stub path: mounts LightweightCharts instance and
   assert.ok(ui.w.klineGestureCtrl, 'klineGestureCtrl was assigned on window');
   assert.deepEqual(ui.errors, []);
 });
+
+test('Right watchlist sidebar: defaults to collapsed state and toggles via topbar button and floating tab', async t => {
+  const ui = await mount(t, async url => ({ ok: true, json: async () => fixture(url) }));
+  await tick();
+  await tick();
+
+  const rwSidebar = ui.w.document.querySelector('.right-watchlist-sidebar');
+  assert.ok(rwSidebar, 'Right watchlist sidebar exists in DOM');
+  assert.ok(rwSidebar.classList.contains('is-collapsed'), 'Sidebar is collapsed by default');
+
+  const topbarToggle = ui.w.document.querySelector('.toggle-rw-btn');
+  assert.ok(topbarToggle, 'Topbar toggle button exists');
+  assert.ok(topbarToggle.classList.contains('is-collapsed'), 'Topbar toggle button reflects collapsed state');
+
+  const floatingTab = ui.w.document.querySelector('.floating-expand-rw-btn');
+  assert.ok(floatingTab, 'Floating expand button is visible when sidebar is collapsed');
+
+  // Click floating tab to expand
+  floatingTab.click();
+  await tick();
+
+  assert.equal(rwSidebar.classList.contains('is-collapsed'), false, 'Sidebar expands after clicking floating tab');
+  assert.equal(topbarToggle.classList.contains('is-collapsed'), false, 'Topbar toggle reflects expanded state');
+  const activeFloatingTab = ui.w.document.querySelector('.floating-expand-rw-btn');
+  assert.ok(!activeFloatingTab || activeFloatingTab._isLeaving, 'Floating tab is leaving or removed when expanded');
+
+  // Click topbar toggle button to collapse back
+  topbarToggle.click();
+  await tick();
+
+  assert.ok(rwSidebar.classList.contains('is-collapsed'), 'Sidebar collapses again after clicking topbar toggle');
+  assert.ok(topbarToggle.classList.contains('is-collapsed'), 'Topbar toggle reflects collapsed state again');
+  assert.ok(ui.w.document.querySelector('.floating-expand-rw-btn'), 'Floating tab reappears');
+  assert.deepEqual(ui.errors, []);
+});
+

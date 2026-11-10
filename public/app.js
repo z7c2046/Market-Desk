@@ -2462,7 +2462,7 @@ createApp({ setup() {
   const sortField = ref(watchlistMgr.data.preferences.sortField || 'extChange');
   const sortDirection = ref(watchlistMgr.data.preferences.sortDirection || 'desc');
   const freezeResort = ref(Boolean(watchlistMgr.data.preferences.freezeResort));
-  const compactPanelOpen = ref(true);
+  const compactPanelOpen = ref(false);
 
   const currentPageTitle = computed(() => {
     const item = nav.find(n => n.id === page.value);
