@@ -434,3 +434,105 @@ test('detectPositionDeltas ignores mark-price fluctuations when contract size is
   assert.equal(btcFlip?.deltaAbs, 2_000_000);
 });
 
+test('TradFi Top 10 filter: computeWhaleSankeyGraph & buildAggregatedPositions strictly limit to top 10 assets by volume (top 5 individual + other 5, excluding ranks 11+)', () => {
+  // Create 15 distinct assets with descending on-chain volumes
+  const coins = ['NVDA', 'SKHX', 'XYZ100', 'SOXL', 'SP500', 'AMD', 'QQQ', 'TSLA', 'AAPL', 'MSTR', 'COIN', 'META', 'AMZN', 'MSFT', 'PLTR'];
+  const volumeMap = new Map();
+  coins.forEach((c, idx) => {
+    volumeMap.set(c, (1000 - idx * 50) * 1_000_000); // NVDA $1000M, SKHX $950M ... PLTR $300M
+  });
+
+  const whales = [
+    {
+      address: '0x1001',
+      name: 'HL Whale 1',
+      positions: coins.map((c, i) => ({
+        coin: c,
+        isLong: i % 2 === 0,
+        side: i % 2 === 0 ? 'LONG' : 'SHORT',
+        positionValue: (i + 1) * 1_000_000
+      }))
+    },
+    {
+      address: '0x1002',
+      name: 'HL Whale 2',
+      positions: coins.map((c, i) => ({
+        coin: c,
+        isLong: true,
+        side: 'LONG',
+        positionValue: 2_000_000
+      }))
+    }
+  ];
+
+  // 1. computeWhaleSankeyGraph with topAssetsLimit=10, maxAssets=5
+  const graph = computeWhaleSankeyGraph({
+    whales,
+    mode: 'all',
+    assetVolumeMap: volumeMap,
+    maxWallets: 6,
+    maxAssets: 5,
+    topAssetsLimit: 10
+  });
+
+  // Verify exactly 6 target nodes: top 5 individual + 1 OTHER
+  assert.equal(graph.assetNodes.length, 6);
+  assert.deepEqual(
+    graph.assetNodes.slice(0, 5).map(a => a.symbol),
+    ['NVDA', 'SKHX', 'XYZ100', 'SOXL', 'SP500']
+  );
+
+  const otherNode = graph.assetNodes[5];
+  assert.equal(otherNode.symbol, 'OTHER');
+  assert.equal(otherNode.isOther, true);
+  assert.equal(otherNode.subLabel, '其他 5 个标的');
+
+  // Verify rank 11+ (COIN, META, AMZN, MSFT, PLTR) are strictly excluded from graph links
+  const targetSymbols = new Set(graph.links.map(l => l.assetSymbol));
+  for (const excluded of ['COIN', 'META', 'AMZN', 'MSFT', 'PLTR']) {
+    assert.equal(targetSymbols.has(excluded), false, `${excluded} (rank 11+) must be excluded from Sankey links`);
+  }
+
+  // Verify OTHER node value equals sum of positions in ranks 6-10 (AMD, QQQ, TSLA, AAPL, MSTR)
+  const rank6to10 = ['AMD', 'QQQ', 'TSLA', 'AAPL', 'MSTR'];
+  let expectedOtherVal = 0;
+  for (const w of whales) {
+    for (const p of w.positions) {
+      if (rank6to10.includes(p.coin)) expectedOtherVal += p.positionValue;
+    }
+  }
+  assert.equal(otherNode.totalVal, expectedOtherVal);
+
+  // Verify strict flow conservation: sum of wallet totals === sum of asset totals === graph.total
+  const sumWallets = graph.walletNodes.reduce((s, w) => s + w.totalVal, 0);
+  const sumAssets = graph.assetNodes.reduce((s, a) => s + a.totalVal, 0);
+  assert.ok(Math.abs(sumWallets - sumAssets) < 1e-6);
+  assert.ok(Math.abs(graph.total - sumAssets) < 1e-6);
+
+  // 2. buildAggregatedPositions with topAssetsLimit=10
+  const agg = buildAggregatedPositions(whales, {
+    assetVolumeMap: volumeMap,
+    topAssetsLimit: 10
+  });
+
+  // Exactly 10 rows returned, strictly matching top 10 on-chain volume
+  assert.equal(agg.length, 10);
+  assert.deepEqual(
+    agg.map(r => r.symbol),
+    ['NVDA', 'SKHX', 'XYZ100', 'SOXL', 'SP500', 'AMD', 'QQQ', 'TSLA', 'AAPL', 'MSTR']
+  );
+
+  // Sorting by longVal sorts within these 10 assets
+  const aggSortedByLong = buildAggregatedPositions(whales, {
+    assetVolumeMap: volumeMap,
+    topAssetsLimit: 10,
+    sortField: 'longVal',
+    sortDir: 'desc'
+  });
+  assert.equal(aggSortedByLong.length, 10);
+  for (const item of aggSortedByLong) {
+    assert.ok(coins.slice(0, 10).includes(item.symbol), 'Must remain within top 10 assets');
+  }
+});
+
+

@@ -1989,7 +1989,8 @@ createApp({ setup() {
       searchQuery: cryptoWhaleSearch.value,
       assetVolumeMap: sankeyAssetVolumeMap.value,
       sortField: aggPositionSort.value.field,
-      sortDir: aggPositionSort.value.dir
+      sortDir: aggPositionSort.value.dir,
+      topAssetsLimit: whaleCategory.value === 'stocks' ? 10 : 0
     });
   });
 
@@ -2122,6 +2123,7 @@ createApp({ setup() {
       assetVolumeMap: sankeyAssetVolumeMap.value,
       maxWallets: 6,
       maxAssets: 5,
+      topAssetsLimit: whaleCategory.value === 'stocks' ? 10 : 0,
       svgWidth: 1280
     });
   });

@@ -265,6 +265,7 @@ export function computeWhaleSankeyGraph({
   assetVolumeMap = null,
   maxWallets = 6,
   maxAssets = 5,
+  topAssetsLimit = 0,
   svgWidth = 1280,
   baseHeight = 462
 } = {}) {
@@ -373,11 +374,16 @@ export function computeWhaleSankeyGraph({
     };
   }
 
-  let displayAssets = sortedAssets;
+  // When topAssetsLimit is specified and no search query, strictly limit the asset pool to top N assets by on-chain volume
+  const eligibleAssets = (topAssetsLimit > 0 && !q && sortedAssets.length > topAssetsLimit)
+    ? sortedAssets.slice(0, topAssetsLimit)
+    : sortedAssets;
+
+  let displayAssets = eligibleAssets;
   let otherSymbols = null;
-  if (sortedAssets.length > maxAssets + 1) {
-    const head = sortedAssets.slice(0, maxAssets);
-    const tail = sortedAssets.slice(maxAssets);
+  if (eligibleAssets.length > maxAssets) {
+    const head = eligibleAssets.slice(0, maxAssets);
+    const tail = eligibleAssets.slice(maxAssets);
     otherSymbols = new Set(tail.map(t => t.symbol));
     const otherBucket = {
       symbol: 'OTHER',
@@ -644,7 +650,7 @@ export function computeWhaleSankeyGraph({
 /**
  * Builds aggregated asset breakdown across all provided wallets (`全部钱包 · 持仓明细`).
  */
-export function buildAggregatedPositions(whales = [], { mode = 'all', searchQuery = '', assetVolumeMap = null, sortField = '', sortDir = 'desc' } = {}) {
+export function buildAggregatedPositions(whales = [], { mode = 'all', searchQuery = '', assetVolumeMap = null, sortField = '', sortDir = 'desc', topAssetsLimit = 0 } = {}) {
   const activeMode = mode === 'long' || mode === 'short' ? mode : 'all';
   const q = String(searchQuery || '').trim().toUpperCase();
   const normalizedField = (sortField === 'longVal' || sortField === 'shortVal' || sortField === 'totalVal' || sortField === 'volume') ? sortField : '';
@@ -695,7 +701,7 @@ export function buildAggregatedPositions(whales = [], { mode = 'all', searchQuer
     }
   }
 
-  return [...byCoin.values()]
+  let items = [...byCoin.values()]
     .map(item => {
       const longPct = item.totalVal > 0 ? Math.round((item.longVal / item.totalVal) * 100) : 50;
       const volume24h = readAssetVolume(assetVolumeMap, item.symbol);
@@ -717,8 +723,15 @@ export function buildAggregatedPositions(whales = [], { mode = 'all', searchQuer
         shortPct: 100 - longPct,
         walletCount: item._wallets.size
       };
-    })
-    .sort((a, b) => {
+    });
+
+  // When topAssetsLimit is specified and no search query, filter to top N assets by on-chain 24h volume
+  if (topAssetsLimit > 0 && !q && items.length > topAssetsLimit) {
+    items.sort((a, b) => (b.volume24h - a.volume24h) || (b.totalVal - a.totalVal) || a.symbol.localeCompare(b.symbol));
+    items = items.slice(0, topAssetsLimit);
+  }
+
+  return items.sort((a, b) => {
       if (normalizedField === 'longVal' || normalizedField === 'shortVal' || normalizedField === 'totalVal') {
         const diff = (Number(a[normalizedField]) || 0) - (Number(b[normalizedField]) || 0);
         if (diff !== 0) {

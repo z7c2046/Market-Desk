@@ -2662,6 +2662,12 @@ test('Crypto Workspace: live HIP-3 (xyz) TradFi mode enables Top N, Custom Walle
   assert.equal(new URL(whaleUrls.at(-1), 'http://localhost').searchParams.get('category'), 'stocks');
   assert.equal(ui.w.document.querySelector('#cw-positions-title').textContent.trim(), '全部钱包 · 持仓明细');
 
+  // TradFi right-side assets: Sankey right column has at most 6 nodes (top 5 individual + 1 OTHER for remaining top 10), and table has at most 10 rows
+  const assetNodes = ui.w.document.querySelectorAll('.cw-sk-asset-node');
+  assert.ok(assetNodes.length <= 6, `TradFi Sankey right column displays at most 6 nodes (5 individual + 1 other), got ${assetNodes.length}`);
+  const aggRows = ui.w.document.querySelectorAll('.cw-agg-row');
+  assert.ok(aggRows.length <= 10, `TradFi 全部钱包持仓明细 table displays at most 10 rows, got ${aggRows.length}`);
+
   // Trigger 15s poll on TradFi -> emits live xyz fill pulse beam
   now += 15000;
   emitFreshXyzFill = true;
