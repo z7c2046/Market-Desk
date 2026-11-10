@@ -187,7 +187,7 @@ export const COIN_CHART_SYMBOLS = {
   LINK: 'LINK-USD',
   NEAR: 'NEAR-USD',
   HYPE: 'HYPE-USD',
-  // 链上美股 Top 10 核心标的
+  // 链上美股与 HIP-3 (TradeXYZ) TradFi 核心合约
   NVDA: 'NVDA',
   MU: 'MU',
   TSLA: 'TSLA',
@@ -196,17 +196,61 @@ export const COIN_CHART_SYMBOLS = {
   AAPL: 'AAPL',
   SPY: 'SPY',
   QQQ: 'QQQ',
+  XYZ100: 'QQQ',
+  SP500: 'SPY',
+  GOLD: 'GC=F',
+  SILVER: 'SI=F',
+  CL: 'CL=F',
+  BRENTOIL: 'BZ=F',
+  NATGAS: 'NG=F',
+  COPPER: 'HG=F',
   AMZN: 'AMZN',
   MSFT: 'MSFT',
   META: 'META',
   PLTR: 'PLTR',
   AMD: 'AMD',
+  INTC: 'INTC',
+  IBM: 'IBM',
+  ORCL: 'ORCL',
+  HOOD: 'HOOD',
+  RKLB: 'RKLB',
+  SOXL: 'SOXL',
+  SNDK: 'SNDK',
+  NBIS: 'NBIS',
+  CRWV: 'CRWV',
+  CRCL: 'CRCL',
+  MRNA: 'MRNA',
+  MRVL: 'MRVL',
+  EWY: 'EWY',
+  DELL: 'DELL',
+  LLY: 'LLY',
+  NFLX: 'NFLX',
+  HIMS: 'HIMS',
+  COST: 'COST',
+  UNH: 'UNH',
+  JPM: 'JPM',
+  BA: 'BA',
+  XOM: 'XOM',
   WDC: 'WDC',
   STX: 'STX',
   GOOGL: 'GOOGL',
   TSM: 'TSM',
   AVGO: 'AVGO'
 };
+
+export function stripDeployerPrefix(rawCoin) {
+  return String(rawCoin || '')
+    .trim()
+    .replace(/^[a-z0-9_-]+:/i, '')
+    .toUpperCase();
+}
+
+export function resolveWhaleChartSymbol(coin, isStock = false) {
+  const clean = String(coin || '').trim().toUpperCase();
+  if (!clean) return isStock ? '' : 'UNKNOWN-USD';
+  if (COIN_CHART_SYMBOLS[clean]) return COIN_CHART_SYMBOLS[clean];
+  return isStock ? clean : `${clean}-USD`;
+}
 
 // 精选链上美股 (Top 10 成交标的) 巨鲸与机构大户持仓
 export const CURATED_STOCK_WHALES = [
@@ -327,6 +371,27 @@ export const CURATED_WHALE_MAP = new Map(
   CURATED_WHALES.map(w => [String(w.address || '').toLowerCase(), w])
 );
 
+export const CURATED_STOCK_WHALE_MAP = new Map(
+  CURATED_STOCK_WHALES.map(w => [String(w.address || '').toLowerCase(), w])
+);
+
+const DEFAULT_STOCK_ASSET_VOLUMES = {
+  NVDA: 285600000,
+  MU: 81600000,
+  SPY: 66200000,
+  AMD: 64700000,
+  QQQ: 58300000,
+  TSLA: 54700000,
+  AAPL: 50900000,
+  AMZN: 43200000,
+  MSFT: 38600000,
+  META: 36700000,
+  MSTR: 28800000,
+  COIN: 21800000,
+  PLTR: 14000000,
+  WDC: 8500000
+};
+
 export class CryptoWhaleService {
   constructor({
     fetchFn = globalThis.fetch,
@@ -351,14 +416,14 @@ export class CryptoWhaleService {
     this.inFlightByKey = new Map();
     this.leaderboardCache = null;
     this.leaderboardInFlight = null;
-    this.discoveryPoolCache = null;
+    this.discoveryPoolCache = new Map();
     this.fillsCache = new Map();
   }
 
   /**
    * 解析单笔合约仓位数据
    */
-  parsePosition(posItem, assetPrices = {}) {
+  parsePosition(posItem, assetPrices = {}, { isStock = false } = {}) {
     const p = posItem.position || posItem;
     const szi = parseFloat(p.szi || 0);
     if (isNaN(szi) || Math.abs(szi) < 1e-6) return null;
@@ -366,15 +431,17 @@ export class CryptoWhaleService {
     const isLong = szi > 0;
     const side = isLong ? 'LONG' : 'SHORT';
     const sideLabel = isLong ? '做多' : '做空';
-    const coin = p.coin || 'UNKNOWN';
+    const rawCoin = String(p.coin || 'UNKNOWN').trim();
+    const coin = isStock ? (stripDeployerPrefix(rawCoin) || 'UNKNOWN') : rawCoin;
+    const priceInfo = assetPrices[coin] || assetPrices[rawCoin] || assetPrices[rawCoin.toUpperCase()] || null;
     const entryPx = parseFloat(p.entryPx || 0);
-    const positionValue = parseFloat(p.positionValue || Math.abs(szi * (assetPrices[coin]?.markPx || entryPx)));
+    const positionValue = parseFloat(p.positionValue || Math.abs(szi * (priceInfo?.markPx || entryPx)));
     const unrealizedPnl = parseFloat(p.unrealizedPnl || 0);
     const returnOnEquity = parseFloat(p.returnOnEquity || 0);
     const leverageVal = p.leverage?.value ?? 10;
     const leverageType = p.leverage?.type === 'isolated' ? '逐仓' : '全仓';
     const liquidationPx = p.liquidationPx ? parseFloat(p.liquidationPx) : null;
-    const markPx = p.markPx ? parseFloat(p.markPx) : (assetPrices[coin]?.markPx ? parseFloat(assetPrices[coin].markPx) : (positionValue && Math.abs(szi) > 0 ? positionValue / Math.abs(szi) : entryPx));
+    const markPx = p.markPx ? parseFloat(p.markPx) : (priceInfo?.markPx ? parseFloat(priceInfo.markPx) : (positionValue && Math.abs(szi) > 0 ? positionValue / Math.abs(szi) : entryPx));
 
     // 预估强平安全垫百分比
     let liqDistancePct = null;
@@ -386,7 +453,7 @@ export class CryptoWhaleService {
 
     return {
       coin,
-      chartSymbol: COIN_CHART_SYMBOLS[coin] || `${coin}-USD`,
+      chartSymbol: resolveWhaleChartSymbol(coin, isStock),
       side,
       sideLabel,
       isLong,
@@ -521,8 +588,10 @@ export class CryptoWhaleService {
 
   /**
    * 基于 Hyperliquid 真实 userFillsByTime 聚合巨鲸近期链上成交记录（按 5 秒连续成交窗口去重合并）
+   * market: 'crypto' (仅主网加密永续) | 'stocks' (仅 HIP-3 TradeXYZ 链上美股/商品/指数永续 xyz:*)
    */
-  buildActivityLogsFromFills(whalesWithFills = [], { now = Date.now(), minNotionalUsd = 500, limit = 40 } = {}) {
+  buildActivityLogsFromFills(whalesWithFills = [], { now = Date.now(), minNotionalUsd = 500, limit = 40, market = 'crypto' } = {}) {
+    const isStocks = market === 'stocks';
     const allBatches = [];
 
     for (const entry of whalesWithFills) {
@@ -532,9 +601,18 @@ export class CryptoWhaleService {
 
       const parsedFills = [];
       for (const f of fills) {
-        const coin = String(f?.coin || '').trim().toUpperCase();
-        // 仅保留 Hyperliquid 主网永续合约（过滤掉 xyz:* 等部署者子市场、@spot 编号与代币对）
-        if (!coin || coin.includes(':') || coin.startsWith('@') || coin.includes('/') || coin === 'USDC') continue;
+        const rawCoin = String(f?.coin || '').trim();
+        const upperRaw = rawCoin.toUpperCase();
+        let coin = '';
+        if (isStocks) {
+          if (!upperRaw.startsWith('XYZ:')) continue;
+          coin = stripDeployerPrefix(upperRaw);
+        } else {
+          // 仅保留 Hyperliquid 主网永续合约（过滤掉 xyz:* 等部署者子市场、@spot 编号与代币对）
+          if (!upperRaw || upperRaw.includes(':') || upperRaw.startsWith('@') || upperRaw.includes('/') || upperRaw === 'USDC') continue;
+          coin = upperRaw;
+        }
+        if (!coin) continue;
 
         const sz = Math.abs(parseFloat(f?.sz || 0));
         const px = parseFloat(f?.px || 0);
@@ -618,7 +696,7 @@ export class CryptoWhaleService {
           isIncrease: b.dirMeta.isIncrease,
           isLiveFill: true,
           coin: b.coin,
-          chartSymbol: COIN_CHART_SYMBOLS[b.coin] || `${b.coin}-USD`,
+          chartSymbol: resolveWhaleChartSymbol(b.coin, isStocks),
           size: b.totalSz,
           amountText: `${szText} ${b.coin}`,
           valueUsd: b.totalVal,
@@ -633,12 +711,18 @@ export class CryptoWhaleService {
   }
 
   /**
-   * 聚合 TradFi 美股样本策略持仓数据 (静态演示账户，不生成伪实时成交异动)
+   * 聚合 TradFi 美股样本策略持仓数据 (离线兜底静态演示账户，不生成伪实时成交异动)
    */
-  getStockWhalesData() {
+  getStockWhalesData({ topN = WHALE_DEFAULT_TOP_N, customWallets = [] } = {}) {
+    const normalizedTopN = normalizeWhaleTopN(topN);
+    const normalizedCustom = parseCustomWhalesParam(customWallets);
+    const customMap = new Map(normalizedCustom.map(c => [c.address, c]));
+
     const whales = CURATED_STOCK_WHALES.map(w => {
+      const addr = w.address.toLowerCase();
+      const custom = customMap.get(addr);
       const positions = (w.positions || [])
-        .map(p => this.parsePosition(p))
+        .map(p => this.parsePosition(p, {}, { isStock: true }))
         .filter(Boolean)
         .sort((a, b) => b.positionValue - a.positionValue);
 
@@ -649,9 +733,13 @@ export class CryptoWhaleService {
       return {
         address: w.address,
         shortAddress: `${w.address.slice(0, 6)}...${w.address.slice(-4)}`,
-        name: w.name,
+        name: custom?.label || w.name,
         tag: w.tag,
         avatar: w.avatar,
+        isCustom: Boolean(custom),
+        isCurated: true,
+        sourceType: custom ? 'custom' : 'curated',
+        sourceLabel: custom ? '自选监控' : '核心样本',
         accountValue: w.accountValue,
         totalNtlPos: w.totalNtlPos,
         netExposure,
@@ -662,15 +750,49 @@ export class CryptoWhaleService {
       };
     }).sort((a, b) => b.totalNtlPos - a.totalNtlPos);
 
+    const seenAddrs = new Set(whales.map(w => w.address.toLowerCase()));
+    for (const c of normalizedCustom) {
+      if (seenAddrs.has(c.address)) continue;
+      const shortAddress = `${c.address.slice(0, 6)}...${c.address.slice(-4)}`;
+      whales.push({
+        address: c.address,
+        shortAddress,
+        name: c.label || `自选钱包 ${shortAddress}`,
+        tag: '自选链上钱包',
+        avatar: '⭐',
+        isCustom: true,
+        isCurated: false,
+        sourceType: 'custom',
+        sourceLabel: '自选监控',
+        accountValue: 0,
+        totalNtlPos: 0,
+        netExposure: 0,
+        netBiasLabel: '暂无持仓',
+        longNotional: 0,
+        shortNotional: 0,
+        positions: []
+      });
+    }
+
     const aggregate = this.computeAggregateMetrics(whales);
 
     return {
+      category: 'stocks',
       isSample: true,
       isLive: false,
       source: 'sample-static',
+      meta: {
+        topN: normalizedTopN,
+        dex: 'xyz',
+        activeDiscoveredCount: CURATED_STOCK_WHALES.length,
+        customCount: normalizedCustom.length,
+        leaderboardActive: false,
+        leaderboardTotalRows: 0
+      },
       aggregate,
       whales,
-      activityLogs: []
+      activityLogs: [],
+      assetVolumes: { ...DEFAULT_STOCK_ASSET_VOLUMES }
     };
   }
 
@@ -724,17 +846,22 @@ export class CryptoWhaleService {
         }
 
         const topByAcct = [...parsed]
-          .filter(x => x.acctVal >= 1_500_000 && x.weekVlm >= 500_000)
+          .filter(x => x.acctVal >= 500_000 && x.weekVlm >= 200_000)
           .sort((a, b) => b.acctVal - a.acctVal)
-          .slice(0, 35);
+          .slice(0, 50);
 
         const topByDayVlm = [...parsed]
-          .filter(x => x.acctVal >= 800_000 && x.dayVlm >= 3_000_000)
+          .filter(x => x.acctVal >= 500_000 && x.dayVlm >= 2_000_000)
           .sort((a, b) => b.dayVlm - a.dayVlm)
+          .slice(0, 20);
+
+        const topByWeekVlm = [...parsed]
+          .filter(x => x.acctVal >= 500_000 && x.weekVlm >= 5_000_000)
+          .sort((a, b) => b.weekVlm - a.weekVlm)
           .slice(0, 15);
 
         const candidateMap = new Map();
-        for (const item of [...topByAcct, ...topByDayVlm]) {
+        for (const item of [...topByAcct, ...topByDayVlm, ...topByWeekVlm]) {
           if (!candidateMap.has(item.address)) {
             candidateMap.set(item.address, item);
           }
@@ -763,11 +890,45 @@ export class CryptoWhaleService {
     return task;
   }
 
-  async fetchClearinghouseState(address, timeoutMs = 6000) {
+  async fetchMetaAndAssetCtxs(dex = '', timeoutMs = 5000) {
+    const prices = {};
+    try {
+      const body = { type: 'metaAndAssetCtxs' };
+      if (dex) body.dex = dex;
+      const metaRes = await this.fetch('https://api.hyperliquid.xyz/info', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(timeoutMs)
+      });
+      if (metaRes?.ok) {
+        const metaData = await metaRes.json();
+        const universe = metaData[0]?.universe || [];
+        const ctxs = metaData[1] || [];
+        const isStockDex = Boolean(dex);
+        universe.forEach((u, idx) => {
+          const cleanName = isStockDex ? stripDeployerPrefix(u.name) : u.name;
+          if (!cleanName) return;
+          prices[cleanName] = {
+            markPx: Number.parseFloat(ctxs[idx]?.markPx || 0),
+            funding: Number.parseFloat(ctxs[idx]?.funding || 0),
+            dayVol: Number.parseFloat(ctxs[idx]?.dayNtlVlm || 0)
+          };
+        });
+      }
+    } catch {
+      // ignore price meta failure, will fall back to position entry prices
+    }
+    return prices;
+  }
+
+  async fetchClearinghouseState(address, timeoutMs = 6000, dex = '') {
+    const body = { type: 'clearinghouseState', user: address };
+    if (dex) body.dex = dex;
     const res = await this.fetch('https://api.hyperliquid.xyz/info', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'clearinghouseState', user: address }),
+      body: JSON.stringify(body),
       signal: AbortSignal.timeout(timeoutMs)
     });
     if (!res?.ok) {
@@ -776,29 +937,52 @@ export class CryptoWhaleService {
     return res.json();
   }
 
-  async fetchUserFillsByTime(address, startTime, timeoutMs = 6000) {
-    const res = await this.fetch('https://api.hyperliquid.xyz/info', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        type: 'userFillsByTime',
-        user: address,
-        startTime,
-        aggregateByTime: true
-      }),
-      signal: AbortSignal.timeout(timeoutMs)
-    });
-    if (!res?.ok) return [];
-    const raw = await res.json();
-    return Array.isArray(raw) ? raw : [];
+  async fetchUserFillsByTime(address, startTime, timeoutMs = 6000, now = Date.now()) {
+    const queryWindow = async windowStart => {
+      const res = await this.fetch('https://api.hyperliquid.xyz/info', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'userFillsByTime',
+          user: address,
+          startTime: windowStart,
+          aggregateByTime: true
+        }),
+        signal: AbortSignal.timeout(timeoutMs)
+      });
+      if (!res?.ok) return [];
+      const raw = await res.json();
+      return Array.isArray(raw) ? raw : [];
+    };
+
+    const initial = await queryWindow(startTime);
+    // Hyperliquid userFillsByTime 按升序最多返回 2000 条；高频做市账户触顶时补查最近 10 分钟窗口确保不错过最新实盘异动
+    const recentWindowStart = now - 10 * 60 * 1000;
+    if (initial.length < 2000 || startTime >= recentWindowStart) {
+      return initial;
+    }
+
+    const tail = await queryWindow(recentWindowStart);
+    if (!tail.length) return initial;
+
+    const merged = [];
+    const seen = new Set();
+    for (const f of [...initial, ...tail]) {
+      const key = `${f?.tid ?? f?.hash ?? ''}-${f?.time ?? ''}-${f?.coin ?? ''}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push(f);
+    }
+    return merged;
   }
 
-  buildWhaleFromState(candidateMeta, state, assetPrices = {}, displayNamesByAddr = new Map()) {
+  buildWhaleFromState(candidateMeta, state, assetPrices = {}, displayNamesByAddr = new Map(), { market = 'crypto' } = {}) {
+    const isStocks = market === 'stocks';
     const address = String(candidateMeta?.address || '').toLowerCase();
     const shortAddress = `${address.slice(0, 6)}...${address.slice(-4)}`;
     const rawPositions = state?.assetPositions || [];
     const positions = rawPositions
-      .map(p => this.parsePosition(p, assetPrices))
+      .map(p => this.parsePosition(p, assetPrices, { isStock: isStocks }))
       .filter(Boolean)
       .sort((a, b) => b.positionValue - a.positionValue);
 
@@ -817,20 +1001,21 @@ export class CryptoWhaleService {
       ? (Number.isFinite(parsedNtl) && parsedNtl > 0 ? parsedNtl : grossSum)
       : (Number.isFinite(parsedNtl) ? parsedNtl : 0);
 
-    const curated = CURATED_WHALE_MAP.get(address);
+    const curated = isStocks ? CURATED_STOCK_WHALE_MAP.get(address) : CURATED_WHALE_MAP.get(address);
     const lbName = (displayNamesByAddr instanceof Map ? displayNamesByAddr.get(address) : '') || candidateMeta?.displayName || '';
     const customLabel = candidateMeta?.customLabel || '';
     const isCustom = Boolean(candidateMeta?.isCustom);
     const isCurated = Boolean(curated);
 
     const name = customLabel
-      || curated?.name
-      || lbName
-      || (isCustom ? `自选钱包 ${shortAddress}` : `HL 巨鲸 ${shortAddress}`);
+      || (isStocks ? (lbName || curated?.name) : (curated?.name || lbName))
+      || (isCustom ? `自选钱包 ${shortAddress}` : (isStocks ? `HL TradFi 巨鲸 ${shortAddress}` : `HL 巨鲸 ${shortAddress}`));
 
     const tag = isCustom
       ? (curated ? `自选 · ${curated.tag}` : (accountValue >= 10_000_000 ? '自选 · 千万级大户' : '自选链上钱包'))
-      : (curated?.tag || (accountValue >= 50_000_000 ? 'Hyperliquid 超大巨鲸' : (accountValue >= 10_000_000 ? 'Hyperliquid 千万级巨鲸' : 'Hyperliquid 榜单巨鲸')));
+      : (isStocks
+        ? (accountValue >= 50_000_000 ? 'HIP-3 TradFi 超大巨鲸' : (accountValue >= 10_000_000 ? 'HIP-3 TradFi 千万级巨鲸' : (curated?.tag || 'HIP-3 TradFi 榜单巨鲸')))
+        : (curated?.tag || (accountValue >= 50_000_000 ? 'Hyperliquid 超大巨鲸' : (accountValue >= 10_000_000 ? 'Hyperliquid 千万级巨鲸' : 'Hyperliquid 榜单巨鲸'))));
 
     const netBiasLabel = positions.length === 0
       ? '暂无持仓'
@@ -1028,25 +1213,17 @@ export class CryptoWhaleService {
   }
 
   /**
-   * 获取巨鲸追踪完整数据 (支持动态排行榜 Top N 自动发现 + 自定义钱包地址 + 缓存与频率配额保护)
+   * 获取巨鲸追踪完整数据 (支持 Crypto 主网永续 与 TradFi HIP-3 TradeXYZ 链上美股/商品/指数永续，均支持动态排行榜 Top N 自动发现 + 自定义地址追踪)
    */
   async getWhaleTrackerData({ force = false, category = 'all', topN, customWallets } = {}) {
+    const market = category === 'stocks' ? 'stocks' : 'crypto';
+    const isStocks = market === 'stocks';
+    const dex = isStocks ? 'xyz' : '';
     const normalizedTopN = normalizeWhaleTopN(topN);
     const normalizedCustom = parseCustomWhalesParam(customWallets);
 
-    if (category === 'stocks') {
-      const stockWhales = this.getStockWhalesData();
-      return {
-        ok: true,
-        provider: 'Hyperliquid L1 DEX',
-        fetchedAt: new Date().toISOString(),
-        ...stockWhales,
-        stockWhales
-      };
-    }
-
     const customSpecKey = normalizedCustom.map(c => `${c.address}:${c.label}`).sort().join('|');
-    const cacheKey = `${normalizedTopN}::${customSpecKey}`;
+    const cacheKey = `${market}::${normalizedTopN}::${customSpecKey}`;
     const now = Date.now();
     const cachedEntry = this.responseCache.get(cacheKey);
     if (!force && cachedEntry && (now - cachedEntry.cachedAt) < this.ttlMs) {
@@ -1057,36 +1234,25 @@ export class CryptoWhaleService {
       return this.inFlightByKey.get(cacheKey);
     }
 
+    const buildMarketFallback = () => {
+      if (isStocks) {
+        const stockFallback = this.getStockWhalesData({ topN: normalizedTopN, customWallets: normalizedCustom });
+        return {
+          ok: true,
+          provider: 'Hyperliquid HIP-3 (TradeXYZ)',
+          category: 'stocks',
+          fetchedAt: new Date().toISOString(),
+          ...stockFallback,
+          stockWhales: stockFallback
+        };
+      }
+      return this.getFallbackData({ topN: normalizedTopN, customWallets: normalizedCustom });
+    };
+
     const task = (async () => {
       try {
-        // 1. 并行获取全市场标记价/成交量 + 主网排行榜候选池
-        const metaPromise = (async () => {
-          const prices = {};
-          try {
-            const metaRes = await this.fetch('https://api.hyperliquid.xyz/info', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ type: 'metaAndAssetCtxs' }),
-              signal: AbortSignal.timeout(5000)
-            });
-            if (metaRes?.ok) {
-              const metaData = await metaRes.json();
-              const universe = metaData[0]?.universe || [];
-              const ctxs = metaData[1] || [];
-              universe.forEach((u, idx) => {
-                prices[u.name] = {
-                  markPx: Number.parseFloat(ctxs[idx]?.markPx || 0),
-                  funding: Number.parseFloat(ctxs[idx]?.funding || 0),
-                  dayVol: Number.parseFloat(ctxs[idx]?.dayNtlVlm || 0)
-                };
-              });
-            }
-          } catch {
-            // ignore price meta failure, will fall back to position entry prices
-          }
-          return prices;
-        })();
-
+        // 1. 并行获取全市场标记价/成交量 (Crypto 主网 或 HIP-3 dex='xyz') + 主网排行榜候选池
+        const metaPromise = this.fetchMetaAndAssetCtxs(dex, 5000);
         const leaderboardPromise = this.fetchLeaderboardCandidates();
         const [assetPrices, leaderboard] = await Promise.all([metaPromise, leaderboardPromise]);
 
@@ -1094,17 +1260,19 @@ export class CryptoWhaleService {
         const displayNames = leaderboard?.displayNamesByAddr instanceof Map
           ? leaderboard.displayNamesByAddr
           : new Map();
+        const curatedList = isStocks ? CURATED_STOCK_WHALES : CURATED_WHALES;
+        const curatedMap = isStocks ? CURATED_STOCK_WHALE_MAP : CURATED_WHALE_MAP;
 
-        // 2. 构建候选地址 Meta 映射（leaderboard + CURATED_WHALES + customWallets）
+        // 2. 构建候选地址 Meta 映射（leaderboard + curated + customWallets）
         const buildCandidateMeta = addr => {
           const low = String(addr || '').toLowerCase();
-          const curated = CURATED_WHALE_MAP.get(low);
+          const curated = curatedMap.get(low);
           const custom = customMap.get(low);
           const lbItem = (leaderboard?.candidates || []).find(c => c.address === low);
           return {
             address: low,
-            defaultEquity: curated?.defaultEquity || 0,
-            defaultNtlPos: curated?.defaultNtlPos || 0,
+            defaultEquity: curated?.defaultEquity || curated?.accountValue || 0,
+            defaultNtlPos: curated?.defaultNtlPos || curated?.totalNtlPos || 0,
             displayName: lbItem?.displayName || displayNames.get(low) || '',
             isCustom: Boolean(custom),
             customLabel: custom?.label || ''
@@ -1113,11 +1281,15 @@ export class CryptoWhaleService {
 
         const poolSeedAddrs = new Set();
         for (const w of CURATED_WHALES) poolSeedAddrs.add(w.address.toLowerCase());
+        if (isStocks) {
+          for (const w of CURATED_STOCK_WHALES) poolSeedAddrs.add(w.address.toLowerCase());
+        }
         for (const c of (leaderboard?.candidates || [])) poolSeedAddrs.add(c.address.toLowerCase());
 
+        const marketPoolCache = this.discoveryPoolCache.get(market);
         const discoveryPoolFresh = this.discoveryTtlMs > 0
-          && this.discoveryPoolCache
-          && (Date.now() - this.discoveryPoolCache.fetchedAt) < this.discoveryTtlMs;
+          && marketPoolCache
+          && (Date.now() - marketPoolCache.fetchedAt) < this.discoveryTtlMs;
 
         let marketPoolWhales = [];
         const customStatesByAddr = new Map();
@@ -1133,7 +1305,7 @@ export class CryptoWhaleService {
             probeList,
             this.discoveryConcurrency,
             async addr => {
-              const state = await this.fetchClearinghouseState(addr, 6000);
+              const state = await this.fetchClearinghouseState(addr, 6000, dex);
               return { addr, state };
             }
           );
@@ -1143,7 +1315,7 @@ export class CryptoWhaleService {
             if (r.status !== 'fulfilled' || !r.value?.state) continue;
             const { addr, state } = r.value;
             const meta = buildCandidateMeta(addr);
-            const whale = this.buildWhaleFromState(meta, state, assetPrices, displayNames);
+            const whale = this.buildWhaleFromState(meta, state, assetPrices, displayNames, { market });
             if (customMap.has(addr)) {
               customStatesByAddr.set(addr, whale);
             }
@@ -1164,29 +1336,29 @@ export class CryptoWhaleService {
             || (b.accountValue - a.accountValue)
           );
 
-          if (this.discoveryTtlMs > 0 && rankedMarketPool.length >= 3) {
-            this.discoveryPoolCache = {
+          if (this.discoveryTtlMs > 0 && rankedMarketPool.length >= (isStocks ? 2 : 3)) {
+            this.discoveryPoolCache.set(market, {
               fetchedAt: Date.now(),
               rankedActive: rankedMarketPool
-            };
+            });
           }
           activeDiscoveredCountRef.count = rankedMarketPool.length;
         } else {
           // 复用 3 分钟发现排名缓存：仅针对 Top(N+4) + 核心巨鲸 + 自选地址拉取实时最新 clearinghouseState
-          const rankedActive = this.discoveryPoolCache.rankedActive || [];
+          const rankedActive = marketPoolCache.rankedActive || [];
           activeDiscoveredCountRef.count = rankedActive.length;
           const targetAddrs = new Set();
           for (const item of rankedActive.slice(0, normalizedTopN + 4)) {
             targetAddrs.add(item.address);
           }
-          for (const w of CURATED_WHALES) targetAddrs.add(w.address.toLowerCase());
+          for (const w of curatedList) targetAddrs.add(w.address.toLowerCase());
           for (const c of normalizedCustom) targetAddrs.add(c.address);
 
           const fetchResults = await mapWithConcurrency(
             [...targetAddrs],
             this.discoveryConcurrency,
             async addr => {
-              const state = await this.fetchClearinghouseState(addr, 6000);
+              const state = await this.fetchClearinghouseState(addr, 6000, dex);
               return { addr, state };
             }
           );
@@ -1195,7 +1367,7 @@ export class CryptoWhaleService {
             if (r.status !== 'fulfilled' || !r.value?.state) continue;
             const { addr, state } = r.value;
             const meta = buildCandidateMeta(addr);
-            const whale = this.buildWhaleFromState(meta, state, assetPrices, displayNames);
+            const whale = this.buildWhaleFromState(meta, state, assetPrices, displayNames, { market });
             if (customMap.has(addr)) {
               customStatesByAddr.set(addr, whale);
             }
@@ -1205,17 +1377,18 @@ export class CryptoWhaleService {
           }
         }
 
-        if (marketPoolWhales.length < 3 && customStatesByAddr.size === 0) {
-          const fallback = this.getFallbackData({ topN: normalizedTopN, customWallets: normalizedCustom });
+        const minLivePool = isStocks ? 2 : 3;
+        if (marketPoolWhales.length < minLivePool && customStatesByAddr.size === 0) {
+          const fallback = buildMarketFallback();
           this.responseCache.set(cacheKey, { cachedAt: Date.now(), data: fallback });
           return fallback;
         }
 
         // 若市场兜底需求未满足但自定义钱包成功，亦补充回退市场巨鲸保证体验完整
-        let isLive = true;
-        let source = 'hyperliquid-api';
-        if (marketPoolWhales.length < 3) {
-          const fallback = this.getFallbackData({ topN: normalizedTopN, customWallets: normalizedCustom });
+        const isLive = true;
+        const source = isStocks ? 'hyperliquid-xyz-api' : 'hyperliquid-api';
+        if (marketPoolWhales.length < minLivePool) {
+          const fallback = buildMarketFallback();
           const mergedFallback = [...fallback.whales];
           for (const [addr, customWhale] of customStatesByAddr.entries()) {
             const idx = mergedFallback.findIndex(w => w.address.toLowerCase() === addr);
@@ -1255,7 +1428,7 @@ export class CryptoWhaleService {
           || (b.accountValue - a.accountValue)
         );
 
-        // 4. 智能配额保护获取近 12H userFillsByTime 成交（仅限最终入选列表）
+        // 4. 智能配额保护获取近 12H userFillsByTime 成交（仅限最终入选列表，按市场分键缓存）
         const fillNow = Date.now();
         const fillLookbackStart = fillNow - 12 * 3600 * 1000;
         const posSigOf = w => w.positions.map(p => `${p.coin}:${p.side}:${p.size}`).join('|');
@@ -1266,11 +1439,12 @@ export class CryptoWhaleService {
 
         for (const w of selectedWhales) {
           const sig = posSigOf(w);
-          const cached = this.fillsCache.get(w.address);
+          const fKey = `${market}:${w.address}`;
+          const cached = this.fillsCache.get(fKey);
           if (this.fillsTtlMs === 0 || !cached || cached.posSignature !== sig) {
-            mustRefresh.push({ whale: w, sig });
+            mustRefresh.push({ whale: w, sig, fKey });
           } else if ((fillNow - cached.fetchedAt) >= this.fillsTtlMs) {
-            staleRefresh.push({ whale: w, sig });
+            staleRefresh.push({ whale: w, sig, fKey });
           } else {
             fillsByAddr.set(w.address, cached.fills);
           }
@@ -1285,7 +1459,7 @@ export class CryptoWhaleService {
         const toFetchFills = [...mustRefresh, ...staleRefresh.slice(0, staleQuota)];
 
         for (const item of staleRefresh.slice(staleQuota)) {
-          const cached = this.fillsCache.get(item.whale.address);
+          const cached = this.fillsCache.get(item.fKey);
           fillsByAddr.set(item.whale.address, cached ? cached.fills : []);
         }
 
@@ -1294,20 +1468,20 @@ export class CryptoWhaleService {
             toFetchFills,
             this.fillsConcurrency,
             async item => {
-              const fills = await this.fetchUserFillsByTime(item.whale.address, fillLookbackStart, 6000);
-              return { addr: item.whale.address, sig: item.sig, fills };
+              const fills = await this.fetchUserFillsByTime(item.whale.address, fillLookbackStart, 6000, fillNow);
+              return { addr: item.whale.address, fKey: item.fKey, sig: item.sig, fills };
             }
           );
 
           for (const r of fillResults) {
             if (r.status === 'fulfilled' && r.value) {
-              const { addr, sig, fills } = r.value;
-              this.fillsCache.set(addr, { fetchedAt: Date.now(), posSignature: sig, fills });
+              const { addr, fKey, sig, fills } = r.value;
+              this.fillsCache.set(fKey, { fetchedAt: Date.now(), posSignature: sig, fills });
               fillsByAddr.set(addr, fills);
             }
           }
 
-          if (this.fillsCache.size > 60) {
+          if (this.fillsCache.size > 100) {
             const firstKey = this.fillsCache.keys().next().value;
             if (firstKey) this.fillsCache.delete(firstKey);
           }
@@ -1320,22 +1494,33 @@ export class CryptoWhaleService {
 
         const aggregate = this.computeAggregateMetrics(selectedWhales);
         const fetchCompletedAt = Date.now();
-        const activityLogs = this.buildActivityLogsFromFills(fulfilledEntries, { now: fetchCompletedAt });
-        const stockWhales = this.getStockWhalesData();
+        const activityLogs = this.buildActivityLogsFromFills(fulfilledEntries, {
+          now: fetchCompletedAt,
+          market
+        });
         const assetVolumes = {};
         for (const [coin, info] of Object.entries(assetPrices)) {
           const dayVol = Number(info?.dayVol) || 0;
           if (dayVol > 0) assetVolumes[String(coin).toUpperCase()] = dayVol;
         }
 
+        let stockWhales;
+        if (!isStocks) {
+          const warmStocks = this.latestLiveStocksSummary;
+          stockWhales = warmStocks || this.getStockWhalesData({ topN: normalizedTopN, customWallets: normalizedCustom });
+        }
+
         const payload = {
           ok: true,
-          provider: 'Hyperliquid L1 DEX',
+          provider: isStocks ? 'Hyperliquid HIP-3 (TradeXYZ)' : 'Hyperliquid L1 DEX',
+          category: market,
           isLive,
+          isSample: false,
           source,
           fetchedAt: new Date(fetchCompletedAt).toISOString(),
           meta: {
             topN: normalizedTopN,
+            dex: dex || 'perp',
             activeDiscoveredCount: Math.max(activeDiscoveredCountRef.count, marketPoolWhales.length),
             customCount: normalizedCustom.length,
             leaderboardActive: Boolean(leaderboard?.ok),
@@ -1345,11 +1530,26 @@ export class CryptoWhaleService {
           whales: selectedWhales,
           activityLogs,
           assetVolumes,
-          stockWhales
+          ...(isStocks ? {} : { stockWhales })
         };
 
+        if (isStocks) {
+          this.latestLiveStocksSummary = {
+            category: 'stocks',
+            isLive: true,
+            isSample: false,
+            source,
+            fetchedAt: payload.fetchedAt,
+            meta: payload.meta,
+            aggregate,
+            whales: selectedWhales,
+            activityLogs,
+            assetVolumes
+          };
+        }
+
         this.responseCache.set(cacheKey, { cachedAt: fetchCompletedAt, data: payload });
-        if (this.responseCache.size > 16) {
+        if (this.responseCache.size > 24) {
           const oldestKey = this.responseCache.keys().next().value;
           if (oldestKey) this.responseCache.delete(oldestKey);
         }
@@ -1358,7 +1558,7 @@ export class CryptoWhaleService {
         if (cachedEntry?.data) {
           return cachedEntry.data;
         }
-        const fallback = this.getFallbackData({ topN: normalizedTopN, customWallets: normalizedCustom });
+        const fallback = buildMarketFallback();
         this.responseCache.set(cacheKey, { cachedAt: Date.now(), data: fallback });
         return fallback;
       } finally {

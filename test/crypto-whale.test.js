@@ -518,3 +518,224 @@ test('HTTP API /api/crypto/whales forwards topN and custom query params to whale
   }
 });
 
+test('CryptoWhaleService: discovers live HIP-3 (xyz) TradFi whales, strips xyz: prefixes, maps chart symbols, and recovers truncated 2000 fills', async () => {
+  const now = Date.now();
+  const lbStocks1 = '0x7111111111111111111111111111111111111111';
+  const lbStocks2 = '0x7222222222222222222222222222222222222222';
+  const lbStocksDormant = '0x7333333333333333333333333333333333333333';
+  const customTradfiZero = '0x7444444444444444444444444444444444444444';
+
+  const seenBodies = [];
+  let lb1FillsQueries = 0;
+
+  const mockFetch = async (url, opts) => {
+    if (String(url).includes('/Mainnet/leaderboard')) {
+      return {
+        ok: true,
+        json: async () => ({
+          leaderboardRows: [
+            {
+              ethAddress: lbStocks1,
+              accountValue: '42000000',
+              displayName: 'XyzSemiDesk',
+              windowPerformances: [['day', { vlm: '15000000' }], ['week', { vlm: '80000000' }]]
+            },
+            {
+              ethAddress: lbStocks2,
+              accountValue: '18000000',
+              displayName: 'XyzIndexArb',
+              windowPerformances: [['day', { vlm: '6000000' }], ['week', { vlm: '30000000' }]]
+            },
+            {
+              ethAddress: lbStocksDormant,
+              accountValue: '9000000',
+              displayName: 'CryptoOnlyWhale',
+              windowPerformances: [['day', { vlm: '5000000' }], ['week', { vlm: '20000000' }]]
+            }
+          ]
+        })
+      };
+    }
+
+    const body = JSON.parse(opts.body);
+    seenBodies.push(body);
+
+    if (body.type === 'metaAndAssetCtxs') {
+      assert.equal(body.dex, 'xyz', 'stocks category queries HIP-3 dex=xyz metadata');
+      return {
+        ok: true,
+        json: async () => [
+          {
+            universe: [
+              { name: 'xyz:NVDA' },
+              { name: 'xyz:XYZ100' },
+              { name: 'xyz:SP500' },
+              { name: 'xyz:RKLB' },
+              { name: 'xyz:GOLD' }
+            ]
+          },
+          [
+            { markPx: '188.5', dayNtlVlm: '654000000' },
+            { markPx: '26100', dayNtlVlm: '447000000' },
+            { markPx: '6750', dayNtlVlm: '365000000' },
+            { markPx: '32.5', dayNtlVlm: '42000000' },
+            { markPx: '3420', dayNtlVlm: '190000000' }
+          ]
+        ]
+      };
+    }
+
+    if (body.type === 'clearinghouseState') {
+      assert.equal(body.dex, 'xyz', 'stocks clearinghouseState requests dex=xyz');
+      const addr = body.user.toLowerCase();
+      if (addr === lbStocks1) {
+        return {
+          ok: true,
+          json: async () => ({
+            marginSummary: { accountValue: '42000000', totalNtlPos: '65000000' },
+            assetPositions: [
+              {
+                position: {
+                  coin: 'xyz:XYZ100',
+                  szi: '1500',
+                  entryPx: '25800',
+                  positionValue: '39150000',
+                  unrealizedPnl: '450000',
+                  returnOnEquity: '0.14',
+                  leverage: { type: 'isolated', value: 10 },
+                  liquidationPx: '22000'
+                }
+              },
+              {
+                position: {
+                  coin: 'xyz:RKLB',
+                  szi: '-800000',
+                  entryPx: '33.1',
+                  positionValue: '25850000',
+                  unrealizedPnl: '480000',
+                  returnOnEquity: '0.19',
+                  leverage: { type: 'cross', value: 5 },
+                  liquidationPx: '41.0'
+                }
+              }
+            ]
+          })
+        };
+      }
+      if (addr === lbStocks2) {
+        return {
+          ok: true,
+          json: async () => ({
+            marginSummary: { accountValue: '18000000', totalNtlPos: '24000000' },
+            assetPositions: [
+              {
+                position: {
+                  coin: 'xyz:NVDA',
+                  szi: '127320',
+                  entryPx: '185.0',
+                  positionValue: '24000000',
+                  unrealizedPnl: '445000',
+                  returnOnEquity: '0.21',
+                  leverage: { type: 'cross', value: 10 },
+                  liquidationPx: '152.0'
+                }
+              }
+            ]
+          })
+        };
+      }
+      if (addr === customTradfiZero) {
+        return {
+          ok: true,
+          json: async () => ({
+            marginSummary: { accountValue: '510000', totalNtlPos: '0' },
+            assetPositions: []
+          })
+        };
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          marginSummary: { accountValue: '9000000', totalNtlPos: '0' },
+          assetPositions: []
+        })
+      };
+    }
+
+    if (body.type === 'userFillsByTime') {
+      if (body.user.toLowerCase() !== lbStocks1) {
+        return { ok: true, json: async () => [] };
+      }
+      lb1FillsQueries++;
+      const recentCutoff = now - 10 * 60 * 1000;
+      if (body.startTime < recentCutoff) {
+        // Simulate 2000 older mainnet fills capping the initial 12h lookback query
+        return {
+          ok: true,
+          json: async () => Array.from({ length: 2000 }, (_, i) => ({
+            coin: 'BTC',
+            px: '80000',
+            sz: '0.25',
+            time: now - 11 * 3600 * 1000 + i * 1000,
+            dir: 'Open Long',
+            side: 'B',
+            closedPnl: '0',
+            hash: `0xold${i}`,
+            tid: i + 1
+          }))
+        };
+      }
+      // Tail catch-up query (now - 10m): latest xyz fills + one BTC fill (must be filtered out)
+      return {
+        ok: true,
+        json: async () => [
+          { coin: 'xyz:XYZ100', px: '26100', sz: '10', time: now - 25_000, dir: 'Open Long', side: 'B', closedPnl: '0', hash: '0xxyz1', tid: 9001 },
+          { coin: 'xyz:NVDA', px: '188.5', sz: '800', time: now - 90_000, dir: 'Open Short', side: 'A', closedPnl: '0', hash: '0xxyz2', tid: 9002 },
+          { coin: 'BTC', px: '80000', sz: '2', time: now - 15_000, dir: 'Open Long', side: 'B', closedPnl: '0', hash: '0xbtc9', tid: 9003 }
+        ]
+      };
+    }
+
+    throw new Error(`Unexpected body: ${JSON.stringify(body)}`);
+  };
+
+  const service = new CryptoWhaleService({ fetchFn: mockFetch, ttlMs: 60000 });
+  const data = await service.getWhaleTrackerData({
+    category: 'stocks',
+    topN: 8,
+    customWallets: `${customTradfiZero}|My TradFi Watch`
+  });
+
+  assert.equal(data.ok, true);
+  assert.equal(data.category, 'stocks');
+  assert.equal(data.isLive, true);
+  assert.equal(data.isSample, false);
+  assert.equal(data.source, 'hyperliquid-xyz-api');
+  assert.equal(data.provider, 'Hyperliquid HIP-3 (TradeXYZ)');
+  assert.equal(data.meta.dex, 'xyz');
+  assert.equal(data.meta.topN, 8);
+  assert.equal(data.whales.length, 3, '2 active xyz whales + 1 zero-position custom TradFi wallet');
+
+  const topWhale = data.whales[0];
+  assert.equal(topWhale.name, 'XyzSemiDesk');
+  assert.equal(topWhale.positions[0].coin, 'XYZ100');
+  assert.equal(topWhale.positions[0].chartSymbol, 'QQQ');
+  assert.equal(topWhale.positions[1].coin, 'RKLB');
+  assert.equal(topWhale.positions[1].chartSymbol, 'RKLB', 'TradFi tickers must never get -USD suffix');
+  assert.equal(data.whales[1].positions[0].coin, 'NVDA');
+  assert.equal(data.whales[1].positions[0].chartSymbol, 'NVDA');
+
+  const customZeroEntry = data.whales.find(w => w.address === customTradfiZero);
+  assert.ok(customZeroEntry && customZeroEntry.isCustom && customZeroEntry.accountValue === 510000);
+
+  assert.equal(data.assetVolumes.XYZ100, 447000000);
+  assert.equal(data.assetVolumes.GOLD, 190000000);
+
+  assert.equal(lb1FillsQueries, 2, 'Triggers 10m tail query when 12h userFillsByTime hits 2000 limit');
+  assert.equal(data.activityLogs.length, 2, 'Only xyz:* fills retained in TradFi activity logs');
+  assert.equal(data.activityLogs[0].coin, 'XYZ100');
+  assert.equal(data.activityLogs[0].chartSymbol, 'QQQ');
+  assert.equal(data.activityLogs[1].coin, 'NVDA');
+  assert.ok(!data.activityLogs.some(l => l.coin === 'BTC'), 'Mainnet crypto fills filtered from TradFi logs');
+});
+

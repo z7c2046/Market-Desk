@@ -1606,9 +1606,9 @@
 
       <div class="cw-toolbar-right">
         <span class="cw-market-desc muted">
-          {{ isWhaleDatasetSample ? '样本持仓策略 · 静态演示账户' : (isWhaleDatasetLive ? ('Hyperliquid L1 实时 · Top ' + whaleTopN + (customWallets.length ? ' + ' + customWallets.length + ' 自选' : '')) : '离线缓存快照') }} · {{ sankeyKpiSummary.walletCount }} 个钱包 · {{ sankeyKpiSummary.assetCount }} 个标的
+          {{ isWhaleDatasetSample ? '样本持仓策略 · 静态演示账户' : (isWhaleDatasetLive ? ((whaleCategory === 'stocks' ? 'Hyperliquid HIP-3 (xyz) 实时' : 'Hyperliquid L1 实时') + ' · Top ' + whaleTopN + (customWallets.length ? ' + ' + customWallets.length + ' 自选' : '')) : '离线缓存快照') }} · {{ sankeyKpiSummary.walletCount }} 个钱包 · {{ sankeyKpiSummary.assetCount }} 个标的
         </span>
-        <label v-if="whaleCategory === 'crypto'" class="cw-topn-wrap" title="选择自动追踪 Hyperliquid 排行榜前 N 大活跃巨鲸数量">
+        <label v-if="!isWhaleDatasetSample" class="cw-topn-wrap" title="选择自动追踪 Hyperliquid 排行榜前 N 大活跃巨鲸数量">
           <span class="cw-topn-label">榜单</span>
           <select
             class="cw-topn-select font-mono"
@@ -1620,7 +1620,7 @@
           </select>
         </label>
         <button
-          v-if="whaleCategory === 'crypto'"
+          v-if="!isWhaleDatasetSample"
           type="button"
           class="cw-custom-btn"
           :class="{ 'has-items': customWallets.length > 0 }"
@@ -1764,8 +1764,8 @@
         </div>
       </div>
 
-      <!-- 正在调仓实时流光通知条（仅在实盘链上市场展示，TradFi 静态样本不伪造实时异动） -->
-      <div v-if="whaleCategory === 'crypto'" class="cw-now-strip">
+      <!-- 正在调仓实时流光通知条（仅在实盘链上市场展示，离线静态样本不伪造实时异动） -->
+      <div v-if="!isWhaleDatasetSample" class="cw-now-strip">
         <span class="cw-now-label">正在调仓</span>
         <div class="cw-now-content">
           <span v-if="nowRebalanceItems.length === 0" class="cw-now-empty muted">
@@ -1927,7 +1927,7 @@
 
       <div class="cw-chart-footer">
         <div class="cw-chart-legend">
-          <template v-if="whaleCategory === 'crypto'">
+          <template v-if="!isWhaleDatasetSample">
             <span><i class="is-ribbon"></i>流带宽度＝本市场名义持仓</span>
             <span><i class="is-long"></i>多仓光带 (仅实盘异动触发)</span>
             <span><i class="is-short"></i>空仓光带 (仅实盘异动触发)</span>
@@ -1959,7 +1959,7 @@
           </div>
           <div class="cw-ph-tools">
             <div
-              v-if="whaleCategory === 'crypto' && customWallets.length > 0"
+              v-if="!isWhaleDatasetSample && customWallets.length > 0"
               class="cw-seg-tabs cw-scope-tabs"
               role="group"
               aria-label="钱包来源筛选"
@@ -1980,7 +1980,7 @@
               >仅自选 <i class="font-mono">{{ customWallets.length }}</i></button>
             </div>
             <button
-              v-if="whaleCategory === 'crypto'"
+              v-if="!isWhaleDatasetSample"
               type="button"
               class="cw-add-inline-btn"
               @click="openCustomWalletManager"
@@ -2022,13 +2022,13 @@
                       <div class="cw-wt-name-row">
                         <button type="button" class="cw-wt-name" @click.stop="selectWhaleWallet(w.walletKey)">{{ w.name }}</button>
                         <span
-                          v-if="whaleCategory === 'crypto'"
+                          v-if="!isWhaleDatasetSample"
                           class="cw-src-pill"
                           :class="w.isCustom ? 'is-custom' : (w.isCurated ? 'is-core' : 'is-auto')"
                           :title="w.isCustom ? '自定义自选监控钱包' : (w.isCurated ? '核心档案巨鲸' : 'Hyperliquid 榜单自动发现')"
                         >{{ w.isCustom ? '自选' : (w.isCurated ? '核心' : '榜单') }}</span>
                         <button
-                          v-if="whaleCategory === 'crypto' && w.isCustom"
+                          v-if="!isWhaleDatasetSample && w.isCustom"
                           type="button"
                           class="cw-row-remove-btn"
                           title="从自选监控中移除"
@@ -2075,7 +2075,7 @@
         </div>
 
         <div class="cw-table-footer">
-          <span>{{ isWhaleDatasetSample ? '静态样本策略持仓 · 非实时链上流' : ('Hyperliquid 榜单 Top ' + whaleTopN + (customWallets.length ? ' + ' + customWallets.length + ' 自选钱包' : '') + ' · 按持仓降序') }}</span>
+          <span>{{ isWhaleDatasetSample ? '静态样本策略持仓 · 非实时链上流' : ((whaleCategory === 'stocks' ? 'HIP-3 (xyz) ' : 'Hyperliquid ') + '榜单 Top ' + whaleTopN + (customWallets.length ? ' + ' + customWallets.length + ' 自选钱包' : '') + ' · 按持仓降序') }}</span>
           <span class="font-mono">{{ isWhaleDatasetSample ? '静态模型口径' : (isWhaleDatasetLive ? ('同步 ' + (lastWhaleSyncAt || '实时')) : '离线缓存') }}</span>
         </div>
       </section>
@@ -2096,7 +2096,7 @@
               <span v-if="copiedWhaleAddress === selectedWhaleRecord.address" class="cw-copied">✓</span>
             </button>
             <span
-              v-if="selectedWhaleRecord && whaleCategory === 'crypto'"
+              v-if="selectedWhaleRecord && !isWhaleDatasetSample"
               class="cw-src-pill"
               :class="selectedWhaleRecord.isCustom ? 'is-custom' : (selectedWhaleRecord.isCurated ? 'is-core' : 'is-auto')"
             >{{ selectedWhaleRecord.isCustom ? '自选' : (selectedWhaleRecord.isCurated ? '核心' : '榜单') }}</span>
@@ -2135,7 +2135,7 @@
           <div v-if="selectedWhaleRecord.displayPositions.length === 0" class="cw-empty-row cw-pos-empty">
             <span class="muted">
               {{ selectedWhaleRecord.isCustom
-                ? '该自选钱包当前在 Hyperliquid L1 暂无活跃永续合约持仓（已纳入每 15s 自动监控队列）'
+                ? ('该自选钱包当前在 ' + (whaleCategory === 'stocks' ? 'Hyperliquid HIP-3 (xyz)' : 'Hyperliquid L1') + ' 暂无活跃永续合约持仓（已纳入每 15s 自动监控队列）')
                 : '当前筛选方向下无匹配永续合约持仓' }}
             </span>
           </div>
@@ -2335,7 +2335,7 @@
         <div class="cw-sec-summary">
           <span class="cw-sec-summary-title">全市场行情与异动归档</span>
           <span class="cw-sec-summary-sub font-mono">
-            {{ whaleCategory === 'stocks' ? ('TradFi 正股溢折价 · 24H 成交 · ' + activeFlowRows.length + ' 个标的 · 样本策略无实时异动') : ('主流加密资产 24H 资金流向 · ' + activeFlowRows.length + ' 个标的 · ' + whaleActivityLogs.length + ' 条 12H 实盘成交') }}
+            {{ whaleCategory === 'stocks' ? ('TradFi 正股溢折价 · 24H 成交 · ' + activeFlowRows.length + ' 个标的 · ' + (isWhaleDatasetSample ? '样本策略无实时异动' : whaleActivityLogs.length + ' 条 12H 实盘成交')) : ('主流加密资产 24H 资金流向 · ' + activeFlowRows.length + ' 个标的 · ' + whaleActivityLogs.length + ' 条 12H 实盘成交') }}
           </span>
         </div>
         <button
@@ -2372,7 +2372,7 @@
             :aria-selected="secondaryFlowTab === 'feed'"
             @click="secondaryFlowTab = 'feed'"
           >
-            <span>{{ whaleCategory === 'stocks' ? '调仓异动记录' : '12H 实盘调仓' }}</span>
+            <span>{{ isWhaleDatasetSample ? '调仓异动记录' : '12H 实盘调仓' }}</span>
             <i class="font-mono">{{ whaleActivityLogs.length }}</i>
           </button>
         </div>
@@ -2624,7 +2624,7 @@
           <div class="cw-feed-wrap">
             <div v-if="whaleActivityLogs.length === 0" class="cw-empty-row">
               <span class="muted">
-                {{ isWhaleDatasetSample ? 'TradFi 当前使用静态样本持仓模型，暂无实盘成交流记录' : (isWhaleDatasetLive ? '近 12 小时内跟踪巨鲸暂无达到门槛的链上成交记录' : '离线缓存模式下暂不显示历史成交记录') }}
+                {{ isWhaleDatasetSample ? '当前使用静态样本持仓模型，暂无实盘成交流记录' : (isWhaleDatasetLive ? ('近 12 小时内跟踪巨鲸暂无达到门槛的' + (whaleCategory === 'stocks' ? ' HIP-3 (xyz) ' : '') + '链上成交记录') : '离线缓存模式下暂不显示历史成交记录') }}
               </span>
             </div>
             <div v-else class="cw-feed-list font-mono">
@@ -4994,7 +4994,7 @@
     <div class="modal-heading">
       <div>
         <h2>自定义巨鲸钱包监控</h2>
-        <p class="cw-custom-modal-sub muted">与 Hyperliquid 榜单 Top {{ whaleTopN }} 自动合并 · 即使当前 0 持仓也将每 15s 同步状态</p>
+        <p class="cw-custom-modal-sub muted">与 Hyperliquid L1 / HIP-3 (xyz) 榜单 Top {{ whaleTopN }} 自动合并 · 即使当前 0 持仓也将每 15s 同步状态</p>
       </div>
       <button type="button" class="modal-close" aria-label="关闭" @click="closeCustomWalletManager">×</button>
     </div>

@@ -2366,3 +2366,313 @@ test('Crypto Workspace: dynamic Leaderboard Top N selector, custom wallet manage
   assert.deepEqual(ui.errors, []);
 });
 
+test('Crypto Workspace: live HIP-3 (xyz) TradFi mode enables Top N, Custom Wallets, xyz fills, and 15s polling', async t => {
+  const whaleUrls = [];
+  const intervals = new Map();
+  let intervalId = 300000;
+  let now = 1_794_310_000_000;
+  const customTradfiAddr = '0xcccccccccccccccccccccccccccccccccccccccc';
+  let emitFreshXyzFill = false;
+
+  const buildStocksPayload = ({ topN = 12, customRaw = '' } = {}) => {
+    const whales = [
+      {
+        address: '0x7111111111111111111111111111111111111111',
+        shortAddress: '0x7111...1111',
+        name: 'XyzSemiDesk',
+        tag: 'HIP-3 TradFi 千万级巨鲸',
+        avatar: '🐋',
+        isCurated: false,
+        sourceType: 'leaderboard',
+        sourceLabel: '榜单发现',
+        accountValue: 42_000_000,
+        totalNtlPos: 65_000_000,
+        netExposure: 13_300_000,
+        netBiasLabel: '净多',
+        longNotional: 39_150_000,
+        shortNotional: 25_850_000,
+        positions: [
+          {
+            coin: 'XYZ100',
+            chartSymbol: 'QQQ',
+            side: 'LONG',
+            sideLabel: '做多',
+            isLong: true,
+            size: 1500,
+            entryPx: 25800,
+            markPx: 26100,
+            positionValue: 39_150_000,
+            unrealizedPnl: 450_000,
+            roePct: 14.0,
+            leverage: 10,
+            leverageType: '全仓',
+            leverageLabel: '10x 全仓',
+            liquidationPx: 22000,
+            liqDistancePct: 15.7
+          },
+          {
+            coin: 'NVDA',
+            chartSymbol: 'NVDA',
+            side: 'SHORT',
+            sideLabel: '做空',
+            isLong: false,
+            size: 137135,
+            entryPx: 190.0,
+            markPx: 188.5,
+            positionValue: 25_850_000,
+            unrealizedPnl: 205_000,
+            roePct: 8.2,
+            leverage: 10,
+            leverageType: '全仓',
+            leverageLabel: '10x 全仓',
+            liquidationPx: 220.0,
+            liqDistancePct: 16.7
+          }
+        ]
+      },
+      {
+        address: '0x7222222222222222222222222222222222222222',
+        shortAddress: '0x7222...2222',
+        name: 'XyzIndexArb',
+        tag: 'HIP-3 TradFi 榜单巨鲸',
+        avatar: '🏛️',
+        isCurated: false,
+        sourceType: 'leaderboard',
+        sourceLabel: '榜单发现',
+        accountValue: 18_000_000,
+        totalNtlPos: 24_000_000,
+        netExposure: 24_000_000,
+        netBiasLabel: '净多',
+        longNotional: 24_000_000,
+        shortNotional: 0,
+        positions: [
+          {
+            coin: 'NVDA',
+            chartSymbol: 'NVDA',
+            side: 'LONG',
+            sideLabel: '做多',
+            isLong: true,
+            size: 127320,
+            entryPx: 185.0,
+            markPx: 188.5,
+            positionValue: 24_000_000,
+            unrealizedPnl: 445_000,
+            roePct: 21.0,
+            leverage: 10,
+            leverageType: '全仓',
+            leverageLabel: '10x 全仓',
+            liquidationPx: 152.0,
+            liqDistancePct: 19.4
+          }
+        ]
+      }
+    ];
+
+    if (topN >= 16) {
+      whales.push({
+        address: '0x7333333333333333333333333333333333333333',
+        shortAddress: '0x7333...3333',
+        name: 'XyzGoldFund',
+        tag: 'HIP-3 TradFi 榜单巨鲸',
+        avatar: '🐋',
+        isCurated: false,
+        sourceType: 'leaderboard',
+        sourceLabel: '榜单发现',
+        accountValue: 11_000_000,
+        totalNtlPos: 15_000_000,
+        netExposure: 15_000_000,
+        netBiasLabel: '净多',
+        longNotional: 15_000_000,
+        shortNotional: 0,
+        positions: [
+          {
+            coin: 'GOLD',
+            chartSymbol: 'GC=F',
+            side: 'LONG',
+            sideLabel: '做多',
+            isLong: true,
+            size: 4385,
+            entryPx: 3390,
+            markPx: 3420,
+            positionValue: 15_000_000,
+            unrealizedPnl: 131_500,
+            roePct: 9.5,
+            leverage: 8,
+            leverageType: '全仓',
+            leverageLabel: '8x 全仓',
+            liquidationPx: 2950,
+            liqDistancePct: 13.7
+          }
+        ]
+      });
+    }
+
+    if (customRaw.includes(customTradfiAddr)) {
+      const pipeLabel = decodeURIComponent(customRaw.split(',')[0].split('|')[1] || '我的美股一号');
+      whales.push({
+        address: customTradfiAddr,
+        shortAddress: '0xcccc...cccc',
+        name: pipeLabel,
+        tag: '自选链上钱包',
+        avatar: '⭐',
+        isCustom: true,
+        isCurated: false,
+        sourceType: 'custom',
+        sourceLabel: '自选监控',
+        accountValue: 125_000,
+        totalNtlPos: 0,
+        netExposure: 0,
+        netBiasLabel: '暂无持仓',
+        longNotional: 0,
+        shortNotional: 0,
+        positions: []
+      });
+    }
+
+    return {
+      ok: true,
+      category: 'stocks',
+      provider: 'Hyperliquid HIP-3 (TradeXYZ)',
+      isLive: true,
+      isSample: false,
+      source: 'hyperliquid-xyz-api',
+      fetchedAt: new Date(now).toISOString(),
+      meta: { topN, dex: 'xyz', customCount: customRaw ? 1 : 0, leaderboardActive: true },
+      aggregate: {
+        totalTrackedWhales: whales.length,
+        totalEquity: 60_000_000,
+        totalOI: 89_000_000,
+        totalLongNotional: 63_150_000,
+        totalShortNotional: 25_850_000,
+        longRatio: 71.0,
+        shortRatio: 29.0,
+        sentiment: '巨鲸偏向做多 BULLISH',
+        sentimentColor: 'long',
+        topCoins: [{ coin: 'NVDA', totalNtl: 49_850_000, longPct: 48, shortPct: 52 }]
+      },
+      whales,
+      assetVolumes: { NVDA: 654_000_000, XYZ100: 447_000_000, GOLD: 190_000_000 },
+      activityLogs: emitFreshXyzFill
+        ? [
+          {
+            id: 'xyz-live-fill-1',
+            time: now - 30_000,
+            ageMs: 30_000,
+            timeAgo: '刚刚',
+            whaleName: 'XyzIndexArb',
+            whaleAddress: '0x7222222222222222222222222222222222222222',
+            action: '开仓做多',
+            shortAction: '开多',
+            isLong: true,
+            isIncrease: true,
+            isLiveFill: true,
+            coin: 'NVDA',
+            chartSymbol: 'NVDA',
+            valueUsd: 320_000,
+            valueText: '$320K'
+          }
+        ]
+        : []
+    };
+  };
+
+  const ui = await mount(t, async url => {
+    const u = new URL(url, 'http://localhost');
+    if (u.pathname === '/api/crypto/whales') {
+      whaleUrls.push(url);
+      if (u.searchParams.get('category') === 'stocks') {
+        const topN = Number(u.searchParams.get('topN') || 12);
+        const customRaw = u.searchParams.get('custom') || '';
+        return { ok: true, json: async () => buildStocksPayload({ topN, customRaw }) };
+      }
+      return { ok: true, json: async () => fixture(url) };
+    }
+    return { ok: true, json: async () => fixture(url) };
+  }, null, w => {
+    Object.defineProperty(w.document, 'hidden', { configurable: true, get: () => false });
+    w.Date.now = () => now;
+    const realClearInterval = w.clearInterval.bind(w);
+    w.setInterval = (fn, ms) => {
+      const id = ++intervalId;
+      intervals.set(id, { fn, ms });
+      return id;
+    };
+    w.clearInterval = id => {
+      intervals.delete(id);
+      realClearInterval(id);
+    };
+  });
+
+  await ui.click('加密货币');
+  await tick();
+  await tick();
+
+  // Switch to TradFi -> live HIP-3 (xyz) mode activates Top N, Custom Wallet, 正在调仓, and 15s polling
+  const catBtns = ui.w.document.querySelectorAll('.whale-cat-btn');
+  catBtns[1].click();
+  await tick();
+  await tick();
+
+  assert.match(ui.w.document.querySelector('#cw-flow-title').textContent, /TradFi · 巨鲸持仓分布/);
+  assert.match(ui.w.document.querySelector('.cw-market-desc').textContent, /Hyperliquid HIP-3 \(xyz\) 实时 · Top 12/);
+  assert.equal(ui.w.document.querySelector('.cw-sample-pill'), null, 'Sample pill must not render in live HIP-3 mode');
+
+  const topNSelect = ui.w.document.querySelector('.cw-topn-select');
+  assert.ok(topNSelect, 'Top N selector renders on live TradFi');
+  assert.ok(ui.w.document.querySelector('.cw-custom-btn'), 'Custom wallet button renders on live TradFi');
+  assert.ok(ui.w.document.querySelector('.cw-now-strip'), '正在调仓 bar renders on live TradFi');
+  assert.ok([...intervals.values()].some(e => e.ms === 15000), '15s poller stays active on live TradFi');
+
+  // Change Top N to 16 -> stays on TradFi & fetches category=stocks&topN=16
+  topNSelect.value = '16';
+  topNSelect.dispatchEvent(new ui.w.Event('change', { bubbles: true }));
+  await tick();
+  await tick();
+
+  const lastTopNUrl = new URL(whaleUrls.at(-1), 'http://localhost');
+  assert.equal(lastTopNUrl.searchParams.get('category'), 'stocks');
+  assert.equal(lastTopNUrl.searchParams.get('topN'), '16');
+  assert.match(ui.w.document.querySelector('#cw-flow-title').textContent, /TradFi · 巨鲸持仓分布/);
+  assert.equal(ui.w.document.querySelectorAll('.cw-wallet-row').length, 3, '3rd HIP-3 xyz whale appears for Top 16');
+
+  // Add custom wallet while on TradFi -> stays on TradFi & passes category=stocks
+  ui.w.document.querySelector('.cw-custom-btn').click();
+  await tick();
+  const modal = ui.w.document.querySelector('.cw-custom-modal-card');
+  const addrInput = modal.querySelector('.cw-custom-addr-input');
+  const labelInput = modal.querySelector('.cw-custom-label-input');
+  addrInput.value = customTradfiAddr;
+  addrInput.dispatchEvent(new ui.w.Event('input', { bubbles: true }));
+  labelInput.value = '我的美股一号';
+  labelInput.dispatchEvent(new ui.w.Event('input', { bubbles: true }));
+  modal.querySelector('form.cw-custom-form').dispatchEvent(new ui.w.Event('submit', { bubbles: true, cancelable: true }));
+  await tick();
+  await tick();
+
+  const lastCustomUrl = new URL(whaleUrls.at(-1), 'http://localhost');
+  assert.equal(lastCustomUrl.searchParams.get('category'), 'stocks');
+  assert.ok(lastCustomUrl.searchParams.get('custom').includes(customTradfiAddr));
+  assert.match(ui.w.document.querySelector('#cw-positions-title').textContent, /我的美股一号 · 持仓明细/);
+  assert.match(ui.w.document.querySelector('.cw-pos-empty').textContent, /Hyperliquid HIP-3 \(xyz\)/);
+
+  // Remove custom wallet while on TradFi -> stays on TradFi, restores 全部钱包
+  ui.w.document.querySelector('.cw-row-remove-btn').click();
+  await tick();
+  await tick();
+  assert.equal(new URL(whaleUrls.at(-1), 'http://localhost').searchParams.get('category'), 'stocks');
+  assert.equal(ui.w.document.querySelector('#cw-positions-title').textContent.trim(), '全部钱包 · 持仓明细');
+
+  // Trigger 15s poll on TradFi -> emits live xyz fill pulse beam
+  now += 15000;
+  emitFreshXyzFill = true;
+  const pollEntry = [...intervals.values()].find(e => e.ms === 15000);
+  pollEntry.fn();
+  await tick();
+  await tick();
+
+  assert.equal(ui.w.document.querySelectorAll('.cw-sk-pulse-beam').length, 1, 'Live xyz fill pulses beam on TradFi Sankey');
+  assert.match(ui.w.document.querySelector('.cw-now-strip').textContent, /XyzIndexArb → NVDA.*开多/);
+
+  assert.deepEqual(ui.errors, []);
+});
+
