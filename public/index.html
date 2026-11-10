@@ -1534,34 +1534,285 @@
 </template>
 
 <template v-if="page==='crypto'">
-  <!-- Crypto Workspace Skeleton -->
-  <div v-if="states.crypto.loading && !cryptoList.length" class="crypto-skeleton-wrap cw-workspace" aria-hidden="true">
+  <!-- Crypto Workspace & Sankey Skeleton Screen -->
+  <div v-if="isCryptoSkeleton" class="crypto-skeleton-wrap cw-workspace" aria-hidden="true">
+    <!-- 1. 顶部市场切换与工具栏骨架 -->
     <div class="cw-top-bar">
-      <div class="cw-market-switcher">
-        <span class="sk" style="width: 176px; height: 42px; border-radius: 8px;"></span>
-        <span class="sk" style="width: 176px; height: 42px; border-radius: 8px;"></span>
+      <div class="cw-market-switcher" role="tablist" aria-label="市场切换骨架">
+        <div class="whale-cat-btn cw-market-card" :class="{ active: whaleCategory === 'crypto' }">
+          <div class="cw-mc-top">
+            <span class="cw-mc-title">加密货币</span>
+            <span class="sk sk-strong" style="width: 82px; height: 16px;"></span>
+          </div>
+          <div class="cw-mc-bar" aria-hidden="true">
+            <span class="sk" style="width: 100%; height: 100%;"></span>
+          </div>
+        </div>
+
+        <div class="whale-cat-btn cw-market-card" :class="{ active: whaleCategory === 'stocks' }">
+          <div class="cw-mc-top">
+            <span class="cw-mc-title">TradFi</span>
+            <span class="sk sk-strong" style="width: 82px; height: 16px;"></span>
+          </div>
+          <div class="cw-mc-bar" aria-hidden="true">
+            <span class="sk" style="width: 100%; height: 100%;"></span>
+          </div>
+        </div>
       </div>
+
       <div class="cw-toolbar-right">
-        <span class="sk" style="width: 210px; height: 34px; border-radius: 7px;"></span>
-        <span class="sk" style="width: 34px; height: 34px; border-radius: 7px;"></span>
+        <span class="sk sk-small" style="width: 190px; height: 14px;"></span>
+        <span class="sk sk-pill" style="width: 68px; height: 28px;"></span>
+        <span class="sk sk-pill" style="width: 78px; height: 28px;"></span>
+        <span class="sk" style="width: 150px; height: 28px; border-radius: 7px;"></span>
+        <span class="sk" style="width: 28px; height: 28px; border-radius: 7px;"></span>
       </div>
     </div>
+
+    <!-- 2. 四维市场持仓总览 KPI 卡片骨架 -->
     <div class="cw-telemetry-grid">
-      <div v-for="i in 4" :key="i" class="cw-telemetry-card cw-kpi-metric">
-        <div class="cw-tel-meta">
-          <span class="sk sk-small" style="width: 72px; height: 14px;"></span>
-          <span class="sk sk-strong" style="width: 112px; height: 24px; margin-top: 8px;"></span>
-          <span class="sk sk-small" style="width: 128px; height: 12px; margin-top: 8px;"></span>
+      <!-- Card 1: 名义持仓 -->
+      <div class="cw-telemetry-card cw-kpi-metric">
+        <div class="cw-tel-meta cw-kpi-full">
+          <div class="cw-tel-head">
+            <span class="cw-tel-label">名义持仓</span>
+            <span class="cw-tag-pill font-mono">{{ whaleCategory === 'stocks' ? 'TradFi' : 'CRYPTO' }}</span>
+          </div>
+          <span class="sk sk-strong" style="width: 118px; height: 24px; margin: 4px 0;"></span>
+          <span class="sk sk-small" style="width: 130px; height: 12px;"></span>
+        </div>
+      </div>
+
+      <!-- Card 2: 多仓 LONG -->
+      <div class="cw-telemetry-card cw-kpi-metric">
+        <div class="cw-tel-meta cw-kpi-full">
+          <div class="cw-tel-head">
+            <span class="cw-tel-label">多仓</span>
+            <span class="cw-tag-pill font-mono">LONG</span>
+          </div>
+          <span class="sk sk-strong" style="width: 108px; height: 24px; margin: 4px 0;"></span>
+          <span class="sk sk-small" style="width: 116px; height: 12px;"></span>
+        </div>
+      </div>
+
+      <!-- Card 3: 空仓 SHORT -->
+      <div class="cw-telemetry-card cw-kpi-metric">
+        <div class="cw-tel-meta cw-kpi-full">
+          <div class="cw-tel-head">
+            <span class="cw-tel-label">空仓</span>
+            <span class="cw-tag-pill font-mono">SHORT</span>
+          </div>
+          <span class="sk sk-strong" style="width: 108px; height: 24px; margin: 4px 0;"></span>
+          <span class="sk sk-small" style="width: 116px; height: 12px;"></span>
+        </div>
+      </div>
+
+      <!-- Card 4: 多空净敞口 -->
+      <div class="cw-telemetry-card cw-kpi-metric">
+        <div class="cw-tel-meta cw-kpi-full">
+          <div class="cw-tel-head">
+            <span class="cw-tel-label">多空净敞口</span>
+            <span class="sk sk-pill" style="width: 52px; height: 16px;"></span>
+          </div>
+          <span class="sk sk-strong" style="width: 104px; height: 24px; margin: 4px 0;"></span>
+          <span class="sk sk-small" style="width: 148px; height: 12px;"></span>
+        </div>
+        <div class="cw-kpi-split-track" aria-hidden="true">
+          <span class="sk" style="width: 100%; height: 100%;"></span>
         </div>
       </div>
     </div>
-    <section class="panel cw-sankey-panel" style="padding: 18px;">
-      <span class="sk sk-strong" style="width: 180px; height: 18px;"></span>
-      <span class="sk" style="display:block; width: 100%; height: 320px; margin-top: 16px; border-radius: 8px;"></span>
+
+    <!-- 3. 巨鲸持仓桑基图骨架屏 (左：6巨鲸节点 -> 中：贝塞尔曲线流带群 -> 右：5标的+其他节点) -->
+    <section class="panel cw-sankey-panel" aria-labelledby="cw-flow-sk-title">
+      <div class="cw-panel-head">
+        <div class="cw-ph-left">
+          <span class="cw-live-dot" aria-hidden="true"></span>
+          <h2 id="cw-flow-sk-title">{{ whaleCategory === 'stocks' ? 'TradFi' : '加密货币' }} · 巨鲸持仓分布</h2>
+          <span class="cw-tag-pill cw-selection-badge">全部钱包</span>
+        </div>
+        <div class="cw-ph-tools">
+          <div class="cw-seg-tabs cw-mode-seg" style="opacity: 0.65; pointer-events: none;">
+            <span class="cw-seg-btn active">全部</span>
+            <span class="cw-seg-btn">多仓</span>
+            <span class="cw-seg-btn">空仓</span>
+          </div>
+          <span class="sk sk-pill" style="width: 60px; height: 26px;"></span>
+        </div>
+      </div>
+
+      <!-- 正在调仓条骨架 -->
+      <div class="cw-now-strip" style="pointer-events: none;">
+        <span class="cw-now-label">正在调仓</span>
+        <div class="cw-now-content" style="display: flex; gap: 12px; align-items: center;">
+          <span class="sk" style="width: 220px; height: 16px; border-radius: 4px;"></span>
+          <span class="sk" style="width: 170px; height: 16px; border-radius: 4px;"></span>
+        </div>
+        <span class="sk" style="width: 80px; height: 14px; border-radius: 4px; margin-left: auto;"></span>
+      </div>
+
+      <!-- 响应式 SVG 桑基画布骨架 -->
+      <div class="cw-chart-wrap cw-sankey-skeleton-stage">
+        <svg
+          class="cw-sankey-svg cw-sankey-skeleton-svg"
+          xmlns="http://www.w3.org/2000/svg"
+          :view-box.camel="'0 0 1280 440'"
+          role="group"
+          aria-label="巨鲸桑基图加载中骨架屏"
+        >
+          <!-- 列头引导标题 -->
+          <text x="15" y="25" class="cw-sk-col-hdr">巨鲸钱包 · 本市场持仓</text>
+          <text x="626" y="25" class="cw-sk-col-hdr" text-anchor="middle">钱包 → 持仓标的</text>
+          <text x="1036" y="25" class="cw-sk-col-hdr">持仓标的 · 按链上成交量</text>
+          <text x="1266" y="25" class="cw-sk-col-hdr" text-anchor="end">标的总持仓</text>
+          <line x1="14" y1="39" x2="1266" y2="39" class="cw-sk-hdr-line" />
+
+          <!-- 中心流带骨架层 (曲线流带群) -->
+          <g class="cw-sk-links">
+            <path
+              v-for="(d, idx) in sankeySkeletonRibbons"
+              :key="idx"
+              class="cw-sk-sankey-ribbon"
+              :style="{ animationDelay: (idx * 0.1) + 's' }"
+              :d="d"
+            />
+          </g>
+
+          <!-- 左侧巨鲸钱包骨架节点 (6 席位) -->
+          <g class="cw-sk-wallets">
+            <g v-for="(w, idx) in sankeySkeletonWallets" :key="idx" class="cw-sk-wallet-node">
+              <rect class="cw-sk-wallet-outline" x="8" :y="w.middleY - 26" width="212" height="52" rx="6" />
+              <rect class="cw-sk-wallet-rail" x="227" :y="w.middleY - 20" width="5" height="40" rx="2" />
+              <rect class="cw-sk-avatar-bg" x="15" :y="w.middleY - 20" width="21" height="20" rx="5" />
+              <text class="cw-sk-avatar-txt numeric" x="25.5" :y="w.middleY - 6" text-anchor="middle">{{ String(idx + 1).padStart(2, '0') }}</text>
+              <rect class="cw-sk-text-pill" x="44" :y="w.middleY - 18" :width="w.nameWidth" height="12" rx="3" />
+              <rect class="cw-sk-text-pill" x="44" :y="w.middleY - 2" :width="w.tagWidth" height="9" rx="2" />
+              <rect class="cw-sk-text-pill" x="15" :y="w.middleY + 14" :width="w.valWidth" height="11" rx="3" />
+            </g>
+          </g>
+
+          <!-- 右侧持仓标的骨架节点 (5 独立标的 + 1 其他) -->
+          <g class="cw-sk-assets">
+            <g v-for="(a, idx) in sankeySkeletonAssets" :key="idx" class="cw-sk-asset-node">
+              <rect class="cw-sk-asset-rail" x="1020" :y="a.middleY - 20" width="5" height="40" rx="1.5" />
+              <rect class="cw-sk-text-pill" x="1036" :y="a.middleY - 14" :width="a.symWidth" height="13" rx="3" />
+              <rect class="cw-sk-text-pill" x="1036" :y="a.middleY + 4" :width="a.lblWidth" height="9" rx="2" />
+              <rect class="cw-sk-text-pill" :x="1266 - a.valWidth" :y="a.middleY - 13" :width="a.valWidth" height="12" rx="3" />
+              <rect class="cw-sk-mix-track" x="1218" :y="a.middleY + 5" width="48" height="3" rx="1.5" />
+            </g>
+          </g>
+        </svg>
+      </div>
+
+      <div class="cw-chart-footer">
+        <div class="cw-chart-legend">
+          <span><i class="is-ribbon"></i>流带宽度＝本市场名义持仓</span>
+          <span><i class="is-long"></i>多仓光带</span>
+          <span><i class="is-short"></i>空仓光带</span>
+          <span>→ 加仓　← 减仓</span>
+        </div>
+        <div class="cw-footer-right">
+          <span class="cw-footer-hint">正在加载链上巨鲸永续合约持仓明细...</span>
+        </div>
+      </div>
     </section>
+
+    <!-- 4. 下半区双栏骨架：左：巨鲸钱包表 / 右：持仓明细面板 -->
     <div class="cw-lower-grid">
-      <section class="panel" style="padding: 16px;"><span class="sk" style="display:block; width:100%; height: 220px;"></span></section>
-      <section class="panel" style="padding: 16px;"><span class="sk" style="display:block; width:100%; height: 220px;"></span></section>
+      <!-- 左栏：巨鲸钱包表骨架 -->
+      <section class="panel crypto-whale-tracker-panel cw-wallet-list-panel" aria-hidden="true" style="pointer-events: none;">
+        <div class="cw-panel-head">
+          <div class="cw-ph-left">
+            <h2>{{ whaleCategory === 'stocks' ? 'TradFi' : '加密货币' }} · 巨鲸钱包</h2>
+            <span class="sk sk-pill" style="width: 58px; height: 18px;"></span>
+          </div>
+          <div class="cw-ph-tools">
+            <span class="sk sk-pill" style="width: 72px; height: 26px;"></span>
+          </div>
+        </div>
+        <div class="cw-table-scroll">
+          <table class="cw-wallet-table">
+            <thead>
+              <tr>
+                <th class="text-left">钱包</th>
+                <th class="text-right">名义持仓</th>
+                <th class="text-right">多仓</th>
+                <th class="text-right">空仓</th>
+                <th class="text-right">多 / 空</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(row, idx) in cryptoWhaleSkeletonRows" :key="idx" class="cw-wallet-row">
+                <td class="text-left">
+                  <div class="cw-wt-title">
+                    <span class="sk" style="width: 22px; height: 20px; border-radius: 5px; flex-shrink: 0;"></span>
+                    <div class="cw-wt-meta" style="display: flex; flex-direction: column; gap: 4px;">
+                      <span class="sk" :style="{ width: row.nameWidth, height: '14px' }"></span>
+                      <span class="sk" :style="{ width: row.addrWidth, height: '11px' }"></span>
+                    </div>
+                  </div>
+                </td>
+                <td class="text-right font-mono"><span class="sk" style="width: 68px; height: 14px; margin-left: auto;"></span></td>
+                <td class="text-right font-mono"><span class="sk" style="width: 58px; height: 14px; margin-left: auto;"></span></td>
+                <td class="text-right font-mono"><span class="sk" style="width: 58px; height: 14px; margin-left: auto;"></span></td>
+                <td class="cw-wt-ratio-cell text-right">
+                  <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
+                    <span class="sk" style="width: 56px; height: 11px;"></span>
+                    <span class="sk" style="width: 46px; height: 4px; border-radius: 2px;"></span>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="cw-table-footer">
+          <span class="sk" style="width: 180px; height: 12px;"></span>
+          <span class="sk" style="width: 70px; height: 12px;"></span>
+        </div>
+      </section>
+
+      <!-- 右栏：持仓明细面板骨架 -->
+      <section class="panel cw-positions-detail-panel" aria-hidden="true" style="pointer-events: none;">
+        <div class="cw-panel-head">
+          <div class="cw-ph-left">
+            <h2>全部钱包 · 持仓明细</h2>
+          </div>
+          <div class="cw-ph-tools">
+            <span class="cw-tag-pill font-mono">{{ whaleCategory === 'stocks' ? 'TradFi' : 'CRYPTO' }}</span>
+          </div>
+        </div>
+        <div class="cw-table-scroll">
+          <table class="cw-agg-positions-table">
+            <thead>
+              <tr>
+                <th class="text-left">标的</th>
+                <th class="text-right">多仓</th>
+                <th class="text-right">空仓</th>
+                <th class="text-right">合计</th>
+                <th class="text-right"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(row, idx) in cryptoAssetSkeletonRows" :key="idx" class="cw-agg-row">
+                <td class="text-left">
+                  <div style="display: flex; flex-direction: column; gap: 4px;">
+                    <span class="sk" :style="{ width: row.symWidth, height: '14px' }"></span>
+                    <span class="sk" :style="{ width: row.lblWidth, height: '11px' }"></span>
+                  </div>
+                </td>
+                <td class="text-right font-mono"><span class="sk" style="width: 60px; height: 14px; margin-left: auto;"></span></td>
+                <td class="text-right font-mono"><span class="sk" style="width: 60px; height: 14px; margin-left: auto;"></span></td>
+                <td class="text-right font-mono"><span class="sk" style="width: 68px; height: 14px; margin-left: auto;"></span></td>
+                <td class="text-right"><span class="sk" style="width: 18px; height: 18px; border-radius: 4px; margin-left: auto;"></span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="cw-table-footer">
+          <span class="sk" style="width: 160px; height: 12px;"></span>
+          <span class="sk" style="width: 80px; height: 12px;"></span>
+        </div>
+      </section>
     </div>
   </div>
 

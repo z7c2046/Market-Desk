@@ -2771,4 +2771,76 @@ test('Flows Tab Switcher: renders as dual cw-market-card cards with title, value
   assert.deepEqual(ui.errors, []);
 });
 
+test('Crypto Workspace Skeleton: renders complete Sankey, 4 KPI cards and 2-column tables skeleton during loading and transitions smoothly upon data arrival', async t => {
+  let resolveWhales;
+  const whalesPromise = new Promise(resolve => { resolveWhales = resolve; });
+
+  const ui = await mount(t, async url => {
+    if (url.includes('/api/crypto/whales')) {
+      return whalesPromise;
+    }
+    return { ok: true, json: async () => fixture(url) };
+  });
+  const tick = () => new Promise(r => setTimeout(r, 25));
+
+  // 1. Navigate to Crypto module while /api/crypto/whales is held pending
+  await ui.click('加密货币');
+  await tick();
+  await tick();
+
+  // 2. Verify that .crypto-skeleton-wrap is rendered while data is pending
+  const skWrap = ui.w.document.querySelector('.crypto-skeleton-wrap');
+  assert.ok(skWrap, 'Crypto skeleton wrap is rendered while whale data is loading');
+  assert.equal(ui.w.document.querySelector('.crypto-dashboard-view'), null, 'Dashboard view is hidden during skeleton state');
+
+  // 3. Verify dual switcher cards in top bar
+  const switcherCards = skWrap.querySelectorAll('.cw-market-switcher .cw-market-card');
+  assert.equal(switcherCards.length, 2, '2 market switcher skeleton cards render');
+  assert.match(switcherCards[0].textContent, /加密货币/);
+  assert.match(switcherCards[1].textContent, /TradFi/);
+
+  // 4. Verify 4 Scoped Telemetry KPI cards skeleton
+  const kpiCards = skWrap.querySelectorAll('.cw-telemetry-grid .cw-telemetry-card');
+  assert.equal(kpiCards.length, 4, '4 telemetry KPI skeleton cards render');
+  assert.match(kpiCards[0].textContent, /名义持仓/);
+  assert.match(kpiCards[1].textContent, /多仓.*LONG/);
+  assert.match(kpiCards[2].textContent, /空仓.*SHORT/);
+  assert.match(kpiCards[3].textContent, /多空净敞口/);
+
+  // 5. Verify Sankey panel & responsive SVG skeleton stage
+  const sankeyPanel = skWrap.querySelector('.cw-sankey-panel');
+  assert.ok(sankeyPanel, 'Sankey panel skeleton renders');
+  const sankeySvg = sankeyPanel.querySelector('.cw-sankey-skeleton-svg');
+  assert.ok(sankeySvg, 'Sankey SVG skeleton renders');
+
+  // Check 6 wallet nodes on left
+  const walletNodes = sankeySvg.querySelectorAll('.cw-sk-wallets .cw-sk-wallet-node');
+  assert.equal(walletNodes.length, 6, 'Sankey SVG has 6 wallet skeleton nodes on left');
+
+  // Check central flowing ribbons
+  const ribbons = sankeySvg.querySelectorAll('.cw-sk-links .cw-sk-sankey-ribbon');
+  assert.ok(ribbons.length >= 10, 'Sankey SVG has multiple curved bezier ribbons connecting wallets to assets');
+
+  // Check 6 target asset nodes on right (5 top + 1 other)
+  const assetNodes = sankeySvg.querySelectorAll('.cw-sk-assets .cw-sk-asset-node');
+  assert.equal(assetNodes.length, 6, 'Sankey SVG has 6 asset skeleton nodes on right');
+
+  // 6. Verify lower 2-column tables skeleton
+  const walletTableRows = skWrap.querySelectorAll('.cw-wallet-list-panel .cw-wallet-row');
+  assert.equal(walletTableRows.length, 6, 'Whale list table has 6 skeleton rows');
+
+  const assetTableRows = skWrap.querySelectorAll('.cw-positions-detail-panel .cw-agg-row');
+  assert.equal(assetTableRows.length, 6, 'Aggregated positions table has 6 skeleton rows');
+
+  // 7. Resolve the whale data response and verify smooth transition to live view
+  resolveWhales({ ok: true, json: async () => fixture('/api/crypto/whales') });
+  await tick();
+  await tick();
+
+  assert.equal(ui.w.document.querySelector('.crypto-skeleton-wrap'), null, 'Skeleton wrap unmounts after data arrives');
+  assert.ok(ui.w.document.querySelector('.crypto-dashboard-view'), 'Live crypto dashboard view renders smoothly');
+
+  assert.deepEqual(ui.errors, []);
+});
+
 

@@ -15909,6 +15909,69 @@ body.is-loading .top-progress,
   flex-direction: column;
   gap: 16px;
 }
+.crypto-skeleton-wrap .cw-sankey-panel {
+  pointer-events: none;
+}
+.cw-sankey-skeleton-stage {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 8px;
+}
+.cw-sankey-skeleton-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  pointer-events: none;
+  user-select: none;
+}
+.cw-sankey-skeleton-svg .cw-sk-wallet-outline {
+  fill: var(--surface-card, rgba(255, 255, 255, 0.02));
+  stroke: var(--border-subtle, rgba(255, 255, 255, 0.06));
+}
+.cw-sankey-skeleton-svg .cw-sk-wallet-rail,
+.cw-sankey-skeleton-svg .cw-sk-asset-rail {
+  fill: var(--skeleton-high, #353a42);
+}
+.cw-sankey-skeleton-svg .cw-sk-avatar-bg {
+  fill: var(--surface-raised, rgba(255, 255, 255, 0.04));
+  stroke: var(--border-subtle, rgba(255, 255, 255, 0.06));
+}
+.cw-sankey-skeleton-svg .cw-sk-avatar-txt {
+  fill: var(--text-muted, #71717a);
+  opacity: 0.6;
+}
+.cw-sankey-skeleton-svg .cw-sk-mix-track {
+  fill: var(--skeleton-base, #24282e);
+}
+.cw-sk-sankey-ribbon {
+  fill: rgba(140, 160, 190, 0.09);
+  stroke: rgba(140, 160, 190, 0.13);
+  stroke-width: 0.6;
+  animation: cw-sk-ribbon-shimmer 2.2s ease-in-out infinite;
+}
+html.dark .cw-sk-sankey-ribbon {
+  fill: rgba(255, 255, 255, 0.038);
+  stroke: rgba(255, 255, 255, 0.06);
+}
+@keyframes cw-sk-ribbon-shimmer {
+  0%, 100% { opacity: 0.42; }
+  50% { opacity: 0.88; }
+}
+.cw-sk-text-pill {
+  fill: var(--skeleton-base, #24282e);
+  animation: cw-sk-text-pulse 2s ease-in-out infinite;
+}
+html.dark .cw-sk-text-pill {
+  fill: #262b33;
+}
+html:not(.dark) .cw-sk-text-pill {
+  fill: #e4e4e9;
+}
+@keyframes cw-sk-text-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 0.95; }
+}
 .crypto-kpi-skeleton-card {
   pointer-events: none;
   min-height: 170px;

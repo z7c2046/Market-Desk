@@ -1141,6 +1141,59 @@ createApp({ setup() {
     { x: 76, y: 78, size: 32 }
   ];
 
+  // Crypto Whale Workspace Sankey & Tables Skeleton Layout
+  const cryptoWhaleSkeletonRows = [
+    { nameWidth: '105px', addrWidth: '135px' },
+    { nameWidth: '92px',  addrWidth: '145px' },
+    { nameWidth: '115px', addrWidth: '128px' },
+    { nameWidth: '88px',  addrWidth: '140px' },
+    { nameWidth: '110px', addrWidth: '132px' },
+    { nameWidth: '96px',  addrWidth: '125px' }
+  ];
+
+  const cryptoAssetSkeletonRows = [
+    { symWidth: '48px', lblWidth: '88px' },
+    { symWidth: '54px', lblWidth: '95px' },
+    { symWidth: '50px', lblWidth: '78px' },
+    { symWidth: '46px', lblWidth: '84px' },
+    { symWidth: '52px', lblWidth: '92px' },
+    { symWidth: '42px', lblWidth: '70px' }
+  ];
+
+  const sankeySkeletonWallets = [
+    { y: 52,  middleY: 77,  nameWidth: 105, tagWidth: 125, valWidth: 64 },
+    { y: 116, middleY: 141, nameWidth: 92,  tagWidth: 138, valWidth: 58 },
+    { y: 180, middleY: 205, nameWidth: 115, tagWidth: 120, valWidth: 66 },
+    { y: 244, middleY: 269, nameWidth: 88,  tagWidth: 142, valWidth: 60 },
+    { y: 308, middleY: 333, nameWidth: 110, tagWidth: 130, valWidth: 62 },
+    { y: 372, middleY: 397, nameWidth: 96,  tagWidth: 124, valWidth: 56 }
+  ];
+
+  const sankeySkeletonAssets = [
+    { y: 52,  middleY: 77,  symWidth: 48, lblWidth: 88, valWidth: 58, isOther: false },
+    { y: 116, middleY: 141, symWidth: 54, lblWidth: 95, valWidth: 62, isOther: false },
+    { y: 180, middleY: 205, symWidth: 50, lblWidth: 78, valWidth: 54, isOther: false },
+    { y: 244, middleY: 269, symWidth: 46, lblWidth: 84, valWidth: 56, isOther: false },
+    { y: 308, middleY: 333, symWidth: 52, lblWidth: 92, valWidth: 60, isOther: false },
+    { y: 372, middleY: 397, symWidth: 42, lblWidth: 70, valWidth: 66, isOther: true }
+  ];
+
+  const sankeySkeletonRibbons = [
+    'M232.00,56.00 C610.24,56.00 641.76,56.00 1020.00,56.00 L1020.00,72.00 C641.76,72.00 610.24,72.00 232.00,72.00Z',
+    'M232.00,74.00 C610.24,74.00 641.76,120.00 1020.00,120.00 L1020.00,132.00 C641.76,132.00 610.24,86.00 232.00,86.00Z',
+    'M232.00,120.00 C610.24,120.00 641.76,74.00 1020.00,74.00 L1020.00,88.00 C641.76,88.00 610.24,134.00 232.00,134.00Z',
+    'M232.00,136.00 C610.24,136.00 641.76,184.00 1020.00,184.00 L1020.00,198.00 C641.76,198.00 610.24,150.00 232.00,150.00Z',
+    'M232.00,184.00 C610.24,184.00 641.76,134.00 1020.00,134.00 L1020.00,148.00 C641.76,148.00 610.24,198.00 232.00,198.00Z',
+    'M232.00,200.00 C610.24,200.00 641.76,248.00 1020.00,248.00 L1020.00,262.00 C641.76,262.00 610.24,214.00 232.00,214.00Z',
+    'M232.00,248.00 C610.24,248.00 641.76,200.00 1020.00,200.00 L1020.00,212.00 C641.76,212.00 610.24,260.00 232.00,260.00Z',
+    'M232.00,262.00 C610.24,262.00 641.76,312.00 1020.00,312.00 L1020.00,326.00 C641.76,326.00 610.24,276.00 232.00,276.00Z',
+    'M232.00,278.00 C610.24,278.00 641.76,376.00 1020.00,376.00 L1020.00,386.00 C641.76,386.00 610.24,288.00 232.00,288.00Z',
+    'M232.00,312.00 C610.24,312.00 641.76,264.00 1020.00,264.00 L1020.00,278.00 C641.76,278.00 610.24,326.00 232.00,326.00Z',
+    'M232.00,328.00 C610.24,328.00 641.76,388.00 1020.00,388.00 L1020.00,402.00 C641.76,402.00 610.24,342.00 232.00,342.00Z',
+    'M232.00,376.00 C610.24,376.00 641.76,328.00 1020.00,328.00 L1020.00,342.00 C641.76,342.00 610.24,390.00 232.00,390.00Z',
+    'M232.00,392.00 C610.24,392.00 641.76,404.00 1020.00,404.00 L1020.00,420.00 C641.76,420.00 610.24,408.00 232.00,408.00Z'
+  ];
+
   const isNavigating = ref(false);
   const isInitialLoading = ref(true);
   let navTimer = null;
@@ -3555,7 +3608,7 @@ createApp({ setup() {
     if (curr === 'options' && states.options.loading && !options.value) return true;
     if (curr === 'overview' && states.overview.loading && !overview.value) return true;
     if (curr === 'news' && states.news.loading && !news.value) return true;
-    if (curr === 'crypto' && states.crypto.loading && !cryptoData.value) return true;
+    if (curr === 'crypto' && (states.crypto.loading || cryptoWhaleLoading.value) && (!cryptoData.value || !cryptoWhaleData.value)) return true;
     if (curr === 'watchlist' && states.watchlist.loading && !Object.keys(quoteStore.value || {}).length) return true;
     return false;
   });
@@ -3566,6 +3619,19 @@ createApp({ setup() {
     const hasQuotes = Object.keys(quoteStore.value || {}).length > 0;
     if (hasQuotes) return false;
     return states.watchlist.loading || isInitialLoading.value;
+  });
+  const isCryptoSkeleton = computed(() => {
+    if (page.value !== 'crypto') return false;
+    const cat = whaleCategory.value === 'stocks' ? 'stocks' : 'crypto';
+    const targetData = cat === 'stocks' ? (stockWhaleData.value || cryptoWhaleData.value?.stockWhales || DEFAULT_STOCK_WHALES_PAYLOAD) : cryptoWhaleData.value;
+    const hasWhales = Array.isArray(targetData?.whales) && targetData.whales.length > 0;
+    if (hasWhales) return false;
+    // 当出现网络或接口异常且请求已结束时，避免永久卡在骨架屏，转由主界面错误/重试态接管
+    if (cryptoWhaleError.value && !cryptoWhaleLoading.value && !states.crypto.loading) {
+      return false;
+    }
+    // 未加载出巨鲸数据时，只要处于拉取中、旧行情加载中或初始挂载阶段，均展示与桑基图结构严格对齐的骨架屏
+    return Boolean(cryptoWhaleLoading.value || states.crypto.loading || isInitialLoading.value || !targetData);
   });
 
   watch(isPageLoading, (loading) => {
@@ -8136,7 +8202,7 @@ createApp({ setup() {
     stockModal, openHeatmapStockModal, closeStockModal, viewStockFromModal,
     undoAction, isInteractingWithTable,
     toast, importing, nyClock, nyClockDetailed, nyClockInfo, sessionStatusText, dateLabel,
-    isPageLoading, isWatchlistSkeleton, rwSkeletonRows, skeletonPattern, butterflySkeletonRows, klineCandleSkeletons, flowsBubbleSkeletons, triggerPageLoadingPulse,
+    isPageLoading, isWatchlistSkeleton, isCryptoSkeleton, rwSkeletonRows, cryptoWhaleSkeletonRows, cryptoAssetSkeletonRows, sankeySkeletonWallets, sankeySkeletonAssets, sankeySkeletonRibbons, skeletonPattern, butterflySkeletonRows, klineCandleSkeletons, flowsBubbleSkeletons, triggerPageLoadingPulse,
     isDeleteMode, pendingDeleteSymbol, toggleDeleteMode, handleChipClick,
     breadcrumbLabel, upSectorsCount, downSectorsCount, upSectorsRatio, isStockGainer, getSparkline,
     stockSectors, rankedSectors, quoteWindow, breadth, findQuote, barWidth, getSectorBarHeight, walls, num, formatWatchlistSymbol, compact, pct, pctNoPlus, tone, time,
