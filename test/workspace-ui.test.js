@@ -2676,3 +2676,48 @@ test('Crypto Workspace: live HIP-3 (xyz) TradFi mode enables Top N, Custom Walle
   assert.deepEqual(ui.errors, []);
 });
 
+test('Options Butterfly Skeleton: spot row (.is-spot-row) is rendered strictly at the apex / peak of the bilateral butterfly bars', async t => {
+  let resolveOptions;
+  const ui = await mount(t, async url => {
+    if (url.includes('/api/options')) {
+      return new Promise(resolve => { resolveOptions = resolve; });
+    }
+    return { ok: true, json: async () => fixture(url) };
+  });
+
+  await ui.click('期权墙');
+  await tick();
+
+  const skeletonContainer = ui.w.document.querySelector('.options-skeleton-container');
+  assert.ok(skeletonContainer, 'Options skeleton container is rendered while loading');
+
+  const rows = Array.from(skeletonContainer.querySelectorAll('.options-butterfly-card .butterfly-row'));
+  assert.ok(rows.length > 0, 'Butterfly skeleton rows exist');
+
+  const spotRow = skeletonContainer.querySelector('.butterfly-row.is-spot-row');
+  assert.ok(spotRow, 'Spot row (.is-spot-row) exists in butterfly skeleton');
+
+  // Verify spot row is strictly at row index 5 (the peak of the butterfly shape)
+  const spotIndex = rows.indexOf(spotRow);
+  assert.equal(spotIndex, 5, 'Spot row is at row index 5 (peak position)');
+
+  // Verify that row index 5 has the maximum Call and Put bar widths across all skeleton rows
+  const getCallW = r => parseFloat(r.querySelector('.sk-butterfly-call')?.style?.width || 0);
+  const getPutW = r => parseFloat(r.querySelector('.sk-butterfly-put')?.style?.width || 0);
+
+  const spotCallW = getCallW(spotRow);
+  const spotPutW = getPutW(spotRow);
+
+  for (let i = 0; i < rows.length; i++) {
+    if (i !== spotIndex) {
+      assert.ok(spotCallW > getCallW(rows[i]), `Peak Call width (${spotCallW}%) is strictly greater than row ${i} (${getCallW(rows[i])}%)`);
+      assert.ok(spotPutW > getPutW(rows[i]), `Peak Put width (${spotPutW}%) is strictly greater than row ${i} (${getPutW(rows[i])}%)`);
+    }
+  }
+
+  // Clean up
+  resolveOptions({ ok: true, json: async () => fixture('/api/options') });
+  await tick();
+  assert.deepEqual(ui.errors, []);
+});
+

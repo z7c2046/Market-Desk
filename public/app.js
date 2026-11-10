@@ -1074,9 +1074,9 @@ createApp({ setup() {
     { putWidth: 42, callWidth: 40, isSpot: false },
     { putWidth: 60, callWidth: 56, isSpot: false },
     { putWidth: 78, callWidth: 74, isSpot: false },
-    { putWidth: 92, callWidth: 90, isSpot: false },
-    { putWidth: 85, callWidth: 88, isSpot: true },  // Spot ATM highlighted row
-    { putWidth: 64, callWidth: 70, isSpot: false },
+    { putWidth: 92, callWidth: 90, isSpot: true },  // 最顶峰位置：现价 ATM 对应两翼峰值行权价高亮
+    { putWidth: 78, callWidth: 76, isSpot: false },
+    { putWidth: 64, callWidth: 68, isSpot: false },
     { putWidth: 48, callWidth: 52, isSpot: false },
     { putWidth: 35, callWidth: 38, isSpot: false },
     { putWidth: 22, callWidth: 24, isSpot: false },
