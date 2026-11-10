@@ -370,6 +370,64 @@
   color: var(--down-text) !important;
 }
 
+/* Cobalt Crypto Sankey & Whale Split Panels */
+:root[data-palette="cobalt"] .cw-market-card.active {
+  background: var(--surface-raised);
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 1px var(--accent-soft);
+}
+
+:root[data-palette="cobalt"] .cw-kpi-badge,
+:root[data-palette="cobalt"] .cw-reset-selection {
+  color: var(--accent-text);
+}
+
+:root[data-palette="cobalt"] .cw-kpi-badge {
+  background: var(--accent-soft);
+  border-color: var(--selection-border);
+}
+
+:root[data-palette="cobalt"] .cw-sk-active-start,
+:root[data-palette="cobalt"] .cw-sk-active-end {
+  stop-color: var(--accent-primary);
+}
+
+:root[data-palette="cobalt"][data-theme="dark"] .cw-sk-stop-start,
+:root[data-palette="cobalt"].dark .cw-sk-stop-start {
+  stop-color: #8096ae;
+  stop-opacity: 0.16;
+}
+
+:root[data-palette="cobalt"][data-theme="dark"] .cw-sk-stop-end,
+:root[data-palette="cobalt"].dark .cw-sk-stop-end {
+  stop-color: #6f9fb1;
+  stop-opacity: 0.29;
+}
+
+:root[data-palette="cobalt"] .cw-sk-wallet-node.is-selected .cw-sk-wallet-outline {
+  fill: var(--accent-soft);
+  stroke: var(--accent-primary);
+}
+
+:root[data-palette="cobalt"] .cw-sk-wallet-node.is-selected .cw-sk-wallet-rail,
+:root[data-palette="cobalt"] .cw-sk-wallet-node:hover .cw-sk-wallet-rail,
+:root[data-palette="cobalt"] .cw-sk-asset-node.is-clickable:hover .cw-sk-asset-rail {
+  fill: var(--accent-primary);
+}
+
+:root[data-palette="cobalt"] .cw-wallet-row.selected {
+  background: var(--accent-soft);
+}
+
+:root[data-palette="cobalt"] .cw-wallet-row.selected td:first-child {
+  box-shadow: inset 3px 0 0 var(--accent-primary);
+}
+
+:root[data-palette="cobalt"] .cw-sec-toggle-btn:hover {
+  border-color: var(--accent-primary);
+  color: var(--accent-text);
+}
+
 /* Palette Preferences Preview Cards (Self-contained, independent of active theme) */
 .pref-palette-options {
   display: grid;

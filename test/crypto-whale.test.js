@@ -1,6 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CryptoWhaleService, getCryptoWhaleService, CURATED_WHALES, COIN_CHART_SYMBOLS } from '../src/crypto-whale-service.js';
+import {
+  CryptoWhaleService,
+  getCryptoWhaleService,
+  CURATED_WHALES,
+  COIN_CHART_SYMBOLS,
+  isValidWhaleAddress,
+  normalizeWhaleTopN,
+  sanitizeWhaleLabel,
+  parseCustomWhalesParam,
+  WHALE_DEFAULT_TOP_N,
+  WHALE_MIN_TOP_N,
+  WHALE_MAX_TOP_N,
+  WHALE_MAX_CUSTOM_WALLETS
+} from '../src/crypto-whale-service.js';
 import { createServer } from '../src/server.js';
 
 test('CryptoWhaleService: parsePosition correctly parses long and short contracts', () => {
@@ -106,9 +119,94 @@ test('CryptoWhaleService: fallback mechanism provides robust verified data when 
   const data = await service.getWhaleTrackerData();
   assert.equal(data.ok, true);
   assert.equal(data.provider, 'Hyperliquid L1 DEX');
+  assert.equal(data.isLive, false);
+  assert.equal(data.source, 'verified-cache');
   assert.ok(data.whales.length >= 6);
   assert.ok(data.aggregate.totalOI > 0);
-  assert.ok(data.activityLogs.length > 0);
+  assert.deepEqual(data.activityLogs, []);
+  assert.ok(data.assetVolumes && data.assetVolumes.BTC > data.assetVolumes.ETH);
+});
+
+test('CryptoWhaleService: fetches real userFillsByTime, batches split executions, filters non-mainnet perps, and marks isLive', async () => {
+  const now = Date.now();
+  const mockFetch = async (_url, opts) => {
+    const body = JSON.parse(opts.body);
+    if (body.type === 'metaAndAssetCtxs') {
+      return {
+        ok: true,
+        json: async () => [
+          { universe: [{ name: 'BTC' }, { name: 'ETH' }, { name: 'SOL' }] },
+          [
+            { markPx: '80000', dayNtlVlm: '3500000000' },
+            { markPx: '2500', dayNtlVlm: '1600000000' },
+            { markPx: '150', dayNtlVlm: '700000000' }
+          ]
+        ]
+      };
+    }
+    if (body.type === 'clearinghouseState') {
+      return {
+        ok: true,
+        json: async () => ({
+          marginSummary: { accountValue: '5000000', totalNtlPos: '15000000' },
+          assetPositions: [
+            {
+              position: {
+                coin: 'BTC',
+                szi: '125',
+                entryPx: '79000',
+                positionValue: '10000000',
+                unrealizedPnl: '125000',
+                returnOnEquity: '0.12',
+                leverage: { type: 'cross', value: 10 },
+                liquidationPx: '58000'
+              }
+            }
+          ]
+        })
+      };
+    }
+    if (body.type === 'userFillsByTime') {
+      if (body.user.toLowerCase() !== CURATED_WHALES[0].address.toLowerCase()) {
+        return { ok: true, json: async () => [] };
+      }
+      // Two child fills within 5s bucket + one closed short + one deployer-submarket fill that must be filtered out
+      return {
+        ok: true,
+        json: async () => [
+          { coin: 'BTC', px: '80000', sz: '0.5', time: now - 45_000, dir: 'Open Long', side: 'B', closedPnl: '0', hash: '0xaaa1', tid: 1 },
+          { coin: 'BTC', px: '80000', sz: '0.75', time: now - 44_000, dir: 'Open Long', side: 'B', closedPnl: '0', hash: '0xaaa2', tid: 2 },
+          { coin: 'ETH', px: '2500', sz: '40', time: now - 180_000, dir: 'Close Short', side: 'B', closedPnl: '12500', hash: '0xbbb1', tid: 3 },
+          { coin: 'xyz:NVDA', px: '150', sz: '500', time: now - 10_000, dir: 'Open Long', side: 'B', closedPnl: '0', hash: '0xccc1', tid: 4 },
+          { coin: '@107', px: '20', sz: '500', time: now - 10_000, dir: 'Buy', side: 'B', closedPnl: '0', hash: '0xddd1', tid: 5 }
+        ]
+      };
+    }
+    throw new Error(`Unexpected body type ${body.type}`);
+  };
+
+  const service = new CryptoWhaleService({ fetchFn: mockFetch, ttlMs: 1000 });
+  const data = await service.getWhaleTrackerData({ force: true });
+
+  assert.equal(data.isLive, true);
+  assert.equal(data.source, 'hyperliquid-api');
+  assert.equal(data.assetVolumes.BTC, 3500000000);
+  // 2 batched mainnet perp fills only (xyz:NVDA and @107 filtered out)
+  assert.equal(data.activityLogs.length, 2);
+  assert.equal(data.activityLogs[0].coin, 'BTC');
+  assert.equal(data.activityLogs[0].action, '开仓做多');
+  assert.equal(data.activityLogs[0].shortAction, '开多');
+  assert.equal(data.activityLogs[0].isLong, true);
+  assert.equal(data.activityLogs[0].isIncrease, true);
+  assert.equal(data.activityLogs[0].isLiveFill, true);
+  assert.equal(data.activityLogs[0].valueUsd, 100000); // 1.25 * 80000 combined across 5s bucket
+  assert.equal(data.activityLogs[0].timeAgo, '刚刚');
+  assert.equal(data.activityLogs[1].coin, 'ETH');
+  assert.equal(data.activityLogs[1].action, '平仓空单');
+  assert.equal(data.activityLogs[1].shortAction, '平空');
+  assert.equal(data.activityLogs[1].isLong, false);
+  assert.equal(data.activityLogs[1].isIncrease, false);
+  assert.equal(data.activityLogs[1].closedPnl, 12500);
 });
 
 test('HTTP API /api/crypto/whales returns 200 and valid JSON schema', async () => {
@@ -173,8 +271,34 @@ test('CryptoWhaleService: getStockWhalesData returns verified on-chain US stock 
   assert.ok(allCoins.includes('MSTR'));
   assert.ok(allCoins.includes('MU'));
 
-  // Verify activity logs generated
-  assert.ok(stockWhales.activityLogs.length > 0);
+  // TradFi static sample portfolios carry honest metadata and no fabricated live fills
+  assert.equal(stockWhales.isSample, true);
+  assert.equal(stockWhales.isLive, false);
+  assert.equal(stockWhales.source, 'sample-static');
+  assert.deepEqual(stockWhales.activityLogs, []);
+});
+
+test('HTTP API /api/crypto/whales?category=stocks returns static sample payload even when offline', async () => {
+  const offlineService = new CryptoWhaleService({
+    fetchFn: async () => { throw new Error('offline'); },
+    ttlMs: 1000
+  });
+  const server = createServer({ whaleService: offlineService });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/api/crypto/whales?category=stocks`);
+    assert.equal(res.status, 200);
+    const json = await res.json();
+    assert.equal(json.ok, true);
+    assert.equal(json.isSample, true);
+    assert.equal(json.isLive, false);
+    assert.deepEqual(json.activityLogs, []);
+    assert.ok(json.whales.some(w => w.positions.some(p => p.coin === 'NVDA')));
+  } finally {
+    await new Promise(resolve => server.close(resolve));
+  }
 });
 
 test('HTTP API /api/crypto/whales?category=stocks returns on-chain US stock whales payload', async () => {
@@ -190,6 +314,205 @@ test('HTTP API /api/crypto/whales?category=stocks returns on-chain US stock whal
     assert.equal(json.ok, true);
     assert.ok(json.whales.length >= 6);
     assert.ok(json.whales.some(w => w.positions.some(p => p.coin === 'NVDA')));
+  } finally {
+    await new Promise(resolve => server.close(resolve));
+  }
+});
+
+test('Whale address & parameter helpers validate, clamp, deduplicate and sanitize cleanly', () => {
+  assert.equal(isValidWhaleAddress('0x0123456789abcdef0123456789abcdef01234567'), true);
+  assert.equal(isValidWhaleAddress('0xABCDEF0123456789ABCDEF0123456789ABCDEF01'), true);
+  assert.equal(isValidWhaleAddress('0x123'), false);
+  assert.equal(isValidWhaleAddress('not-an-address'), false);
+
+  assert.equal(normalizeWhaleTopN(undefined), WHALE_DEFAULT_TOP_N);
+  assert.equal(normalizeWhaleTopN('2'), WHALE_MIN_TOP_N);
+  assert.equal(normalizeWhaleTopN('99'), WHALE_MAX_TOP_N);
+  assert.equal(normalizeWhaleTopN('16'), 16);
+
+  assert.equal(sanitizeWhaleLabel('  Smart <script> Money \n 01  '), 'Smart script Money 01');
+
+  const addrA = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+  const addrB = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+  const parsedPipe = parseCustomWhalesParam(`bad,${addrA.toUpperCase()},${addrA}|Alpha Vault,${addrB}|Beta Desk`);
+  assert.deepEqual(parsedPipe, [
+    { address: addrA, label: 'Alpha Vault' },
+    { address: addrB, label: 'Beta Desk' }
+  ]);
+
+  const overCap = Array.from({ length: 25 }, (_, i) => `0x${String(i + 1).padStart(40, '0')}`).join(',');
+  assert.equal(parseCustomWhalesParam(overCap).length, WHALE_MAX_CUSTOM_WALLETS);
+});
+
+test('CryptoWhaleService: discovers Top N active leaderboard whales, filters dormant wallets, and merges zero-position custom wallets', async () => {
+  const lbWhale1 = '0x1111111111111111111111111111111111111111';
+  const lbWhale2 = '0x2222222222222222222222222222222222222222';
+  const lbDormant = '0x3333333333333333333333333333333333333333';
+  const customZero = '0x4444444444444444444444444444444444444444';
+  const curated0 = CURATED_WHALES[0].address.toLowerCase();
+
+  const stateByAddr = {
+    [lbWhale1]: { value: 90_000_000, equity: 25_000_000, coin: 'BTC', szi: '1125', entryPx: '80000' },
+    [lbWhale2]: { value: 45_000_000, equity: 12_000_000, coin: 'ETH', szi: '-18000', entryPx: '2500' },
+    [lbDormant]: { value: 0, equity: 10_000_000, coin: null, szi: '0', entryPx: '0' },
+    [customZero]: { value: 0, equity: 320_000, coin: null, szi: '0', entryPx: '0' }
+  };
+  CURATED_WHALES.forEach((cw, idx) => {
+    stateByAddr[cw.address.toLowerCase()] = {
+      value: (30 - idx * 2) * 1_000_000,
+      equity: (10 - idx) * 1_000_000,
+      coin: 'SOL',
+      szi: String(Math.round(((30 - idx * 2) * 1_000_000) / 150)),
+      entryPx: '150'
+    };
+  });
+
+  const mockFetch = async (url, opts) => {
+    if (String(url).includes('/Mainnet/leaderboard')) {
+      return {
+        ok: true,
+        json: async () => ({
+          leaderboardRows: [
+            {
+              ethAddress: lbWhale1,
+              accountValue: '25000000',
+              displayName: 'ApexQuantFund',
+              windowPerformances: [['day', { vlm: '12000000' }], ['week', { vlm: '48000000' }]]
+            },
+            {
+              ethAddress: lbWhale2,
+              accountValue: '12000000',
+              displayName: 'EthGammaDesk',
+              windowPerformances: [['day', { vlm: '8000000' }], ['week', { vlm: '19000000' }]]
+            },
+            {
+              ethAddress: lbDormant,
+              accountValue: '10000000',
+              displayName: 'DormantBridgeVault',
+              windowPerformances: [['day', { vlm: '4000000' }], ['week', { vlm: '10000000' }]]
+            }
+          ]
+        })
+      };
+    }
+
+    const body = JSON.parse(opts.body);
+    if (body.type === 'metaAndAssetCtxs') {
+      return {
+        ok: true,
+        json: async () => [
+          { universe: [{ name: 'BTC' }, { name: 'ETH' }, { name: 'SOL' }] },
+          [
+            { markPx: '80000', dayNtlVlm: '4000000000' },
+            { markPx: '2500', dayNtlVlm: '1800000000' },
+            { markPx: '150', dayNtlVlm: '900000000' }
+          ]
+        ]
+      };
+    }
+    if (body.type === 'clearinghouseState') {
+      const info = stateByAddr[body.user.toLowerCase()];
+      if (!info || !info.coin) {
+        return {
+          ok: true,
+          json: async () => ({
+            marginSummary: { accountValue: String(info?.equity || 0), totalNtlPos: '0' },
+            assetPositions: []
+          })
+        };
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          marginSummary: { accountValue: String(info.equity), totalNtlPos: String(info.value) },
+          assetPositions: [
+            {
+              position: {
+                coin: info.coin,
+                szi: info.szi,
+                entryPx: info.entryPx,
+                positionValue: String(info.value),
+                unrealizedPnl: '150000',
+                returnOnEquity: '0.1',
+                leverage: { type: 'cross', value: 10 },
+                liquidationPx: '0'
+              }
+            }
+          ]
+        })
+      };
+    }
+    if (body.type === 'userFillsByTime') {
+      return { ok: true, json: async () => [] };
+    }
+    throw new Error(`Unexpected request: ${url}`);
+  };
+
+  const service = new CryptoWhaleService({ fetchFn: mockFetch, ttlMs: 60000 });
+
+  // 1) Top 6 vs Top 10 cache isolation and dormant filtering
+  const top6 = await service.getWhaleTrackerData({ topN: 6 });
+  assert.equal(top6.isLive, true);
+  assert.equal(top6.whales.length, 6);
+  assert.equal(top6.meta.topN, 6);
+  assert.equal(top6.meta.leaderboardActive, true);
+  assert.equal(top6.meta.leaderboardTotalRows, 3);
+  assert.equal(top6.whales[0].address, lbWhale1);
+  assert.equal(top6.whales[0].name, 'ApexQuantFund');
+  assert.equal(top6.whales[0].sourceType, 'leaderboard');
+  assert.ok(!top6.whales.some(w => w.address === lbDormant), 'Zero-position leaderboard whale must be filtered out of Top N');
+
+  // 2) Adding zero-position custom address + custom label override on already-discovered curated whale
+  const customQuery = `${customZero}|My Cold Watch,${curated0}|My Curated Override`;
+  const withCustom = await service.getWhaleTrackerData({ topN: 6, customWallets: customQuery });
+  assert.equal(withCustom.meta.customCount, 2);
+  assert.equal(withCustom.whales.length, 7, '6 Top N whales + 1 external zero-pos custom wallet (curated0 deduplicated)');
+
+  const zeroEntry = withCustom.whales.find(w => w.address === customZero);
+  assert.ok(zeroEntry, 'Zero-position custom wallet is retained in tracked list');
+  assert.equal(zeroEntry.isCustom, true);
+  assert.equal(zeroEntry.sourceType, 'custom');
+  assert.equal(zeroEntry.name, 'My Cold Watch');
+  assert.equal(zeroEntry.accountValue, 320_000);
+  assert.equal(zeroEntry.totalNtlPos, 0);
+  assert.deepEqual(zeroEntry.positions, []);
+
+  const overriddenCurated = withCustom.whales.filter(w => w.address === curated0);
+  assert.equal(overriddenCurated.length, 1, 'Duplicate address in custom + curated pool must deduplicate cleanly');
+  assert.equal(overriddenCurated[0].isCustom, true);
+  assert.equal(overriddenCurated[0].name, 'My Curated Override');
+});
+
+test('HTTP API /api/crypto/whales forwards topN and custom query params to whaleService', async () => {
+  const receivedCalls = [];
+  const mockWhaleService = {
+    getWhaleTrackerData: async opts => {
+      receivedCalls.push(opts);
+      return {
+        ok: true,
+        provider: 'Hyperliquid L1 DEX',
+        isLive: true,
+        meta: { topN: Number(opts.topN) || 12, customCount: 1 },
+        whales: [],
+        aggregate: { totalTrackedWhales: 0, totalOI: 0, longRatio: 50, shortRatio: 50, topCoins: [] },
+        activityLogs: []
+      };
+    }
+  };
+
+  const server = createServer({ whaleService: mockWhaleService });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+
+  try {
+    const customAddr = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|Desk Main';
+    const res = await fetch(`http://127.0.0.1:${port}/api/crypto/whales?topN=16&force=1&custom=${encodeURIComponent(customAddr)}`);
+    assert.equal(res.status, 200);
+    await res.json();
+    assert.equal(receivedCalls.length, 1);
+    assert.equal(receivedCalls[0].force, true);
+    assert.equal(receivedCalls[0].topN, '16');
+    assert.equal(receivedCalls[0].customWallets, customAddr);
   } finally {
     await new Promise(resolve => server.close(resolve));
   }

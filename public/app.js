@@ -58,6 +58,14 @@ import {
   getMetricYoy
 } from './earnings-calendar-model.js';
 import { computeInflectionSignals, formatSignalMarkers, dema } from './inflection-signals.js';
+import {
+  disambiguateWallets,
+  computeWhaleSankeyGraph,
+  buildAggregatedPositions,
+  detectPositionDeltas,
+  getAssetLabel,
+  formatWhaleCompactUsd
+} from './composables/whaleSankeyModel.js';
 
 const { createApp, ref, computed, reactive, watch, nextTick, onMounted, onUnmounted } = window.Vue;
 let green = '#187454', red = '#B7424D', blue = '#315EAD';
@@ -1432,6 +1440,60 @@ createApp({ setup() {
   // --------------------------------------------------------------------------
   // Hyperliquid On-Chain Whale Perpetual Tracker State & Computed
   // --------------------------------------------------------------------------
+  const WHALE_TOP_N_STORAGE_KEY = 'market-desk-whale-top-n';
+  const CUSTOM_WHALES_STORAGE_KEY = 'market-desk-custom-whales';
+  const WHALE_TOP_N_OPTIONS = [8, 12, 16, 20];
+  const WHALE_DEFAULT_TOP_N = 12;
+  const WHALE_MAX_CUSTOM_WALLETS = 20;
+  const VALID_EVM_ADDR_RE = /^0x[a-fA-F0-9]{40}$/;
+
+  function normalizeTopNChoice(val) {
+    const parsed = Number.parseInt(val, 10);
+    if (!Number.isFinite(parsed)) return WHALE_DEFAULT_TOP_N;
+    if (WHALE_TOP_N_OPTIONS.includes(parsed)) return parsed;
+    if (parsed <= 8) return 8;
+    if (parsed <= 12) return 12;
+    if (parsed <= 16) return 16;
+    return 20;
+  }
+
+  function sanitizeCustomLabel(raw) {
+    return String(raw || '')
+      .replace(/[|,;\r\n\t]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 24);
+  }
+
+  function formatShortAddr(addr) {
+    const s = String(addr || '').trim();
+    return s.length >= 10 ? `${s.slice(0, 6)}...${s.slice(-4)}` : s;
+  }
+
+  function loadStoredCustomWallets() {
+    const raw = readStorage(CUSTOM_WHALES_STORAGE_KEY, []);
+    if (!Array.isArray(raw)) return [];
+    const seen = new Set();
+    const list = [];
+    for (const item of raw) {
+      const addrRaw = typeof item === 'string' ? item : item?.address;
+      const addr = String(addrRaw || '').trim().toLowerCase();
+      if (!VALID_EVM_ADDR_RE.test(addr) || seen.has(addr)) continue;
+      seen.add(addr);
+      list.push({
+        address: addr,
+        label: sanitizeCustomLabel(typeof item === 'object' ? item?.label : ''),
+        addedAt: Number(typeof item === 'object' ? item?.addedAt : 0) || 0
+      });
+      if (list.length >= WHALE_MAX_CUSTOM_WALLETS) break;
+    }
+    return list;
+  }
+
+  function saveStoredCustomWallets(list) {
+    persist(CUSTOM_WHALES_STORAGE_KEY, list);
+  }
+
   const cryptoWhaleData = ref(null);
   const cryptoWhaleLoading = ref(false);
   const cryptoWhaleError = ref('');
@@ -1440,8 +1502,48 @@ createApp({ setup() {
   const expandedWhaleAddress = ref('');
   const copiedWhaleAddress = ref('');
   const whaleCategory = ref('crypto'); // 'crypto' | 'stocks'
+  const whaleTopN = ref(normalizeTopNChoice(readStorage(WHALE_TOP_N_STORAGE_KEY, WHALE_DEFAULT_TOP_N)));
+  const customWallets = ref(loadStoredCustomWallets());
+  const walletScopeFilter = ref('all'); // 'all' | 'custom'
+  const showCustomWalletManager = ref(false);
+  const customWalletAddressInput = ref('');
+  const customWalletLabelInput = ref('');
+  const customWalletFormError = ref('');
+
+  // Sankey & Two-Column Whale Split Layout State
+  const selectedWhaleKeys = reactive({ crypto: '', stocks: '' });
+  const sankeyModes = reactive({ crypto: 'all', stocks: 'all' }); // 'all' | 'long' | 'short'
+  const aggPositionSorts = reactive({
+    crypto: { field: '', dir: 'desc' },
+    stocks: { field: '', dir: 'desc' }
+  });
+  const hoveredSankeyWalletKey = ref('');
+  const hoveredAssetSymbol = ref('');
+  const hoveredSankeyLinkId = ref('');
+  const reduceSankeyMotion = ref(
+    typeof window !== 'undefined' && window.matchMedia
+      ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      : false
+  );
+  const WHALE_REFRESH_INTERVAL_MS = 15_000;
+  const WHALE_LIVE_PULSE_TTL_MS = 120_000;
+  const WHALE_LIVE_FILL_MAX_AGE_MS = 300_000;
+  const WHALE_LIVE_FILL_MIN_USD = 5_000;
+  const showSecondaryMarketFlow = ref(false);
+  const secondaryFlowTab = ref('flow'); // 'flow' | 'feed'
+  const liveRebalanceDeltas = reactive({ crypto: [] });
+  const lastWhaleSyncAt = ref('');
+  const whaleSyncNow = ref(Date.now());
+  let prevCryptoWhaleSnapshot = [];
+  let cryptoWhaleInFlight = null;
+  let cryptoWhaleInFlightUrl = '';
+  let cryptoWhaleReqSeq = 0;
+  let cryptoWhaleTimer = null;
 
   const DEFAULT_STOCK_WHALES_PAYLOAD = {
+    isSample: true,
+    isLive: false,
+    source: 'sample-static',
     aggregate: {
       totalTrackedWhales: 7,
       totalEquity: 170980000,
@@ -1583,13 +1685,7 @@ createApp({ setup() {
         ]
       }
     ],
-    activityLogs: [
-      { timeAgo: '15分钟前', whaleName: '微策略 MSTR 杠杆博弈巨鲸', action: '加仓', side: 'LONG', isLong: true, coin: 'MSTR', chartSymbol: 'MSTR', amountText: '21,500 MSTR', valueText: '$5.12M', leverageText: '10x', entryPx: 228.5, pnlText: '+$916,245' },
-      { timeAgo: '38分钟前', whaleName: 'HL 科技股阿尔法对冲基金', action: '开仓', side: 'LONG', isLong: true, coin: 'NVDA', chartSymbol: 'NVDA', amountText: '25,000 NVDA', valueText: '$3.71M', leverageText: '5x', entryPx: 146.2, pnlText: '+$285,200' },
-      { timeAgo: '1小时前', whaleName: '美股宽基指数链上套利机构', action: '加仓', side: 'LONG', isLong: true, coin: 'SPY', chartSymbol: 'SPY', amountText: '15,000 SPY', valueText: '$8.69M', leverageText: '20x', entryPx: 576.2, pnlText: '+$179,440' },
-      { timeAgo: '2小时前', whaleName: '七巨头 Mag 7 动量长线基金', action: '开仓', side: 'SHORT', isLong: false, coin: 'AAPL', chartSymbol: 'AAPL', amountText: '18,500 AAPL', valueText: '$4.11M', leverageText: '5x', entryPx: 225.1, pnlText: '+$150,540' },
-      { timeAgo: '3小时前', whaleName: 'NVDA / 半导体高频波段巨鲸', action: '加仓', side: 'LONG', isLong: true, coin: 'NVDA', chartSymbol: 'NVDA', amountText: '30,000 NVDA', valueText: '$4.45M', leverageText: '8x', entryPx: 144.1, pnlText: '+$420,740' }
-    ]
+    activityLogs: []
   };
 
   const activeWhaleDataset = computed(() => {
@@ -1597,6 +1693,14 @@ createApp({ setup() {
       return cryptoWhaleData.value?.stockWhales || DEFAULT_STOCK_WHALES_PAYLOAD;
     }
     return cryptoWhaleData.value || { aggregate: {}, whales: [], activityLogs: [] };
+  });
+
+  const isWhaleDatasetSample = computed(() => {
+    return whaleCategory.value === 'stocks' || Boolean(activeWhaleDataset.value?.isSample);
+  });
+
+  const isWhaleDatasetLive = computed(() => {
+    return whaleCategory.value === 'crypto' && Boolean(cryptoWhaleData.value?.isLive);
   });
 
   const whaleAggregate = computed(() => {
@@ -1614,25 +1718,90 @@ createApp({ setup() {
     };
   });
 
-  const allWhales = computed(() => {
-    return activeWhaleDataset.value?.whales || [];
+  const customWalletMap = computed(() => {
+    const map = new Map();
+    for (const c of customWallets.value) {
+      map.set(String(c.address).toLowerCase(), c);
+    }
+    return map;
   });
+
+  const allWhales = computed(() => {
+    const base = disambiguateWallets(activeWhaleDataset.value?.whales || []);
+    if (whaleCategory.value !== 'crypto') {
+      return base;
+    }
+    const cMap = customWalletMap.value;
+    return base.map(w => {
+      const lowAddr = String(w.address || '').toLowerCase();
+      const customEntry = cMap.get(lowAddr);
+      const isCustom = Boolean(customEntry || w.isCustom);
+      const isCurated = Boolean(w.isCurated);
+      const sourceType = isCustom ? 'custom' : (w.sourceType || (isCurated ? 'curated' : 'leaderboard'));
+      const sourceLabel = isCustom ? '自选' : (isCurated ? '核心' : '榜单');
+      const displayName = (customEntry?.label) ? customEntry.label : w.name;
+      return {
+        ...w,
+        name: displayName,
+        isCustom,
+        isCurated,
+        sourceType,
+        sourceLabel
+      };
+    });
+  });
+
+  const selectedWhaleKey = computed(() => selectedWhaleKeys[whaleCategory.value] || '');
+  const sankeyMode = computed(() => sankeyModes[whaleCategory.value] || 'all');
+
+  function setSankeyMode(mode) {
+    const valid = mode === 'long' || mode === 'short' ? mode : 'all';
+    sankeyModes[whaleCategory.value] = valid;
+    cryptoWhaleFilter.value = valid;
+  }
+
+  function selectWhaleWallet(walletKey) {
+    const key = String(walletKey || '');
+    const cat = whaleCategory.value;
+    selectedWhaleKeys[cat] = selectedWhaleKeys[cat] === key ? '' : key;
+    if (selectedWhaleKeys[cat]) {
+      expandedWhaleAddress.value = selectedWhaleKeys[cat];
+    }
+  }
+
+  function clearWhaleSelection() {
+    selectedWhaleKeys[whaleCategory.value] = '';
+  }
+
+  function resetCryptoSankeyFilters() {
+    const cat = whaleCategory.value === 'stocks' ? 'stocks' : 'crypto';
+    selectedWhaleKeys[cat] = '';
+    sankeyModes[cat] = 'all';
+    aggPositionSorts[cat] = { field: '', dir: 'desc' };
+    walletScopeFilter.value = 'all';
+    cryptoWhaleFilter.value = 'all';
+    cryptoWhaleSearch.value = '';
+  }
 
   const filteredWhales = computed(() => {
     const list = allWhales.value;
-    const filter = cryptoWhaleFilter.value;
+    const filter = sankeyMode.value;
     const q = cryptoWhaleSearch.value.trim().toUpperCase();
+    const onlyCustom = whaleCategory.value === 'crypto' && walletScopeFilter.value === 'custom';
 
     return list.filter(w => {
+      // 0. Scope filter (all vs custom watchlist)
+      if (onlyCustom && !w.isCustom) return false;
       // 1. Text search
       if (q) {
         const matchName = (w.name || '').toUpperCase().includes(q);
         const matchAddr = (w.address || '').toUpperCase().includes(q);
         const matchTag = (w.tag || '').toUpperCase().includes(q);
+        const matchSource = (w.sourceLabel || '').toUpperCase().includes(q);
         const matchCoin = (w.positions || []).some(p => p.coin.toUpperCase().includes(q));
-        if (!matchName && !matchAddr && !matchTag && !matchCoin) return false;
+        if (!matchName && !matchAddr && !matchTag && !matchSource && !matchCoin) return false;
       }
-      // 2. Tab filter
+      // 2. Mode filter
       if (filter === 'long') {
         return (w.positions || []).some(p => p.isLong);
       }
@@ -1645,7 +1814,8 @@ createApp({ setup() {
       if (filter === 'long') positions = positions.filter(p => p.isLong);
       else if (filter === 'short') positions = positions.filter(p => !p.isLong);
 
-      const sortSpec = getWhalePositionSort(w.address);
+      const sortKey = w.walletKey || w.address;
+      const sortSpec = getWhalePositionSort(sortKey);
       const sortF = sortSpec?.field || 'val';
       const sortD = sortSpec?.dir || 'desc';
 
@@ -1675,15 +1845,327 @@ createApp({ setup() {
       const calcLong = w.longNotional ?? (w.positions || []).filter(p => p.isLong).reduce((s, p) => s + (Number(p.positionValue) || 0), 0);
       const calcShort = w.shortNotional ?? (w.positions || []).filter(p => !p.isLong).reduce((s, p) => s + (Number(p.positionValue) || 0), 0);
       const calcTotal = calcLong + calcShort;
-      const walletLongPct = calcTotal > 0 ? Math.round((calcLong / calcTotal) * 100) : (w.netExposure >= 0 ? 100 : 0);
+      const activeTotal = filter === 'long' ? calcLong : (filter === 'short' ? calcShort : calcTotal);
+      const hasPositions = calcTotal > 0;
+      const walletLongPct = hasPositions ? Math.round((calcLong / calcTotal) * 100) : 0;
+      const walletShortPct = hasPositions ? (100 - walletLongPct) : 0;
 
       return {
         ...w,
+        hasPositions,
+        activeTotal,
         walletLongPct,
-        walletShortPct: 100 - walletLongPct,
+        walletShortPct,
         displayPositions: positions
       };
+    }).sort((a, b) =>
+      (b.activeTotal - a.activeTotal)
+      || ((b.isCustom ? 1 : 0) - (a.isCustom ? 1 : 0))
+      || ((Number(b.accountValue) || 0) - (Number(a.accountValue) || 0))
+    );
+  });
+
+  const leftWalletRows = computed(() => filteredWhales.value);
+
+  const selectedWhaleRecord = computed(() => {
+    const key = selectedWhaleKey.value;
+    if (!key) return null;
+    return leftWalletRows.value.find(w => w.walletKey === key) || null;
+  });
+
+  const sankeyAssetVolumeMap = computed(() => {
+    const map = new Map();
+    if (whaleCategory.value === 'stocks') {
+      const apiVols = onchainStocksData.value?.assetVolumes;
+      if (apiVols && typeof apiVols === 'object') {
+        for (const [k, v] of Object.entries(apiVols)) {
+          const n = Number(v);
+          if (Number.isFinite(n) && n > 0) map.set(String(k).toUpperCase(), n);
+        }
+      }
+      const stockVols = cryptoWhaleData.value?.stockWhales?.assetVolumes;
+      if (stockVols && typeof stockVols === 'object') {
+        for (const [k, v] of Object.entries(stockVols)) {
+          const sym = String(k).toUpperCase();
+          const n = Number(v);
+          if (!map.has(sym) && Number.isFinite(n) && n > 0) map.set(sym, n);
+        }
+      }
+      for (const s of (onchainStocksData.value?.top10 || [])) {
+        const sym = String(s?.symbol || '').toUpperCase();
+        const vol = Number(s?.volume24h) || 0;
+        if (sym && vol > 0 && !map.has(sym)) map.set(sym, vol);
+      }
+      if (map.size === 0) {
+        for (const s of (DEFAULT_ONCHAIN_STOCKS_PAYLOAD.top10 || [])) {
+          const sym = String(s?.symbol || '').toUpperCase();
+          const vol = Number(s?.volume24h) || 0;
+          if (sym && vol > 0) map.set(sym, vol);
+        }
+      }
+      return map;
+    }
+
+    const whaleVols = cryptoWhaleData.value?.assetVolumes;
+    if (whaleVols && typeof whaleVols === 'object') {
+      for (const [k, v] of Object.entries(whaleVols)) {
+        const n = Number(v);
+        if (Number.isFinite(n) && n > 0) map.set(String(k).toUpperCase(), n);
+      }
+    }
+    if (map.size === 0) {
+      for (const c of (cryptoList.value || [])) {
+        const code = String(c?.code || c?.symbol?.replace(/-USD$/i, '') || '').toUpperCase();
+        const defItem = DEFAULT_CRYPTOS.find(d => d.code === code);
+        const vol = parseCompactUsd(c?.vol24h || defItem?.vol24h);
+        if (code && vol > 0) map.set(code, vol);
+      }
+    }
+    return map;
+  });
+
+  const aggPositionSort = computed(() => {
+    const cat = whaleCategory.value === 'stocks' ? 'stocks' : 'crypto';
+    return aggPositionSorts[cat] || aggPositionSorts.crypto;
+  });
+
+  function toggleAggPositionSort(field) {
+    const valid = field === 'longVal' || field === 'shortVal' || field === 'totalVal' ? field : '';
+    if (!valid) return;
+    const cat = whaleCategory.value === 'stocks' ? 'stocks' : 'crypto';
+    const cur = aggPositionSorts[cat];
+    if (!cur || cur.field !== valid) {
+      aggPositionSorts[cat] = { field: valid, dir: 'desc' };
+    } else if (cur.dir === 'desc') {
+      aggPositionSorts[cat] = { field: valid, dir: 'asc' };
+    } else {
+      aggPositionSorts[cat] = { field: '', dir: 'desc' };
+    }
+  }
+
+  function isAggSortedBy(field) {
+    return aggPositionSort.value.field === field;
+  }
+
+  function getAggSortDir(field) {
+    return aggPositionSort.value.field === field ? aggPositionSort.value.dir : '';
+  }
+
+  function getAggSortIcon(field) {
+    if (!isAggSortedBy(field)) return '⇅';
+    return getAggSortDir(field) === 'asc' ? '↑' : '↓';
+  }
+
+  const aggregatedAssetPositions = computed(() => {
+    return buildAggregatedPositions(leftWalletRows.value, {
+      mode: sankeyMode.value,
+      searchQuery: cryptoWhaleSearch.value,
+      assetVolumeMap: sankeyAssetVolumeMap.value,
+      sortField: aggPositionSort.value.field,
+      sortDir: aggPositionSort.value.dir
     });
+  });
+
+  const whaleActivityLogs = computed(() => {
+    const logs = activeWhaleDataset.value?.activityLogs || [];
+    const q = cryptoWhaleSearch.value.trim().toUpperCase();
+    if (!q) return logs;
+    return logs.filter(l => l.coin.toUpperCase().includes(q) || l.whaleName.toUpperCase().includes(q) || (l.action && l.action.includes(q)));
+  });
+
+  const nowRebalanceItems = computed(() => {
+    if (whaleCategory.value !== 'crypto' || !cryptoWhaleData.value?.isLive) {
+      return [];
+    }
+
+    const mode = sankeyMode.value;
+    const selKey = selectedWhaleKey.value;
+    const nowMs = whaleSyncNow.value || Date.now();
+    const deltas = (liveRebalanceDeltas.crypto || []).filter(
+      d => (nowMs - (Number(d?.detectedAt) || 0)) <= WHALE_LIVE_PULSE_TTL_MS
+    );
+    const logs = whaleActivityLogs.value || [];
+    const walletByName = new Map();
+    const walletByAddr = new Map();
+    for (const w of allWhales.value) {
+      if (w.name && !walletByName.has(w.name)) walletByName.set(w.name, w.walletKey);
+      if (w.address) {
+        const rawAddr = String(w.address);
+        const lowAddr = rawAddr.toLowerCase();
+        if (!walletByAddr.has(rawAddr)) walletByAddr.set(rawAddr, w.walletKey);
+        if (!walletByAddr.has(lowAddr)) walletByAddr.set(lowAddr, w.walletKey);
+      }
+    }
+
+    const formatLiveAge = (ts, fallbackText = '刚刚') => {
+      const t = Number(ts);
+      if (!Number.isFinite(t) || t <= 0) return fallbackText || '刚刚';
+      const diffSec = Math.max(0, Math.floor((nowMs - t) / 1000));
+      if (diffSec < 60) return '刚刚';
+      if (diffSec < 3600) return `${Math.floor(diffSec / 60)}分钟前`;
+      return `${Math.floor(diffSec / 3600)}小时前`;
+    };
+
+    const deltaItems = deltas.map(d => ({
+      id: d.id,
+      walletKey: d.walletKey,
+      whaleName: d.whaleName,
+      coin: String(d.coin || '').toUpperCase(),
+      chartSymbol: d.chartSymbol || d.coin,
+      isLong: Boolean(d.isLong),
+      isIncrease: d.isIncrease !== false,
+      actionText: d.actionText,
+      valueText: formatWhaleCompactUsd(d.deltaAbs),
+      timeAgo: formatLiveAge(d.detectedAt, d.timeAgo || '刚刚')
+    }));
+
+    const freshFillItems = logs
+      .filter(l => {
+        if (!l || l.isLiveFill !== true) return false;
+        const fillTime = Number(l.time);
+        if (Number.isFinite(fillTime) && fillTime > 0) {
+          const liveAge = nowMs - fillTime;
+          if (liveAge > WHALE_LIVE_FILL_MAX_AGE_MS || liveAge < -60_000) return false;
+        } else if (l.ageMs != null && l.ageMs !== '' && Number.isFinite(Number(l.ageMs)) && Number(l.ageMs) >= 0) {
+          if (Number(l.ageMs) > WHALE_LIVE_FILL_MAX_AGE_MS) return false;
+        } else {
+          return false;
+        }
+        const usdVal = Number.isFinite(Number(l.valueUsd))
+          ? Number(l.valueUsd)
+          : parseCompactUsd(l.valueText);
+        return usdVal >= WHALE_LIVE_FILL_MIN_USD;
+      })
+      .map((l, idx) => {
+        const addr = String(l.whaleAddress || '');
+        const mappedKey = l.walletKey || walletByAddr.get(addr) || walletByAddr.get(addr.toLowerCase()) || walletByName.get(l.whaleName) || '';
+        const coin = String(l.coin || '').toUpperCase();
+        const isLong = Boolean(l.isLong);
+        return {
+          id: l.id || `act-${idx}`,
+          walletKey: mappedKey,
+          whaleName: l.whaleName,
+          coin,
+          chartSymbol: l.chartSymbol || coin,
+          isLong,
+          isIncrease: l.isIncrease !== false,
+          actionText: l.shortAction || l.action || (isLong ? '加多' : '做空'),
+          valueText: l.valueText || formatWhaleCompactUsd(l.valueUsd || 0),
+          timeAgo: formatLiveAge(l.time, l.timeAgo || '刚刚')
+        };
+      });
+
+    const deduped = [];
+    const seen = new Set();
+    for (const item of [...deltaItems, ...freshFillItems]) {
+      const dedupeKey = `${item.walletKey || item.whaleName}::${item.coin}::${item.isLong ? 'L' : 'S'}`;
+      if (seen.has(dedupeKey)) continue;
+      seen.add(dedupeKey);
+      deduped.push(item);
+    }
+
+    return deduped
+      .filter(item => (!selKey || item.walletKey === selKey))
+      .filter(item => (mode === 'all' || (mode === 'long' ? item.isLong : !item.isLong)))
+      .slice(0, 3);
+  });
+
+  const sankeyPulseMap = computed(() => {
+    const map = new Map();
+    for (const item of nowRebalanceItems.value) {
+      if (item.walletKey && item.coin) {
+        map.set(`${item.walletKey}::${String(item.coin).toUpperCase()}`, {
+          isLong: Boolean(item.isLong),
+          isIncrease: item.isIncrease !== false
+        });
+      }
+    }
+    return map;
+  });
+
+  const sankeyGraph = computed(() => {
+    return computeWhaleSankeyGraph({
+      whales: leftWalletRows.value,
+      mode: sankeyMode.value,
+      selectedWalletKey: selectedWhaleKey.value,
+      hoveredWalletKey: hoveredSankeyWalletKey.value,
+      searchQuery: cryptoWhaleSearch.value,
+      pulseKeys: sankeyPulseMap.value,
+      assetVolumeMap: sankeyAssetVolumeMap.value,
+      maxWallets: 6,
+      maxAssets: 5,
+      svgWidth: 1280
+    });
+  });
+
+  const hoveredSankeyLink = computed(() => {
+    const id = hoveredSankeyLinkId.value;
+    if (!id) return null;
+    return sankeyGraph.value.links.find(l => l.id === id) || null;
+  });
+
+  const sankeyKpiSummary = computed(() => {
+    const list = allWhales.value;
+    const agg = whaleAggregate.value;
+    const sumLong = list.reduce((s, w) => s + (Number(w.longNotional) || 0), 0);
+    const sumShort = list.reduce((s, w) => s + (Number(w.shortNotional) || 0), 0);
+    const totalOI = (sumLong + sumShort) > 0 ? (sumLong + sumShort) : (Number(agg?.totalOI) || 0);
+    const longNotional = sumLong > 0 ? sumLong : (Number(agg?.totalLongNotional) || 0);
+    const shortNotional = sumShort > 0 ? sumShort : (Number(agg?.totalShortNotional) || 0);
+    const denom = longNotional + shortNotional || totalOI || 1;
+    const longPct = Number(((longNotional / denom) * 100).toFixed(1));
+    const shortPct = Number((100 - longPct).toFixed(1));
+    const netExposure = longNotional - shortNotional;
+    const totalPnl = list.reduce((s, w) => s + (Number(w.unrealizedPnl) || 0), 0) || Number(agg?.totalUnrealizedPnl) || 0;
+    const coins = new Set();
+    for (const w of list) {
+      for (const p of (w.positions || [])) {
+        if (p?.coin) coins.add(String(p.coin).toUpperCase());
+      }
+    }
+    const isStocks = whaleCategory.value === 'stocks';
+    const nowMs = whaleSyncNow.value || Date.now();
+    const activeDeltaCount = isStocks
+      ? 0
+      : (liveRebalanceDeltas.crypto || []).filter(d => (nowMs - (Number(d?.detectedAt) || 0)) <= WHALE_LIVE_PULSE_TTL_MS).length;
+    return {
+      totalOI,
+      longNotional,
+      shortNotional,
+      longPct,
+      shortPct,
+      netExposure,
+      totalPnl,
+      walletCount: list.length,
+      assetCount: coins.size,
+      deltaCount: activeDeltaCount,
+      liveFillCount: isStocks ? 0 : nowRebalanceItems.value.length,
+      activityCount: (whaleActivityLogs.value || []).length
+    };
+  });
+
+  const sankeyMarketMeta = computed(() => {
+    const cAgg = cryptoWhaleData.value?.aggregate || {};
+    const cWhales = cryptoWhaleData.value?.whales || [];
+    const cLong = cWhales.reduce((s, w) => s + (w.positions || []).filter(p => p.isLong).reduce((a, p) => a + (Number(p.positionValue) || 0), 0), 0) || Number(cAgg.totalLongNotional) || 0;
+    const cShort = cWhales.reduce((s, w) => s + (w.positions || []).filter(p => !p.isLong).reduce((a, p) => a + (Number(p.positionValue) || 0), 0), 0) || Number(cAgg.totalShortNotional) || 0;
+    const cryptoTotalOI = (cLong + cShort) > 0 ? (cLong + cShort) : (Number(cAgg.totalOI) || 0);
+    const cryptoLongPct = cryptoTotalOI > 0 ? Number(((cLong / cryptoTotalOI) * 100).toFixed(1)) : (Number(cAgg.longRatio) || 50);
+
+    const sData = cryptoWhaleData.value?.stockWhales || DEFAULT_STOCK_WHALES_PAYLOAD;
+    const sAgg = sData?.aggregate || {};
+    const sWhales = sData?.whales || [];
+    const sLong = sWhales.reduce((s, w) => s + (w.positions || []).filter(p => p.isLong).reduce((a, p) => a + (Number(p.positionValue) || 0), 0), 0) || Number(sAgg.totalLongNotional) || 0;
+    const sShort = sWhales.reduce((s, w) => s + (w.positions || []).filter(p => !p.isLong).reduce((a, p) => a + (Number(p.positionValue) || 0), 0), 0) || Number(sAgg.totalShortNotional) || 0;
+    const stocksTotalOI = (sLong + sShort) > 0 ? (sLong + sShort) : (Number(sAgg.totalOI) || 0);
+    const stocksLongPct = stocksTotalOI > 0 ? Number(((sLong / stocksTotalOI) * 100).toFixed(1)) : (Number(sAgg.longRatio) || 50);
+
+    return {
+      cryptoTotalOI,
+      cryptoLongPct,
+      stocksTotalOI,
+      stocksLongPct
+    };
   });
 
   const whaleSortStates = reactive({}); // address -> { field: 'val'|'pnl'|'coin', dir: 'desc'|'asc' }
@@ -1727,27 +2209,28 @@ createApp({ setup() {
     whaleGlobalSort.dir = nextDir;
   }
 
-  const whaleActivityLogs = computed(() => {
-    const logs = activeWhaleDataset.value?.activityLogs || [];
-    const q = cryptoWhaleSearch.value.trim().toUpperCase();
-    if (!q) return logs;
-    return logs.filter(l => l.coin.toUpperCase().includes(q) || l.whaleName.toUpperCase().includes(q) || (l.action && l.action.includes(q)));
-  });
-
   function setWhaleCategory(cat) {
     whaleCategory.value = cat;
     cryptoWhaleSearch.value = '';
     onchainStockSearch.value = '';
     expandedWhaleAddress.value = '';
     expandedStockSymbol.value = '';
+    hoveredSankeyWalletKey.value = '';
+    hoveredSankeyLinkId.value = '';
+    hoveredAssetSymbol.value = '';
+    if (cat === 'stocks') {
+      walletScopeFilter.value = 'all';
+    }
+    cryptoWhaleFilter.value = sankeyModes[cat] || 'all';
   }
 
   function viewStockWhale(symbol) {
     setWhaleCategory('stocks');
+    selectedWhaleKeys.stocks = '';
     cryptoWhaleSearch.value = (symbol || '').toUpperCase();
     expandedWhaleAddress.value = '';
     setTimeout(() => {
-      const el = document.querySelector('.crypto-whale-tracker-panel');
+      const el = document.querySelector('.cw-sankey-panel') || document.querySelector('.crypto-whale-tracker-panel');
       if (el && typeof el.scrollIntoView === 'function') {
         el.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
@@ -1879,27 +2362,233 @@ createApp({ setup() {
     } catch {}
   }
 
-  async function loadCryptoWhales({ force = false } = {}) {
-    try {
-      cryptoWhaleLoading.value = true;
-      cryptoWhaleError.value = '';
-      const url = force ? '/api/crypto/whales?force=1' : '/api/crypto/whales';
-      const res = await fetch(url);
-      if (res.ok) {
-        const data = await res.json();
-        if (data?.ok && data.whales) {
-          cryptoWhaleData.value = data;
-          if (!expandedWhaleAddress.value && data.whales.length > 0) {
-            expandedWhaleAddress.value = data.whales[0].address;
-          }
+  function buildCustomWhalesQueryParam() {
+    if (!customWallets.value.length) return '';
+    return customWallets.value
+      .map(c => (c.label ? `${c.address}|${c.label}` : c.address))
+      .join(',');
+  }
+
+  function buildCryptoWhalesUrl({ force = false } = {}) {
+    const params = new URLSearchParams();
+    params.set('topN', String(whaleTopN.value));
+    const customParam = buildCustomWhalesQueryParam();
+    if (customParam) {
+      params.set('custom', customParam);
+    }
+    if (force) {
+      params.set('force', '1');
+    }
+    return `/api/crypto/whales?${params.toString()}`;
+  }
+
+  function setWhaleTopN(val) {
+    const next = normalizeTopNChoice(val);
+    if (next === whaleTopN.value) return;
+    whaleTopN.value = next;
+    persist(WHALE_TOP_N_STORAGE_KEY, next);
+    if (whaleCategory.value !== 'crypto') {
+      setWhaleCategory('crypto');
+    }
+    loadCryptoWhales({ force: true });
+  }
+
+  function toggleWalletScopeFilter(scope) {
+    walletScopeFilter.value = (scope === 'custom' && customWallets.value.length > 0) ? 'custom' : 'all';
+  }
+
+  function openCustomWalletManager() {
+    customWalletFormError.value = '';
+    showCustomWalletManager.value = true;
+  }
+
+  function closeCustomWalletManager() {
+    customWalletFormError.value = '';
+    showCustomWalletManager.value = false;
+  }
+
+  function getCustomWalletLiveRecord(addr) {
+    const low = String(addr || '').trim().toLowerCase();
+    return disambiguateWallets(cryptoWhaleData.value?.whales || [])
+      .find(w => String(w.address || '').toLowerCase() === low) || null;
+  }
+
+  function focusCustomWallet(addr) {
+    const lowAddr = String(addr || '').trim().toLowerCase();
+    if (!lowAddr) return;
+    if (whaleCategory.value !== 'crypto') {
+      setWhaleCategory('crypto');
+    }
+    const matched = allWhales.value.find(w => String(w.address || '').toLowerCase() === lowAddr);
+    if (matched) {
+      selectedWhaleKeys.crypto = matched.walletKey;
+      expandedWhaleAddress.value = matched.address;
+    }
+    showCustomWalletManager.value = false;
+  }
+
+  async function addCustomWhaleWallet() {
+    const addr = customWalletAddressInput.value.trim().toLowerCase();
+    const label = sanitizeCustomLabel(customWalletLabelInput.value);
+    if (!VALID_EVM_ADDR_RE.test(addr)) {
+      customWalletFormError.value = '请输入有效的 42 位以太坊/Hyperliquid 钱包地址（0x 开头 + 40 位十六进制字符）';
+      return;
+    }
+
+    const existingIdx = customWallets.value.findIndex(c => c.address === addr);
+    if (existingIdx >= 0) {
+      if (label && label !== customWallets.value[existingIdx].label) {
+        const next = [...customWallets.value];
+        next[existingIdx] = { ...next[existingIdx], label };
+        customWallets.value = next;
+        saveStoredCustomWallets(next);
+        customWalletAddressInput.value = '';
+        customWalletLabelInput.value = '';
+        customWalletFormError.value = '';
+        if (whaleCategory.value !== 'crypto') {
+          setWhaleCategory('crypto');
         }
-      } else {
-        cryptoWhaleError.value = `HTTP ${res.status}`;
+        await loadCryptoWhales({ force: true });
+        focusCustomWallet(addr);
+        return;
       }
-    } catch (e) {
-      cryptoWhaleError.value = e.message || '加载巨鲸数据异常';
-    } finally {
-      cryptoWhaleLoading.value = false;
+      customWalletFormError.value = '该钱包地址已在自选监控列表中';
+      return;
+    }
+
+    if (customWallets.value.length >= WHALE_MAX_CUSTOM_WALLETS) {
+      customWalletFormError.value = `最多支持添加 ${WHALE_MAX_CUSTOM_WALLETS} 个自选钱包地址，请先移除部分旧地址`;
+      return;
+    }
+
+    const next = [...customWallets.value, { address: addr, label, addedAt: Date.now() }];
+    customWallets.value = next;
+    saveStoredCustomWallets(next);
+    customWalletAddressInput.value = '';
+    customWalletLabelInput.value = '';
+    customWalletFormError.value = '';
+    if (whaleCategory.value !== 'crypto') {
+      setWhaleCategory('crypto');
+    }
+    await loadCryptoWhales({ force: true });
+    const matched = allWhales.value.find(w => String(w.address || '').toLowerCase() === addr);
+    if (matched) {
+      selectedWhaleKeys.crypto = matched.walletKey;
+      expandedWhaleAddress.value = matched.address;
+    }
+    showCustomWalletManager.value = false;
+  }
+
+  async function removeCustomWhaleWallet(addr) {
+    const lowAddr = String(addr || '').trim().toLowerCase();
+    const next = customWallets.value.filter(c => c.address !== lowAddr);
+    if (next.length === customWallets.value.length) return;
+    customWallets.value = next;
+    saveStoredCustomWallets(next);
+    if (next.length === 0 && walletScopeFilter.value === 'custom') {
+      walletScopeFilter.value = 'all';
+    }
+    if (selectedWhaleRecord.value && String(selectedWhaleRecord.value.address || '').toLowerCase() === lowAddr) {
+      selectedWhaleKeys.crypto = '';
+    }
+    await loadCryptoWhales({ force: true, silent: true });
+  }
+
+  async function loadCryptoWhales({ force = false, silent = false } = {}) {
+    const url = buildCryptoWhalesUrl({ force });
+    if (cryptoWhaleInFlight && cryptoWhaleInFlightUrl === url) {
+      return cryptoWhaleInFlight;
+    }
+    const reqSeq = ++cryptoWhaleReqSeq;
+    const run = (async () => {
+      try {
+        if (!silent) {
+          cryptoWhaleLoading.value = true;
+        }
+        cryptoWhaleError.value = '';
+        const res = await fetch(url);
+        if (reqSeq !== cryptoWhaleReqSeq) {
+          return cryptoWhaleData.value;
+        }
+        if (res.ok) {
+          const data = await res.json();
+          if (reqSeq !== cryptoWhaleReqSeq) {
+            return cryptoWhaleData.value;
+          }
+          const nowMs = Date.now();
+          whaleSyncNow.value = nowMs;
+
+          liveRebalanceDeltas.crypto = (liveRebalanceDeltas.crypto || []).filter(
+            d => (nowMs - (Number(d?.detectedAt) || 0)) <= WHALE_LIVE_PULSE_TTL_MS
+          );
+
+          if (data?.ok && data.whales) {
+            if (data.isLive !== false) {
+              if (prevCryptoWhaleSnapshot.length > 0) {
+                const cDeltas = detectPositionDeltas(prevCryptoWhaleSnapshot, data.whales, { now: nowMs });
+                if (cDeltas.length > 0) {
+                  liveRebalanceDeltas.crypto = [...cDeltas, ...liveRebalanceDeltas.crypto].slice(0, 12);
+                }
+              }
+              prevCryptoWhaleSnapshot = data.whales;
+            }
+
+            cryptoWhaleData.value = data;
+            const dt = data.fetchedAt ? new Date(data.fetchedAt) : new Date(nowMs);
+            if (!Number.isNaN(dt.getTime())) {
+              lastWhaleSyncAt.value = dt.toTimeString().slice(0, 8);
+            }
+            if (!expandedWhaleAddress.value && data.whales.length > 0) {
+              expandedWhaleAddress.value = data.whales[0].address;
+            }
+            if (selectedWhaleKeys.crypto) {
+              const stillExists = disambiguateWallets(data.whales).some(
+                w => w.walletKey === selectedWhaleKeys.crypto
+              );
+              if (!stillExists) {
+                selectedWhaleKeys.crypto = '';
+              }
+            }
+          }
+        } else {
+          cryptoWhaleError.value = `HTTP ${res.status}`;
+        }
+      } catch (e) {
+        if (reqSeq === cryptoWhaleReqSeq) {
+          cryptoWhaleError.value = e.message || '加载巨鲸数据异常';
+        }
+      } finally {
+        if (reqSeq === cryptoWhaleReqSeq) {
+          if (!silent) {
+            cryptoWhaleLoading.value = false;
+          }
+          cryptoWhaleInFlight = null;
+          cryptoWhaleInFlightUrl = '';
+        }
+      }
+    })();
+    cryptoWhaleInFlight = run;
+    cryptoWhaleInFlightUrl = url;
+    return run;
+  }
+
+  function pollCryptoWhales() {
+    if (typeof document !== 'undefined' && document.hidden) return;
+    if (page.value !== 'crypto' || whaleCategory.value !== 'crypto') return;
+    loadCryptoWhales({ force: true, silent: true });
+  }
+
+  function syncCryptoWhalePolling() {
+    const shouldPoll = page.value === 'crypto'
+      && whaleCategory.value === 'crypto'
+      && (typeof document === 'undefined' || !document.hidden);
+    if (shouldPoll) {
+      if (!cryptoWhaleTimer) {
+        cryptoWhaleTimer = setInterval(pollCryptoWhales, WHALE_REFRESH_INTERVAL_MS);
+      }
+    } else if (cryptoWhaleTimer) {
+      clearInterval(cryptoWhaleTimer);
+      cryptoWhaleTimer = null;
     }
   }
 
@@ -5782,7 +6471,6 @@ createApp({ setup() {
       if (typeof document !== 'undefined' && document.hidden) return;
       fetchWatchlistQuotes({ silent: true });
       if (page.value === 'crypto') {
-        loadCryptoWhales();
         loadOnchainStocks();
       }
     }, 4000);
@@ -7168,6 +7856,7 @@ createApp({ setup() {
   });
 
   watch([symbol, chartRange, chartInterval], () => { if (page.value === 'chart') loadChart(); });
+  watch([page, whaleCategory], () => { syncCryptoWhalePolling(); });
   watch([selectedCrypto, cryptoTimeframe], async () => { if (page.value === 'crypto') { await nextTick(); renderCryptoChart(); } });
   watch(newsSymbol, () => { if (page.value === 'news') loadNews(); });
   watch(optionExpiry, value => { if (page.value === 'options' && value && value !== options.value?.expiration) loadOptions(); });
@@ -7177,10 +7866,14 @@ createApp({ setup() {
   watch(showSettings, value => { document.body.classList.toggle('drawer-open', value && isMobile.value); });
 
   function handleVisibilityChange() {
+    syncCryptoWhalePolling();
     if (document.hidden) {
       stopShortPolling();
     } else {
       fetchWatchlistQuotes({ silent: true });
+      if (page.value === 'crypto' && whaleCategory.value === 'crypto') {
+        loadCryptoWhales({ force: true, silent: true });
+      }
       if (!eventSource || eventSource.readyState === 2) { // 2 = EventSource.CLOSED
         setupEventSource();
       }
@@ -7188,6 +7881,10 @@ createApp({ setup() {
   }
 
   function handleGlobalKeyDown(e) {
+    if (showCustomWalletManager.value && e.key === 'Escape') {
+      closeCustomWalletManager();
+      return;
+    }
     if (showPreferencesModal.value && e.key === 'Escape') {
       showPreferencesModal.value = false;
       return;
@@ -7205,6 +7902,7 @@ createApp({ setup() {
     loadInitialPageData();
     fetchWatchlistQuotes();
     setupEventSource();
+    syncCryptoWhalePolling();
     setupTreeNewsStream();
     fetchTreeNewsHistory();
     initialTimer = setTimeout(() => { isInitialLoading.value = false; }, 800);
@@ -7240,6 +7938,10 @@ createApp({ setup() {
     if (initialTimer) clearTimeout(initialTimer);
     clearInterval(clockTimer);
     stopShortPolling();
+    if (cryptoWhaleTimer) {
+      clearInterval(cryptoWhaleTimer);
+      cryptoWhaleTimer = null;
+    }
     clearTimeout(sseReconnectTimer);
     clearTimeout(treeNewsReconnectTimer);
     clearTimeout(watchlistDebounceTimer);
@@ -7304,10 +8006,23 @@ createApp({ setup() {
     cryptoData, cryptoList, selectedCrypto, selectedCryptoItem, cryptoTimeframe,
     formatCryptoPrice, getCryptoRangePct, selectCryptoCoin, loadCrypto, renderCryptoChart,
     cryptoWhaleData, cryptoWhaleLoading, cryptoWhaleError, cryptoWhaleFilter, cryptoWhaleSearch,
+    isWhaleDatasetSample, isWhaleDatasetLive,
     expandedWhaleAddress, copiedWhaleAddress, whaleAggregate, allWhales, filteredWhales, whaleActivityLogs,
     formatWhaleUsd, formatWhaleCoinSize, toggleWhaleExpand, copyWhaleAddress, loadCryptoWhales,
     isWhaleSortedBy, getWhaleSortDir, getWhaleSortIcon, toggleWhalePositionSort,
+    aggPositionSort, toggleAggPositionSort, isAggSortedBy, getAggSortDir, getAggSortIcon,
     whaleCategory, setWhaleCategory, viewStockWhale,
+    WHALE_TOP_N_OPTIONS, WHALE_MAX_CUSTOM_WALLETS, whaleTopN, customWallets, walletScopeFilter,
+    showCustomWalletManager, customWalletAddressInput, customWalletLabelInput, customWalletFormError,
+    setWhaleTopN, toggleWalletScopeFilter, openCustomWalletManager, closeCustomWalletManager,
+    addCustomWhaleWallet, removeCustomWhaleWallet, focusCustomWallet, getCustomWalletLiveRecord, formatShortAddr,
+    // Whale Sankey & Two-Column Split Layout
+    selectedWhaleKey, sankeyMode, hoveredSankeyWalletKey, hoveredAssetSymbol, hoveredSankeyLinkId,
+    reduceSankeyMotion, showSecondaryMarketFlow, secondaryFlowTab, lastWhaleSyncAt,
+    setSankeyMode, selectWhaleWallet, clearWhaleSelection, resetCryptoSankeyFilters,
+    leftWalletRows, selectedWhaleRecord, aggregatedAssetPositions, nowRebalanceItems,
+    sankeyGraph, hoveredSankeyLink, sankeyKpiSummary, sankeyMarketMeta,
+    getAssetLabel, formatWhaleCompactUsd,
     // On-Chain US Equities Flow Top 10 & Unified Graphic Flow
     onchainStocksData, onchainStocksLoading, onchainStocksError, onchainStockSearch, onchainStockSortField, onchainStockSortDir,
     onchainAggregate, onchainStocksList, toggleOnchainSort, formatOnchainUsd, formatOnchainFlowUsd, loadOnchainStocks,

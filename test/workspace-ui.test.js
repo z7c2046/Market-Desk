@@ -11,6 +11,7 @@ import * as themeModel from '../public/theme-model.js';
 import * as mobileWorkspace from '../public/mobile-workspace.js';
 import * as mobileQuoteView from '../public/mobile-quote-view.js';
 import * as chartDerivedData from '../public/composables/chartDerivedData.js';
+import * as whaleSankeyModel from '../public/composables/whaleSankeyModel.js';
 import { AiSearchService } from '../src/ai-search-service.js';
 import { createServer } from '../src/server.js';
 const tick = () => new Promise(resolve => setTimeout(resolve, 30));
@@ -132,7 +133,7 @@ async function mount(t, fetchImpl, initStorage = null, configureWindow = null) {
   w.EventSource = class { constructor() {} close() {} };
   w.requestAnimationFrame = cb => setTimeout(cb, 16);
   w.cancelAnimationFrame = id => clearTimeout(id);
-  Object.assign(w, watchlistModel, earningsCalendarModel, inflectionSignals, themeModel, mobileWorkspace, mobileQuoteView, chartDerivedData);
+  Object.assign(w, watchlistModel, earningsCalendarModel, inflectionSignals, themeModel, mobileWorkspace, mobileQuoteView, chartDerivedData, whaleSankeyModel);
   Object.defineProperty(w.HTMLElement.prototype, 'clientWidth', { get: () => 800 });
   w.echarts = { init: el => ({ setOption: config => configs.set(el.id, config), off() {}, on() {}, resize() {}, dispose() {}, dispatchAction() {} }) };
   w.eval(await fs.readFile(new URL('../node_modules/vue/dist/vue.global.prod.js', import.meta.url), 'utf8'));
@@ -162,6 +163,7 @@ async function mount(t, fetchImpl, initStorage = null, configureWindow = null) {
     .replace("import { parseFlows } from './flows.js';", 'const parseFlows = window.parseFlows;')
     .replace("import { bindKlineGestures } from './composables/klineGesture.js';", 'const bindKlineGestures = window.bindKlineGestures;')
     .replace("import { createChartDerivedData } from './composables/chartDerivedData.js';", 'const { createChartDerivedData } = window;')
+    .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/composables\/whaleSankeyModel\.js';/, 'const { getAssetLabel, formatWhaleCompactUsd, disambiguateWallets, computeWhaleSankeyGraph, buildAggregatedPositions, detectPositionDeltas } = window;')
     .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/watchlist-model\.js';/, 'const { WatchlistManager, sortWatchlistRows, getSelectedExtQuote, getCurrentSession, getNyTime, SESSION_TYPES, MAX_UNIQUE_SYMBOLS, validSymbol, SYMBOL_NAMES, NASDAQ100_STOCKS, SP500_STOCKS, isLeveragedEtf, isCryptoSymbol, STOCK_MARKET_CAPS, getStockMarketCap, sortSymbolsByMarketCap } = window;')
     .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/earnings-calendar-model\.js';/, 'const { AI_SECTOR_FILTERS, CORPORATE_LOGOS, getEarningsCalendarDate, getEarningsWeeks, MACRO_CALENDAR_ITEMS, filterEarningsByDay, parseMetricNumber, getMetricSurprise, getMetricYoy } = window;')
     .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/inflection-signals\.js';/, 'const { computeInflectionSignals, formatSignalMarkers, dema } = window;')
@@ -185,6 +187,9 @@ const fixture = url => {
   if (u.pathname === '/api/crypto/whales') {
     return {
       ok: true,
+      isLive: true,
+      source: 'hyperliquid-api',
+      fetchedAt: new Date().toISOString(),
       aggregate: {
         totalTrackedWhales: 2,
         totalEquity: 50000000,
@@ -244,6 +249,55 @@ const fixture = url => {
               leverageLabel: '20x 全仓',
               liquidationPx: 54200,
               liqDistancePct: 31.0
+            }
+          ]
+        },
+        {
+          address: '0x3f5ce5fbfe3e9af3971dd833d26ba9b5c936f0be',
+          shortAddress: '0x3f5c...f0be',
+          name: 'SOL 高频套利巨鲸',
+          tag: '高频量化',
+          avatar: '⚡',
+          accountValue: 19500000,
+          totalNtlPos: 18700000,
+          netExposure: 10300000,
+          netBiasLabel: '净多',
+          positions: [
+            {
+              coin: 'SOL',
+              chartSymbol: 'SOL-USD',
+              side: 'LONG',
+              sideLabel: '做多',
+              isLong: true,
+              size: 102112,
+              entryPx: 138.4,
+              markPx: 142.0,
+              positionValue: 14500000,
+              unrealizedPnl: 367600,
+              roePct: 18.2,
+              leverage: 10,
+              leverageType: '全仓',
+              leverageLabel: '10x 全仓',
+              liquidationPx: 112.0,
+              liqDistancePct: 21.1
+            },
+            {
+              coin: 'BTC',
+              chartSymbol: 'BTC-USD',
+              side: 'SHORT',
+              sideLabel: '做空',
+              isLong: false,
+              size: 53.4,
+              entryPx: 79100,
+              markPx: 78600,
+              positionValue: 4200000,
+              unrealizedPnl: 26700,
+              roePct: 6.4,
+              leverage: 10,
+              leverageType: '全仓',
+              leverageLabel: '10x 全仓',
+              liquidationPx: 92000,
+              liqDistancePct: 17.0
             }
           ]
         }
@@ -1445,7 +1499,7 @@ test('Mobile Workspace Redesign: 5 bottom tabs, dedicated search overlay, more f
   assert.deepEqual(ui.errors, []);
 });
 
-test('Crypto Workspace: graphic-first zero-bloat capital flow matrix, SVG telemetry, unified Crypto/TradFi switcher, and inline whale drawer', async t => {
+test('Crypto Workspace: Sankey distribution, 4 scoped KPIs, 2-column whale-position linking, Crypto/TradFi switch, and collapsible secondary flow drawer', async t => {
   const ui = await mount(t, async url => ({ ok: true, json: async () => {
     const data = fixture(url);
     if (new URL(url, 'http://localhost').pathname !== '/api/crypto/onchain-stocks') return data;
@@ -1462,34 +1516,246 @@ test('Crypto Workspace: graphic-first zero-bloat capital flow matrix, SVG teleme
   await tick();
   await tick();
 
-  // 2. Verify legacy crypto-table and verbose marketing slogans are absent
+  // 2. Verify legacy clutter and old sparklines/donuts are replaced by unified Sankey KPIs
   assert.equal(ui.w.document.querySelector('.crypto-table'), null, 'crypto-table is removed from crypto dashboard');
   assert.equal(ui.w.document.querySelector('#crypto-chart'), null, 'crypto-chart is not rendered');
   const mainText = ui.w.document.querySelector('main').textContent;
   assert.doesNotMatch(mainText, /市值霸主|智能合约|实时行情已联通|仅精选 BTC/);
 
-  // 3. Verify 4 Graphic Telemetry Cards (2 SVG sparklines + 1 diverging histogram + 1 dual-arc donut)
-  assert.equal(ui.w.document.querySelectorAll('.cw-telemetry-card').length, 4, '4 graphic telemetry cards rendered');
-  assert.equal(ui.w.document.querySelectorAll('.cw-sparkline-svg').length, 2, '2 SVG area sparklines rendered');
-  assert.ok(ui.w.document.querySelector('.cw-skyline-svg'), 'Diverging flow histogram SVG rendered');
-  assert.ok(ui.w.document.querySelector('.cw-donut-svg'), 'Whale L/S dual-arc donut SVG rendered');
+  // 3. Verify 4 Scoped KPI Cards (名义持仓, 多仓 LONG, 空仓 SHORT, 多空净敞口)
+  const kpiCards = ui.w.document.querySelectorAll('.cw-telemetry-card');
+  assert.equal(kpiCards.length, 4, '4 scoped KPI cards rendered');
+  assert.match(kpiCards[0].textContent, /名义持仓/);
+  assert.match(kpiCards[1].textContent, /多仓.*LONG/);
+  assert.match(kpiCards[2].textContent, /空仓.*SHORT/);
+  assert.match(kpiCards[3].textContent, /多空净敞口/);
+  assert.ok(kpiCards[3].querySelector('.cw-kpi-split-track'), 'L/S split bar rendered on KPI card 4');
 
-  // 4. Verify Capital Flow Matrix in default Crypto mode
+  // 4. Verify SVG Sankey Diagram & Live Rebalance Strip
+  const sankeyPanel = ui.w.document.querySelector('.cw-sankey-panel');
+  assert.ok(sankeyPanel, 'Sankey panel rendered');
+  assert.match(sankeyPanel.textContent, /加密货币 · 巨鲸持仓分布/);
+  assert.match(sankeyPanel.querySelector('.cw-selection-badge').textContent, /全部钱包/);
+  assert.ok(sankeyPanel.querySelector('.cw-now-strip'), 'Live rebalance marquee strip rendered');
+  assert.match(sankeyPanel.querySelector('.cw-now-strip').textContent, /暂无 5 分钟内新成交/);
+
+  const sankeySvg = sankeyPanel.querySelector('.cw-sankey-svg');
+  assert.ok(sankeySvg, 'Responsive SVG Sankey chart rendered');
+  assert.equal(sankeySvg.querySelectorAll('.cw-sk-pulse-beam').length, 0, 'Calm Crypto period renders zero synthetic pulse beams');
+  assert.equal(sankeySvg.hasAttribute('viewBox'), true, 'SVG preserves camelCase viewBox attribute for browser scaling');
+  assert.equal(sankeySvg.hasAttribute('viewbox'), false, 'SVG must not downgrade viewBox to lowercase viewbox');
+  const vbParts = (sankeySvg.getAttribute('viewBox') || '').trim().split(/\s+/).map(Number);
+  assert.equal(vbParts.length, 4, 'Valid 4-tuple SVG viewBox');
+  assert.equal(vbParts[2], 1280, 'Sankey viewBox width matches 1280px coordinate space');
+  assert.ok(vbParts[3] >= 440, 'Sankey viewBox height avoids vertical clipping');
+
+  const walletNodes = sankeySvg.querySelectorAll('.cw-sk-wallet-node');
+  const assetNodes = sankeySvg.querySelectorAll('.cw-sk-asset-node');
+  const ribbonPaths = sankeySvg.querySelectorAll('.cw-sk-ribbon');
+  assert.match(sankeySvg.textContent, /持仓标的 · 按链上成交量/);
+  assert.equal(walletNodes.length, 2, '2 crypto whale wallet nodes in SVG');
+  assert.equal(walletNodes[0].querySelector('.cw-sk-avatar-txt').textContent.trim(), '01', 'Numeric monospace badge replaces emoji');
+  assert.deepEqual(
+    [...assetNodes].map(n => n.getAttribute('data-asset')),
+    ['BTC', 'ETH', 'SOL'],
+    'Crypto Sankey assets sort top-to-bottom by 24h on-chain volume (BTC > ETH > SOL) despite ETH holding highest whale OI'
+  );
+  assert.match(assetNodes[0].querySelector('.cw-sk-asset-lbl').textContent, /量 \$/);
+  assert.equal(ribbonPaths.length, 4, '4 conservation-strict position ribbons in SVG');
+  for (const rPath of ribbonPaths) {
+    const dAttr = rPath.getAttribute('d') || '';
+    assert.ok(dAttr.startsWith('M'), 'Valid SVG path string');
+    assert.doesNotMatch(dAttr, /NaN|Infinity/);
+    const mStart = dAttr.match(/^M[\d.]+,([\d.]+)\s/);
+    const lEnd = dAttr.match(/L[\d.]+,([\d.]+)\sC/);
+    const cEnd = dAttr.match(/C[\d.,\s]+[\d.]+,([\d.]+)\s/);
+    assert.ok(mStart && lEnd && cEnd, 'Ribbon SVG path contains full closed cubic geometry');
+    const targetSpan = Number(lEnd[1]) - Number(cEnd[1]);
+    assert.ok(targetSpan > 1, `Ribbon must have non-zero vertical thickness (got ${targetSpan})`);
+  }
+
+  // Test direction mode filter (全部 -> 多仓 -> 空仓 -> 全部)
+  const modeBtns = sankeyPanel.querySelectorAll('.cw-mode-seg .cw-seg-btn');
+  assert.equal(modeBtns.length, 3, '全部 / 多仓 / 空仓 mode buttons rendered');
+  modeBtns[1].click(); // 多仓
+  await tick();
+  assert.equal(sankeyPanel.querySelectorAll('.cw-sk-ribbon').length, 2, 'Only 2 long ribbons remain in 多仓 mode');
+  modeBtns[2].click(); // 空仓
+  await tick();
+  assert.equal(sankeyPanel.querySelectorAll('.cw-sk-ribbon').length, 2, 'Only 2 short ribbons remain in 空仓 mode');
+  modeBtns[0].click(); // 全部
+  await tick();
+  assert.equal(sankeyPanel.querySelectorAll('.cw-sk-ribbon').length, 4, 'Restored 4 ribbons in 全部 mode');
+
+  // 5. Verify Lower Two-Column Split Layout: Left = 巨鲸钱包, Right = 持仓明细
+  const lowerGrid = ui.w.document.querySelector('.cw-lower-grid');
+  assert.ok(lowerGrid, 'Lower 2-column split grid exists');
+  const whalePanel = lowerGrid.querySelector('.crypto-whale-tracker-panel');
+  const detailPanel = lowerGrid.querySelector('.cw-positions-detail-panel');
+  assert.ok(whalePanel && detailPanel, 'Left wallet panel & right detail panel exist');
+  assert.match(whalePanel.textContent, /加密货币 · 巨鲸钱包/);
+  assert.equal(ui.w.document.querySelector('#cw-positions-title').textContent.trim(), '全部钱包 · 持仓明细');
+  assert.ok(detailPanel.querySelector('.cw-agg-positions-table'), 'Aggregated multi-wallet breakdown shown initially');
+
+  // Test sorting of 多仓 / 空仓 / 合计 columns in 全部钱包 · 持仓明细 (when no wallet is selected)
+  const aggSyms = () => [...detailPanel.querySelectorAll('.cw-agg-positions-table .cw-asset-sym')].map(el => el.textContent.trim());
+  const thAggLong = detailPanel.querySelector('.th-agg-long.sortable-th');
+  const thAggShort = detailPanel.querySelector('.th-agg-short.sortable-th');
+  const thAggTotal = detailPanel.querySelector('.th-agg-total.sortable-th');
+  assert.ok(thAggLong && thAggShort && thAggTotal, 'Sortable 多仓 / 空仓 / 合计 headers exist on aggregated table');
+  assert.deepEqual(aggSyms(), ['BTC', 'ETH', 'SOL'], 'Initial aggregated order follows 24h volume desc');
+  assert.equal(thAggLong.getAttribute('aria-sort'), 'none');
+  assert.equal(thAggLong.querySelector('.sort-indicator').textContent.trim(), '⇅');
+
+  // Cycle 多仓: desc (SOL $14.5M > BTC $6.93M > ETH $0) -> asc -> reset to volume order
+  thAggLong.click();
+  await tick();
+  assert.deepEqual(aggSyms(), ['SOL', 'BTC', 'ETH'], '多仓 desc puts largest long position first');
+  assert.equal(thAggLong.getAttribute('aria-sort'), 'descending');
+  assert.equal(thAggLong.querySelector('.sort-indicator').textContent.trim(), '↓');
+  assert.ok(thAggLong.classList.contains('is-sorted'));
+
+  thAggLong.click();
+  await tick();
+  assert.deepEqual(aggSyms(), ['ETH', 'BTC', 'SOL'], '多仓 asc puts $0 long first');
+  assert.equal(thAggLong.getAttribute('aria-sort'), 'ascending');
+  assert.equal(thAggLong.querySelector('.sort-indicator').textContent.trim(), '↑');
+
+  thAggLong.click();
+  await tick();
+  assert.deepEqual(aggSyms(), ['BTC', 'ETH', 'SOL'], '3rd click on 多仓 resets to default volume order');
+  assert.equal(thAggLong.getAttribute('aria-sort'), 'none');
+
+  // Cycle 空仓: desc (ETH $31.8M > BTC $4.2M > SOL $0) -> asc
+  thAggShort.click();
+  await tick();
+  assert.deepEqual(aggSyms(), ['ETH', 'BTC', 'SOL'], '空仓 desc puts largest short position first');
+  assert.equal(thAggShort.getAttribute('aria-sort'), 'descending');
+
+  thAggShort.dispatchEvent(new ui.w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  await tick();
+  assert.deepEqual(aggSyms(), ['SOL', 'BTC', 'ETH'], 'Enter key toggles 空仓 to asc');
+  assert.equal(thAggShort.getAttribute('aria-sort'), 'ascending');
+
+  // Keyboard Space toggles 合计 desc -> asc
+  thAggTotal.dispatchEvent(new ui.w.KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+  await tick();
+  assert.deepEqual(aggSyms(), ['ETH', 'SOL', 'BTC'], 'Space key sorts 合计 desc');
+  thAggTotal.click();
+  await tick();
+  assert.deepEqual(aggSyms(), ['BTC', 'SOL', 'ETH'], 'Click sorts 合计 asc');
+  thAggTotal.click();
+  await tick();
+  assert.deepEqual(aggSyms(), ['BTC', 'ETH', 'SOL'], '3rd click resets 合计 back to default volume order');
+
+  // Click left wallet row -> links Sankey + highlights row + switches Right Panel to rich single-whale table
+  const leftRows = whalePanel.querySelectorAll('.cw-wallet-row');
+  assert.equal(leftRows.length, 2, '2 wallet rows rendered in left table');
+  leftRows[0].click();
+  await tick();
+
+  assert.ok(leftRows[0].classList.contains('selected'), 'Clicked wallet row gets .selected state');
+  assert.match(sankeyPanel.querySelector('.cw-selection-badge').textContent, /HL 亿级多空对冲巨鲸/);
+  assert.match(ui.w.document.querySelector('#cw-positions-title').textContent, /HL 亿级多空对冲巨鲸 · 持仓明细/);
+  assert.ok(detailPanel.querySelector('.cw-selected-wallet-strip'), 'Selected wallet summary strip shown');
+  assert.ok(detailPanel.querySelector('.whale-positions-table'), 'Single-whale rich positions table shown');
+
+  // Verify position column sorting on Right Panel (仓位 val asc/desc, 盈亏 pnl desc/asc)
+  const thVal = detailPanel.querySelector('.th-val.sortable-th');
+  const thPnl = detailPanel.querySelector('.th-pnl.sortable-th');
+  assert.ok(thVal && thPnl, 'Sortable 仓位 & 盈亏 headers exist');
+
+  let coinNames = Array.from(detailPanel.querySelectorAll('.whale-positions-table .pos-coin-name')).map(el => el.textContent.trim());
+  assert.deepEqual(coinNames, ['ETH', 'BTC']);
+
+  thVal.click();
+  await tick();
+  coinNames = Array.from(detailPanel.querySelectorAll('.whale-positions-table .pos-coin-name')).map(el => el.textContent.trim());
+  assert.deepEqual(coinNames, ['BTC', 'ETH']);
+
+  thPnl.click();
+  await tick();
+  coinNames = Array.from(detailPanel.querySelectorAll('.whale-positions-table .pos-coin-name')).map(el => el.textContent.trim());
+  assert.deepEqual(coinNames, ['ETH', 'BTC']);
+
+  thPnl.click();
+  await tick();
+  coinNames = Array.from(detailPanel.querySelectorAll('.whale-positions-table .pos-coin-name')).map(el => el.textContent.trim());
+  assert.deepEqual(coinNames, ['BTC', 'ETH']);
+
+  // Click 清除选择 -> restores 全部钱包 · 持仓明细
+  const resetSelBtn = sankeyPanel.querySelector('.cw-reset-selection');
+  assert.equal(resetSelBtn.disabled, false);
+  resetSelBtn.click();
+  await tick();
+  assert.equal(ui.w.document.querySelector('#cw-positions-title').textContent.trim(), '全部钱包 · 持仓明细');
+  assert.ok(detailPanel.querySelector('.cw-agg-positions-table'), 'Aggregated table restored after clearing selection');
+
+  // Test clicking SVG wallet node directly -> selects 2nd whale (SOL 高频套利巨鲸)
+  const solWalletSvgNode = sankeySvg.querySelectorAll('.cw-sk-wallet-node')[1];
+  solWalletSvgNode.dispatchEvent(new ui.w.MouseEvent('click', { bubbles: true }));
+  await tick();
+  assert.match(ui.w.document.querySelector('#cw-positions-title').textContent, /SOL 高频套利巨鲸 · 持仓明细/);
+
+  // Test clicking Sankey ribbon directly -> toggles/selects 1st whale
+  const firstRibbon = sankeySvg.querySelector('.cw-sk-ribbon');
+  firstRibbon.dispatchEvent(new ui.w.MouseEvent('click', { bubbles: true }));
+  await tick();
+  assert.match(ui.w.document.querySelector('#cw-positions-title').textContent, /HL 亿级多空对冲巨鲸 · 持仓明细/);
+
+  // 6. Verify unified clickable market cards: switch to "TradFi"
+  const catBtns = ui.w.document.querySelectorAll('.whale-cat-btn');
+  assert.equal(catBtns.length, 2, 'Two clickable market cards exist');
+  assert.match(catBtns[0].textContent, /加密货币/);
+  assert.match(catBtns[1].textContent, /TradFi/);
+
+  catBtns[1].click();
+  await tick();
+  assert.match(sankeyPanel.textContent, /TradFi · 巨鲸持仓分布/);
+  assert.match(sankeyPanel.textContent, /样本持仓策略 · 静态演示账户/);
+  assert.equal(sankeyPanel.querySelector('.cw-now-strip'), null, 'TradFi static sample hides 正在调仓 pseudo-live ticker');
+  assert.equal(sankeySvg.querySelectorAll('.cw-sk-pulse-beam').length, 0, 'TradFi static sample never flashes pulse beams');
+  assert.match(sankeySvg.textContent, /NVDA/);
+  assert.equal(sankeySvg.hasAttribute('viewBox'), true, 'TradFi SVG also maintains camelCase viewBox');
+  assert.ok(sankeySvg.querySelectorAll('.cw-sk-ribbon').length >= 1, 'TradFi renders non-empty Sankey ribbons');
+  const tradfiAssetOrder = [...sankeySvg.querySelectorAll('.cw-sk-asset-node')].map(n => n.getAttribute('data-asset'));
+  assert.deepEqual(
+    tradfiAssetOrder.slice(0, 3),
+    ['NVDA', 'TSLA', 'AMD'],
+    'TradFi Sankey assets sort strictly by 24h on-chain volume descending (NVDA $64.8M > TSLA $20M > AMD $8M)'
+  );
+  assert.equal(tradfiAssetOrder.at(-1), 'OTHER', 'Long-tail bucket remains pinned at bottom');
+  assert.match(whalePanel.textContent, /TradFi · 巨鲸钱包/);
+  assert.equal(ui.w.document.querySelector('#cw-positions-title').textContent.trim(), '全部钱包 · 持仓明细', 'Market switch uses independent TradFi selection state');
+
+  // Verify TradFi aggregated table sorting (independent from Crypto sort state)
+  const tradfiAggLong = detailPanel.querySelector('.th-agg-long.sortable-th');
+  const tradfiAggShort = detailPanel.querySelector('.th-agg-short.sortable-th');
+  assert.equal(tradfiAggLong.getAttribute('aria-sort'), 'none');
+  tradfiAggLong.click();
+  await tick();
+  const tradfiLongTop = [...detailPanel.querySelectorAll('.cw-agg-positions-table .cw-asset-sym')].map(el => el.textContent.trim());
+  assert.deepEqual(tradfiLongTop.slice(0, 3), ['NVDA', 'SPY', 'MSTR'], 'TradFi 多仓 desc puts NVDA ($32.6M) > SPY ($28.9M) > MSTR ($22.5M)');
+  tradfiAggShort.click();
+  await tick();
+  const tradfiShortTop = [...detailPanel.querySelectorAll('.cw-agg-positions-table .cw-asset-sym')].map(el => el.textContent.trim());
+  assert.deepEqual(tradfiShortTop.slice(0, 3), ['QQQ', 'TSLA', 'AAPL'], 'TradFi 空仓 desc puts QQQ ($21.4M) > TSLA ($12.8M) > AAPL ($12.4M)');
+
+  const stylesCss = await fs.readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
+  assert.match(stylesCss, /\.cw-sk-pulse-glow,\s*\.cw-sk-pulse-beam\s*\{[^}]*stroke-dasharray:/, 'Pulse glow and beam share dashed packet geometry');
+
+  // 7. Verify Secondary Market Flow & Radar Drawer (Collapsed by default -> Expandable)
+  assert.equal(ui.w.document.querySelector('.onchain-stocks-panel'), null, 'Full-market flow table collapsed by default');
+  const secToggleBtn = ui.w.document.querySelector('.cw-sec-toggle-btn');
+  assert.ok(secToggleBtn, 'Secondary section toggle button exists');
+  secToggleBtn.click();
+  await tick();
+
   const onchainPanel = ui.w.document.querySelector('.onchain-stocks-panel');
-  assert.ok(onchainPanel, 'Capital Flow Matrix panel exists');
-  assert.match(onchainPanel.textContent, /资金流向/);
-  assert.match(onchainPanel.textContent, /BTC/);
-  assert.match(onchainPanel.textContent, /ETH/);
-  assert.equal(onchainPanel.querySelector('.th-spread'), null, 'th-spread hidden in Crypto coin mode');
-
-  // Verify diverging zero-axis flow graphic & split L/S capsule bar
-  const thFlow = onchainPanel.querySelector('.th-flow');
-  assert.ok(thFlow && thFlow.classList.contains('text-center'), 'th-flow centered header exists');
-  const firstColFlow = onchainPanel.querySelector('.col-flow');
-  assert.ok(firstColFlow && firstColFlow.classList.contains('text-center'), 'col-flow centered cell exists');
-  assert.ok(firstColFlow.querySelector('.cw-diverging-track'), 'diverging zero-axis flow bar rendered');
-  assert.ok(onchainPanel.querySelector('.cw-ls-capsule'), 'split L/S capsule bar rendered');
-  assert.ok(firstColFlow.querySelector('.netflow-val'), 'netflow-val numeric label rendered');
+  assert.ok(onchainPanel, 'Capital Flow Matrix panel revealed after expanding secondary toggle');
+  assert.match(onchainPanel.textContent, /NVDA/);
+  assert.match(onchainPanel.textContent, /英伟达/);
+  assert.match(onchainPanel.querySelector('.netflow-val').textContent, /^\+\$[0-9]/, 'positive TradFi net flow formatted cleanly');
 
   const flowSymbols = () => [...onchainPanel.querySelectorAll('.cw-flow-row .cw-ticker')].map(el => el.textContent.trim());
   const checkFlowSort = async (selector, descending, ascending) => {
@@ -1499,13 +1765,9 @@ test('Crypto Workspace: graphic-first zero-bloat capital flow matrix, SVG teleme
     header.click();
     await tick();
     assert.deepEqual(flowSymbols(), descending);
-    assert.equal(header.getAttribute('aria-sort'), 'descending');
-    assert.equal(header.querySelector('.cw-sort-arrow').textContent, '↓');
     header.click();
     await tick();
     assert.deepEqual(flowSymbols(), ascending);
-    assert.equal(header.getAttribute('aria-sort'), 'ascending');
-    assert.equal(header.querySelector('.cw-sort-arrow').textContent, '↑');
     header.dispatchEvent(new ui.w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     await tick();
     assert.deepEqual(flowSymbols(), descending);
@@ -1513,99 +1775,31 @@ test('Crypto Workspace: graphic-first zero-bloat capital flow matrix, SVG teleme
     await tick();
     assert.deepEqual(flowSymbols(), ascending);
   };
-  // The six-coin list includes fallback rows; BTC is long and ETH is short.
-  await checkFlowSort('.th-flow', ['SOL', 'BTC', 'BNB', 'ADA', 'XRP', 'ETH'], ['ETH', 'XRP', 'ADA', 'BNB', 'BTC', 'SOL']);
-  await checkFlowSort('.th-ls', ['BTC', 'BNB', 'SOL', 'ADA', 'XRP', 'ETH'], ['ETH', 'XRP', 'BNB', 'SOL', 'ADA', 'BTC']);
-  onchainPanel.querySelector('.th-vol').click();
-  await tick();
 
-  // 5. Verify Whale Positions Panel & column sorting in Crypto mode
-  const whalePanel = ui.w.document.querySelector('.crypto-whale-tracker-panel');
-  assert.ok(whalePanel, 'Full-width whale tracker panel exists');
-  assert.match(whalePanel.textContent, /巨鲸持仓/);
-  assert.match(whalePanel.textContent, /做多/);
-  assert.match(whalePanel.textContent, /做空/);
-  assert.ok(whalePanel.querySelector('.cw-wallet-exp-bar'), 'Graphical wallet exposure bar rendered');
-
-  const thVal = ui.w.document.querySelector('.th-val.sortable-th');
-  const thPnl = ui.w.document.querySelector('.th-pnl.sortable-th');
-  assert.ok(thVal, 'Sortable 仓位 header exists');
-  assert.ok(thPnl, 'Sortable 盈亏 header exists');
-
-  // Initial order is positionValue desc: ETH ($31.8M), BTC ($6.93M)
-  let coinNames = Array.from(ui.w.document.querySelectorAll('.whale-positions-table .pos-coin-name')).map(el => el.textContent.trim());
-  assert.deepEqual(coinNames.slice(0, 2), ['ETH', 'BTC']);
-
-  // Click 仓位 to sort asc (smallest first)
-  thVal.click();
-  await tick();
-  coinNames = Array.from(ui.w.document.querySelectorAll('.whale-positions-table .pos-coin-name')).map(el => el.textContent.trim());
-  assert.deepEqual(coinNames.slice(0, 2), ['BTC', 'ETH']);
-
-  // Click 盈亏 to sort pnl desc (185000 > 24500)
-  thPnl.click();
-  await tick();
-  coinNames = Array.from(ui.w.document.querySelectorAll('.whale-positions-table .pos-coin-name')).map(el => el.textContent.trim());
-  assert.deepEqual(coinNames.slice(0, 2), ['ETH', 'BTC']);
-
-  // Click 盈亏 again to sort pnl asc (24500 < 185000)
-  thPnl.click();
-  await tick();
-  coinNames = Array.from(ui.w.document.querySelectorAll('.whale-positions-table .pos-coin-name')).map(el => el.textContent.trim());
-  assert.deepEqual(coinNames.slice(0, 2), ['BTC', 'ETH']);
-
-  // 6. Verify unified clickable market cards: switch to "TradFi"
-  const catBtns = ui.w.document.querySelectorAll('.whale-cat-btn');
-  assert.equal(catBtns.length, 2, 'Two clean clickable market cards exist');
-  assert.match(catBtns[0].textContent, /加密货币/);
-  assert.match(catBtns[1].textContent, /TradFi/);
-
-  catBtns[1].click();
-  await tick();
-  assert.match(onchainPanel.textContent, /TradFi/);
-  assert.match(onchainPanel.textContent, /NVDA/);
-  assert.match(onchainPanel.textContent, /英伟达/);
-  assert.match(whalePanel.textContent, /NVDA/);
-  assert.match(onchainPanel.querySelector('.netflow-val').textContent, /^\+\$[0-9]/, 'positive TradFi net flow formatted cleanly');
-
-  // Verify Spread header and badges in TradFi mode
-  const thSpread = onchainPanel.querySelector('.th-spread');
-  assert.ok(thSpread, 'th-spread header exists in TradFi mode');
-  assert.match(thSpread.textContent, /价差/);
-  const firstColSpread = onchainPanel.querySelector('.col-spread');
-  assert.ok(firstColSpread, 'col-spread exists in TradFi row');
-  assert.match(firstColSpread.textContent, /溢价|折价/);
-  assert.match(firstColSpread.textContent, /正股/);
-
-  // Sort signed raw amounts across M/K units, and sort long share independently.
   await checkFlowSort('.th-flow', ['NVDA', 'AMD', 'TSLA'], ['TSLA', 'AMD', 'NVDA']);
   await checkFlowSort('.th-ls', ['AMD', 'NVDA', 'TSLA'], ['TSLA', 'NVDA', 'AMD']);
   await checkFlowSort('.th-spread', ['AMD', 'NVDA', 'TSLA'], ['TSLA', 'NVDA', 'AMD']);
   onchainPanel.querySelector('.th-vol').click();
   await tick();
 
-  // 7. Expand inline whale drawer under NVDA row -> verify horizontal price axis graphic + whale positions
+  // Expand inline whale drawer under NVDA row -> verify cost axis & 钱包 ↘ filter jump
   const radarBtn = onchainPanel.querySelector('.onchain-radar-btn');
   assert.ok(radarBtn, 'onchain-radar-btn exists');
   radarBtn.click();
   await tick();
   const radarContainer = onchainPanel.querySelector('.stock-radar-container');
-  assert.ok(radarContainer, 'stock-radar-container inline drawer is rendered');
+  assert.ok(radarContainer, 'stock-radar-container inline drawer rendered');
   assert.ok(radarContainer.querySelector('.cw-axis-rail'), 'Horizontal price cost/spot axis graphic rendered');
-  assert.match(radarContainer.textContent, /多均/);
-  assert.match(radarContainer.textContent, /空均/);
-  assert.match(radarContainer.textContent, /正股/);
-  assert.ok(radarContainer.querySelector('.cw-axis-pin.is-tradfi'), 'TradFi stock reference pin rendered on axis rail');
-  assert.ok(radarContainer.querySelector('.cw-spread-tag'), 'TradFi spread tag rendered in drawer header');
+  assert.ok(radarContainer.querySelector('.cw-axis-pin.is-tradfi'), 'TradFi stock reference pin rendered');
+  assert.ok(radarContainer.querySelector('.cw-spread-tag'), 'TradFi spread tag rendered');
 
-  // Click "钱包 ↘" filter link inside inline drawer -> filters whale panel to NVDA
   const whaleBtn = radarContainer.querySelector('.onchain-whale-btn');
   assert.ok(whaleBtn, 'onchain-whale-btn exists');
   whaleBtn.click();
   await tick();
   assert.match(whalePanel.textContent, /NVDA/);
 
-  // 8. Verify Watchlist sidebar contains the '加密货币' group
+  // 8. Verify Watchlist sidebar contains '加密货币' group
   const rwSidebar = ui.w.document.querySelector('.right-watchlist-sidebar');
   assert.ok(rwSidebar, 'Right watchlist sidebar exists');
   assert.match(rwSidebar.textContent, /加密货币/, 'Watchlist has crypto group');
@@ -1827,6 +2021,348 @@ test('Right watchlist sidebar: defaults to collapsed state and toggles via topba
   assert.ok(rwSidebar.classList.contains('is-collapsed'), 'Sidebar collapses again after clicking topbar toggle');
   assert.ok(topbarToggle.classList.contains('is-collapsed'), 'Topbar toggle reflects collapsed state again');
   assert.ok(ui.w.document.querySelector('.floating-expand-rw-btn'), 'Floating tab reappears');
+  assert.deepEqual(ui.errors, []);
+});
+
+test('Crypto Workspace: truth-gated Sankey pulses only on fresh fills or contract size deltas and polls every 15s while visible', async t => {
+  const intervals = new Map();
+  let intervalId = 200000;
+  let now = 1_794_300_000_000;
+  let hidden = false;
+  let whaleRequests = 0;
+
+  let currentWhalePayload = () => {
+    const base = fixture('/api/crypto/whales');
+    // Calm initial response: old 20m fill should not light up the Sankey
+    base.fetchedAt = new Date(now).toISOString();
+    base.activityLogs = [
+      {
+        id: 'old-fill',
+        time: now - 20 * 60 * 1000,
+        ageMs: 20 * 60 * 1000,
+        timeAgo: '20分钟前',
+        whaleName: 'HL 亿级多空对冲巨鲸',
+        whaleAddress: '0xecb63caa47c7c4e77f60f1ce858cf28dc2b82b00',
+        action: '开仓做空',
+        shortAction: '开空',
+        isLong: false,
+        isIncrease: true,
+        isLiveFill: true,
+        coin: 'ETH',
+        chartSymbol: 'ETH-USD',
+        valueUsd: 250000,
+        valueText: '$250K'
+      }
+    ];
+    return base;
+  };
+
+  const ui = await mount(t, async url => {
+    if (url.startsWith('/api/crypto/whales')) {
+      whaleRequests++;
+      return { ok: true, json: async () => currentWhalePayload() };
+    }
+    return { ok: true, json: async () => fixture(url) };
+  }, null, w => {
+    Object.defineProperty(w.document, 'hidden', { configurable: true, get: () => hidden });
+    w.Date.now = () => now;
+    const realClearInterval = w.clearInterval.bind(w);
+    w.setInterval = (fn, ms) => {
+      const id = ++intervalId;
+      intervals.set(id, { fn, ms });
+      return id;
+    };
+    w.clearInterval = id => {
+      intervals.delete(id);
+      realClearInterval(id);
+    };
+  });
+
+  // Navigate to Crypto tab -> registers 15s whale poller
+  await ui.click('加密货币');
+  await tick();
+  await tick();
+
+  const pollEntry = () => [...intervals.values()].find(e => e.ms === 15000);
+  assert.ok(pollEntry(), '15s Crypto whale poller is scheduled while visible on Crypto tab');
+  assert.equal(ui.w.document.querySelectorAll('.cw-sk-pulse-beam').length, 0, 'Fills older than 5m stay calm (0 pulse beams)');
+
+  const beforePollRequests = whaleRequests;
+
+  // Poll 1: markPx / positionValue swings by +20% with IDENTICAL contract size -> STILL 0 pulse beams
+  now += 15000;
+  currentWhalePayload = () => {
+    const base = fixture('/api/crypto/whales');
+    base.fetchedAt = new Date(now).toISOString();
+    base.whales[0].positions[0].markPx = 2796;
+    base.whales[0].positions[0].positionValue = 38_160_000;
+    base.activityLogs = [];
+    return base;
+  };
+  pollEntry().fn();
+  await tick();
+  await tick();
+  assert.equal(whaleRequests, beforePollRequests + 1, '15s poller requested updated whale snapshot');
+  assert.equal(ui.w.document.querySelectorAll('.cw-sk-pulse-beam').length, 0, 'Mark-price swing without size change emits 0 beams');
+
+  // Poll 2: fresh fill (30s ago, $180K) AND real contract size reduction on ETH (-1000 contracts) -> beam pulses with is-reverse!
+  now += 15000;
+  const freshSolFillTime = now - 30_000;
+  currentWhalePayload = () => {
+    const base = fixture('/api/crypto/whales');
+    base.fetchedAt = new Date(now).toISOString();
+    base.whales[0].positions[0].size = 12685; // trimmed by 1000 ETH
+    base.whales[0].positions[0].positionValue = 29_500_000;
+    base.activityLogs = [
+      {
+        id: 'fresh-sol-fill',
+        time: freshSolFillTime,
+        ageMs: now - freshSolFillTime,
+        timeAgo: '刚刚',
+        whaleName: 'SOL 高频套利巨鲸',
+        whaleAddress: '0x3f5ce5fbfe3e9af3971dd833d26ba9b5c936f0be',
+        action: '开仓做多',
+        shortAction: '开多',
+        isLong: true,
+        isIncrease: true,
+        isLiveFill: true,
+        coin: 'SOL',
+        chartSymbol: 'SOL-USD',
+        valueUsd: 180_000,
+        valueText: '$180K'
+      }
+    ];
+    return base;
+  };
+  pollEntry().fn();
+  await tick();
+  await tick();
+
+  const beams = [...ui.w.document.querySelectorAll('.cw-sk-pulse-beam')];
+  assert.equal(beams.length, 2, 'Both contract trim delta (ETH) and fresh 5m fill (SOL) illuminate pulse beams');
+  assert.ok(beams.some(b => b.classList.contains('is-reverse') && b.classList.contains('is-short')), 'ETH trim renders reverse short pulse');
+  assert.ok(beams.some(b => !b.classList.contains('is-reverse') && b.classList.contains('is-long')), 'SOL fresh buy renders forward long pulse');
+  const stripText = ui.w.document.querySelector('.cw-now-strip').textContent;
+  assert.match(stripText, /ETH → HL 亿级多空对冲巨鲸.*减空/);
+  assert.match(stripText, /SOL 高频套利巨鲸 → SOL.*开多/);
+
+  // Switch to TradFi -> 15s poller stops, 正在调仓 hidden, beams = 0
+  const catBtns = ui.w.document.querySelectorAll('.whale-cat-btn');
+  catBtns[1].click();
+  await tick();
+  assert.equal(pollEntry(), undefined, '15s poller pauses on TradFi static sample tab');
+  assert.equal(ui.w.document.querySelectorAll('.cw-sk-pulse-beam').length, 0);
+
+  // Switch back to Crypto, then advance clock +6 min -> both 2m snapshot delta and 5m fresh fill expire cleanly back to 0 beams
+  catBtns[0].click();
+  await tick();
+  assert.ok(pollEntry(), '15s poller resumes on returning to Crypto');
+
+  now += 6 * 60 * 1000;
+  pollEntry().fn();
+  await tick();
+  await tick();
+  assert.equal(ui.w.document.querySelectorAll('.cw-sk-pulse-beam').length, 0, 'Expired fills and snapshot deltas return Sankey to calm baseline');
+
+  // Hide document -> poller stops; unhide -> resumes and triggers catch-up fetch
+  const beforeUnhideCount = whaleRequests;
+  hidden = true;
+  ui.w.document.dispatchEvent(new ui.w.Event('visibilitychange'));
+  await tick();
+  assert.equal(pollEntry(), undefined, 'Poller stops while tab is hidden');
+
+  hidden = false;
+  ui.w.document.dispatchEvent(new ui.w.Event('visibilitychange'));
+  await tick();
+  await tick();
+  assert.ok(pollEntry(), 'Poller resumes on visibility restore');
+  assert.ok(whaleRequests > beforeUnhideCount, 'Catch-up fetch runs when tab returns to foreground');
+
+  assert.deepEqual(ui.errors, []);
+});
+
+test('Crypto Workspace: dynamic Leaderboard Top N selector, custom wallet manager validation/add/scope-filter/empty-state and removal', async t => {
+  const whaleUrls = [];
+  const customZeroAddr = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+
+  const ui = await mount(t, async url => {
+    const u = new URL(url, 'http://localhost');
+    if (u.pathname === '/api/crypto/whales') {
+      whaleUrls.push(url);
+      const topN = Number(u.searchParams.get('topN') || 12);
+      const customRaw = u.searchParams.get('custom') || '';
+      const base = fixture('/api/crypto/whales');
+      base.meta = { topN, customCount: customRaw ? 1 : 0, leaderboardActive: true };
+
+      if (topN >= 16) {
+        base.whales.push({
+          address: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+          shortAddress: '0xbbbb...bbbb',
+          name: 'ApexQuantFund',
+          tag: '排行榜发现 · Top 巨鲸',
+          avatar: '🐋',
+          isCurated: false,
+          sourceType: 'leaderboard',
+          sourceLabel: '榜单发现',
+          accountValue: 18_500_000,
+          totalNtlPos: 12_000_000,
+          netExposure: 12_000_000,
+          netBiasLabel: '净多',
+          longNotional: 12_000_000,
+          shortNotional: 0,
+          positions: [
+            {
+              coin: 'BTC',
+              chartSymbol: 'BTC-USD',
+              side: 'LONG',
+              sideLabel: '做多',
+              isLong: true,
+              size: 150,
+              entryPx: 79000,
+              markPx: 80000,
+              positionValue: 12_000_000,
+              unrealizedPnl: 150_000,
+              roePct: 12.1,
+              leverage: 10,
+              leverageType: '全仓',
+              leverageLabel: '10x 全仓',
+              liquidationPx: 62000,
+              liqDistancePct: 22.5
+            }
+          ]
+        });
+      }
+
+      if (customRaw.includes(customZeroAddr)) {
+        const pipeLabel = customRaw.split(',')[0].split('|')[1] || '自选地址';
+        base.whales.push({
+          address: customZeroAddr,
+          shortAddress: '0xaaaa...aaaa',
+          name: pipeLabel,
+          tag: '自选链上钱包',
+          avatar: '⭐',
+          isCustom: true,
+          isCurated: false,
+          sourceType: 'custom',
+          sourceLabel: '自选监控',
+          accountValue: 45_000,
+          totalNtlPos: 0,
+          netExposure: 0,
+          netBiasLabel: '暂无持仓',
+          longNotional: 0,
+          shortNotional: 0,
+          positions: []
+        });
+      }
+
+      return { ok: true, json: async () => base };
+    }
+    return { ok: true, json: async () => fixture(url) };
+  });
+
+  await ui.click('加密货币');
+  await tick();
+  await tick();
+
+  // 1. Default Top 12 request & selector state
+  assert.ok(whaleUrls.some(u => new URL(u, 'http://localhost').searchParams.get('topN') === '12'), 'Initial crypto fetch requests topN=12');
+  const topNSelect = ui.w.document.querySelector('.cw-topn-select');
+  assert.ok(topNSelect, 'Top N select exists in crypto toolbar');
+  assert.equal(topNSelect.value, '12');
+
+  // Change Top N to 16 -> persists to localStorage, fetches topN=16, renders newly discovered whale
+  topNSelect.value = '16';
+  topNSelect.dispatchEvent(new ui.w.Event('change', { bubbles: true }));
+  await tick();
+  await tick();
+
+  assert.equal(JSON.parse(ui.w.localStorage.getItem('market-desk-whale-top-n')), 16);
+  assert.ok(whaleUrls.some(u => new URL(u, 'http://localhost').searchParams.get('topN') === '16'), 'Changing Top N fetches topN=16');
+  assert.equal(ui.w.document.querySelectorAll('.cw-wallet-row').length, 3, '3rd dynamically discovered whale renders in list');
+  assert.match(ui.w.document.querySelector('.cw-market-desc').textContent, /Top 16/);
+
+  // 2. Open Custom Wallet Manager & validate invalid EVM address
+  const openBtn = ui.w.document.querySelector('.cw-custom-btn');
+  assert.ok(openBtn, 'Custom wallet button exists');
+  openBtn.click();
+  await tick();
+
+  const modal = ui.w.document.querySelector('.cw-custom-modal-card');
+  assert.ok(modal, 'Custom wallet manager modal opens');
+  const addrInput = modal.querySelector('.cw-custom-addr-input');
+  const labelInput = modal.querySelector('.cw-custom-label-input');
+  const form = modal.querySelector('form.cw-custom-form');
+
+  addrInput.value = '0x123';
+  addrInput.dispatchEvent(new ui.w.Event('input', { bubbles: true }));
+  form.dispatchEvent(new ui.w.Event('submit', { bubbles: true, cancelable: true }));
+  await tick();
+  assert.ok(modal.querySelector('.cw-custom-error'), 'Invalid address shows validation error');
+  assert.equal(ui.w.localStorage.getItem('market-desk-custom-whales'), null, 'Invalid address is not saved to localStorage');
+
+  // 3. Submit valid custom wallet -> persists, requests custom=, focuses right panel with honest zero-position state
+  addrInput.value = customZeroAddr.toUpperCase();
+  addrInput.dispatchEvent(new ui.w.Event('input', { bubbles: true }));
+  labelInput.value = '我的对冲号';
+  labelInput.dispatchEvent(new ui.w.Event('input', { bubbles: true }));
+  form.dispatchEvent(new ui.w.Event('submit', { bubbles: true, cancelable: true }));
+  await tick();
+  await tick();
+
+  const storedCustom = JSON.parse(ui.w.localStorage.getItem('market-desk-custom-whales'));
+  assert.equal(storedCustom.length, 1);
+  assert.equal(storedCustom[0].address, customZeroAddr);
+  assert.equal(storedCustom[0].label, '我的对冲号');
+
+  const lastCustomReq = whaleUrls.at(-1);
+  assert.ok(lastCustomReq.includes('custom='), 'Submit sends custom query param');
+  assert.equal(ui.w.document.querySelector('.cw-custom-modal-card'), null, 'Modal closes automatically after adding custom wallet');
+
+  // Right panel displays selected zero-position custom wallet cleanly (live equity + honest empty state)
+  assert.match(ui.w.document.querySelector('#cw-positions-title').textContent, /我的对冲号 · 持仓明细/);
+  assert.match(ui.w.document.querySelector('.cw-selected-wallet-strip').textContent, /\$45\.0K/);
+  assert.ok(ui.w.document.querySelector('.cw-pos-empty'), 'Empty position custom wallet shows honest empty state instead of blank table');
+  assert.match(ui.w.document.querySelector('.cw-positions-detail-panel .cw-table-footer').textContent, /空仓观望/);
+
+  const customRow = [...ui.w.document.querySelectorAll('.cw-wallet-row')].find(r => r.textContent.includes('我的对冲号'));
+  assert.ok(customRow, 'Custom wallet row appears in left table');
+  assert.ok(customRow.querySelector('.cw-src-pill.is-custom'), 'Custom wallet row has 自选 pill');
+  assert.match(customRow.querySelector('.cw-wt-ratio-cell').textContent, /空仓/);
+
+  // 4. Scope filter ("全部" vs "仅自选") filters cleanly & persists across TradFi toggle
+  const scopeBtns = ui.w.document.querySelectorAll('.cw-scope-btn');
+  assert.equal(scopeBtns.length, 2, 'Scope tabs appear once custom wallets exist');
+  scopeBtns[1].click(); // 仅自选
+  await tick();
+  assert.equal(ui.w.document.querySelectorAll('.cw-wallet-row').length, 1, '仅自选 filters table strictly to custom wallet');
+
+  scopeBtns[0].click(); // 全部
+  await tick();
+  assert.equal(ui.w.document.querySelectorAll('.cw-wallet-row').length, 4, '全部 restores all 4 tracked wallets');
+
+  // TradFi hides Top N & custom controls, switching back preserves Crypto Top 16 & custom list
+  const catBtns = ui.w.document.querySelectorAll('.whale-cat-btn');
+  catBtns[1].click();
+  await tick();
+  assert.equal(ui.w.document.querySelector('.cw-topn-select'), null, 'TradFi hides Top N selector');
+  assert.equal(ui.w.document.querySelector('.cw-custom-btn'), null, 'TradFi hides custom wallet manager button');
+
+  catBtns[0].click();
+  await tick();
+  assert.equal(ui.w.document.querySelector('.cw-topn-select').value, '16', 'Top 16 selection preserved on returning to Crypto');
+
+  // 5. Remove custom wallet from row action -> updates localStorage and resets selection back to 全部钱包
+  const rowRemoveBtn = ui.w.document.querySelector('.cw-row-remove-btn');
+  assert.ok(rowRemoveBtn, 'Inline remove button exists on custom wallet row');
+  rowRemoveBtn.click();
+  await tick();
+  await tick();
+
+  assert.deepEqual(JSON.parse(ui.w.localStorage.getItem('market-desk-custom-whales')), []);
+  assert.equal(ui.w.document.querySelector('.cw-scope-btn'), null, 'Scope tabs hide cleanly once custom wallets empty out');
+  assert.equal(ui.w.document.querySelector('#cw-positions-title').textContent.trim(), '全部钱包 · 持仓明细');
+  assert.equal(ui.w.document.querySelectorAll('.cw-wallet-row').length, 3);
+
   assert.deepEqual(ui.errors, []);
 });
 

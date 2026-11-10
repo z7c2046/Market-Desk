@@ -78,6 +78,10 @@ describe('OnchainStocksService', () => {
     assert.ok(data.aggregate);
     assert.strictEqual(data.aggregate.totalTrackedCount, 10);
     assert.ok(data.aggregate.totalVolume24h > 0);
+    assert.ok(data.assetVolumes && typeof data.assetVolumes === 'object');
+    assert.strictEqual(Object.keys(data.assetVolumes).length, ONCHAIN_STOCK_CANDIDATES.length);
+    assert.strictEqual(data.assetVolumes[data.top10[0].symbol], data.top10[0].volume24h);
+    assert.ok(data.assetVolumes.MSTR > 0, 'Non-Top-10 candidates also include 24h volume in assetVolumes');
 
     // Check rank order and descending volume
     for (let i = 0; i < data.top10.length; i++) {

@@ -879,6 +879,7 @@ export class OnchainStocksService {
           rank: idx + 1,
           ...item
         }));
+        const assetVolumes = Object.fromEntries(allProcessed.map(s => [s.symbol, s.volume24h]));
 
         const aggregate = this.computeAggregateMetrics(top10);
 
@@ -888,7 +889,8 @@ export class OnchainStocksService {
           isLive: true,
           fetchedAt: new Date().toISOString(),
           aggregate,
-          top10
+          top10,
+          assetVolumes
         };
 
         this.cachedData = payload;

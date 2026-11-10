@@ -56,7 +56,12 @@ export function createServer({ workspace = createMarketWorkspace(), watchlist = 
         '/api/market/overview': () => workspace.overview(), '/api/market/chart': () => workspace.chart(params),
         '/api/macro': () => (workspace.macro ? workspace.macro() : { items: [] }),
         '/api/crypto': () => (workspace.crypto ? workspace.crypto() : { items: [] }),
-        '/api/crypto/whales': () => whaleService.getWhaleTrackerData({ force: params.force === '1', category: params.category }),
+        '/api/crypto/whales': () => whaleService.getWhaleTrackerData({
+          force: params.force === '1',
+          category: params.category,
+          topN: params.topN,
+          customWallets: params.custom
+        }),
         '/api/crypto/onchain-stocks': () => onchainStockService.getOnchainStocksData({ force: params.force === '1' }),
         '/api/news': () => workspace.news(params),
         '/api/earnings/calendar': () => earningsService.getWeek({ weekStart: params.weekStart, force: params.force === '1' }),
