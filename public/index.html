@@ -2652,11 +2652,45 @@
 </template>
 
 <template v-if="page==='flows'">
-  <div class="tabs" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
-    <div style="display:flex;gap:6px;">
-      <button :class="{selected:flowTab==='rotation'}" @click="flowTab='rotation'">板块轮动与成交</button>
-      <button :class="{selected:flowTab==='net'}" @click="flowTab='net'">ETF 净申赎</button>
+  <div class="flows-top-bar" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:14px;">
+    <div class="cw-market-switcher flows-market-switcher" role="tablist" aria-label="资金观察模块切换">
+      <button
+        type="button"
+        class="whale-cat-btn cw-market-card flows-tab-btn"
+        :class="{ active: flowTab === 'rotation', selected: flowTab === 'rotation' }"
+        @click="flowTab = 'rotation'"
+        role="tab"
+        :aria-selected="flowTab === 'rotation'"
+        tabindex="0"
+      >
+        <div class="cw-mc-top">
+          <span class="cw-mc-title">板块轮动与成交</span>
+          <strong class="cw-mc-val font-mono">{{ sectorRotationSummaryVal }}</strong>
+        </div>
+        <div class="cw-mc-bar" aria-hidden="true">
+          <i class="cw-mc-long" :style="{ width: upSectorsRatio + '%' }"></i>
+        </div>
+      </button>
+
+      <button
+        type="button"
+        class="whale-cat-btn cw-market-card flows-tab-btn"
+        :class="{ active: flowTab === 'net', selected: flowTab === 'net' }"
+        @click="flowTab = 'net'"
+        role="tab"
+        :aria-selected="flowTab === 'net'"
+        tabindex="0"
+      >
+        <div class="cw-mc-top">
+          <span class="cw-mc-title">ETF 净申赎</span>
+          <strong class="cw-mc-val font-mono">{{ flowsSummaryVal }}</strong>
+        </div>
+        <div class="cw-mc-bar" aria-hidden="true">
+          <i class="cw-mc-long" :style="{ width: flowsSummaryBarPct + '%' }"></i>
+        </div>
+      </button>
     </div>
+
     <span class="muted small font-mono" style="display:inline-flex;align-items:center;gap:6px;">
       <span class="status-dot-pulse"></span> {{ dateLabel }} · 实时跨行业流动
     </span>

@@ -16640,6 +16640,10 @@ body.is-loading .top-progress,
   transition: border-color 0.16s ease, background-color 0.16s ease, transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.16s ease;
 }
 
+.flows-tab-btn {
+  min-width: 196px;
+}
+
 .cw-market-card:hover {
   border-color: var(--border-strong);
   background: var(--surface-raised);
@@ -19330,7 +19334,8 @@ html.dark .cw-custom-item {
   .cw-market-switcher {
     width: 100%;
   }
-  .cw-market-card {
+  .cw-market-card,
+  .flows-tab-btn {
     flex: 1;
     min-width: 0;
   }

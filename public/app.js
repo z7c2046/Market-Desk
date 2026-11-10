@@ -3905,6 +3905,32 @@ createApp({ setup() {
     return (up / down).toFixed(2);
   });
 
+  const sectorRotationSummaryVal = computed(() => {
+    const tot = totalSectorTurnover.value;
+    if (tot && Number.isFinite(tot) && tot > 0) {
+      return '$' + compact(tot);
+    }
+    return '11 Sectors';
+  });
+
+  const flowsSummaryVal = computed(() => {
+    const list = dayFlows.value || [];
+    if (!list.length) {
+      if (flows.value?.length) return `${flows.value.length} 笔`;
+      return '$0';
+    }
+    const total = list.reduce((acc, f) => acc + (Number(f.netFlowUsd) || 0), 0);
+    const sign = total > 0 ? '+' : (total < 0 ? '-' : '');
+    return `${sign}$${compact(Math.abs(total))}`;
+  });
+
+  const flowsSummaryBarPct = computed(() => {
+    const list = dayFlows.value || [];
+    if (!list.length) return 50;
+    const posCount = list.filter(f => (Number(f.netFlowUsd) || 0) > 0).length;
+    return Math.round((posCount / list.length) * 100);
+  });
+
   // Options Computed Metrics
   const callWallDist = computed(() => {
     if (!options.value?.spot || !options.value?.callWall?.[0]) return '+2.88';
@@ -8052,7 +8078,7 @@ createApp({ setup() {
     overview, chart, options, news, states, searchInput, symbol, chartRange, chartInterval, INTERVAL_OPTIONS, RANGE_OPTIONS, setChartInterval, formatIntervalLabel,
     optionSymbol, optionExpiry, optionMetric, strikeRange, optionsSpotQuote, formatExpiryLabel, butterflyOptionRows, callWallDist, putWallDist, newsSymbol, newsSearch, heatSize, sectorFilter,
     heatmapScope, heatmapSession, currentSessionShortLabel, resolvedHeatmapSession, resolvedHeatmapSessionLabel, heatmapSessionBadgeText, activeHeatmapStocks, onHeatmapScopeChange, onHeatmapSessionChange, setHeatmapSession, cycleHeatmapSession, renderHeatmap, isLeveragedEtf, isCryptoSymbol, nonLeveragedWatchlist,
-    flowTab, flows, flowDate, flowDates, dayFlows,
+    flowTab, flows, flowDate, flowDates, dayFlows, sectorRotationSummaryVal, flowsSummaryVal, flowsSummaryBarPct,
     // Macro & Fear/Greed & Gold & Crypto & Treasury
     macroItems, macroMap, fearGreedIndex, goldContract, goldCnyPerGram, usdCnyRate, formatMacroPrice,
     showFearGreedModal, openFearGreedModal, closeFearGreedModal, getFearGreedRatingText, getFearGreedTone, fearGreedIndicators,

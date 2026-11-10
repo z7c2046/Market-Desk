@@ -173,7 +173,7 @@ async function mount(t, fetchImpl, initStorage = null, configureWindow = null) {
   if (configureWindow) configureWindow(w);
   w.eval(appSrc);
   await tick();
-  const button = text => [...w.document.querySelectorAll('button')].find(el => el.textContent.trim() === text || el.textContent.trim().endsWith(text));
+  const button = text => [...w.document.querySelectorAll('button')].find(el => el.textContent.trim() === text || el.textContent.trim().endsWith(text) || el.querySelector('.cw-mc-title')?.textContent.trim() === text);
   const click = async text => { const el = button(text); assert.ok(el, `Missing button ${text}`); el.click(); await tick(); };
   return { w, configs, errors, click };
 }
@@ -2726,4 +2726,49 @@ test('Options Butterfly Skeleton: spot row (.is-spot-row) is rendered strictly a
   await tick();
   assert.deepEqual(ui.errors, []);
 });
+
+test('Flows Tab Switcher: renders as dual cw-market-card cards with title, value, and ratio bar', async t => {
+  const ui = await mount(t, async url => ({ ok: true, json: async () => fixture(url) }));
+  const tick = () => new Promise(r => setTimeout(r, 25));
+
+  await ui.click('资金观察');
+  await tick();
+  await tick();
+
+  const switcher = ui.w.document.querySelector('.flows-market-switcher');
+  assert.ok(switcher, 'Flows market switcher container exists');
+
+  const cards = switcher.querySelectorAll('.flows-tab-btn');
+  assert.equal(cards.length, 2, 'Exactly 2 tab cards render');
+
+  const [cardRotation, cardNet] = cards;
+
+  // Card 1: 板块轮动与成交
+  assert.match(cardRotation.querySelector('.cw-mc-title').textContent, /板块轮动与成交/);
+  assert.ok(cardRotation.querySelector('.cw-mc-val'), 'Turnover value renders on card 1');
+  assert.ok(cardRotation.querySelector('.cw-mc-bar .cw-mc-long'), 'Breadth bar renders on card 1');
+  assert.ok(cardRotation.classList.contains('active'), 'Card 1 is initially active');
+
+  // Card 2: ETF 净申赎
+  assert.match(cardNet.querySelector('.cw-mc-title').textContent, /ETF 净申赎/);
+  assert.ok(cardNet.querySelector('.cw-mc-val'), 'Flow value renders on card 2');
+  assert.ok(cardNet.querySelector('.cw-mc-bar .cw-mc-long'), 'Ratio bar renders on card 2');
+  assert.equal(cardNet.classList.contains('active'), false, 'Card 2 is initially inactive');
+
+  // Click Card 2 -> toggles to ETF 净申赎
+  cardNet.click();
+  await tick();
+  assert.equal(cardRotation.classList.contains('active'), false);
+  assert.ok(cardNet.classList.contains('active'), 'Card 2 becomes active after click');
+  assert.ok(ui.w.document.querySelector('#flows-chart, .empty-state'), 'ETF net flow section renders');
+
+  // Click Card 1 -> toggles back to 板块轮动与成交
+  cardRotation.click();
+  await tick();
+  assert.ok(cardRotation.classList.contains('active'), 'Card 1 becomes active after click');
+  assert.equal(cardNet.classList.contains('active'), false);
+
+  assert.deepEqual(ui.errors, []);
+});
+
 
