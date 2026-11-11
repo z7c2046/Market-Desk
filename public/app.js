@@ -2097,37 +2097,52 @@ createApp({ setup() {
   const sankeyAssetVolumeMap = computed(() => {
     const map = new Map();
     if (whaleCategory.value === 'stocks') {
-      if (!isWhaleDatasetSample.value) {
-        const liveStockVols = stockWhaleData.value?.assetVolumes;
-        if (liveStockVols && typeof liveStockVols === 'object') {
-          for (const [k, v] of Object.entries(liveStockVols)) {
-            const sym = String(k).toUpperCase();
-            const n = Number(v);
-            if (sym && Number.isFinite(n) && n > 0) map.set(sym, n);
-          }
+      // 1. 绝对第一优先级：严格以资金流向矩阵 (activeFlowRows / onchainStocksData) 的真实 24H 成交量为权威来源
+      const flowList = (activeFlowRows.value && activeFlowRows.value.length > 0)
+        ? activeFlowRows.value
+        : (onchainStocksData.value?.top10 || DEFAULT_ONCHAIN_STOCKS_PAYLOAD.top10 || []);
+
+      for (const s of flowList) {
+        const sym = String(s?.symbol || '').trim().toUpperCase();
+        const csym = String(s?.chartSymbol || '').trim().toUpperCase();
+        const vol = Number(s?.volume24h) || 0;
+        if (vol > 0) {
+          if (sym) map.set(sym, vol);
+          if (csym && !map.has(csym)) map.set(csym, vol);
+          // 双向绑定 HIP-3 / TradeXYZ 别名，确保无论以 QQQ/SPY 还是以 XYZ100/SP500 索引，成交量严格与矩阵对齐
+          if (sym === 'QQQ' || csym === 'QQQ') map.set('XYZ100', vol);
+          if (sym === 'SPY' || csym === 'SPY') map.set('SP500', vol);
+          if (sym === 'XYZ100') map.set('QQQ', vol);
+          if (sym === 'SP500') map.set('SPY', vol);
         }
       }
+
+      // 2. 补充资金流向候选全量标的（若有未排进 top10 的其他美股候选标的）
       const apiVols = onchainStocksData.value?.assetVolumes;
       if (apiVols && typeof apiVols === 'object') {
         for (const [k, v] of Object.entries(apiVols)) {
           const sym = String(k).toUpperCase();
           const n = Number(v);
-          if (sym && !map.has(sym) && Number.isFinite(n) && n > 0) map.set(sym, n);
+          if (sym && !map.has(sym) && Number.isFinite(n) && n > 0) {
+            map.set(sym, n);
+            if (sym === 'QQQ') map.set('XYZ100', n);
+            if (sym === 'SPY') map.set('SP500', n);
+          }
         }
       }
+
+      // 3. 兜底补充未在流向矩阵中的长尾代币（长尾代币成交量限额，避免喧宾夺主）
       const stockVols = (stockWhaleData.value || cryptoWhaleData.value?.stockWhales)?.assetVolumes;
       if (stockVols && typeof stockVols === 'object') {
         for (const [k, v] of Object.entries(stockVols)) {
           const sym = String(k).toUpperCase();
           const n = Number(v);
-          if (!map.has(sym) && Number.isFinite(n) && n > 0) map.set(sym, n);
+          if (sym && !map.has(sym) && Number.isFinite(n) && n > 0) {
+            map.set(sym, Math.min(n, 20000000));
+          }
         }
       }
-      for (const s of (onchainStocksData.value?.top10 || [])) {
-        const sym = String(s?.symbol || '').toUpperCase();
-        const vol = Number(s?.volume24h) || 0;
-        if (sym && vol > 0 && !map.has(sym)) map.set(sym, vol);
-      }
+
       if (map.size === 0) {
         for (const s of (DEFAULT_ONCHAIN_STOCKS_PAYLOAD.top10 || [])) {
           const sym = String(s?.symbol || '').toUpperCase();

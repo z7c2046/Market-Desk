@@ -224,15 +224,28 @@ function sum(arr) {
   return acc;
 }
 
+const ASSET_VOLUME_ALIASES = {
+  XYZ100: 'QQQ',
+  QQQ: 'XYZ100',
+  SP500: 'SPY',
+  SPY: 'SP500'
+};
+
 function readAssetVolume(assetVolumeMap, symbol) {
   if (!assetVolumeMap || !symbol) return 0;
   const key = String(symbol).trim().toUpperCase();
   if (!key) return 0;
+  const alias = ASSET_VOLUME_ALIASES[key] || '';
   if (typeof assetVolumeMap.get === 'function' && typeof assetVolumeMap.entries === 'function') {
     const direct = Number(assetVolumeMap.get(key) ?? assetVolumeMap.get(symbol));
     if (Number.isFinite(direct) && direct > 0) return direct;
+    if (alias) {
+      const aliasVal = Number(assetVolumeMap.get(alias));
+      if (Number.isFinite(aliasVal) && aliasVal > 0) return aliasVal;
+    }
     for (const [k, v] of assetVolumeMap.entries()) {
-      if (String(k || '').trim().toUpperCase() === key) {
+      const kUpper = String(k || '').trim().toUpperCase();
+      if (kUpper === key || (alias && kUpper === alias)) {
         const n = Number(v);
         return Number.isFinite(n) && n > 0 ? n : 0;
       }
@@ -242,8 +255,13 @@ function readAssetVolume(assetVolumeMap, symbol) {
   if (typeof assetVolumeMap === 'object') {
     const direct = Number(assetVolumeMap[key] ?? assetVolumeMap[symbol]);
     if (Number.isFinite(direct) && direct > 0) return direct;
+    if (alias) {
+      const aliasVal = Number(assetVolumeMap[alias]);
+      if (Number.isFinite(aliasVal) && aliasVal > 0) return aliasVal;
+    }
     for (const [k, v] of Object.entries(assetVolumeMap)) {
-      if (String(k || '').trim().toUpperCase() === key) {
+      const kUpper = String(k || '').trim().toUpperCase();
+      if (kUpper === key || (alias && kUpper === alias)) {
         const n = Number(v);
         return Number.isFinite(n) && n > 0 ? n : 0;
       }
