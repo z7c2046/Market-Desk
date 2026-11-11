@@ -1800,13 +1800,53 @@ test('Crypto Workspace: Sankey distribution, 4 scoped KPIs, 2-column whale-posit
   await tick();
   assert.match(whalePanel.textContent, /NVDA/);
 
-  // 8. Verify Watchlist sidebar contains '加密货币' group
+  // 8. Verify clicking Sankey asset node -> auto-expands Flow Matrix & reveals top positions (long & short)
+  // First collapse the drawer to test auto-expansion
+  secToggleBtn.click();
+  await tick();
+  assert.equal(ui.w.document.querySelector('.onchain-stocks-panel'), null, 'Drawer collapsed before asset click test');
+
+  // Click the NVDA asset node in the Sankey chart
+  const nvdaAssetNode = sankeySvg.querySelector('.cw-sk-asset-node[data-asset="NVDA"]');
+  assert.ok(nvdaAssetNode, 'NVDA asset node exists in Sankey');
+  nvdaAssetNode.dispatchEvent(new ui.w.MouseEvent('click', { bubbles: true }));
+  await tick();
+  await new Promise(resolve => setTimeout(resolve, 80));
+
+  // Confirm drawer auto-expanded and NVDA row inline positions opened
+  const autoOpenedPanel = ui.w.document.querySelector('.onchain-stocks-panel');
+  assert.ok(autoOpenedPanel, 'Secondary section auto-expanded after clicking Sankey asset');
+  const activeDrawerTr = ui.w.document.querySelector('.cw-drawer-tr');
+  assert.ok(activeDrawerTr, 'Inline whale positions drawer opened for clicked asset');
+  assert.match(activeDrawerTr.textContent, /NVDA/, 'Drawer corresponds to clicked symbol NVDA');
+
+  // Verify whale positions list includes both long and short positions and is sorted by positionValue descending
+  const whalePosRows = activeDrawerTr.querySelectorAll('.stock-whale-table tbody tr');
+  assert.ok(whalePosRows.length >= 2, 'At least top 2 whale positions rendered for clicked asset');
+  const dirPills = [...whalePosRows].map(r => r.querySelector('.cw-dir-pill').textContent.trim());
+  assert.ok(dirPills.some(p => p.includes('多')), 'Positions list contains LONG position');
+  assert.ok(dirPills.some(p => p.includes('空')), 'Positions list contains SHORT position');
+
+  const parseVal = text => {
+    const clean = text.replace(/[^0-9.]/g, '');
+    const num = parseFloat(clean) || 0;
+    if (text.includes('B')) return num * 1e9;
+    if (text.includes('M')) return num * 1e6;
+    if (text.includes('K')) return num * 1e3;
+    return num;
+  };
+  const posValues = [...whalePosRows].map(r => parseVal(r.querySelectorAll('td')[2].textContent));
+  for (let i = 0; i < posValues.length - 1; i++) {
+    assert.ok(posValues[i] >= posValues[i + 1], `Top positions must sort by positionValue descending: got ${posValues[i]} vs ${posValues[i+1]}`);
+  }
+
+  // 9. Verify Watchlist sidebar contains '加密货币' group
   const rwSidebar = ui.w.document.querySelector('.right-watchlist-sidebar');
   assert.ok(rwSidebar, 'Right watchlist sidebar exists');
   assert.match(rwSidebar.textContent, /加密货币/, 'Watchlist has crypto group');
 
-  // 9. Click row K-line jump button -> navigates directly to 'chart' (个股)
-  const onchainJumpBtn = onchainPanel.querySelector('.onchain-jump-btn');
+  // 10. Click row K-line jump button -> navigates directly to 'chart' (个股)
+  const onchainJumpBtn = autoOpenedPanel.querySelector('.onchain-jump-btn');
   assert.ok(onchainJumpBtn, 'On-chain jump button exists');
   onchainJumpBtn.click();
   await tick();

@@ -17312,6 +17312,21 @@ html.dark .cw-flow-row.is-open {
   background: rgba(59, 130, 246, 0.08);
 }
 
+.cw-flow-row.is-focused-flow {
+  background: rgba(59, 130, 246, 0.16) !important;
+  box-shadow: inset 4px 0 0 var(--accent-primary, #3b82f6);
+  animation: cw-flow-row-pulse 1.8s ease-in-out infinite alternate;
+}
+
+@keyframes cw-flow-row-pulse {
+  0% {
+    background-color: rgba(59, 130, 246, 0.12);
+  }
+  100% {
+    background-color: rgba(59, 130, 246, 0.22);
+  }
+}
+
 .cw-flow-row td {
   padding: 9px 12px;
   font-size: 12.5px;

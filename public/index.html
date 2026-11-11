@@ -2162,10 +2162,11 @@
               :class="{ 'is-dim': aNode.dimmed, 'is-clickable': !aNode.isOther }"
               :data-asset="aNode.symbol"
               :tabindex="aNode.isOther ? -1 : 0"
+              :title="!aNode.isOther ? ('点击跳转并展开 ' + aNode.displaySymbol + ' 资金流向矩阵与前大主力持仓') : ''"
               @mouseenter="hoveredAssetSymbol = aNode.symbol"
               @mouseleave="hoveredAssetSymbol = ''"
-              @click="!aNode.isOther && selectCryptoCoin(aNode.chartSymbol)"
-              @keydown.enter.prevent="!aNode.isOther && selectCryptoCoin(aNode.chartSymbol)"
+              @click="!aNode.isOther && focusAssetInFlowMatrix(aNode)"
+              @keydown.enter.prevent="!aNode.isOther && focusAssetInFlowMatrix(aNode)"
             >
               <rect class="cw-sk-asset-rail" x="1020" :y="aNode.y" width="5" :height="Math.max(2, aNode.h)" rx="1.5" />
               <text class="cw-sk-asset-sym numeric" x="1036" :y="aNode.middleY - 2">{{ aNode.displaySymbol }}</text>
@@ -2693,7 +2694,12 @@
               </thead>
               <tbody>
                 <template v-for="r in activeFlowRows" :key="r.symbol">
-                  <tr class="onchain-stock-row cw-flow-row" :class="{ 'is-open': expandedStockSymbol === r.symbol }" @click="toggleStockRadar(r.symbol)">
+                  <tr
+                    class="onchain-stock-row cw-flow-row"
+                    :class="{ 'is-open': expandedStockSymbol === r.symbol, 'is-focused-flow': focusedFlowSymbol === r.symbol }"
+                    :data-symbol="r.symbol"
+                    @click="toggleStockRadar(r.symbol)"
+                  >
                     <td class="col-rank text-center font-mono">
                       <span class="cw-rank-num" :class="{ 'is-top': r.displayRank <= 3 }">{{ r.displayRank }}</span>
                     </td>
