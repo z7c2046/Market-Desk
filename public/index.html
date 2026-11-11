@@ -1682,7 +1682,7 @@
           <g class="cw-sk-wallets">
             <g v-for="(w, idx) in sankeySkeletonWallets" :key="idx" class="cw-sk-wallet-node">
               <rect class="cw-sk-wallet-outline" x="8" :y="w.middleY - 26" width="212" height="52" rx="6" />
-              <rect class="cw-sk-wallet-rail" x="227" :y="w.middleY - 20" width="5" height="40" rx="2" />
+              <rect class="cw-sk-wallet-rail" x="227" :y="w.y" width="5" :height="w.h" rx="2" />
               <rect class="cw-sk-avatar-bg" x="15" :y="w.middleY - 20" width="21" height="20" rx="5" />
               <text class="cw-sk-avatar-txt numeric" x="25.5" :y="w.middleY - 6" text-anchor="middle">{{ String(idx + 1).padStart(2, '0') }}</text>
               <rect class="cw-sk-text-pill" x="44" :y="w.middleY - 18" :width="w.nameWidth" height="12" rx="3" />
@@ -1694,7 +1694,7 @@
           <!-- 右侧持仓标的骨架节点 (5 独立标的 + 1 其他) -->
           <g class="cw-sk-assets">
             <g v-for="(a, idx) in sankeySkeletonAssets" :key="idx" class="cw-sk-asset-node">
-              <rect class="cw-sk-asset-rail" x="1020" :y="a.middleY - 20" width="5" height="40" rx="1.5" />
+              <rect class="cw-sk-asset-rail" x="1020" :y="a.y" width="5" :height="a.h" rx="1.5" />
               <rect class="cw-sk-text-pill" x="1036" :y="a.middleY - 14" :width="a.symWidth" height="13" rx="3" />
               <rect class="cw-sk-text-pill" x="1036" :y="a.middleY + 4" :width="a.lblWidth" height="9" rx="2" />
               <rect class="cw-sk-text-pill" :x="1266 - a.valWidth" :y="a.middleY - 13" :width="a.valWidth" height="12" rx="3" />

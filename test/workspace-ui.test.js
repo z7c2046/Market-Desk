@@ -2816,6 +2816,11 @@ test('Crypto Workspace Skeleton: renders complete Sankey, 4 KPI cards and 2-colu
   // Check 6 wallet nodes on left
   const walletNodes = sankeySvg.querySelectorAll('.cw-sk-wallets .cw-sk-wallet-node');
   assert.equal(walletNodes.length, 6, 'Sankey SVG has 6 wallet skeleton nodes on left');
+  const walletRails = sankeySvg.querySelectorAll('.cw-sk-wallets .cw-sk-wallet-rail');
+  for (const rail of walletRails) {
+    const h = parseFloat(rail.getAttribute('height'));
+    assert.ok(h >= 20 && h <= 40, 'Wallet rail height dynamically matches centered ribbon thickness');
+  }
 
   // Check central flowing ribbons
   const ribbons = sankeySvg.querySelectorAll('.cw-sk-links .cw-sk-sankey-ribbon');
@@ -2824,6 +2829,11 @@ test('Crypto Workspace Skeleton: renders complete Sankey, 4 KPI cards and 2-colu
   // Check 6 target asset nodes on right (5 top + 1 other)
   const assetNodes = sankeySvg.querySelectorAll('.cw-sk-assets .cw-sk-asset-node');
   assert.equal(assetNodes.length, 6, 'Sankey SVG has 6 asset skeleton nodes on right');
+  const assetRails = sankeySvg.querySelectorAll('.cw-sk-assets .cw-sk-asset-rail');
+  for (const rail of assetRails) {
+    const h = parseFloat(rail.getAttribute('height'));
+    assert.ok(h >= 20 && h <= 40, 'Asset rail height dynamically matches centered ribbon thickness');
+  }
 
   // 6. Verify lower 2-column tables skeleton
   const walletTableRows = skWrap.querySelectorAll('.cw-wallet-list-panel .cw-wallet-row');
