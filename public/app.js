@@ -3400,6 +3400,20 @@ createApp({ setup() {
     };
   });
 
+  // 标的巨鲸持仓抽屉列表排序状态（方向/仓位/均价/盈亏/强平/地址）
+  const whaleDrawerSortField = ref('positionValue');
+  const whaleDrawerSortDir = ref('desc');
+
+  function toggleWhaleDrawerSort(field) {
+    if (whaleDrawerSortField.value === field) {
+      whaleDrawerSortDir.value = whaleDrawerSortDir.value === 'desc' ? 'asc' : 'desc';
+    } else {
+      whaleDrawerSortField.value = field;
+      // 方向默认多在前（desc），仓位、均价、盈亏默认降序（desc），强平默认升序（更接近现价更危险），地址默认升序（asc）
+      whaleDrawerSortDir.value = (field === 'address' || field === 'liquidationPx') ? 'asc' : 'desc';
+    }
+  }
+
   function getUnifiedWhalePositions(row) {
     if (!row) return [];
     const sym = String(row.symbol || '').trim().toUpperCase();
@@ -3476,14 +3490,8 @@ createApp({ setup() {
       }
     }
 
-    // 关键：严格按仓位名义价值 (positionValue) 降序排序，不管是多仓还是空仓，前几大持仓全部置顶展示！
-    list.sort((a, b) => (Number(b.positionValue) || 0) - (Number(a.positionValue) || 0));
-
-    if (list.length > 0) return list;
-
-    // 保底：若没有任何巨鲸持有，生成逼真的代表性多空对冲主力仓位
     const px = Number(row.price) || 100;
-    return [
+    const candidateList = list.length > 0 ? list : [
       {
         name: `${sym} 核心主力基金`,
         address: '0x0242468165b4c483a9fba11b8ca605481747ffa1',
@@ -3521,6 +3529,46 @@ createApp({ setup() {
         liquidationPx: Number((px * 1.16).toFixed(2))
       }
     ];
+
+    // 支持用户对表头任意字段进行动态排序（方向/仓位/均价/盈亏/强平/地址）
+    const field = whaleDrawerSortField.value || 'positionValue';
+    const dir = whaleDrawerSortDir.value === 'asc' ? 1 : -1;
+
+    return [...candidateList].sort((a, b) => {
+      let diff = 0;
+      if (field === 'positionValue') {
+        diff = (Number(a.positionValue) || 0) - (Number(b.positionValue) || 0);
+      } else if (field === 'unrealizedPnl') {
+        diff = (Number(a.unrealizedPnl) || 0) - (Number(b.unrealizedPnl) || 0);
+      } else if (field === 'entryPx') {
+        diff = (Number(a.entryPx) || 0) - (Number(b.entryPx) || 0);
+      } else if (field === 'liquidationPx') {
+        const aLiq = (a.liquidationPx != null && Number.isFinite(Number(a.liquidationPx))) ? Number(a.liquidationPx) : null;
+        const bLiq = (b.liquidationPx != null && Number.isFinite(Number(b.liquidationPx))) ? Number(b.liquidationPx) : null;
+        if (aLiq === null && bLiq === null) diff = 0;
+        else if (aLiq === null) return 1;
+        else if (bLiq === null) return -1;
+        else diff = aLiq - bLiq;
+      } else if (field === 'side') {
+        const aSideVal = a.side === 'LONG' ? 1 : -1;
+        const bSideVal = b.side === 'LONG' ? 1 : -1;
+        diff = aSideVal - bSideVal;
+        if (diff === 0) {
+          const aLev = parseFloat(String(a.leverage || '').replace(/[^0-9.]/g, '')) || 0;
+          const bLev = parseFloat(String(b.leverage || '').replace(/[^0-9.]/g, '')) || 0;
+          diff = aLev - bLev;
+        }
+      } else if (field === 'address') {
+        const aStr = String(a.name || a.address || '').toUpperCase();
+        const bStr = String(b.name || b.address || '').toUpperCase();
+        diff = aStr.localeCompare(bStr);
+      }
+
+      if (diff !== 0) {
+        return diff * dir;
+      }
+      return (Number(b.positionValue) || 0) - (Number(a.positionValue) || 0);
+    });
   }
 
   function getPriceAxisSpec(row) {
@@ -8565,6 +8613,7 @@ createApp({ setup() {
     onchainAggregate, onchainStocksList, toggleOnchainSort, formatOnchainUsd, formatOnchainFlowUsd, loadOnchainStocks,
     expandedStockSymbol, focusedFlowSymbol, toggleStockRadar, focusAssetInFlowMatrix, formatWhaleShares, getWhalePositionsForStock,
     activeFlowRows, activeFlowSummary, whaleDonutSpec, getUnifiedWhalePositions, getPriceAxisSpec, formatSpreadPct, formatSpreadDiff, refreshCryptoWorkspace,
+    whaleDrawerSortField, whaleDrawerSortDir, toggleWhaleDrawerSort,
     // Watchlist & Groups & Sidebar Live Streamlined Board
     watchlistData, groups, watchlist, quoteStore, providerInfo, currentSession,
     viewMode, extMode, sortField, sortDirection, freezeResort, compactPanelOpen,

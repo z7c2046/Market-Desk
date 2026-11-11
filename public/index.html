@@ -25,7 +25,7 @@
   display: none !important;
 }
 </style>
-<script defer src="/vendor/vue.js"></script><script defer src="/vendor/echarts.js"></script><script defer src="/vendor/lightweight-charts.standalone.js"></script><script type="module" src="/app.js?v=2.9.7"></script>
+<script defer src="/vendor/vue.js"></script><script defer src="/vendor/echarts.js"></script><script defer src="/vendor/lightweight-charts.standalone.js"></script><script type="module" src="/app.js?v=2.9.8"></script>
 </head><body><div id="app" v-cloak>
 <aside class="nav-rail desktop-only" aria-label="工作台主导航">
   <div class="rail-top">
@@ -2880,12 +2880,60 @@
                           <table class="stock-whale-table cw-drawer-table">
                             <thead>
                               <tr>
-                                <th class="text-left">地址</th>
-                                <th class="text-left">方向</th>
-                                <th class="text-right">仓位</th>
-                                <th class="text-right">均价</th>
-                                <th class="text-right">盈亏</th>
-                                <th class="text-right">强平</th>
+                                <th class="text-left cw-sortable" tabindex="0"
+                                    :aria-sort="whaleDrawerSortField === 'address' ? (whaleDrawerSortDir === 'desc' ? 'descending' : 'ascending') : 'none'"
+                                    title="按地址/机构名称排序，点击切换升降序"
+                                    @click="toggleWhaleDrawerSort('address')"
+                                    @keydown.enter.prevent="toggleWhaleDrawerSort('address')"
+                                    @keydown.space.prevent="toggleWhaleDrawerSort('address')">
+                                  <span>地址</span>
+                                  <span class="cw-sort-arrow" :class="{ 'is-idle': whaleDrawerSortField !== 'address' }" aria-hidden="true">{{ whaleDrawerSortField === 'address' ? (whaleDrawerSortDir === 'desc' ? '↓' : '↑') : '↕' }}</span>
+                                </th>
+                                <th class="text-left cw-sortable" tabindex="0"
+                                    :aria-sort="whaleDrawerSortField === 'side' ? (whaleDrawerSortDir === 'desc' ? 'descending' : 'ascending') : 'none'"
+                                    title="按做多/做空方向及杠杆排序，点击切换"
+                                    @click="toggleWhaleDrawerSort('side')"
+                                    @keydown.enter.prevent="toggleWhaleDrawerSort('side')"
+                                    @keydown.space.prevent="toggleWhaleDrawerSort('side')">
+                                  <span>方向</span>
+                                  <span class="cw-sort-arrow" :class="{ 'is-idle': whaleDrawerSortField !== 'side' }" aria-hidden="true">{{ whaleDrawerSortField === 'side' ? (whaleDrawerSortDir === 'desc' ? '↓' : '↑') : '↕' }}</span>
+                                </th>
+                                <th class="text-right cw-sortable" tabindex="0"
+                                    :aria-sort="whaleDrawerSortField === 'positionValue' ? (whaleDrawerSortDir === 'desc' ? 'descending' : 'ascending') : 'none'"
+                                    title="按名义仓位价值排序，点击切换升降序"
+                                    @click="toggleWhaleDrawerSort('positionValue')"
+                                    @keydown.enter.prevent="toggleWhaleDrawerSort('positionValue')"
+                                    @keydown.space.prevent="toggleWhaleDrawerSort('positionValue')">
+                                  <span>仓位</span>
+                                  <span class="cw-sort-arrow" :class="{ 'is-idle': whaleDrawerSortField !== 'positionValue' }" aria-hidden="true">{{ whaleDrawerSortField === 'positionValue' ? (whaleDrawerSortDir === 'desc' ? '↓' : '↑') : '↕' }}</span>
+                                </th>
+                                <th class="text-right cw-sortable" tabindex="0"
+                                    :aria-sort="whaleDrawerSortField === 'entryPx' ? (whaleDrawerSortDir === 'desc' ? 'descending' : 'ascending') : 'none'"
+                                    title="按开仓均价排序，点击切换升降序"
+                                    @click="toggleWhaleDrawerSort('entryPx')"
+                                    @keydown.enter.prevent="toggleWhaleDrawerSort('entryPx')"
+                                    @keydown.space.prevent="toggleWhaleDrawerSort('entryPx')">
+                                  <span>均价</span>
+                                  <span class="cw-sort-arrow" :class="{ 'is-idle': whaleDrawerSortField !== 'entryPx' }" aria-hidden="true">{{ whaleDrawerSortField === 'entryPx' ? (whaleDrawerSortDir === 'desc' ? '↓' : '↑') : '↕' }}</span>
+                                </th>
+                                <th class="text-right cw-sortable" tabindex="0"
+                                    :aria-sort="whaleDrawerSortField === 'unrealizedPnl' ? (whaleDrawerSortDir === 'desc' ? 'descending' : 'ascending') : 'none'"
+                                    title="按浮动盈亏排序，点击切换升降序"
+                                    @click="toggleWhaleDrawerSort('unrealizedPnl')"
+                                    @keydown.enter.prevent="toggleWhaleDrawerSort('unrealizedPnl')"
+                                    @keydown.space.prevent="toggleWhaleDrawerSort('unrealizedPnl')">
+                                  <span>盈亏</span>
+                                  <span class="cw-sort-arrow" :class="{ 'is-idle': whaleDrawerSortField !== 'unrealizedPnl' }" aria-hidden="true">{{ whaleDrawerSortField === 'unrealizedPnl' ? (whaleDrawerSortDir === 'desc' ? '↓' : '↑') : '↕' }}</span>
+                                </th>
+                                <th class="text-right cw-sortable" tabindex="0"
+                                    :aria-sort="whaleDrawerSortField === 'liquidationPx' ? (whaleDrawerSortDir === 'desc' ? 'descending' : 'ascending') : 'none'"
+                                    title="按预估强平价排序，点击切换升降序"
+                                    @click="toggleWhaleDrawerSort('liquidationPx')"
+                                    @keydown.enter.prevent="toggleWhaleDrawerSort('liquidationPx')"
+                                    @keydown.space.prevent="toggleWhaleDrawerSort('liquidationPx')">
+                                  <span>强平</span>
+                                  <span class="cw-sort-arrow" :class="{ 'is-idle': whaleDrawerSortField !== 'liquidationPx' }" aria-hidden="true">{{ whaleDrawerSortField === 'liquidationPx' ? (whaleDrawerSortDir === 'desc' ? '↓' : '↑') : '↕' }}</span>
+                                </th>
                               </tr>
                             </thead>
                             <tbody>

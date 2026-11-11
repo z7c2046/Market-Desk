@@ -1934,6 +1934,21 @@ test('Crypto Workspace: Sankey distribution, 4 scoped KPIs, 2-column whale-posit
     assert.ok(posValues[i] >= posValues[i + 1], `Top positions must sort by positionValue descending: got ${posValues[i]} vs ${posValues[i+1]}`);
   }
 
+  // Verify interactive sorting on whale positions table headers (e.g. clicking '仓位' toggles ascending)
+  const posTh = activeDrawerTr.querySelectorAll('.stock-whale-table thead th')[2];
+  assert.ok(posTh && posTh.classList.contains('cw-sortable'), 'Position header has cw-sortable class');
+  posTh.dispatchEvent(new ui.w.MouseEvent('click', { bubbles: true }));
+  await tick();
+  const ascWhaleRows = activeDrawerTr.querySelectorAll('.stock-whale-table tbody tr');
+  const ascPosValues = [...ascWhaleRows].map(r => parseVal(r.querySelectorAll('td')[2].textContent));
+  for (let i = 0; i < ascPosValues.length - 1; i++) {
+    assert.ok(ascPosValues[i] <= ascPosValues[i + 1], `Positions correctly sorted by positionValue ascending: got ${ascPosValues[i]} vs ${ascPosValues[i+1]}`);
+  }
+
+  // Restore to descending order for subsequent checks
+  posTh.dispatchEvent(new ui.w.MouseEvent('click', { bubbles: true }));
+  await tick();
+
   // 9. Verify Watchlist sidebar contains '加密货币' group
   const rwSidebar = ui.w.document.querySelector('.right-watchlist-sidebar');
   assert.ok(rwSidebar, 'Right watchlist sidebar exists');
