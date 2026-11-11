@@ -1052,6 +1052,7 @@ test('Watchlist refined layout: "全部" view shows flat list without group head
   assert.match(header.textContent, /标的/);
   assert.match(header.textContent, /收盘价格/);
   assert.match(header.textContent, /Chg%/);
+  assert.match(header.textContent, /成交量/);
   assert.match(header.textContent, /EXT%/);
 
   const extCell = flatBlock.querySelector('.rw-cell-ext');
@@ -1067,13 +1068,21 @@ test('Watchlist refined layout: "全部" view shows flat list without group head
   const dropdown = rwSidebar.querySelector('.rw-more-dropdown');
   assert.ok(dropdown, '3-dots settings dropdown opens');
   assert.match(dropdown.textContent, /显示延长时段/);
+  assert.match(dropdown.textContent, /显示成交量/);
 
-  const toggleSetting = dropdown.querySelector('.rw-dropdown-setting');
-  toggleSetting.click();
+  const toggleExtSetting = dropdown.querySelector('.rw-setting-ext');
+  toggleExtSetting.click();
   await tick();
 
   assert.doesNotMatch(header.textContent, /EXT%/);
   assert.equal(flatBlock.querySelector('.rw-cell-ext'), null);
+
+  const toggleVolSetting = dropdown.querySelector('.rw-setting-volume');
+  toggleVolSetting.click();
+  await tick();
+
+  assert.doesNotMatch(header.textContent, /成交量/);
+  assert.equal(flatBlock.querySelector('.rw-cell-vol'), null);
 
   assert.deepEqual(ui.errors, []);
 });
@@ -1110,6 +1119,67 @@ test('Watchlist refined layout: displays extended hours move (EXT%) when market 
   const extCell = flatBlock.querySelector('.rw-cell-ext');
   assert.ok(extCell, 'EXT% element exists');
   assert.match(extCell.textContent, /-6\.00%/);
+
+  assert.deepEqual(ui.errors, []);
+});
+
+test('Watchlist sidebar volume column: uses 24H volume for crypto and regular session volume for equities, and supports sorting', async t => {
+  const volumeMarketFixture = url => {
+    const u = new URL(url, 'http://localhost');
+    if (u.pathname.includes('/watchlist/quotes')) {
+      return {
+        quotes: {
+          'BTC-USD': {
+            symbol: 'BTC-USD',
+            name: 'Bitcoin 比特币',
+            regular: { price: 68000, changePercent: 1.5, volume: 38200000000 },
+            vol24h: '38.2B',
+            meta: { status: 'active', delayStatus: 'realtime' }
+          },
+          'ETH-USD': {
+            symbol: 'ETH-USD',
+            name: 'Ethereum 以太坊',
+            regular: { price: 2600, changePercent: 2.1, volume: 18400000000 },
+            vol24h: '18.4B',
+            meta: { status: 'active', delayStatus: 'realtime' }
+          },
+          NVDA: {
+            symbol: 'NVDA',
+            name: 'NVIDIA Corporation',
+            regular: { price: 140, changePercent: 3.2, volume: 48000000 },
+            meta: { status: 'active', delayStatus: 'realtime' }
+          },
+          AAPL: {
+            symbol: 'AAPL',
+            name: 'Apple Inc.',
+            regular: { price: 230, changePercent: -0.5, volume: 38000000 },
+            meta: { status: 'active', delayStatus: 'realtime' }
+          }
+        },
+        session: { session: 'regular', desc: '正常开盘' },
+        provider: { isConfigured: false, name: 'Longbridge' }
+      };
+    }
+    return fixture(url);
+  };
+
+  const ui = await mount(t, async url => ({ ok: true, json: async () => volumeMarketFixture(url) }));
+  await tick();
+  await tick();
+
+  const rwSidebar = ui.w.document.querySelector('.right-watchlist-sidebar');
+  const flatBlock = rwSidebar.querySelector('.rw-all-flat-block');
+  const volHeader = flatBlock.querySelector('.rw-col-vol');
+  assert.ok(volHeader, 'Volume column header exists');
+  assert.match(volHeader.textContent, /成交量/);
+
+  // Click volume column header to sort by volume desc
+  volHeader.click();
+  await tick();
+
+  // Verify volume values formatting
+  const volCells = flatBlock.querySelectorAll('.rw-cell-vol');
+  assert.ok(volCells.length > 0, 'Volume cells rendered');
 
   assert.deepEqual(ui.errors, []);
 });

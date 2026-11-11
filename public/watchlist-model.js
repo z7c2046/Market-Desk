@@ -151,6 +151,32 @@ export function sortSymbolsByMarketCap(symbolArray) {
   });
 }
 
+export function parseVolumeNumber(val) {
+  if (val == null) return null;
+  if (typeof val === 'number') return Number.isFinite(val) ? val : null;
+  const str = String(val).trim().toUpperCase();
+  if (!str) return null;
+  const clean = str.replace(/[^0-9.TBMK]/g, '');
+  const numPart = parseFloat(clean);
+  if (!Number.isFinite(numPart)) return null;
+  if (clean.includes('T')) return numPart * 1e12;
+  if (clean.includes('B')) return numPart * 1e9;
+  if (clean.includes('M')) return numPart * 1e6;
+  if (clean.includes('K')) return numPart * 1e3;
+  return numPart;
+}
+
+export function formatWatchlistVolume(vol, isCrypto = false) {
+  if (vol == null || !Number.isFinite(Number(vol)) || Number(vol) <= 0) return '—';
+  const n = Number(vol);
+  const prefix = isCrypto ? '$' : '';
+  if (n >= 1e12) return `${prefix}${(n / 1e12).toFixed(2)}T`;
+  if (n >= 1e9) return `${prefix}${(n / 1e9).toFixed(2)}B`;
+  if (n >= 1e6) return `${prefix}${(n / 1e6).toFixed(1)}M`;
+  if (n >= 1e3) return `${prefix}${(n / 1e3).toFixed(1)}K`;
+  return `${prefix}${Math.round(n)}`;
+}
+
 export function sortWatchlistRows(rows, sortField = 'extChange', sortDirection = 'desc') {
   if (!sortField || sortField === 'manual' || sortField === 'custom') {
     return [...rows];
@@ -163,6 +189,11 @@ export function sortWatchlistRows(rows, sortField = 'extChange', sortDirection =
     if (sortField === 'marketCap' || sortField === 'marketCapNum') {
       valA = a.marketCapNum ?? (STOCK_MARKET_CAPS[a.symbol]?.value ?? null);
       valB = b.marketCapNum ?? (STOCK_MARKET_CAPS[b.symbol]?.value ?? null);
+    }
+
+    if (sortField === 'volume' || sortField === 'regularVolume') {
+      valA = a.volume;
+      valB = b.volume;
     }
 
     if (sortField === 'symbol') {

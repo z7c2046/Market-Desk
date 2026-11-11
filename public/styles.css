@@ -14355,6 +14355,16 @@ body[data-theme="light"] .hero-catalyst-block {
   grid-template-columns: minmax(0, 1.05fr) 76px 66px 68px;
 }
 
+.rw-group-col-header.with-vol {
+  grid-template-columns: minmax(0, 1.05fr) 76px 66px 68px;
+}
+
+.rw-group-col-header.with-vol.with-ext {
+  grid-template-columns: minmax(0, 0.9fr) 68px 56px 56px 56px;
+  column-gap: 5px;
+  padding: 10px 10px;
+}
+
 :root.dark .rw-group-col-header {
   border-bottom-color: var(--border-subtle);
 }
@@ -14417,6 +14427,23 @@ body[data-theme="light"] .hero-catalyst-block {
   font-weight: 700;
 }
 
+.rw-col-vol {
+  text-align: right;
+  cursor: pointer;
+  user-select: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  transition: color 0.14s ease;
+  white-space: nowrap;
+}
+.rw-col-vol:hover,
+.rw-col-vol.is-sorted {
+  color: var(--text-main);
+  font-weight: 700;
+}
+
 .rw-col-ext {
   text-align: right;
   cursor: pointer;
@@ -14462,6 +14489,16 @@ body[data-theme="light"] .hero-catalyst-block {
 
 .rw-stock-row.with-ext {
   grid-template-columns: minmax(0, 1.05fr) 76px 66px 68px;
+}
+
+.rw-stock-row.with-vol {
+  grid-template-columns: minmax(0, 1.05fr) 76px 66px 68px;
+}
+
+.rw-stock-row.with-vol.with-ext {
+  grid-template-columns: minmax(0, 0.9fr) 68px 56px 56px 56px;
+  column-gap: 5px;
+  padding: 10px 10px;
 }
 
 :root.dark .rw-stock-row {
@@ -14534,6 +14571,20 @@ body[data-theme="light"] .hero-catalyst-block {
   line-height: 1.2;
 }
 
+.rw-cell-vol {
+  text-align: right;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: var(--font-mono, monospace);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  color: var(--text-secondary);
+  line-height: 1.2;
+}
+
 .rw-cell-ext {
   text-align: right;
   font-size: 13px;
@@ -14546,6 +14597,13 @@ body[data-theme="light"] .hero-catalyst-block {
   justify-content: flex-end;
   gap: 2px;
   line-height: 1.2;
+}
+
+.rw-stock-row.with-vol.with-ext .rw-cell-price,
+.rw-stock-row.with-vol.with-ext .rw-cell-change,
+.rw-stock-row.with-vol.with-ext .rw-cell-vol,
+.rw-stock-row.with-vol.with-ext .rw-cell-ext {
+  font-size: 12.5px;
 }
 
 .rw-ext-sess-lbl {

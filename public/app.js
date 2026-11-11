@@ -44,7 +44,9 @@ import {
   isCryptoSymbol,
   STOCK_MARKET_CAPS,
   getStockMarketCap,
-  sortSymbolsByMarketCap
+  sortSymbolsByMarketCap,
+  parseVolumeNumber,
+  formatWatchlistVolume
 } from './watchlist-model.js';
 import {
   AI_SECTOR_FILTERS,
@@ -5574,6 +5576,35 @@ createApp({ setup() {
       }
     }
 
+    const isCrypto = isCryptoSymbol(sym);
+    let volume = null;
+    let formattedVolume = '—';
+
+    if (isCrypto) {
+      // 加密货币：优先使用 24 小时成交量 (vol24h)
+      const rawVol = q.vol24h ?? q.volume24h ?? q.volume ?? reg.volume;
+      let parsed = parseVolumeNumber(rawVol);
+      if (parsed == null || parsed <= 0) {
+        const clean = String(sym).toUpperCase().replace(/[-_/]?(USD|USDT)$/, '');
+        const cItem = (cryptoList.value || []).find(c => c.symbol === sym || c.code === sym || c.code === clean || c.symbol?.startsWith(clean));
+        if (cItem?.vol24h) {
+          parsed = parseVolumeNumber(cItem.vol24h);
+        } else {
+          const defItem = DEFAULT_CRYPTOS.find(d => d.code === clean || d.symbol === sym || d.symbol?.startsWith(clean));
+          if (defItem?.vol24h) {
+            parsed = parseVolumeNumber(defItem.vol24h);
+          }
+        }
+      }
+      volume = parsed;
+      formattedVolume = formatWatchlistVolume(volume, true);
+    } else {
+      // 美股：使用正常交易时段收盘成交量 (reg.volume)
+      const rawVol = reg.volume ?? q.volume;
+      volume = parseVolumeNumber(rawVol);
+      formattedVolume = formatWatchlistVolume(volume, false);
+    }
+
     return {
       symbol: sym,
       name: (q.name && q.name !== sym) ? q.name : (SYMBOL_NAMES[sym] || sym),
@@ -5589,6 +5620,8 @@ createApp({ setup() {
       activePrice,
       activeChange,
       hasActiveQuote,
+      volume,
+      formattedVolume,
       sourceTime: reg.sourceTime || null,
       receivedAt: q.meta?.updatedAt || null,
       updatedAt: reg.sourceTime || q.meta?.updatedAt || null,
@@ -5976,6 +6009,17 @@ createApp({ setup() {
     persist('market-desk-show-ext-session', showExtSessionSetting.value);
   }
 
+  const showVolumeSetting = ref(readStorage('market-desk-show-volume', true));
+  function toggleShowVolumeSetting() {
+    showVolumeSetting.value = !showVolumeSetting.value;
+    persist('market-desk-show-volume', showVolumeSetting.value);
+  }
+
+  const showVolumeColumn = computed(() => {
+    // 由自选上方 3 个点设置中的“显示成交量”总控
+    return Boolean(showVolumeSetting.value);
+  });
+
   const isMarketOpen = computed(() => {
     return currentSession.value?.session === 'regular';
   });
@@ -6160,6 +6204,7 @@ createApp({ setup() {
     const normalized =
       field === 'price' ? 'regularPrice' :
       field === 'change' ? 'regularChange' :
+      (field === 'volume' || field === 'vol') ? 'volume' :
       field;
 
     if (normalized === 'symbol') {
@@ -6271,7 +6316,7 @@ createApp({ setup() {
     const spec = resolveGroupSortSpec(groupId);
     if (spec) return spec;
     const globalField = sidebarSortField.value;
-    if (globalField === 'symbol' || globalField === 'regularPrice' || globalField === 'regularChange' || globalField === 'extChange' || globalField === 'extPrice' || globalField === 'marketCap') {
+    if (globalField === 'symbol' || globalField === 'regularPrice' || globalField === 'regularChange' || globalField === 'extChange' || globalField === 'extPrice' || globalField === 'marketCap' || globalField === 'volume') {
       return { field: globalField, dir: sidebarSortDirection.value || 'desc' };
     }
     return { field: 'regularChange', dir: sidebarSortDirection.value || 'desc' };
@@ -6339,6 +6384,7 @@ createApp({ setup() {
       sidebarSortField.value === 'extChange' ||
       sidebarSortField.value === 'extPrice' ||
       sidebarSortField.value === 'marketCap' ||
+      sidebarSortField.value === 'volume' ||
       sidebarSortField.value === 'manual'
     )
       ? sidebarSortField.value
@@ -6436,7 +6482,8 @@ createApp({ setup() {
       sidebarSortField.value === 'regularChange' ||
       sidebarSortField.value === 'extChange' ||
       sidebarSortField.value === 'extPrice' ||
-      sidebarSortField.value === 'marketCap'
+      sidebarSortField.value === 'marketCap' ||
+      sidebarSortField.value === 'volume'
     )
       ? sidebarSortField.value
       : 'regularChange';
@@ -8460,6 +8507,7 @@ createApp({ setup() {
     groupOrderSortDir, toggleGroupOrderSort, rwSessionTab, setRwSessionTab, currentExtSessionShortLabel, getRowExtSessionLabel,
     activeSessionKey, activeSessionShortLabel, activeSessionPriceLabel, activeSessionChangeLabel,
     toggleGroupCollapse, toggleAllGroupsCollapse, areAllGroupsCollapsed, openAddStockToGroup, sidebarGroupSections, filteredSidebarGroupSections, sidebarFlatRows, filteredSidebarFlatRows, isMarketOpen, showExtColumn,
+    showVolumeSetting, showVolumeColumn, toggleShowVolumeSetting, formatWatchlistVolume,
     showRwMoreMenu, showExtSessionSetting, toggleShowExtSessionSetting,
     groupSortStates, resolveGroupSortSpec, getGroupEffectiveSort, isGroupSortedBy, getGroupColumnSortDir, toggleGroupColumnSort, cycleGroupSort, getGroupSortTitle,
     draggedStock, dragOverTarget, dragOverGroup,

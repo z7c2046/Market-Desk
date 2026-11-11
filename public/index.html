@@ -6206,12 +6206,21 @@
         </button>
         <!-- 3-Dots Dropdown Settings Menu -->
         <div v-if="showRwMoreMenu" class="rw-more-dropdown" @click.stop>
-          <div class="rw-dropdown-item rw-dropdown-setting" @click="toggleShowExtSessionSetting">
+          <div class="rw-dropdown-item rw-dropdown-setting rw-setting-ext" @click="toggleShowExtSessionSetting">
             <div class="rw-dropdown-item-left">
               <span class="rw-setting-title">显示延长时段 (EXT%)</span>
               <span class="rw-setting-desc">盘后/盘前时段展示涨跌幅</span>
             </div>
             <div class="rw-toggle-switch" :class="{ active: showExtSessionSetting }">
+              <span class="rw-toggle-knob"></span>
+            </div>
+          </div>
+          <div class="rw-dropdown-item rw-dropdown-setting rw-setting-volume" @click="toggleShowVolumeSetting">
+            <div class="rw-dropdown-item-left">
+              <span class="rw-setting-title">显示成交量 (Volume)</span>
+              <span class="rw-setting-desc">美股收盘量 / 加密 24H 成交量</span>
+            </div>
+            <div class="rw-toggle-switch" :class="{ active: showVolumeSetting }">
               <span class="rw-toggle-knob"></span>
             </div>
           </div>
@@ -6284,16 +6293,17 @@
   <div class="rw-groups-scrollable">
     <!-- 5.0 自选列表骨架屏加载态 (页面开始刷新 / 初始化加载时呈现) -->
     <div v-if="isWatchlistSkeleton" class="rw-all-flat-block rw-skeleton-wrap" aria-hidden="true">
-      <div class="rw-group-col-header" :class="{ 'with-ext': showExtColumn }" aria-label="全量自选排序栏骨架">
+      <div class="rw-group-col-header" :class="{ 'with-ext': showExtColumn, 'with-vol': showVolumeColumn }" aria-label="全量自选排序栏骨架">
         <span class="rw-col-code">标的</span>
         <span class="rw-col-price">收盘价格</span>
         <span class="rw-col-change">Chg%</span>
+        <span v-if="showVolumeColumn" class="rw-col-vol">成交量</span>
         <span v-if="showExtColumn" class="rw-col-ext">EXT%</span>
       </div>
       <div class="rw-stock-list">
         <div v-for="(sk, idx) in rwSkeletonRows" :key="idx" 
              class="rw-stock-row rw-skeleton-row" 
-             :class="{ 'with-ext': showExtColumn }">
+             :class="{ 'with-ext': showExtColumn, 'with-vol': showVolumeColumn }">
           <div class="rw-cell-code">
             <span class="sk sk-line" :style="{ width: sk.symWidth, height: '14px', borderRadius: '3px' }"></span>
           </div>
@@ -6302,6 +6312,9 @@
           </span>
           <span class="rw-cell-change" style="display:flex;justify-content:flex-end;">
             <span class="sk sk-pill" :style="{ width: sk.chgWidth, height: '18px', borderRadius: '4px' }"></span>
+          </span>
+          <span v-if="showVolumeColumn" class="rw-cell-vol" style="display:flex;justify-content:flex-end;">
+            <span class="sk sk-line" style="width: 44px; height: 13px; border-radius: 3px;"></span>
           </span>
           <span v-if="showExtColumn" class="rw-cell-ext" style="display:flex;justify-content:flex-end;">
             <span class="sk sk-line" :style="{ width: sk.extWidth, height: '13px', borderRadius: '3px' }"></span>
@@ -6314,8 +6327,8 @@
     <template v-else>
       <!-- 5.1 全部视图 (Flat List): 切换到全部时不显示股票分组，直接平铺显示全量自选标的 (包括杠杆 ETF) -->
       <div v-if="sidebarActiveGroup === 'all'" class="rw-all-flat-block">
-      <!-- 统一表头: 标的 | 收盘价格 | Chg% | EXT% (开盘后不显示 EXT%) -->
-      <div class="rw-group-col-header" :class="{ 'with-ext': showExtColumn }" aria-label="全量自选排序栏">
+      <!-- 统一表头: 标的 | 收盘价格 | Chg% | 成交量 | EXT% (开盘后不显示 EXT%) -->
+      <div class="rw-group-col-header" :class="{ 'with-ext': showExtColumn, 'with-vol': showVolumeColumn }" aria-label="全量自选排序栏">
         <span class="rw-col-code"
               :class="{ 'is-sorted': sidebarSortField === 'symbol' }"
               @click.stop="toggleSidebarSort('symbol')"
@@ -6343,6 +6356,16 @@
           Chg%
           <span v-if="sidebarSortField === 'regularChange'" class="rw-sort-indicator">{{ sidebarSortDirection === 'asc' ? '↑' : '↓' }}</span>
         </span>
+        <span v-if="showVolumeColumn"
+              class="rw-col-vol"
+              :class="{ 'is-sorted': sidebarSortField === 'volume' }"
+              @click.stop="toggleSidebarSort('volume')"
+              role="button"
+              tabindex="0"
+              title="按成交量排序（美股收盘量 / 加密 24H 成交量）">
+          成交量
+          <span v-if="sidebarSortField === 'volume'" class="rw-sort-indicator">{{ sidebarSortDirection === 'asc' ? '↑' : '↓' }}</span>
+        </span>
         <span v-if="showExtColumn"
               class="rw-col-ext"
               :class="{ 'is-sorted': sidebarSortField === 'extChange' }"
@@ -6359,7 +6382,7 @@
       <div class="rw-stock-list">
         <div v-for="r in filteredSidebarFlatRows" :key="r.symbol"
              class="rw-stock-row"
-             :class="{ active: symbol === r.symbol, 'with-ext': showExtColumn }"
+             :class="{ active: symbol === r.symbol, 'with-ext': showExtColumn, 'with-vol': showVolumeColumn }"
              @click="selectSymbol(r.symbol)">
           <span v-if="symbol === r.symbol" class="rw-selected-bar"></span>
           <div class="rw-cell-code">
@@ -6367,6 +6390,11 @@
           </div>
           <span class="rw-cell-price">{{ num(r.regularPrice) }}</span>
           <span class="rw-cell-change" :class="tone(r.regularChange)">{{ pctNoPlus(r.regularChange) }}</span>
+          <span v-if="showVolumeColumn"
+                class="rw-cell-vol font-mono"
+                :title="'成交量: ' + r.formattedVolume">
+            {{ r.formattedVolume }}
+          </span>
           <span v-if="showExtColumn"
                 class="rw-cell-ext"
                 :class="isMarketOpen ? 'rw-muted-empty' : (r.extChange !== null ? tone(r.extChange) : 'rw-muted-empty')"
@@ -6406,8 +6434,8 @@
           </div>
         </div>
 
-        <!-- In-Group Column Header: 标的 | 收盘价格 | Chg% | EXT% (若开盘则不显示 EXT%) -->
-        <div v-show="!sec.collapsed" class="rw-group-col-header" :class="{ 'with-ext': showExtColumn }" aria-label="分组内排序栏">
+        <!-- In-Group Column Header: 标的 | 收盘价格 | Chg% | 成交量 | EXT% (若开盘则不显示 EXT%) -->
+        <div v-show="!sec.collapsed" class="rw-group-col-header" :class="{ 'with-ext': showExtColumn, 'with-vol': showVolumeColumn }" aria-label="分组内排序栏">
           <span class="rw-col-code"
                 :class="{ 'is-sorted': isGroupSortedBy(sec.id, 'symbol') }"
                 @click.stop="toggleGroupColumnSort(sec.id, 'symbol')"
@@ -6435,6 +6463,16 @@
             Chg%
             <span v-if="isGroupSortedBy(sec.id, 'regularChange')" class="rw-sort-indicator">{{ getGroupColumnSortDir(sec.id, 'regularChange') === 'asc' ? '↑' : '↓' }}</span>
           </span>
+          <span v-if="showVolumeColumn"
+                class="rw-col-vol"
+                :class="{ 'is-sorted': isGroupSortedBy(sec.id, 'volume') }"
+                @click.stop="toggleGroupColumnSort(sec.id, 'volume')"
+                role="button"
+                tabindex="0"
+                title="本组内按成交量排序（美股收盘量 / 加密 24H 成交量）">
+            成交量
+            <span v-if="isGroupSortedBy(sec.id, 'volume')" class="rw-sort-indicator">{{ getGroupColumnSortDir(sec.id, 'volume') === 'asc' ? '↑' : '↓' }}</span>
+          </span>
           <span v-if="showExtColumn"
                 class="rw-col-ext"
                 :class="{ 'is-sorted': isGroupSortedBy(sec.id, 'extChange') }"
@@ -6451,7 +6489,7 @@
         <div v-show="!sec.collapsed" class="rw-stock-list">
           <div v-for="r in sec.rows" :key="r.symbol"
                class="rw-stock-row"
-               :class="{ active: symbol === r.symbol, 'with-ext': showExtColumn }"
+               :class="{ active: symbol === r.symbol, 'with-ext': showExtColumn, 'with-vol': showVolumeColumn }"
                @click="selectSymbol(r.symbol)">
             <span v-if="symbol === r.symbol" class="rw-selected-bar"></span>
             <div class="rw-cell-code">
@@ -6459,6 +6497,11 @@
             </div>
             <span class="rw-cell-price">{{ num(r.regularPrice) }}</span>
             <span class="rw-cell-change" :class="tone(r.regularChange)">{{ pctNoPlus(r.regularChange) }}</span>
+            <span v-if="showVolumeColumn"
+                  class="rw-cell-vol font-mono"
+                  :title="'成交量: ' + r.formattedVolume">
+              {{ r.formattedVolume }}
+            </span>
             <span v-if="showExtColumn"
                   class="rw-cell-ext"
                   :class="isMarketOpen ? 'rw-muted-empty' : (r.extChange !== null ? tone(r.extChange) : 'rw-muted-empty')"
