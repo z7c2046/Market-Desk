@@ -185,10 +185,13 @@ const fixture = url => {
   if (u.pathname.endsWith('chart')) return { ...q, symbol: u.searchParams.get('symbol'), currency: 'USD', range: u.searchParams.get('range'), bars: [{ time: 1792612800, open: 99, close: 100, low: 98, high: 101, volume: 1000 }] };
   if (u.pathname === '/api/crypto') return { items: [{ symbol: 'BTC-USD', code: 'BTC', name: 'Bitcoin 比特币', price: 68000, changePercent: 1.5, marketCap: '1.3T', vol24h: '30B', high24h: 69000, low24h: 67000 }] };
   if (u.pathname === '/api/crypto/whales') {
+    const isStocks = u.searchParams.get('category') === 'stocks';
     return {
       ok: true,
-      isLive: true,
-      source: 'hyperliquid-api',
+      category: isStocks ? 'stocks' : 'crypto',
+      isLive: !isStocks,
+      isSample: isStocks,
+      source: isStocks ? 'static-sample' : 'hyperliquid-api',
       fetchedAt: new Date().toISOString(),
       aggregate: {
         totalTrackedWhales: 2,
@@ -1625,6 +1628,19 @@ test('Crypto Workspace: Sankey distribution, 4 scoped KPIs, 2-column whale-posit
   assert.ok(kpiCards[3].querySelector('.cw-kpi-ratio-tag'), 'Ratio tag rendered beside net exposure');
   assert.ok(kpiCards[3].querySelector('.cw-kpi-split-track'), 'L/S split bar rendered on KPI card 4');
 
+  // 3.5 Verify default market tab is TradFi
+  let catBtns = ui.w.document.querySelectorAll('.whale-cat-btn');
+  assert.equal(catBtns.length, 2, 'Two clickable market cards exist');
+  assert.match(catBtns[0].textContent, /加密货币/);
+  assert.match(catBtns[1].textContent, /TradFi/);
+  assert.ok(catBtns[1].classList.contains('active'), 'TradFi tab is active by default');
+  assert.match(ui.w.document.querySelector('.cw-sankey-panel').textContent, /TradFi · 巨鲸持仓分布/);
+
+  // Switch to "加密货币" tab to test Crypto Sankey & workflows
+  catBtns[0].click();
+  await tick();
+  await tick();
+
   // 4. Verify SVG Sankey Diagram & Live Rebalance Strip
   const sankeyPanel = ui.w.document.querySelector('.cw-sankey-panel');
   assert.ok(sankeyPanel, 'Sankey panel rendered');
@@ -1799,7 +1815,7 @@ test('Crypto Workspace: Sankey distribution, 4 scoped KPIs, 2-column whale-posit
   assert.match(ui.w.document.querySelector('#cw-positions-title').textContent, /HL 亿级多空对冲巨鲸 · 持仓明细/);
 
   // 6. Verify unified clickable market cards: switch to "TradFi"
-  const catBtns = ui.w.document.querySelectorAll('.whale-cat-btn');
+  catBtns = ui.w.document.querySelectorAll('.whale-cat-btn');
   assert.equal(catBtns.length, 2, 'Two clickable market cards exist');
   assert.match(catBtns[0].textContent, /加密货币/);
   assert.match(catBtns[1].textContent, /TradFi/);
@@ -2222,6 +2238,10 @@ test('Crypto Workspace: truth-gated Sankey pulses only on fresh fills or contrac
   const ui = await mount(t, async url => {
     if (url.startsWith('/api/crypto/whales')) {
       whaleRequests++;
+      const u = new URL(url, 'http://localhost');
+      if (u.searchParams.get('category') === 'stocks') {
+        return { ok: true, json: async () => ({ ...fixture(url), category: 'stocks', isSample: true }) };
+      }
       return { ok: true, json: async () => currentWhalePayload() };
     }
     return { ok: true, json: async () => fixture(url) };
@@ -2240,8 +2260,13 @@ test('Crypto Workspace: truth-gated Sankey pulses only on fresh fills or contrac
     };
   });
 
-  // Navigate to Crypto tab -> registers 15s whale poller
+  // Navigate to Crypto tab -> default is TradFi, switch to "加密货币" to activate 15s crypto poller
   await ui.click('加密货币');
+  while (ui.w.document.querySelector('.crypto-skeleton-wrap')) {
+    await tick();
+  }
+  const catBtns = ui.w.document.querySelectorAll('button.whale-cat-btn');
+  catBtns[0].click();
   await tick();
   await tick();
 
@@ -2309,14 +2334,14 @@ test('Crypto Workspace: truth-gated Sankey pulses only on fresh fills or contrac
   assert.match(stripText, /SOL 高频套利巨鲸 → SOL.*开多/);
 
   // Switch to TradFi -> 15s poller stops, 正在调仓 hidden, beams = 0
-  const catBtns = ui.w.document.querySelectorAll('.whale-cat-btn');
-  catBtns[1].click();
+  const catBtnsTradFi = ui.w.document.querySelectorAll('.whale-cat-btn');
+  catBtnsTradFi[1].click();
   await tick();
   assert.equal(pollEntry(), undefined, '15s poller pauses on TradFi static sample tab');
   assert.equal(ui.w.document.querySelectorAll('.cw-sk-pulse-beam').length, 0);
 
   // Switch back to Crypto, then advance clock +6 min -> both 2m snapshot delta and 5m fresh fill expire cleanly back to 0 beams
-  catBtns[0].click();
+  catBtnsTradFi[0].click();
   await tick();
   assert.ok(pollEntry(), '15s poller resumes on returning to Crypto');
 
@@ -2351,6 +2376,9 @@ test('Crypto Workspace: dynamic Leaderboard Top N selector, custom wallet manage
     const u = new URL(url, 'http://localhost');
     if (u.pathname === '/api/crypto/whales') {
       whaleUrls.push(url);
+      if (u.searchParams.get('category') === 'stocks') {
+        return { ok: true, json: async () => ({ ...fixture(url), category: 'stocks', isSample: true }) };
+      }
       const topN = Number(u.searchParams.get('topN') || 12);
       const customRaw = u.searchParams.get('custom') || '';
       const base = fixture('/api/crypto/whales');
@@ -2423,6 +2451,9 @@ test('Crypto Workspace: dynamic Leaderboard Top N selector, custom wallet manage
   });
 
   await ui.click('加密货币');
+  await tick();
+  const catBtns = ui.w.document.querySelectorAll('.whale-cat-btn');
+  catBtns[0].click();
   await tick();
   await tick();
 
@@ -2503,13 +2534,13 @@ test('Crypto Workspace: dynamic Leaderboard Top N selector, custom wallet manage
   assert.equal(ui.w.document.querySelectorAll('.cw-wallet-row').length, 4, '全部 restores all 4 tracked wallets');
 
   // TradFi hides Top N & custom controls, switching back preserves Crypto Top 16 & custom list
-  const catBtns = ui.w.document.querySelectorAll('.whale-cat-btn');
-  catBtns[1].click();
+  const catBtnsTradFi = ui.w.document.querySelectorAll('.whale-cat-btn');
+  catBtnsTradFi[1].click();
   await tick();
   assert.equal(ui.w.document.querySelector('.cw-topn-select'), null, 'TradFi hides Top N selector');
   assert.equal(ui.w.document.querySelector('.cw-custom-btn'), null, 'TradFi hides custom wallet manager button');
 
-  catBtns[0].click();
+  catBtnsTradFi[0].click();
   await tick();
   assert.equal(ui.w.document.querySelector('.cw-topn-select').value, '16', 'Top 16 selection preserved on returning to Crypto');
 
@@ -2769,11 +2800,9 @@ test('Crypto Workspace: live HIP-3 (xyz) TradFi mode enables Top N, Custom Walle
   await tick();
   await tick();
 
-  // Switch to TradFi -> live HIP-3 (xyz) mode activates Top N, Custom Wallet, 正在调仓, and 15s polling
+  // 默认直接进入 TradFi -> live HIP-3 (xyz) mode activates Top N, Custom Wallet, 正在调仓, and 15s polling
   const catBtns = ui.w.document.querySelectorAll('.whale-cat-btn');
-  catBtns[1].click();
-  await tick();
-  await tick();
+  assert.ok(catBtns[1].classList.contains('active'), 'TradFi is active by default');
 
   assert.match(ui.w.document.querySelector('#cw-flow-title').textContent, /TradFi · 巨鲸持仓分布/);
   assert.match(ui.w.document.querySelector('.cw-market-desc').textContent, /Hyperliquid HIP-3 \(xyz\) 实时 · Top 12/);
@@ -3005,7 +3034,7 @@ test('Crypto Workspace Skeleton: renders complete Sankey, 4 KPI cards and 2-colu
   assert.equal(assetTableRows.length, 6, 'Aggregated positions table has 6 skeleton rows');
 
   // 7. Resolve the whale data response and verify smooth transition to live view
-  resolveWhales({ ok: true, json: async () => fixture('/api/crypto/whales') });
+  resolveWhales({ ok: true, json: async () => ({ ...fixture('/api/crypto/whales'), category: 'stocks' }) });
   await tick();
   await tick();
 

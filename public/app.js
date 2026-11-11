@@ -1556,7 +1556,7 @@ createApp({ setup() {
   const cryptoWhaleSearch = ref('');
   const expandedWhaleAddress = ref('');
   const copiedWhaleAddress = ref('');
-  const whaleCategory = ref('crypto'); // 'crypto' | 'stocks'
+  const whaleCategory = ref('stocks'); // 默认进入 TradFi 板块 ('stocks' | 'crypto')
   const whaleTopN = ref(normalizeTopNChoice(readStorage(WHALE_TOP_N_STORAGE_KEY, WHALE_DEFAULT_TOP_N)));
   const customWallets = ref(loadStoredCustomWallets());
   const walletScopeFilter = ref('all'); // 'all' | 'custom'
@@ -4016,7 +4016,7 @@ createApp({ setup() {
   const isCryptoSkeleton = computed(() => {
     if (page.value !== 'crypto') return false;
     const cat = whaleCategory.value === 'stocks' ? 'stocks' : 'crypto';
-    const targetData = cat === 'stocks' ? (stockWhaleData.value || cryptoWhaleData.value?.stockWhales || DEFAULT_STOCK_WHALES_PAYLOAD) : cryptoWhaleData.value;
+    const targetData = cat === 'stocks' ? (stockWhaleData.value || cryptoWhaleData.value?.stockWhales) : cryptoWhaleData.value;
     const hasWhales = Array.isArray(targetData?.whales) && targetData.whales.length > 0;
     if (hasWhales) return false;
     // 当出现网络或接口异常且请求已结束时，避免永久卡在骨架屏，转由主界面错误/重试态接管
