@@ -937,9 +937,13 @@ export class OnchainStocksService {
           return this.processStockItem(item, q, idx);
         });
 
-        // 3. 严格按照 24H 链上成交量 (volume24h) 降序排列，只取 TradeFi 链上美股 Top 10
+        // 3. 严格按照 24H 链上成交量 (volume24h) 降序排列
         allProcessed.sort((a, b) => b.volume24h - a.volume24h);
         const top10 = allProcessed.slice(0, 10).map((item, idx) => ({
+          rank: idx + 1,
+          ...item
+        }));
+        const allStocks = allProcessed.map((item, idx) => ({
           rank: idx + 1,
           ...item
         }));
@@ -954,6 +958,7 @@ export class OnchainStocksService {
           fetchedAt: new Date().toISOString(),
           aggregate,
           top10,
+          allStocks,
           assetVolumes
         };
 

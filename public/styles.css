@@ -18611,6 +18611,15 @@ html.dark .cw-sk-wallet-node.is-selected .cw-sk-wallet-outline {
   cursor: pointer;
 }
 
+.cw-sk-asset-hitbox {
+  pointer-events: all;
+  cursor: pointer;
+}
+
+.cw-sk-asset-node.is-clickable:hover .cw-sk-asset-sym {
+  fill: var(--apple-blue, #3b82f6);
+}
+
 .cw-sk-asset-node.is-dim {
   opacity: 0.32;
 }
@@ -18854,6 +18863,15 @@ html.dark .cw-wallet-row.selected {
 
 .cw-agg-row {
   border-bottom: 1px solid var(--border-subtle);
+}
+
+.cw-agg-row.is-clickable {
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.cw-agg-row.is-clickable:hover td {
+  background: var(--surface-hover, rgba(255, 255, 255, 0.04));
 }
 
 .cw-wt-title {

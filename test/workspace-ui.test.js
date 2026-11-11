@@ -357,6 +357,26 @@ const fixture = url => {
           openInterest: 38500000,
           turnoverRate: 16.8,
           chartSymbol: 'NVDA'
+        },
+        {
+          rank: 2,
+          symbol: 'MU',
+          name: '美光',
+          protocol: 'Hyperliquid Perp / Backed',
+          network: 'Hyperliquid L1',
+          price: 684.05,
+          changePercent: 1.25,
+          tradFiClose: 680.0,
+          premiumPct: 0.59,
+          volume24h: 38618000,
+          inflow24h: 18000000,
+          outflow24h: 20618000,
+          netFlow: -2618000,
+          buyRatio: 46.6,
+          sellRatio: 53.4,
+          openInterest: 24000000,
+          turnoverRate: 14.2,
+          chartSymbol: 'MU'
         }
       ]
     };
@@ -1915,13 +1935,25 @@ test('Crypto Workspace: Sankey distribution, 4 scoped KPIs, 2-column whale-posit
   assert.ok(rwSidebar, 'Right watchlist sidebar exists');
   assert.match(rwSidebar.textContent, /加密货币/, 'Watchlist has crypto group');
 
-  // 10. Click row K-line jump button -> navigates directly to 'chart' (个股)
+  // 10. Verify clicking asset or onchain button stays in crypto/whale workspace and reveals drawer instead of jumping to chart
+  assert.ok(ui.w.document.querySelector('.crypto-whale-tracker-panel'), 'Remains in Crypto/Whale view, did NOT navigate away to K-line');
+
+  // Verify clicking right aggregated position row also focuses Flow Matrix drawer without jumping to K-line
+  const aggRows = ui.w.document.querySelectorAll('.cw-agg-row');
+  assert.ok(aggRows.length > 0, 'Aggregated position rows exist');
+  const targetAggRow = [...aggRows].find(r => r.textContent.includes('NVDA')) || aggRows[0];
+  targetAggRow.dispatchEvent(new ui.w.MouseEvent('click', { bubbles: true }));
+  await tick();
+  await new Promise(resolve => setTimeout(resolve, 80));
+  assert.ok(ui.w.document.querySelector('.cw-drawer-tr'), 'Flow matrix drawer remains open for clicked aggregated asset');
+  assert.ok(ui.w.document.querySelector('.crypto-whale-tracker-panel'), 'Still in Crypto/Whale workspace after clicking aggregated position');
+
+  // Verify onchain button toggles whale positions drawer in-place without page navigation
   const onchainJumpBtn = autoOpenedPanel.querySelector('.onchain-jump-btn');
-  assert.ok(onchainJumpBtn, 'On-chain jump button exists');
+  assert.ok(onchainJumpBtn, 'On-chain toggle button exists');
   onchainJumpBtn.click();
   await tick();
-  await tick();
-  assert.equal(ui.w.document.querySelector('main').textContent.includes('NVDA') || ui.w.document.querySelector('main').textContent.includes('USD'), true, 'Navigated to K-line chart');
+  assert.ok(ui.w.document.querySelector('.crypto-whale-tracker-panel'), 'In-place whale positions toggle does not leave crypto page');
 
   assert.deepEqual(ui.errors, []);
 });

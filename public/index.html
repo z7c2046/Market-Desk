@@ -25,7 +25,7 @@
   display: none !important;
 }
 </style>
-<script defer src="/vendor/vue.js"></script><script defer src="/vendor/echarts.js"></script><script defer src="/vendor/lightweight-charts.standalone.js"></script><script type="module" src="/app.js?v=2.9.0"></script>
+<script defer src="/vendor/vue.js"></script><script defer src="/vendor/echarts.js"></script><script defer src="/vendor/lightweight-charts.standalone.js"></script><script type="module" src="/app.js?v=2.9.5"></script>
 </head><body><div id="app" v-cloak>
 <aside class="nav-rail desktop-only" aria-label="工作台主导航">
   <div class="rail-top">
@@ -2029,7 +2029,7 @@
             :key="item.id"
             type="button"
             class="cw-now-item"
-            @click="item.walletKey ? selectWhaleWallet(item.walletKey) : selectCryptoCoin(item.chartSymbol)"
+            @click="item.walletKey ? selectWhaleWallet(item.walletKey) : focusAssetInFlowMatrix({ symbol: item.coin, chartSymbol: item.chartSymbol })"
           >
             <span class="cw-now-route">{{ item.isIncrease ? (item.whaleName + ' → ' + item.coin) : (item.coin + ' → ' + item.whaleName) }}</span>
             <span class="cw-now-amount font-mono" :class="item.isLong ? 'text-pos' : 'text-neg'">{{ item.actionText }} {{ item.valueText }}</span>
@@ -2162,12 +2162,23 @@
               :class="{ 'is-dim': aNode.dimmed, 'is-clickable': !aNode.isOther }"
               :data-asset="aNode.symbol"
               :tabindex="aNode.isOther ? -1 : 0"
-              :title="!aNode.isOther ? ('点击跳转并展开 ' + aNode.displaySymbol + ' 资金流向矩阵与前大主力持仓') : ''"
+              :title="!aNode.isOther ? ('点击展开 ' + aNode.displaySymbol + ' 资金流向矩阵与钱包持仓明细') : ''"
               @mouseenter="hoveredAssetSymbol = aNode.symbol"
               @mouseleave="hoveredAssetSymbol = ''"
-              @click="!aNode.isOther && focusAssetInFlowMatrix(aNode)"
+              @click.stop.prevent="!aNode.isOther && focusAssetInFlowMatrix(aNode)"
               @keydown.enter.prevent="!aNode.isOther && focusAssetInFlowMatrix(aNode)"
             >
+              <!-- 覆盖整条标的卡片的透明点击热区 (Hit-Box) -->
+              <rect
+                v-if="!aNode.isOther"
+                class="cw-sk-asset-hitbox"
+                x="1015"
+                :y="aNode.middleY - 18"
+                width="265"
+                height="36"
+                fill="transparent"
+                style="cursor: pointer; pointer-events: all;"
+              />
               <rect class="cw-sk-asset-rail" x="1020" :y="aNode.y" width="5" :height="Math.max(2, aNode.h)" rx="1.5" />
               <text class="cw-sk-asset-sym numeric" x="1036" :y="aNode.middleY - 2">{{ aNode.displaySymbol }}</text>
               <text class="cw-sk-asset-lbl" x="1036" :y="aNode.middleY + 12">{{ aNode.cleanLabel || (aNode.isOther ? aNode.label : '') }}</text>
@@ -2474,10 +2485,15 @@
                     <span v-else class="muted">—</span>
                   </td>
                   <td class="col-jump text-right">
-                    <button type="button" class="pos-jump-btn cw-act-btn" @click.stop="selectCryptoCoin(p.chartSymbol)" :title="p.coin + ' K线'" :aria-label="p.coin + ' K线'">
-                      <svg viewBox="0 0 12 12" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <line x1="3" y1="9" x2="9" y2="3"></line>
-                        <polyline points="4.5 3 9 3 9 7.5"></polyline>
+                    <button
+                      type="button"
+                      class="pos-jump-btn cw-act-btn"
+                      @click.stop="focusAssetInFlowMatrix({ symbol: p.coin, chartSymbol: p.chartSymbol })"
+                      :title="'展开 ' + p.coin + ' 资金流向与主力持仓'"
+                      :aria-label="'展开 ' + p.coin + ' 资金流向与主力持仓'"
+                    >
+                      <svg viewBox="0 0 12 12" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <polyline points="2.5 4.5 6 8 9.5 4.5"></polyline>
                       </svg>
                     </button>
                   </td>
@@ -2545,7 +2561,13 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="pos in aggregatedAssetPositions" :key="pos.symbol" class="cw-agg-row">
+                <tr
+                  v-for="pos in aggregatedAssetPositions"
+                  :key="pos.symbol"
+                  class="cw-agg-row is-clickable"
+                  :title="'点击展开 ' + pos.symbol + ' 资金流向矩阵与钱包持仓明细'"
+                  @click="focusAssetInFlowMatrix(pos)"
+                >
                   <td class="text-left">
                     <span class="cw-asset-sym font-mono">{{ pos.symbol }}</span>
                     <span v-if="pos.subLabel || pos.label" class="cw-asset-sub">{{ pos.subLabel || pos.label }}</span>
@@ -2562,13 +2584,12 @@
                     <button
                       type="button"
                       class="pos-jump-btn cw-act-btn"
-                      @click.stop="selectCryptoCoin(pos.chartSymbol)"
-                      :title="pos.symbol + ' K线'"
-                      :aria-label="pos.symbol + ' K线'"
+                      @click.stop="focusAssetInFlowMatrix(pos)"
+                      :title="'展开 ' + pos.symbol + ' 资金流向与主力持仓明细'"
+                      :aria-label="'展开 ' + pos.symbol + ' 资金流向与主力持仓明细'"
                     >
-                      <svg viewBox="0 0 12 12" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <line x1="3" y1="9" x2="9" y2="3"></line>
-                        <polyline points="4.5 3 9 3 9 7.5"></polyline>
+                      <svg viewBox="0 0 12 12" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <polyline points="2.5 4.5 6 8 9.5 4.5"></polyline>
                       </svg>
                     </button>
                   </td>
@@ -2776,13 +2797,13 @@
                         </button>
                         <button
                           class="onchain-jump-btn cw-act-btn"
-                          @click.stop="selectCryptoCoin(r.chartSymbol)"
-                          :title="r.symbol + ' K线'"
-                          :aria-label="r.symbol + ' K线'"
+                          :class="{ active: expandedStockSymbol === r.symbol }"
+                          @click.stop="toggleStockRadar(r.symbol)"
+                          :title="r.symbol + ' 巨鲸持仓明细'"
+                          :aria-label="r.symbol + ' 巨鲸持仓明细'"
                         >
-                          <svg viewBox="0 0 12 12" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <line x1="3" y1="9" x2="9" y2="3"></line>
-                            <polyline points="4.5 3 9 3 9 7.5"></polyline>
+                          <svg viewBox="0 0 12 12" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <polyline points="2.5 4.5 6 8 9.5 4.5"></polyline>
                           </svg>
                         </button>
                       </div>
@@ -2897,10 +2918,9 @@
                 <span class="cw-feed-px muted">@ ${{ formatCryptoPrice(log.entryPx) }}</span>
                 <span class="cw-feed-whale">{{ log.whaleName }}</span>
                 <strong class="cw-feed-pnl" :class="String(log.pnlText || '').startsWith('+') ? 'text-pos' : 'text-neg'">{{ log.pnlText }}</strong>
-                <button class="cw-act-btn" @click="selectCryptoCoin(log.chartSymbol)" :title="log.coin + ' K线'">
-                  <svg viewBox="0 0 12 12" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <line x1="3" y1="9" x2="9" y2="3"></line>
-                    <polyline points="4.5 3 9 3 9 7.5"></polyline>
+                <button class="cw-act-btn" @click.stop="focusAssetInFlowMatrix({ symbol: log.coin, chartSymbol: log.chartSymbol })" :title="'展开 ' + log.coin + ' 资金流向与主力持仓'">
+                  <svg viewBox="0 0 12 12" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <polyline points="2.5 4.5 6 8 9.5 4.5"></polyline>
                   </svg>
                 </button>
               </div>

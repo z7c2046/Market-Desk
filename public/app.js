@@ -2913,10 +2913,18 @@ createApp({ setup() {
     expandedStockSymbol.value = (expandedStockSymbol.value === sym ? '' : sym);
   }
 
-  function focusAssetInFlowMatrix(aNode) {
-    if (!aNode || aNode.isOther) return;
-    const targetSymbol = String(aNode.symbol || '').trim().toUpperCase();
-    const targetChartSymbol = String(aNode.chartSymbol || '').trim().toUpperCase();
+  function focusAssetInFlowMatrix(target) {
+    if (!target) return;
+    if (typeof target === 'object' && target.isOther) return;
+
+    const rawSym = typeof target === 'string'
+      ? target
+      : String(target.symbol || target.coin || target.chartSymbol || '').trim();
+    const rawChartSym = typeof target === 'object'
+      ? String(target.chartSymbol || '').trim()
+      : '';
+    const targetSymbol = rawSym.toUpperCase();
+    const targetChartSymbol = rawChartSym.toUpperCase();
 
     // 1. 自动展开全市场流向与异动折叠区
     showSecondaryMarketFlow.value = true;
@@ -2928,13 +2936,15 @@ createApp({ setup() {
       onchainStockSearch.value = '';
     }
 
-    // 4. 在 activeFlowRows 中匹配目标标的
+    // 4. 在 activeFlowRows 中匹配目标标的（支持双向别名，如 XYZ100 <-> QQQ, SP500 <-> SPY）
     const matchedRow = activeFlowRows.value.find(r => {
       const sym = String(r.symbol || '').toUpperCase();
       const csym = String(r.chartSymbol || '').toUpperCase();
       return sym === targetSymbol || sym === targetChartSymbol || csym === targetSymbol || csym === targetChartSymbol
         || (targetSymbol === 'XYZ100' && (sym === 'QQQ' || csym === 'QQQ'))
-        || (targetSymbol === 'SP500' && (sym === 'SPY' || csym === 'SPY'));
+        || (targetSymbol === 'QQQ' && (sym === 'XYZ100' || csym === 'XYZ100'))
+        || (targetSymbol === 'SP500' && (sym === 'SPY' || csym === 'SPY'))
+        || (targetSymbol === 'SPY' && (sym === 'SP500' || csym === 'SP500'));
     });
 
     const finalSymbol = matchedRow ? matchedRow.symbol : targetSymbol;
@@ -2943,10 +2953,11 @@ createApp({ setup() {
     expandedStockSymbol.value = finalSymbol;
     focusedFlowSymbol.value = finalSymbol;
 
-    // 6. 滚动居中并触发聚焦高亮
+    // 6. 滚动居中并触发聚焦高亮（平滑对齐抽屉与标的行）
     nextTick(() => {
       setTimeout(() => {
         const rowEl = document.querySelector(`.cw-flow-row[data-symbol="${finalSymbol}"]`)
+          || document.querySelector(`.cw-flow-row[data-symbol="${targetSymbol}"]`)
           || document.querySelector('.cw-drawer-tr')
           || document.querySelector('.cw-flow-panel');
         if (rowEl && typeof rowEl.scrollIntoView === 'function') {
@@ -2955,7 +2966,7 @@ createApp({ setup() {
         setTimeout(() => {
           if (focusedFlowSymbol.value === finalSymbol) focusedFlowSymbol.value = '';
         }, 3200);
-      }, 60);
+      }, 70);
     });
   }
 
@@ -3210,8 +3221,15 @@ createApp({ setup() {
 
   const activeFlowRows = computed(() => {
     const q = (cryptoWhaleSearch.value || onchainStockSearch.value || '').trim().toUpperCase();
-    const rawList = whaleCategory.value === 'stocks'
-      ? (onchainStocksData.value?.top10 || []).map(s => {
+    const isStocks = whaleCategory.value === 'stocks';
+    const sourceCandidates = isStocks
+      ? ((onchainStocksData.value?.allStocks && onchainStocksData.value.allStocks.length > 0)
+          ? onchainStocksData.value.allStocks
+          : (onchainStocksData.value?.top10 || []))
+      : cryptoFlowRows.value;
+
+    const rawList = isStocks
+      ? sourceCandidates.map(s => {
           const price = Number(s.price) || 0;
           const tradFiClose = Number(s.tradFiClose) || 0;
           const priceDiff = s.priceDiff != null ? Number(s.priceDiff) : ((price > 0 && tradFiClose > 0) ? Number((price - tradFiClose).toFixed(2)) : 0);
@@ -3247,7 +3265,40 @@ createApp({ setup() {
 
     const field = onchainStockSortField.value || 'volume24h';
     const dir = onchainStockSortDir.value === 'asc' ? 1 : -1;
-    const sorted = [...filtered].sort((a, b) => ((a[field] ?? 0) - (b[field] ?? 0)) * dir);
+    let sorted = [...filtered].sort((a, b) => ((a[field] ?? 0) - (b[field] ?? 0)) * dir);
+
+    // 若未进行搜索且处于默认展示时，若列表较长，保留前 12 个；但若用户展开了某个标的，确保该标的必在列表中
+    const expSym = (expandedStockSymbol.value || '').toUpperCase();
+    if (!q && sorted.length > 12) {
+      const head = sorted.slice(0, 12);
+      if (expSym && !head.some(r => r.symbol.toUpperCase() === expSym || r.chartSymbol.toUpperCase() === expSym)) {
+        const picked = sorted.find(r => r.symbol.toUpperCase() === expSym || r.chartSymbol.toUpperCase() === expSym);
+        if (picked) head.push(picked);
+      }
+      sorted = head;
+    }
+
+    // 绝对保底：若用户聚焦展开了某个标的，但该标的因未被聚合等原因缺失，自动动态补入该标的行，确保 100% 展开抽屉
+    if (expSym && !sorted.some(r => r.symbol.toUpperCase() === expSym || r.chartSymbol.toUpperCase() === expSym)) {
+      sorted.push({
+        symbol: expSym,
+        name: expSym,
+        chartSymbol: expSym,
+        price: 100,
+        changePercent: 0,
+        tradFiClose: 100,
+        priceDiff: 0,
+        premiumPct: 0,
+        volume24h: 10000000,
+        netFlow: 0,
+        buyRatio: 50,
+        sellRatio: 50,
+        openInterest: 10000000,
+        _priceDir: 'flat',
+        raw: null,
+        isCrypto: !isStocks
+      });
+    }
 
     const maxAbsFlow = Math.max(1, ...sorted.map(r => Math.abs(Number(r.netFlow) || 0)));
     const maxVol = Math.max(1, ...sorted.map(r => Number(r.volume24h) || 0));
