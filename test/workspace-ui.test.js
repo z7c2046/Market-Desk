@@ -1735,11 +1735,11 @@ test('Crypto Workspace: Sankey distribution, 4 scoped KPIs, 2-column whale-posit
   tradfiAggLong.click();
   await tick();
   const tradfiLongTop = [...detailPanel.querySelectorAll('.cw-agg-positions-table .cw-asset-sym')].map(el => el.textContent.trim());
-  assert.deepEqual(tradfiLongTop.slice(0, 3), ['NVDA', 'SPY', 'MSTR'], 'TradFi 多仓 desc puts NVDA ($32.6M) > SPY ($28.9M) > MSTR ($22.5M)');
+  assert.deepEqual(tradfiLongTop.slice(0, 3), ['NVDA', 'SPY', 'MU'], 'TradFi 多仓 desc puts NVDA ($41M) > SPY ($28.9M) > MU ($24.1M)');
   tradfiAggShort.click();
   await tick();
   const tradfiShortTop = [...detailPanel.querySelectorAll('.cw-agg-positions-table .cw-asset-sym')].map(el => el.textContent.trim());
-  assert.deepEqual(tradfiShortTop.slice(0, 3), ['QQQ', 'TSLA', 'AAPL'], 'TradFi 空仓 desc puts QQQ ($21.4M) > TSLA ($12.8M) > AAPL ($12.4M)');
+  assert.deepEqual(tradfiShortTop.slice(0, 3), ['MU', 'QQQ', 'TSLA'], 'TradFi 空仓 desc puts MU ($38.6M) > QQQ ($21.4M) > TSLA ($12.8M)');
 
   const stylesCss = await fs.readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
   assert.match(stylesCss, /\.cw-sk-pulse-glow,\s*\.cw-sk-pulse-beam\s*\{[^}]*stroke-dasharray:/, 'Pulse glow and beam share dashed packet geometry');
@@ -2633,7 +2633,7 @@ test('Crypto Workspace: live HIP-3 (xyz) TradFi mode enables Top N, Custom Walle
   assert.equal(lastTopNUrl.searchParams.get('category'), 'stocks');
   assert.equal(lastTopNUrl.searchParams.get('topN'), '16');
   assert.match(ui.w.document.querySelector('#cw-flow-title').textContent, /TradFi · 巨鲸持仓分布/);
-  assert.equal(ui.w.document.querySelectorAll('.cw-wallet-row').length, 3, '3rd HIP-3 xyz whale appears for Top 16');
+  assert.equal(ui.w.document.querySelectorAll('.cw-wallet-row').length, 12, '9 curated institutional whales + 3 discovered HIP-3 xyz whales appear for Top 16');
 
   // Add custom wallet while on TradFi -> stays on TradFi & passes category=stocks
   ui.w.document.querySelector('.cw-custom-btn').click();

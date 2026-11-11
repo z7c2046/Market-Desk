@@ -330,6 +330,34 @@ export function computeWhaleSankeyGraph({
     }
   }
 
+  // Guarantee active pulse wallets are included so live trade animation is visible
+  if (pulseKeys) {
+    const pulseWalletKeys = new Set();
+    const pKeys = (typeof pulseKeys.keys === 'function')
+      ? pulseKeys.keys()
+      : (typeof pulseKeys.values === 'function' ? pulseKeys.values() : []);
+    for (const k of pKeys) {
+      const wKey = String(k).split('::')[0];
+      if (wKey) pulseWalletKeys.add(wKey);
+    }
+    for (const pKey of pulseWalletKeys) {
+      if (!displayWallets.some(w => w.walletKey === pKey)) {
+        const picked = candidates.find(w => w.walletKey === pKey);
+        if (picked) {
+          if (displayWallets.length >= maxWallets) {
+            let replaceIdx = displayWallets.length - 1;
+            if (displayWallets[replaceIdx].walletKey === selectedWalletKey && replaceIdx > 0) {
+              replaceIdx--;
+            }
+            displayWallets[replaceIdx] = picked;
+          } else {
+            displayWallets.push(picked);
+          }
+        }
+      }
+    }
+  }
+
   // Aggregate asset totals across displayed wallets
   const assetAggregate = new Map();
   for (const w of displayWallets) {

@@ -317,7 +317,7 @@ export const CURATED_STOCK_WHALES = [
     ]
   },
   {
-    address: '0x9e5c467a90f055627685601c238b16c1724f8d55',
+    address: '0x9c45c1a704e6c981258671239845ef208bc28d55',
     name: 'NVDA / 半导体高频波段巨鲸',
     tag: '高胜率波段大户',
     avatar: '🎯',

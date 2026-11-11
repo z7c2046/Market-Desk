@@ -1600,57 +1600,39 @@ createApp({ setup() {
     isLive: false,
     source: 'sample-static',
     aggregate: {
-      totalTrackedWhales: 7,
-      totalEquity: 170980000,
-      totalOI: 210200000,
-      totalLongNotional: 133900000,
-      totalShortNotional: 76300000,
-      longRatio: 63.7,
-      shortRatio: 36.3,
-      sentiment: '美股巨鲸显著看多 BULLISH',
+      totalTrackedWhales: 9,
+      totalEquity: 244980000,
+      totalOI: 299700000,
+      totalLongNotional: 171400000,
+      totalShortNotional: 128300000,
+      longRatio: 57.2,
+      shortRatio: 42.8,
+      sentiment: '美股巨鲸温和看多 BULLISH',
       sentimentColor: 'long',
       topCoins: [
-        { coin: 'NVDA', totalNtl: 43800000, longNtl: 32600000, shortNtl: 11200000, longPct: 74.4, shortPct: 25.6 },
+        { coin: 'NVDA', totalNtl: 52160000, longNtl: 40960000, shortNtl: 11200000, longPct: 78.5, shortPct: 21.5 },
+        { coin: 'MU', totalNtl: 62700000, longNtl: 24080000, shortNtl: 38620000, longPct: 38.4, shortPct: 61.6 },
         { coin: 'SPY', totalNtl: 28900000, longNtl: 28900000, shortNtl: 0, longPct: 100, shortPct: 0 },
         { coin: 'MSTR', totalNtl: 22500000, longNtl: 22500000, shortNtl: 0, longPct: 100, shortPct: 0 },
-        { coin: 'TSLA', totalNtl: 22400000, longNtl: 9600000, shortNtl: 12800000, longPct: 42.9, shortPct: 57.1 },
-        { coin: 'QQQ', totalNtl: 21400000, longNtl: 0, shortNtl: 21400000, longPct: 0, shortPct: 100 }
+        { coin: 'TSLA', totalNtl: 22400000, longNtl: 9600000, shortNtl: 12800000, longPct: 42.9, shortPct: 57.1 }
       ]
     },
     whales: [
       {
-        address: '0x7a250d5630b4cf539739df2c5dacb4c659f2488d',
-        shortAddress: '0x7a25...488d',
-        name: 'HL 科技股阿尔法对冲基金',
-        tag: '科技股对冲基金',
-        avatar: '🏛️',
-        accountValue: 32450000,
-        totalNtlPos: 39700000,
-        netExposure: 14100000,
-        netBiasLabel: '净多',
-        longNotional: 26900000,
-        shortNotional: 12800000,
+        address: '0x8c5b91a27e314f3b723508194b61a3f591244e82',
+        shortAddress: '0x8c5b...4e82',
+        name: 'HL 存储半导体先锋对冲基金',
+        tag: '存储芯片对冲巨鲸',
+        avatar: '💾',
+        accountValue: 42800000,
+        totalNtlPos: 51000000,
+        netExposure: -51000000,
+        netBiasLabel: '净空',
+        longNotional: 0,
+        shortNotional: 51000000,
         positions: [
-          { coin: 'NVDA', chartSymbol: 'NVDA', side: 'LONG', sideLabel: '做多', isLong: true, size: 123905, entryPx: 146.20, markPx: 148.50, positionValue: 18400000, unrealizedPnl: 285200, roePct: 7.8, leverage: 5, leverageType: '全仓', leverageLabel: '5x 全仓', liquidationPx: 118.50, liqDistancePct: 20.2 },
-          { coin: 'TSLA', chartSymbol: 'TSLA', side: 'SHORT', sideLabel: '做空', isLong: false, size: 50874, entryPx: 255.40, markPx: 251.60, positionValue: 12800000, unrealizedPnl: 193320, roePct: 4.5, leverage: 3, leverageType: '全仓', leverageLabel: '3x 全仓', liquidationPx: 330.00, liqDistancePct: 31.2 },
-          { coin: 'MSFT', chartSymbol: 'MSFT', side: 'LONG', sideLabel: '做多', isLong: true, size: 20437, entryPx: 418.20, markPx: 415.90, positionValue: 8500000, unrealizedPnl: -47005, roePct: -2.8, leverage: 5, leverageType: '全仓', leverageLabel: '5x 全仓', liquidationPx: 335.00, liqDistancePct: 19.5 }
-        ]
-      },
-      {
-        address: '0x1b32d2df95c474dcfc9dddfd88f6153a77484dfc',
-        shortAddress: '0x1b32...4dfc',
-        name: '微策略 MSTR 杠杆博弈巨鲸',
-        tag: '单标的高倍多头',
-        avatar: '⚡',
-        accountValue: 24180000,
-        totalNtlPos: 33700000,
-        netExposure: 33700000,
-        netBiasLabel: '净多',
-        longNotional: 33700000,
-        shortNotional: 0,
-        positions: [
-          { coin: 'MSTR', chartSymbol: 'MSTR', side: 'LONG', sideLabel: '做多', isLong: true, size: 94458, entryPx: 228.50, markPx: 238.20, positionValue: 22500000, unrealizedPnl: 916245, roePct: 40.7, leverage: 10, leverageType: '全仓', leverageLabel: '10x 全仓', liquidationPx: 208.00, liqDistancePct: 12.7 },
-          { coin: 'COIN', chartSymbol: 'COIN', side: 'LONG', sideLabel: '做多', isLong: true, size: 52385, entryPx: 210.40, markPx: 213.80, positionValue: 11200000, unrealizedPnl: 178110, roePct: 7.9, leverage: 5, leverageType: '全仓', leverageLabel: '5x 全仓', liquidationPx: 172.50, liqDistancePct: 19.3 }
+          { coin: 'MU', chartSymbol: 'MU', side: 'SHORT', sideLabel: '做空', isLong: false, size: 56455, entryPx: 715.00, markPx: 684.05, positionValue: 38618000, unrealizedPnl: 1747300, roePct: 22.6, leverage: 5, leverageType: '全仓', leverageLabel: '5x 全仓', liquidationPx: 850.00, liqDistancePct: 24.3 },
+          { coin: 'WDC', chartSymbol: 'WDC', side: 'SHORT', sideLabel: '做空', isLong: false, size: 45000, entryPx: 282.00, markPx: 275.22, positionValue: 12384900, unrealizedPnl: 305100, roePct: 9.8, leverage: 4, leverageType: '全仓', leverageLabel: '4x 全仓', liquidationPx: 345.00, liqDistancePct: 25.4 }
         ]
       },
       {
@@ -1671,20 +1653,56 @@ createApp({ setup() {
         ]
       },
       {
+        address: '0x7a250d5630b4cf539739df2c5dacb4c659f2488d',
+        shortAddress: '0x7a25...488d',
+        name: 'HL 科技股阿尔法对冲基金',
+        tag: '科技股对冲基金',
+        avatar: '🏛️',
+        accountValue: 32450000,
+        totalNtlPos: 39700000,
+        netExposure: 14100000,
+        netBiasLabel: '净多',
+        longNotional: 26900000,
+        shortNotional: 12800000,
+        positions: [
+          { coin: 'NVDA', chartSymbol: 'NVDA', side: 'LONG', sideLabel: '做多', isLong: true, size: 123905, entryPx: 146.20, markPx: 148.50, positionValue: 18400000, unrealizedPnl: 285200, roePct: 7.8, leverage: 5, leverageType: '全仓', leverageLabel: '5x 全仓', liquidationPx: 118.50, liqDistancePct: 20.2 },
+          { coin: 'TSLA', chartSymbol: 'TSLA', side: 'SHORT', sideLabel: '做空', isLong: false, size: 50874, entryPx: 255.40, markPx: 251.60, positionValue: 12800000, unrealizedPnl: 193320, roePct: 4.5, leverage: 3, leverageType: '全仓', leverageLabel: '3x 全仓', liquidationPx: 330.00, liqDistancePct: 31.2 },
+          { coin: 'MSFT', chartSymbol: 'MSFT', side: 'LONG', sideLabel: '做多', isLong: true, size: 20437, entryPx: 418.20, markPx: 415.90, positionValue: 8500000, unrealizedPnl: -47005, roePct: -2.8, leverage: 5, leverageType: '全仓', leverageLabel: '5x 全仓', liquidationPx: 335.00, liqDistancePct: 19.5 }
+        ]
+      },
+      {
         address: '0x9e5c467a90f055627685601c238b16c1724f8d55',
         shortAddress: '0x9e5c...8d55',
-        name: 'NVDA / 半导体高频波段巨鲸',
+        name: '美光与半导体波段巨鲸',
         tag: '高胜率波段大户',
         avatar: '🎯',
-        accountValue: 16850000,
-        totalNtlPos: 20000000,
-        netExposure: 8400000,
+        accountValue: 31200000,
+        totalNtlPos: 38500000,
+        netExposure: 26380000,
         netBiasLabel: '净多',
-        longNotional: 14200000,
-        shortNotional: 5800000,
+        longNotional: 32440000,
+        shortNotional: 6060000,
         positions: [
-          { coin: 'NVDA', chartSymbol: 'NVDA', side: 'LONG', sideLabel: '做多', isLong: true, size: 95622, entryPx: 144.10, markPx: 148.50, positionValue: 14200000, unrealizedPnl: 420740, roePct: 23.7, leverage: 8, leverageType: '全仓', leverageLabel: '8x 全仓', liquidationPx: 131.00, liqDistancePct: 11.8 },
-          { coin: 'AMD', chartSymbol: 'AMD', side: 'SHORT', sideLabel: '做空', isLong: false, size: 37858, entryPx: 155.80, markPx: 153.20, positionValue: 5800000, unrealizedPnl: 98430, roePct: 6.8, leverage: 4, leverageType: '全仓', leverageLabel: '4x 全仓', liquidationPx: 190.00, liqDistancePct: 24.0 }
+          { coin: 'MU', chartSymbol: 'MU', side: 'LONG', sideLabel: '做多', isLong: true, size: 35200, entryPx: 675.00, markPx: 684.05, positionValue: 24078000, unrealizedPnl: 318560, roePct: 6.6, leverage: 5, leverageType: '全仓', leverageLabel: '5x 全仓', liquidationPx: 540.00, liqDistancePct: 21.1 },
+          { coin: 'NVDA', chartSymbol: 'NVDA', side: 'LONG', sideLabel: '做多', isLong: true, size: 45600, entryPx: 180.20, markPx: 183.36, positionValue: 8361216, unrealizedPnl: 144170, roePct: 8.6, leverage: 5, leverageType: '全仓', leverageLabel: '5x 全仓', liquidationPx: 145.00, liqDistancePct: 20.9 },
+          { coin: 'AMD', chartSymbol: 'AMD', side: 'SHORT', sideLabel: '做空', isLong: false, size: 14100, entryPx: 435.00, markPx: 429.99, positionValue: 6062859, unrealizedPnl: 70641, roePct: 4.6, leverage: 4, leverageType: '全仓', leverageLabel: '4x 全仓', liquidationPx: 530.00, liqDistancePct: 23.3 }
+        ]
+      },
+      {
+        address: '0x1b32d2df95c474dcfc9dddfd88f6153a77484dfc',
+        shortAddress: '0x1b32...4dfc',
+        name: '微策略 MSTR 杠杆博弈巨鲸',
+        tag: '单标的高倍多头',
+        avatar: '⚡',
+        accountValue: 24180000,
+        totalNtlPos: 33700000,
+        netExposure: 33700000,
+        netBiasLabel: '净多',
+        longNotional: 33700000,
+        shortNotional: 0,
+        positions: [
+          { coin: 'MSTR', chartSymbol: 'MSTR', side: 'LONG', sideLabel: '做多', isLong: true, size: 94458, entryPx: 228.50, markPx: 238.20, positionValue: 22500000, unrealizedPnl: 916245, roePct: 40.7, leverage: 10, leverageType: '全仓', leverageLabel: '10x 全仓', liquidationPx: 208.00, liqDistancePct: 12.7 },
+          { coin: 'COIN', chartSymbol: 'COIN', side: 'LONG', sideLabel: '做多', isLong: true, size: 52385, entryPx: 210.40, markPx: 213.80, positionValue: 11200000, unrealizedPnl: 178110, roePct: 7.9, leverage: 5, leverageType: '全仓', leverageLabel: '5x 全仓', liquidationPx: 172.50, liqDistancePct: 19.3 }
         ]
       },
       {
@@ -1706,20 +1724,20 @@ createApp({ setup() {
         ]
       },
       {
-        address: '0x524cab2ec69124574082676e6f654a18df49a048',
-        shortAddress: '0x524c...a048',
-        name: 'Coinbase & 泛代币化资产先锋',
-        tag: '币股联动量化',
-        avatar: '🚀',
-        accountValue: 11400000,
-        totalNtlPos: 14100000,
-        netExposure: 14100000,
+        address: '0x9c45c1a704e6c981258671239845ef208bc28d55',
+        shortAddress: '0x9c45...8d55',
+        name: 'NVDA / 半导体高频波段巨鲸',
+        tag: '高胜率波段大户',
+        avatar: '🎯',
+        accountValue: 16850000,
+        totalNtlPos: 20000000,
+        netExposure: 8400000,
         netBiasLabel: '净多',
-        longNotional: 14100000,
-        shortNotional: 0,
+        longNotional: 14200000,
+        shortNotional: 5800000,
         positions: [
-          { coin: 'COIN', chartSymbol: 'COIN', side: 'LONG', sideLabel: '做多', isLong: true, size: 44434, entryPx: 209.60, markPx: 213.80, positionValue: 9500000, unrealizedPnl: 186620, roePct: 15.7, leverage: 8, leverageType: '全仓', leverageLabel: '8x 全仓', liquidationPx: 185.00, liqDistancePct: 13.5 },
-          { coin: 'PLTR', chartSymbol: 'PLTR', side: 'LONG', sideLabel: '做多', isLong: true, size: 102678, entryPx: 43.20, markPx: 44.80, positionValue: 4600000, unrealizedPnl: 164285, roePct: 17.9, leverage: 5, leverageType: '全仓', leverageLabel: '5x 全仓', liquidationPx: 35.00, liqDistancePct: 21.9 }
+          { coin: 'NVDA', chartSymbol: 'NVDA', side: 'LONG', sideLabel: '做多', isLong: true, size: 95622, entryPx: 144.10, markPx: 148.50, positionValue: 14200000, unrealizedPnl: 420740, roePct: 23.7, leverage: 8, leverageType: '全仓', leverageLabel: '8x 全仓', liquidationPx: 131.00, liqDistancePct: 11.8 },
+          { coin: 'AMD', chartSymbol: 'AMD', side: 'SHORT', sideLabel: '做空', isLong: false, size: 37858, entryPx: 155.80, markPx: 153.20, positionValue: 5800000, unrealizedPnl: 98430, roePct: 6.8, leverage: 4, leverageType: '全仓', leverageLabel: '4x 全仓', liquidationPx: 190.00, liqDistancePct: 24.0 }
         ]
       },
       {
@@ -1737,6 +1755,23 @@ createApp({ setup() {
         positions: [
           { coin: 'NVDA', chartSymbol: 'NVDA', side: 'SHORT', sideLabel: '做空', isLong: false, size: 75420, entryPx: 151.20, markPx: 148.50, positionValue: 11200000, unrealizedPnl: 203634, roePct: 10.9, leverage: 6, leverageType: '全仓', leverageLabel: '6x 全仓', liquidationPx: 174.00, liqDistancePct: 17.2 },
           { coin: 'META', chartSymbol: 'META', side: 'SHORT', sideLabel: '做空', isLong: false, size: 13062, entryPx: 572.00, markPx: 566.50, positionValue: 7400000, unrealizedPnl: 71840, roePct: 4.9, leverage: 5, leverageType: '全仓', leverageLabel: '5x 全仓', liquidationPx: 670.00, liqDistancePct: 18.3 }
+        ]
+      },
+      {
+        address: '0x524cab2ec69124574082676e6f654a18df49a048',
+        shortAddress: '0x524c...a048',
+        name: 'Coinbase & 泛代币化资产先锋',
+        tag: '币股联动量化',
+        avatar: '🚀',
+        accountValue: 11400000,
+        totalNtlPos: 14100000,
+        netExposure: 14100000,
+        netBiasLabel: '净多',
+        longNotional: 14100000,
+        shortNotional: 0,
+        positions: [
+          { coin: 'COIN', chartSymbol: 'COIN', side: 'LONG', sideLabel: '做多', isLong: true, size: 44434, entryPx: 209.60, markPx: 213.80, positionValue: 9500000, unrealizedPnl: 186620, roePct: 15.7, leverage: 8, leverageType: '全仓', leverageLabel: '8x 全仓', liquidationPx: 185.00, liqDistancePct: 13.5 },
+          { coin: 'PLTR', chartSymbol: 'PLTR', side: 'LONG', sideLabel: '做多', isLong: true, size: 102678, entryPx: 43.20, markPx: 44.80, positionValue: 4600000, unrealizedPnl: 164285, roePct: 17.9, leverage: 5, leverageType: '全仓', leverageLabel: '5x 全仓', liquidationPx: 35.00, liqDistancePct: 21.9 }
         ]
       }
     ],
@@ -1772,21 +1807,6 @@ createApp({ setup() {
     return lastWhaleSyncByCat[cat] || '';
   });
 
-  const whaleAggregate = computed(() => {
-    return activeWhaleDataset.value?.aggregate || {
-      totalTrackedWhales: 0,
-      totalEquity: 0,
-      totalOI: 0,
-      totalLongNotional: 0,
-      totalShortNotional: 0,
-      longRatio: 50,
-      shortRatio: 50,
-      sentiment: '多空均衡',
-      sentimentColor: 'neutral',
-      topCoins: []
-    };
-  });
-
   const customWalletMap = computed(() => {
     const map = new Map();
     for (const c of customWallets.value) {
@@ -1796,11 +1816,94 @@ createApp({ setup() {
   });
 
   const allWhales = computed(() => {
+    const isSample = isWhaleDatasetSample.value;
+    const cMap = customWalletMap.value;
+
+    if (whaleCategory.value === 'stocks') {
+      // 1. 机构基石钱包（9 核心公开机构）
+      const curatedBaseList = (DEFAULT_STOCK_WHALES_PAYLOAD.whales || []).map(w => ({
+        ...w,
+        isCurated: true,
+        sourceType: 'curated',
+        sourceLabel: '核心'
+      }));
+
+      const activeRawWhales = activeWhaleDataset.value?.whales || [];
+
+      // 若处于纯离线/样本模式，直接呈现这 9 个核心机构
+      if (isSample) {
+        return disambiguateWallets(curatedBaseList);
+      }
+
+      // 实时扫描模式下：
+      // (1) 9 个核心机构常驻基石：如果链上有机构地址的真实仓位，更新其实时状态
+      const curatedMap = new Map();
+      for (const cw of curatedBaseList) {
+        curatedMap.set(String(cw.address).toLowerCase(), { ...cw });
+      }
+
+      // (2) 实时扫描合约巨鲸轨：从扫描池中筛选非机构、非自选且有真实合约持仓的账户
+      // 严格按合约名义持仓量 (totalNtlPos) 从高到低降序排序，精选 Top 5 合约巨鲸
+      const liveCandidateWhales = [];
+      for (const w of activeRawWhales) {
+        const low = String(w.address || '').toLowerCase();
+        if (curatedMap.has(low)) {
+          if (w.positions && w.positions.length > 0) {
+            curatedMap.set(low, {
+              ...curatedMap.get(low),
+              ...w,
+              isCurated: true,
+              sourceType: 'curated',
+              sourceLabel: '核心'
+            });
+          }
+          continue;
+        }
+        if (cMap.has(low) || w.isCustom) continue;
+        if (w.positions && w.positions.length > 0 && (Number(w.totalNtlPos) > 0 || Number(w.accountValue) > 0)) {
+          liveCandidateWhales.push(w);
+        }
+      }
+
+      // 严格按合约持仓量降序排列，取持仓最庞大的 Top 5
+      liveCandidateWhales.sort((a, b) => (Number(b.totalNtlPos) || 0) - (Number(a.totalNtlPos) || 0));
+      const top5LiveWhales = liveCandidateWhales.slice(0, 5).map(w => ({
+        ...w,
+        isCurated: false,
+        sourceType: 'leaderboard',
+        sourceLabel: '榜单'
+      }));
+
+      // (3) 自选钱包
+      const customList = [];
+      for (const c of customWallets.value) {
+        const low = String(c.address).toLowerCase();
+        const matched = activeRawWhales.find(w => String(w.address || '').toLowerCase() === low);
+        if (matched) {
+          customList.push({
+            ...matched,
+            name: c.label || matched.name,
+            isCustom: true,
+            sourceType: 'custom',
+            sourceLabel: '自选'
+          });
+        }
+      }
+
+      // (4) 组合：9 个公开机构基石 + Top 5 实时扫描真实合约巨鲸 + 用户自选
+      const combined = [...curatedMap.values(), ...top5LiveWhales, ...customList];
+
+      // 统一按合约持仓总量 (totalNtlPos) 从高到低降序排列
+      combined.sort((a, b) => (Number(b.totalNtlPos) || 0) - (Number(a.totalNtlPos) || 0));
+
+      return disambiguateWallets(combined);
+    }
+
+    // crypto 模式下
     const base = disambiguateWallets(activeWhaleDataset.value?.whales || []);
-    if (isWhaleDatasetSample.value) {
+    if (isSample) {
       return base;
     }
-    const cMap = customWalletMap.value;
     return base.map(w => {
       const lowAddr = String(w.address || '').toLowerCase();
       const customEntry = cMap.get(lowAddr);
@@ -1818,6 +1921,54 @@ createApp({ setup() {
         sourceLabel
       };
     });
+  });
+
+  const whaleAggregate = computed(() => {
+    if (whaleCategory.value === 'stocks') {
+      const list = allWhales.value;
+      if (list.length > 0) {
+        let totalEquity = 0;
+        let totalLongNotional = 0;
+        let totalShortNotional = 0;
+        for (const w of list) {
+          totalEquity += Number(w.accountValue) || 0;
+          for (const p of (w.positions || [])) {
+            const val = Number(p.positionValue) || 0;
+            if (p.isLong) totalLongNotional += val;
+            else totalShortNotional += val;
+          }
+        }
+        const totalOI = totalLongNotional + totalShortNotional;
+        const longRatio = totalOI > 0 ? Number(((totalLongNotional / totalOI) * 100).toFixed(1)) : 50;
+        const shortRatio = totalOI > 0 ? Number((100 - longRatio).toFixed(1)) : 50;
+        const sentiment = longRatio >= 60 ? '美股巨鲸显著看多 BULLISH' : longRatio <= 40 ? '美股巨鲸显著看空 BEARISH' : '美股巨鲸多空均衡 NEUTRAL';
+        const sentimentColor = longRatio >= 55 ? 'long' : longRatio <= 45 ? 'short' : 'neutral';
+        return {
+          totalTrackedWhales: list.length,
+          totalEquity,
+          totalOI,
+          totalLongNotional,
+          totalShortNotional,
+          longRatio,
+          shortRatio,
+          sentiment,
+          sentimentColor,
+          topCoins: activeWhaleDataset.value?.aggregate?.topCoins || []
+        };
+      }
+    }
+    return activeWhaleDataset.value?.aggregate || {
+      totalTrackedWhales: 0,
+      totalEquity: 0,
+      totalOI: 0,
+      totalLongNotional: 0,
+      totalShortNotional: 0,
+      longRatio: 50,
+      shortRatio: 50,
+      sentiment: '多空均衡',
+      sentimentColor: 'neutral',
+      topCoins: []
+    };
   });
 
   const selectedWhaleKey = computed(() => selectedWhaleKeys[whaleCategory.value] || '');
