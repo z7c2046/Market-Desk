@@ -1170,12 +1170,12 @@ createApp({ setup() {
   ];
 
   const sankeySkeletonAssets = [
-    { y: 57,  middleY: 76,  h: 38, symWidth: 48, lblWidth: 88, valWidth: 58, isOther: false },
-    { y: 123, middleY: 140, h: 34, symWidth: 54, lblWidth: 95, valWidth: 62, isOther: false },
-    { y: 190, middleY: 204, h: 28, symWidth: 50, lblWidth: 78, valWidth: 54, isOther: false },
-    { y: 256, middleY: 268, h: 24, symWidth: 46, lblWidth: 84, valWidth: 56, isOther: false },
-    { y: 321, middleY: 332, h: 22, symWidth: 52, lblWidth: 92, valWidth: 60, isOther: false },
-    { y: 385, middleY: 396, h: 22, symWidth: 42, lblWidth: 70, valWidth: 66, isOther: true }
+    { y: 57,  middleY: 76,  h: 38, symWidth: 48, lblWidth: 58, volWidth: 48, valWidth: 58, isOther: false },
+    { y: 123, middleY: 140, h: 34, symWidth: 54, lblWidth: 46, volWidth: 48, valWidth: 62, isOther: false },
+    { y: 190, middleY: 204, h: 28, symWidth: 50, lblWidth: 64, volWidth: 48, valWidth: 54, isOther: false },
+    { y: 256, middleY: 268, h: 24, symWidth: 46, lblWidth: 52, volWidth: 48, valWidth: 56, isOther: false },
+    { y: 321, middleY: 332, h: 22, symWidth: 52, lblWidth: 68, volWidth: 48, valWidth: 60, isOther: false },
+    { y: 385, middleY: 396, h: 22, symWidth: 42, lblWidth: 70, volWidth: 0,  valWidth: 66, isOther: true }
   ];
 
   const sankeySkeletonRibbons = [

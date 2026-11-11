@@ -1552,7 +1552,8 @@ test('Crypto Workspace: Sankey distribution, 4 scoped KPIs, 2-column whale-posit
   const walletNodes = sankeySvg.querySelectorAll('.cw-sk-wallet-node');
   const assetNodes = sankeySvg.querySelectorAll('.cw-sk-asset-node');
   const ribbonPaths = sankeySvg.querySelectorAll('.cw-sk-ribbon');
-  assert.match(sankeySvg.textContent, /持仓标的 · 按链上成交量/);
+  assert.match(sankeySvg.textContent, /持仓标的/);
+  assert.match(sankeySvg.textContent, /按链上成交量/);
   assert.equal(walletNodes.length, 2, '2 crypto whale wallet nodes in SVG');
   assert.equal(walletNodes[0].querySelector('.cw-sk-avatar-txt').textContent.trim(), '01', 'Numeric monospace badge replaces emoji');
   assert.deepEqual(
@@ -1560,7 +1561,7 @@ test('Crypto Workspace: Sankey distribution, 4 scoped KPIs, 2-column whale-posit
     ['BTC', 'ETH', 'SOL'],
     'Crypto Sankey assets sort top-to-bottom by 24h on-chain volume (BTC > ETH > SOL) despite ETH holding highest whale OI'
   );
-  assert.match(assetNodes[0].querySelector('.cw-sk-asset-lbl').textContent, /量 \$/);
+  assert.match(assetNodes[0].querySelector('.cw-sk-asset-vol').textContent, /量 \$/);
   assert.equal(ribbonPaths.length, 4, '4 conservation-strict position ribbons in SVG');
   for (const rPath of ribbonPaths) {
     const dAttr = rPath.getAttribute('d') || '';

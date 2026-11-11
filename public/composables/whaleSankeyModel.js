@@ -624,6 +624,9 @@ export function computeWhaleSankeyGraph({
     const middleY = slot.slotMiddleY;
     const volVal = a.isOther ? 0 : (a.onchainVolume || 0);
     const formattedVolume = volVal > 0 ? formatWhaleCompactUsd(volVal) : '';
+    const cleanLabel = a.isOther
+      ? a.label
+      : (a.label && a.label !== a.symbol ? a.label : '');
     const subLabel = formattedVolume
       ? (a.label && a.label !== a.symbol ? `${a.label} · 量 ${formattedVolume}` : `量 ${formattedVolume}`)
       : a.label;
@@ -632,6 +635,7 @@ export function computeWhaleSankeyGraph({
       symbol: a.symbol,
       displaySymbol: a.isOther ? '其他' : a.symbol,
       label: a.label,
+      cleanLabel,
       volumeVal: volVal,
       formattedVolume,
       subLabel,

@@ -18562,6 +18562,12 @@ html.dark .cw-sk-wallet-node.is-selected .cw-sk-wallet-outline {
   fill: var(--text-muted);
 }
 
+.cw-sk-asset-vol {
+  font-size: 9.5px;
+  font-weight: 500;
+  fill: var(--text-muted);
+}
+
 .cw-sk-asset-val {
   font-size: 12px;
   font-weight: 600;

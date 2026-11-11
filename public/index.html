@@ -1663,7 +1663,8 @@
           <!-- 列头引导标题 -->
           <text x="15" y="25" class="cw-sk-col-hdr">巨鲸钱包 · 本市场持仓</text>
           <text x="626" y="25" class="cw-sk-col-hdr" text-anchor="middle">钱包 → 持仓标的</text>
-          <text x="1036" y="25" class="cw-sk-col-hdr">持仓标的 · 按链上成交量</text>
+          <text x="1036" y="25" class="cw-sk-col-hdr">持仓标的</text>
+          <text x="1190" y="25" class="cw-sk-col-hdr" text-anchor="end">按链上成交量</text>
           <text x="1266" y="25" class="cw-sk-col-hdr" text-anchor="end">标的总持仓</text>
           <line x1="14" y1="39" x2="1266" y2="39" class="cw-sk-hdr-line" />
 
@@ -1697,6 +1698,7 @@
               <rect class="cw-sk-asset-rail" x="1020" :y="a.y" width="5" :height="a.h" rx="1.5" />
               <rect class="cw-sk-text-pill" x="1036" :y="a.middleY - 14" :width="a.symWidth" height="13" rx="3" />
               <rect class="cw-sk-text-pill" x="1036" :y="a.middleY + 4" :width="a.lblWidth" height="9" rx="2" />
+              <rect v-if="!a.isOther && a.volWidth" class="cw-sk-text-pill" :x="1190 - a.volWidth" :y="a.middleY + 4" :width="a.volWidth" height="9" rx="2" />
               <rect class="cw-sk-text-pill" :x="1266 - a.valWidth" :y="a.middleY - 13" :width="a.valWidth" height="12" rx="3" />
               <rect class="cw-sk-mix-track" x="1218" :y="a.middleY + 5" width="48" height="3" rx="1.5" />
             </g>
@@ -2071,7 +2073,8 @@
           <!-- 列头引导标题 -->
           <text x="15" y="25" class="cw-sk-col-hdr">巨鲸钱包 · 本市场持仓</text>
           <text x="626" y="25" class="cw-sk-col-hdr" text-anchor="middle">钱包 → 持仓标的</text>
-          <text x="1036" y="25" class="cw-sk-col-hdr">持仓标的 · 按链上成交量</text>
+          <text x="1036" y="25" class="cw-sk-col-hdr">持仓标的</text>
+          <text x="1190" y="25" class="cw-sk-col-hdr" text-anchor="end">按链上成交量</text>
           <text x="1266" y="25" class="cw-sk-col-hdr" text-anchor="end">标的总持仓</text>
           <line x1="14" y1="39" x2="1266" y2="39" class="cw-sk-hdr-line" />
 
@@ -2166,7 +2169,8 @@
             >
               <rect class="cw-sk-asset-rail" x="1020" :y="aNode.y" width="5" :height="Math.max(2, aNode.h)" rx="1.5" />
               <text class="cw-sk-asset-sym numeric" x="1036" :y="aNode.middleY - 2">{{ aNode.displaySymbol }}</text>
-              <text class="cw-sk-asset-lbl" x="1036" :y="aNode.middleY + 12">{{ aNode.subLabel || aNode.label }}</text>
+              <text class="cw-sk-asset-lbl" x="1036" :y="aNode.middleY + 12">{{ aNode.cleanLabel || (aNode.isOther ? aNode.label : '') }}</text>
+              <text v-if="aNode.formattedVolume" class="cw-sk-asset-vol numeric" x="1190" :y="aNode.middleY + 12" text-anchor="end">量 {{ aNode.formattedVolume }}</text>
               <text class="cw-sk-asset-val numeric" x="1266" :y="aNode.middleY - 1" text-anchor="end">{{ aNode.formattedVal }}</text>
               <text v-if="aNode.selectedContribText" class="cw-sk-asset-contrib numeric" x="1266" :y="aNode.middleY + 13" text-anchor="end">{{ aNode.selectedContribText }}</text>
               <rect class="cw-sk-mix-track" x="1218" :y="aNode.middleY + (aNode.selectedContribText ? 22 : 10)" width="48" height="2.5" rx="1.2" />
