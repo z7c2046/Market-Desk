@@ -18209,26 +18209,52 @@ html.dark .cw-pos-wrap {
   margin-top: 2px;
 }
 
+/* 多空比例条状对比模块（做大做醒目，置于卡片主内容流内） */
+.cw-kpi-split-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  margin-top: 6px;
+  position: relative;
+  z-index: 2;
+}
+
 .cw-kpi-split-track {
-  position: absolute;
-  left: 14px;
-  right: 14px;
-  bottom: 8px;
-  height: 7px;
+  display: block;
+  width: 100%;
+  height: 8px;
   border-radius: 999px;
   background: var(--semantic-down, #f43f5e);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.28);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.32);
   overflow: hidden;
-  opacity: 0.92;
+  position: relative;
 }
 
 .cw-kpi-split-long {
   display: block;
   height: 100%;
-  border-radius: 999px;
+  border-radius: 999px 0 0 999px;
   background: var(--semantic-up, #10b981);
   box-shadow: inset 0 -1px 1px rgba(0, 0, 0, 0.18);
   transition: width 0.35s ease;
+}
+
+.cw-kpi-split-labels {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  padding: 0 1px;
+}
+
+.cw-kpi-split-lbl {
+  display: inline-flex;
+  align-items: center;
 }
 
 /* 多空净敞口卡片：右上角发散发光遮罩 (类似首页双联波动率指数) */
@@ -18236,7 +18262,6 @@ html.dark .cw-pos-wrap {
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  padding-bottom: 20px !important;
   transition: border-color 0.4s ease, box-shadow 0.4s ease;
 }
 
@@ -18281,10 +18306,10 @@ html:not(.dark) .cw-kpi-net-card.is-long-dominant::before {
   background: radial-gradient(circle at 75% 25%, rgba(16, 185, 129, 0.22) 0%, rgba(16, 185, 129, 0.08) 38%, rgba(16, 185, 129, 0) 70%);
 }
 
-.cw-kpi-net-card .cw-tel-meta,
-.cw-kpi-net-card .cw-kpi-split-track {
+.cw-kpi-net-card .cw-tel-meta {
   position: relative;
   z-index: 1;
+  width: 100%;
 }
 
 .cw-kpi-val-cluster {

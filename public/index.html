@@ -25,7 +25,7 @@
   display: none !important;
 }
 </style>
-<script defer src="/vendor/vue.js"></script><script defer src="/vendor/echarts.js"></script><script defer src="/vendor/lightweight-charts.standalone.js"></script><script type="module" src="/app.js?v=2.9.6"></script>
+<script defer src="/vendor/vue.js"></script><script defer src="/vendor/echarts.js"></script><script defer src="/vendor/lightweight-charts.standalone.js"></script><script type="module" src="/app.js?v=2.9.7"></script>
 </head><body><div id="app" v-cloak>
 <aside class="nav-rail desktop-only" aria-label="工作台主导航">
   <div class="rail-top">
@@ -1619,9 +1619,15 @@
             <span class="sk sk-pill" style="width: 58px; height: 18px; margin-left: 6px;"></span>
           </div>
           <span class="sk sk-small" style="width: 148px; height: 12px;"></span>
-        </div>
-        <div class="cw-kpi-split-track" aria-hidden="true">
-          <span class="sk" style="width: 100%; height: 100%;"></span>
+          <div class="cw-kpi-split-row" aria-hidden="true">
+            <div class="cw-kpi-split-track">
+              <span class="sk" style="width: 100%; height: 100%; border-radius: 999px;"></span>
+            </div>
+            <div class="cw-kpi-split-labels">
+              <span class="sk sk-small" style="width: 44px; height: 10px;"></span>
+              <span class="sk sk-small" style="width: 44px; height: 10px;"></span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -1980,9 +1986,17 @@
           <span class="cw-tel-sub font-mono">
             浮盈亏 {{ (sankeyKpiSummary.totalPnl >= 0 ? '+' : '-') + '$' + formatWhaleUsd(sankeyKpiSummary.totalPnl) }} · <template v-if="isWhaleDatasetSample">静态样本策略（非实盘流）</template><template v-else-if="sankeyKpiSummary.deltaCount > 0">本轮变动 {{ sankeyKpiSummary.deltaCount }} 笔</template><template v-else-if="sankeyKpiSummary.liveFillCount > 0">5m 实盘 {{ sankeyKpiSummary.liveFillCount }} 笔</template><template v-else>12H 成交 {{ sankeyKpiSummary.activityCount }} 条</template>
           </span>
-        </div>
-        <div class="cw-kpi-split-track" :title="'多空对比：多仓 ' + sankeyKpiSummary.longPct + '% / 空仓 ' + sankeyKpiSummary.shortPct + '%'" aria-hidden="true">
-          <i class="cw-kpi-split-long" :style="{ width: sankeyKpiSummary.longPct + '%' }"></i>
+
+          <!-- 红绿多空条状对比条：置于卡片主内容流内，做大做醒目 -->
+          <div class="cw-kpi-split-row" :title="'多空比例：做多 ' + sankeyKpiSummary.longPct + '% / 做空 ' + sankeyKpiSummary.shortPct + '%'">
+            <div class="cw-kpi-split-track" aria-hidden="true">
+              <i class="cw-kpi-split-long" :style="{ width: sankeyKpiSummary.longPct + '%' }"></i>
+            </div>
+            <div class="cw-kpi-split-labels font-mono">
+              <span class="cw-kpi-split-lbl text-pos">多 {{ sankeyKpiSummary.longPct }}%</span>
+              <span class="cw-kpi-split-lbl text-neg">{{ sankeyKpiSummary.shortPct }}% 空</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
