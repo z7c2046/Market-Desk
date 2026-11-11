@@ -2366,6 +2366,10 @@ createApp({ setup() {
     const longPct = Number(((longNotional / denom) * 100).toFixed(1));
     const shortPct = Number((100 - longPct).toFixed(1));
     const netExposure = longNotional - shortNotional;
+    const longShortRatio = shortNotional > 0
+      ? Number((longNotional / shortNotional).toFixed(2))
+      : (longNotional > 0 ? 99.9 : 1.0);
+    const longShortRatioText = `${longShortRatio}`;
     const totalPnl = list.reduce((s, w) => s + (Number(w.unrealizedPnl) || 0), 0) || Number(agg?.totalUnrealizedPnl) || 0;
     const coins = new Set();
     for (const w of list) {
@@ -2386,6 +2390,8 @@ createApp({ setup() {
       longPct,
       shortPct,
       netExposure,
+      longShortRatio,
+      longShortRatioText,
       totalPnl,
       walletCount: list.length,
       assetCount: coins.size,

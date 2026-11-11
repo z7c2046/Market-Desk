@@ -1619,6 +1619,10 @@ test('Crypto Workspace: Sankey distribution, 4 scoped KPIs, 2-column whale-posit
   assert.match(kpiCards[1].textContent, /多仓.*LONG/);
   assert.match(kpiCards[2].textContent, /空仓.*SHORT/);
   assert.match(kpiCards[3].textContent, /多空净敞口/);
+  assert.match(kpiCards[3].textContent, /比值/);
+  assert.ok(kpiCards[3].classList.contains('cw-kpi-net-card'), 'KPI card 4 has cw-kpi-net-card class for radial glow');
+  assert.ok(kpiCards[3].classList.contains('is-short-dominant') || kpiCards[3].classList.contains('is-long-dominant'), 'KPI card 4 has dominant direction class for radial glow');
+  assert.ok(kpiCards[3].querySelector('.cw-kpi-ratio-tag'), 'Ratio tag rendered beside net exposure');
   assert.ok(kpiCards[3].querySelector('.cw-kpi-split-track'), 'L/S split bar rendered on KPI card 4');
 
   // 4. Verify SVG Sankey Diagram & Live Rebalance Strip

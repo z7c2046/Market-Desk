@@ -25,7 +25,7 @@
   display: none !important;
 }
 </style>
-<script defer src="/vendor/vue.js"></script><script defer src="/vendor/echarts.js"></script><script defer src="/vendor/lightweight-charts.standalone.js"></script><script type="module" src="/app.js?v=2.9.5"></script>
+<script defer src="/vendor/vue.js"></script><script defer src="/vendor/echarts.js"></script><script defer src="/vendor/lightweight-charts.standalone.js"></script><script type="module" src="/app.js?v=2.9.6"></script>
 </head><body><div id="app" v-cloak>
 <aside class="nav-rail desktop-only" aria-label="工作台主导航">
   <div class="rail-top">
@@ -1608,13 +1608,16 @@
       </div>
 
       <!-- Card 4: 多空净敞口 -->
-      <div class="cw-telemetry-card cw-kpi-metric">
+      <div class="cw-telemetry-card cw-kpi-metric cw-kpi-net-card">
         <div class="cw-tel-meta cw-kpi-full">
           <div class="cw-tel-head">
             <span class="cw-tel-label">多空净敞口</span>
             <span class="sk sk-pill" style="width: 52px; height: 16px;"></span>
           </div>
-          <span class="sk sk-strong" style="width: 104px; height: 24px; margin: 4px 0;"></span>
+          <div class="cw-kpi-val-cluster">
+            <span class="sk sk-strong" style="width: 104px; height: 24px; margin: 4px 0;"></span>
+            <span class="sk sk-pill" style="width: 58px; height: 18px; margin-left: 6px;"></span>
+          </div>
           <span class="sk sk-small" style="width: 148px; height: 12px;"></span>
         </div>
         <div class="cw-kpi-split-track" aria-hidden="true">
@@ -1951,7 +1954,10 @@
       </div>
 
       <!-- Card 4: 多空净敞口 / 实时浮盈亏与异动 -->
-      <div class="cw-telemetry-card cw-kpi-metric">
+      <div
+        class="cw-telemetry-card cw-kpi-metric cw-kpi-net-card"
+        :class="sankeyKpiSummary.netExposure >= 0 ? 'is-long-dominant' : 'is-short-dominant'"
+      >
         <div class="cw-tel-meta cw-kpi-full">
           <div class="cw-tel-head">
             <span class="cw-tel-label">多空净敞口</span>
@@ -1959,14 +1965,23 @@
               {{ isWhaleDatasetSample ? '样本模型' : (isWhaleDatasetLive ? '实时净值' : '离线缓存') }}
             </span>
           </div>
-          <strong class="cw-tel-num cw-kpi-num font-mono" :class="sankeyKpiSummary.netExposure >= 0 ? 'text-pos' : 'text-neg'">
-            {{ (sankeyKpiSummary.netExposure >= 0 ? '+' : '-') + '$' + formatWhaleUsd(sankeyKpiSummary.netExposure) }}
-          </strong>
+          <div class="cw-kpi-val-cluster">
+            <strong class="cw-tel-num cw-kpi-num font-mono" :class="sankeyKpiSummary.netExposure >= 0 ? 'text-pos' : 'text-neg'">
+              {{ (sankeyKpiSummary.netExposure >= 0 ? '+' : '-') + '$' + formatWhaleUsd(sankeyKpiSummary.netExposure) }}
+            </strong>
+            <span
+              class="cw-kpi-ratio-tag font-mono"
+              :class="sankeyKpiSummary.netExposure >= 0 ? 'is-long' : 'is-short'"
+              :title="'多空持仓比值: ' + sankeyKpiSummary.longShortRatio + ' (多头 ' + sankeyKpiSummary.longPct + '% : ' + sankeyKpiSummary.shortPct + '% 空头)'"
+            >
+              比值 {{ sankeyKpiSummary.longShortRatio }}
+            </span>
+          </div>
           <span class="cw-tel-sub font-mono">
             浮盈亏 {{ (sankeyKpiSummary.totalPnl >= 0 ? '+' : '-') + '$' + formatWhaleUsd(sankeyKpiSummary.totalPnl) }} · <template v-if="isWhaleDatasetSample">静态样本策略（非实盘流）</template><template v-else-if="sankeyKpiSummary.deltaCount > 0">本轮变动 {{ sankeyKpiSummary.deltaCount }} 笔</template><template v-else-if="sankeyKpiSummary.liveFillCount > 0">5m 实盘 {{ sankeyKpiSummary.liveFillCount }} 笔</template><template v-else>12H 成交 {{ sankeyKpiSummary.activityCount }} 条</template>
           </span>
         </div>
-        <div class="cw-kpi-split-track" aria-hidden="true">
+        <div class="cw-kpi-split-track" :title="'多空对比：多仓 ' + sankeyKpiSummary.longPct + '% / 空仓 ' + sankeyKpiSummary.shortPct + '%'" aria-hidden="true">
           <i class="cw-kpi-split-long" :style="{ width: sankeyKpiSummary.longPct + '%' }"></i>
         </div>
       </div>
