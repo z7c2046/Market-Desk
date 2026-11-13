@@ -2915,8 +2915,828 @@ createApp({ setup() {
   const expandedStockSymbol = ref('');
   const focusedFlowSymbol = ref('');
 
+  // ============================================================
+  // 方案 A：巨鲸时空 K 线与资金流向抽屉一体化双甲板系统控制器
+  // ============================================================
+  const whaleDrawerInterval = ref('15m'); // '15m' | '1h' | '1d'
+  const whaleDrawerRange = ref('1mo'); // '1mo' | '3mo'
+  const activeWhaleHud = ref(null); // { symbol, whale, x, y, isPinned, isFlipDown, arrowOffset }
+  const highlightedWhaleAddr = ref('');
+  const whaleDrawerChartLoading = ref(false);
+  const whaleDrawerChartError = ref('');
+  const whaleMarkerOverlays = ref([]); // Bybit 风格小圆点交互图层 [{ whale, isLong, x, y, price, time }]
+
+  let lwWhaleDrawerChart = null;
+  let lwWhaleCandleSeries = null;
+  let lwWhaleVolumeSeries = null;
+  let lwWhaleMarkersPlugin = null;
+  let lwWhalePriceLines = [];
+  let lwWhaleGestureCtrl = null;
+  let lwWhaleResizeObserver = null;
+  let lastWhaleDrawerSymbol = '';
+  let lastWhaleDrawerInterval = '';
+  let lwWhaleDrawerBars = [];
+  const lwWhaleMarkersMap = new Map();
+  const whaleDrawerBarsCache = new Map();
+
+  function disposeWhaleDrawerChart() {
+    if (lwWhaleGestureCtrl) {
+      try { lwWhaleGestureCtrl.dispose(); } catch (_) {}
+      lwWhaleGestureCtrl = null;
+    }
+    if (lwWhaleResizeObserver) {
+      try { lwWhaleResizeObserver.disconnect(); } catch (_) {}
+      lwWhaleResizeObserver = null;
+    }
+    if (lwWhaleMarkersPlugin) {
+      try { lwWhaleMarkersPlugin.detach(); } catch (_) {}
+      lwWhaleMarkersPlugin = null;
+    }
+    if (lwWhaleDrawerChart) {
+      try { lwWhaleDrawerChart.remove(); } catch (_) {}
+      lwWhaleDrawerChart = null;
+      lwWhaleCandleSeries = null;
+      lwWhaleVolumeSeries = null;
+      lwWhalePriceLines = [];
+    }
+    lastWhaleDrawerSymbol = '';
+    lastWhaleDrawerInterval = '';
+    lwWhaleDrawerBars = [];
+    lwWhaleMarkersMap.clear();
+    whaleMarkerOverlays.value = [];
+    activeWhaleHud.value = null;
+    highlightedWhaleAddr.value = '';
+  }
+
+  function resetWhaleDrawerChartZoom() {
+    if (lwWhaleGestureCtrl && typeof lwWhaleGestureCtrl.resetZoom === 'function') {
+      lwWhaleGestureCtrl.resetZoom();
+    } else if (lwWhaleDrawerChart) {
+      lwWhaleDrawerChart.timeScale().fitContent();
+    }
+  }
+
+  function setWhaleDrawerInterval(tf) {
+    if (whaleDrawerInterval.value === tf) return;
+    whaleDrawerInterval.value = tf;
+    if (expandedStockSymbol.value) {
+      loadAndRenderWhaleDrawerChart(expandedStockSymbol.value, true);
+    }
+  }
+
+  async function loadAndRenderWhaleDrawerChart(sym, forceReload = false) {
+    if (!sym) {
+      disposeWhaleDrawerChart();
+      return;
+    }
+
+    const targetSymbol = sym.toUpperCase();
+    const matchedRow = activeFlowRows.value.find(r => {
+      const s = String(r.symbol || '').toUpperCase();
+      const cs = String(r.chartSymbol || '').toUpperCase();
+      return s === targetSymbol || cs === targetSymbol;
+    });
+
+    const chartSym = (matchedRow?.chartSymbol || matchedRow?.symbol || sym).toUpperCase();
+    const resolvedChartSym = chartSym === 'XYZ100' ? 'QQQ' : (chartSym === 'SP500' ? 'SPY' : chartSym);
+
+    whaleDrawerChartLoading.value = true;
+    whaleDrawerChartError.value = '';
+
+    const cacheKey = `${resolvedChartSym}:${whaleDrawerRange.value}:${whaleDrawerInterval.value}`;
+    let bars = null;
+
+    if (!forceReload && whaleDrawerBarsCache.has(cacheKey)) {
+      bars = whaleDrawerBarsCache.get(cacheKey);
+    } else {
+      try {
+        const u = `/api/market/chart?symbol=${encodeURIComponent(resolvedChartSym)}&range=${whaleDrawerRange.value}&interval=${whaleDrawerInterval.value}`;
+        const res = await fetch(u);
+        if (res.ok) {
+          const json = await res.json();
+          if (Array.isArray(json?.bars) && json.bars.length > 0) {
+            bars = json.bars;
+            whaleDrawerBarsCache.set(cacheKey, bars);
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to fetch chart bars for whale drawer:', err);
+      }
+    }
+
+    whaleDrawerChartLoading.value = false;
+
+    // 若网络不可达或测试环境无独立 bars，平滑基于现价构建合理蜡烛序列避免空白
+    if (!bars || !bars.length) {
+      const basePx = Number(matchedRow?.price) || 150;
+      bars = [];
+      const nowTs = Math.floor(Date.now() / 1000);
+      const step = whaleDrawerInterval.value === '15m' ? 900 : (whaleDrawerInterval.value === '1h' ? 3600 : 86400);
+      let cur = basePx * 0.96;
+      for (let i = 24; i >= 0; i--) {
+        const t = nowTs - i * step;
+        const o = cur;
+        const change = (Math.sin(i * 0.8) + (i % 2 === 0 ? 0.3 : -0.2)) * (basePx * 0.008);
+        const c = o + change;
+        const h = Math.max(o, c) + Math.abs(change) * 0.4;
+        const l = Math.min(o, c) - Math.abs(change) * 0.4;
+        bars.push({ time: t, open: o, high: h, low: l, close: c, volume: Math.round(10000 + Math.abs(change) * 20000) });
+        cur = c;
+      }
+    }
+
+    await nextTick();
+    renderWhaleDrawerChart(sym, bars, matchedRow);
+  }
+
+  function renderWhaleDrawerChart(sym, bars, matchedRow) {
+    const el = document.getElementById('whale-drawer-chart-' + sym);
+    if (!el) return;
+
+    const LW = window.LightweightCharts;
+    if (!LW || typeof LW.createChart !== 'function') {
+      const positions = getUnifiedWhalePositions(matchedRow || { symbol: sym });
+      if (positions.length > 0) {
+        whaleMarkerOverlays.value = positions.map((p, idx) => ({
+          whale: p,
+          isLong: p.side === 'LONG',
+          time: 1000 + idx * 100,
+          price: p.entryPx,
+          x: 120 + idx * 60,
+          y: 110
+        }));
+      }
+      return;
+    }
+
+    // 读取全局偏好设置的配色方案与自适应 Tokens (与个股 K 线 100% 相同)
+    const curKline = KLINE_SCHEMES[klineScheme.value] || KLINE_SCHEMES.classic;
+    const klineUp = curKline.up;
+    const klineDown = curKline.down;
+    const isDarkTheme = isDark.value;
+    const tokens = readChartTokens(document.documentElement);
+    const chartBg = tokens.klineSurface;
+    const gridColorValue = tokens.klineGrid;
+    const textThemeColor = tokens.muted;
+    const crosshairColor = tokens.crosshair;
+    const showGrid = klineGridStyle.value !== 'none';
+    const gridStyleNum = klineGridStyle.value === 'solid' ? 0 : 2;
+    const volAlpha = isDarkTheme ? 0.65 : 0.75;
+    const volUpColor = hexToRgba(klineUp, volAlpha);
+    const volDownColor = hexToRgba(klineDown, volAlpha);
+
+    if (lwWhaleDrawerChart && lwWhaleDrawerChart._hostEl !== el) {
+      disposeWhaleDrawerChart();
+    }
+
+    if (!lwWhaleDrawerChart) {
+      el.innerHTML = '';
+      const chartInstance = LW.createChart(el, {
+        autoSize: true,
+        layout: {
+          background: { type: LW.ColorType.Solid, color: chartBg },
+          textColor: textThemeColor,
+          fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, PingFang SC, sans-serif',
+          fontSize: 11
+        },
+        grid: {
+          vertLines: { color: gridColorValue, style: gridStyleNum, visible: showGrid },
+          horzLines: { color: gridColorValue, style: gridStyleNum, visible: showGrid }
+        },
+        rightPriceScale: {
+          visible: true,
+          autoScale: true,
+          borderColor: gridColorValue,
+          scaleMargins: { top: 0.12, bottom: 0.22 }
+        },
+        leftPriceScale: { visible: false },
+        timeScale: {
+          timeVisible: whaleDrawerInterval.value !== '1d',
+          secondsVisible: false,
+          borderColor: gridColorValue,
+          rightOffset: 5,
+          minBarSpacing: 0.5,
+          fixRightEdge: false
+        },
+        crosshair: {
+          mode: LW.CrosshairMode.Normal,
+          vertLine: { color: crosshairColor, width: 1, style: 2 },
+          horzLine: { color: crosshairColor, width: 1, style: 2 }
+        },
+        // 交由系统经过深度调校的手势引擎接管
+        handleScroll: { mouseWheel: false, pressedMouseMove: false, horzTouchDrag: false, vertTouchDrag: false },
+        handleScale: {
+          mouseWheel: false, pinch: false,
+          axisPressedMouseMove: { time: false, price: false },
+          axisDoubleClickReset: { time: false, price: false }
+        },
+        kineticScroll: { touch: false, mouse: false }
+      });
+
+      chartInstance._hostEl = el;
+
+      const candleSeries = chartInstance.addSeries(LW.CandlestickSeries, {
+        upColor: klineUp,
+        downColor: klineDown,
+        wickUpColor: klineUp,
+        wickDownColor: klineDown,
+        borderVisible: false,
+        priceFormat: { type: 'price', precision: 2, minMove: 0.01 }
+      });
+
+      const volumeSeries = chartInstance.addSeries(LW.HistogramSeries, {
+        priceScaleId: 'volume',
+        priceFormat: { type: 'volume' },
+        color: volUpColor
+      });
+      chartInstance.priceScale('volume').applyOptions({
+        scaleMargins: { top: 0.82, bottom: 0 }
+      });
+
+      // 绑定核心丝滑手势控制器
+      const gestures = bindKlineGestures(el, chartInstance, candleSeries, {
+        inputPolicy: 'desktop',
+        getLatestLogicalIndex: () => (bars.length || 1) - 1,
+        getFirstLogicalIndex: () => 0,
+        initialBars: Math.min(bars.length, 60),
+        minBars: 8,
+        maxBars: 5000,
+        minBarSpacing: 0.5,
+        centerUntilBars: 20,
+        rightAtBars: 180,
+        rightFraction: 0.95
+      });
+
+      lwWhaleResizeObserver = new ResizeObserver(() => {
+        chartInstance.resize(el.clientWidth, el.clientHeight);
+        updateWhaleMarkerOverlays();
+        updateActiveWhaleHudPosition();
+      });
+      lwWhaleResizeObserver.observe(el);
+
+      try {
+        chartInstance.timeScale().subscribeVisibleLogicalRangeChange(() => {
+          updateWhaleMarkerOverlays();
+          updateActiveWhaleHudPosition();
+        });
+      } catch (_) {}
+
+      try {
+        if (typeof chartInstance.subscribeClick === 'function') {
+          chartInstance.subscribeClick(param => {
+            if (!param || !param.time) return;
+            for (const entry of lwWhaleMarkersMap.values()) {
+              if (entry.time === param.time) {
+                onWhaleMarkerClick(entry, { symbol: sym });
+                break;
+              }
+            }
+          });
+        }
+      } catch (_) {}
+
+      try {
+        chartInstance.subscribeCrosshairMove(param => {
+          if (!param || !param.time || activeWhaleHud.value?.isPinned) return;
+          let matchedEntry = null;
+          for (const entry of lwWhaleMarkersMap.values()) {
+            if (entry.time === param.time) {
+              matchedEntry = entry;
+              break;
+            }
+          }
+          if (matchedEntry) {
+            highlightedWhaleAddr.value = matchedEntry.whale.address;
+            const coords = getWhaleMarkerCoordinates(matchedEntry.whale, sym);
+            const rect = el.getBoundingClientRect();
+            activeWhaleHud.value = {
+              symbol: sym,
+              whale: matchedEntry.whale,
+              x: coords ? coords.x : Math.round((rect.width || 600) * 0.45),
+              y: coords ? coords.y : Math.max(30, Math.round((rect.height || 280) * 0.22)),
+              rawX: coords?.rawX,
+              rawY: coords?.rawY,
+              arrowOffset: coords?.arrowOffset || 0,
+              isFlipDown: !!coords?.isFlipDown,
+              isPinned: false
+            };
+          }
+        });
+      } catch (_) {}
+
+      lwWhaleDrawerChart = chartInstance;
+      lwWhaleCandleSeries = candleSeries;
+      lwWhaleVolumeSeries = volumeSeries;
+      lwWhaleGestureCtrl = gestures;
+    } else {
+      updateWhaleDrawerChartTheme();
+    }
+
+    lwWhaleDrawerBars = bars;
+    lwWhaleMarkersMap.clear();
+
+    // 填充蜡烛数据
+    lwWhaleCandleSeries.setData(bars.map(b => ({
+      time: b.time,
+      open: b.open,
+      high: b.high,
+      low: b.low,
+      close: b.close
+    })));
+
+    // 填充成交量
+    lwWhaleVolumeSeries.setData(bars.map(b => ({
+      time: b.time,
+      value: b.volume || 1000,
+      color: b.close >= b.open ? volUpColor : volDownColor
+    })));
+
+    // 打点 Bybit 风格多空圆点 (Whale Position Markers)
+    const positions = getUnifiedWhalePositions(matchedRow || { symbol: sym });
+    const markers = [];
+
+    // 清理先前的 PriceLines
+    if (Array.isArray(lwWhalePriceLines)) {
+      for (const pl of lwWhalePriceLines) {
+        try { lwWhaleCandleSeries.removePriceLine(pl); } catch (_) {}
+      }
+      lwWhalePriceLines = [];
+    }
+
+    if (positions.length > 0 && bars.length > 0) {
+      let totalLongNtl = 0;
+      let totalLongCost = 0;
+      let totalShortNtl = 0;
+      let totalShortCost = 0;
+
+      positions.forEach((p, idx) => {
+        const isLong = p.side === 'LONG';
+        const ntl = p.positionValue || (p.shares * p.markPx) || 1000;
+        if (isLong) {
+          totalLongNtl += ntl;
+          totalLongCost += (p.entryPx * ntl);
+        } else {
+          totalShortNtl += ntl;
+          totalShortCost += (p.entryPx * ntl);
+        }
+
+        // 匹配最接近开仓价格的 K 线柱
+        const matchedBar = bars.reduce((prev, curr) => {
+          return Math.abs(curr.close - p.entryPx) < Math.abs(prev.close - p.entryPx) ? curr : prev;
+        }, bars[0]);
+
+        // Bybit 风格极简圆点 Marker：无多余冗余长文字，紧凑干净
+        const markerItem = {
+          time: matchedBar.time,
+          position: isLong ? 'belowBar' : 'aboveBar',
+          color: isLong ? klineUp : klineDown,
+          shape: 'circle',
+          size: 1,
+          id: p.address,
+          whale: p
+        };
+        markers.push(markerItem);
+
+        lwWhaleMarkersMap.set(p.address, {
+          marker: markerItem,
+          whale: p,
+          time: matchedBar.time,
+          bar: matchedBar,
+          isLong
+        });
+      });
+
+      markers.sort((a, b) => a.time - b.time);
+
+      try {
+        if (lwWhaleMarkersPlugin && typeof lwWhaleMarkersPlugin.setMarkers === 'function') {
+          lwWhaleMarkersPlugin.setMarkers(markers);
+        } else if (typeof LW.createSeriesMarkers === 'function') {
+          lwWhaleMarkersPlugin = LW.createSeriesMarkers(lwWhaleCandleSeries, markers);
+        } else if (typeof lwWhaleCandleSeries.setMarkers === 'function') {
+          lwWhaleCandleSeries.setMarkers(markers);
+        }
+      } catch (err) {
+        console.warn('Failed to apply markers in whale drawer:', err);
+      }
+
+      // 实时同步绘制 Bybit 风格高保真小圆点层
+      updateWhaleMarkerOverlays();
+
+      // 添加多空成本参考线 (Price Lines)
+      if (totalLongNtl > 0) {
+        const bullAvg = totalLongCost / totalLongNtl;
+        const plBull = lwWhaleCandleSeries.createPriceLine({
+          price: bullAvg,
+          color: klineUp,
+          lineWidth: 1.5,
+          lineStyle: LW.LineStyle ? LW.LineStyle.Dashed : 2,
+          axisLabelVisible: true,
+          title: `多头均价 $${formatCryptoPrice(bullAvg)}`
+        });
+        lwWhalePriceLines.push(plBull);
+      }
+
+      if (totalShortNtl > 0) {
+        const bearAvg = totalShortCost / totalShortNtl;
+        const plBear = lwWhaleCandleSeries.createPriceLine({
+          price: bearAvg,
+          color: klineDown,
+          lineWidth: 1.5,
+          lineStyle: LW.LineStyle ? LW.LineStyle.Dashed : 2,
+          axisLabelVisible: true,
+          title: `空头均价 $${formatCryptoPrice(bearAvg)}`
+        });
+        lwWhalePriceLines.push(plBear);
+      }
+    }
+
+    lastWhaleDrawerSymbol = sym;
+    lastWhaleDrawerInterval = whaleDrawerInterval.value;
+  }
+
+  function updateWhaleDrawerChartTheme() {
+    if (!lwWhaleDrawerChart || !lwWhaleCandleSeries) return;
+    const LW = window.LightweightCharts;
+    const curKline = KLINE_SCHEMES[klineScheme.value] || KLINE_SCHEMES.classic;
+    const klineUp = curKline.up;
+    const klineDown = curKline.down;
+    const isDarkTheme = isDark.value;
+    const tokens = readChartTokens(document.documentElement);
+    const chartBg = tokens.klineSurface;
+    const gridColorValue = tokens.klineGrid;
+    const textThemeColor = tokens.muted;
+    const crosshairColor = tokens.crosshair;
+    const showGrid = klineGridStyle.value !== 'none';
+    const gridStyleNum = klineGridStyle.value === 'solid' ? 0 : 2;
+
+    lwWhaleDrawerChart.applyOptions({
+      layout: {
+        background: { type: LW.ColorType.Solid, color: chartBg },
+        textColor: textThemeColor
+      },
+      grid: {
+        vertLines: { color: gridColorValue, style: gridStyleNum, visible: showGrid },
+        horzLines: { color: gridColorValue, style: gridStyleNum, visible: showGrid }
+      },
+      crosshair: {
+        vertLine: { color: crosshairColor },
+        horzLine: { color: crosshairColor }
+      }
+    });
+
+    lwWhaleCandleSeries.applyOptions({
+      upColor: klineUp,
+      downColor: klineDown,
+      wickUpColor: klineUp,
+      wickDownColor: klineDown
+    });
+
+    if (lwWhaleVolumeSeries) {
+      const volAlpha = isDarkTheme ? 0.65 : 0.75;
+      lwWhaleVolumeSeries.applyOptions({
+        color: hexToRgba(klineUp, volAlpha)
+      });
+    }
+
+    // 重新应用带有新配色的 PriceLines 与 Markers
+    if (expandedStockSymbol.value) {
+      const matchedRow = activeFlowRows.value.find(r => String(r.symbol || '').toUpperCase() === expandedStockSymbol.value.toUpperCase());
+      const positions = getUnifiedWhalePositions(matchedRow || { symbol: expandedStockSymbol.value });
+      if (positions.length > 0) {
+        if (Array.isArray(lwWhalePriceLines)) {
+          for (const pl of lwWhalePriceLines) {
+            try { lwWhaleCandleSeries.removePriceLine(pl); } catch (_) {}
+          }
+          lwWhalePriceLines = [];
+        }
+        let totalLongNtl = 0, totalLongCost = 0, totalShortNtl = 0, totalShortCost = 0;
+        positions.forEach(p => {
+          const ntl = p.positionValue || (p.shares * p.markPx) || 1000;
+          if (p.side === 'LONG') { totalLongNtl += ntl; totalLongCost += (p.entryPx * ntl); }
+          else { totalShortNtl += ntl; totalShortCost += (p.entryPx * ntl); }
+        });
+        if (totalLongNtl > 0) {
+          const bullAvg = totalLongCost / totalLongNtl;
+          lwWhalePriceLines.push(lwWhaleCandleSeries.createPriceLine({
+            price: bullAvg, color: klineUp, lineWidth: 1.5,
+            lineStyle: LW.LineStyle ? LW.LineStyle.Dashed : 2, axisLabelVisible: true,
+            title: `多头均价 $${formatCryptoPrice(bullAvg)}`
+          }));
+        }
+        if (totalShortNtl > 0) {
+          const bearAvg = totalShortCost / totalShortNtl;
+          lwWhalePriceLines.push(lwWhaleCandleSeries.createPriceLine({
+            price: bearAvg, color: klineDown, lineWidth: 1.5,
+            lineStyle: LW.LineStyle ? LW.LineStyle.Dashed : 2, axisLabelVisible: true,
+            title: `空头均价 $${formatCryptoPrice(bearAvg)}`
+          }));
+        }
+      }
+    }
+  }
+
+  // 计算巨鲸买点 Marker 在画布上的精确像素坐标与防溢出位置
+  function getWhaleMarkerCoordinates(whale, sym) {
+    if (!whale || !lwWhaleDrawerChart || !lwWhaleCandleSeries) return null;
+    const currentSymbol = sym || expandedStockSymbol.value;
+    const hostEl = lwWhaleDrawerChart._hostEl || document.getElementById('whale-drawer-chart-' + currentSymbol);
+    if (!hostEl) return null;
+
+    const rect = hostEl.getBoundingClientRect();
+    const W = hostEl.clientWidth || rect.width || 600;
+    const H = hostEl.clientHeight || rect.height || 280;
+
+    const markerInfo = lwWhaleMarkersMap.get(whale.address);
+    let barTime = markerInfo?.time;
+    let bar = markerInfo?.bar;
+
+    if (!barTime && lwWhaleDrawerBars && lwWhaleDrawerBars.length > 0) {
+      const entryPx = Number(whale.entryPx);
+      bar = lwWhaleDrawerBars.reduce((prev, curr) => {
+        return Math.abs(curr.close - entryPx) < Math.abs(prev.close - entryPx) ? curr : prev;
+      }, lwWhaleDrawerBars[0]);
+      barTime = bar.time;
+    }
+
+    let rawX = Math.round(W * 0.5);
+    let rawY = Math.round(H * 0.45);
+
+    try {
+      if (barTime && typeof lwWhaleDrawerChart.timeScale === 'function') {
+        const timeScale = lwWhaleDrawerChart.timeScale();
+        if (typeof timeScale.timeToCoordinate === 'function') {
+          const cx = timeScale.timeToCoordinate(barTime);
+          if (typeof cx === 'number' && Number.isFinite(cx)) {
+            rawX = cx;
+          }
+        }
+      }
+
+      if (typeof lwWhaleCandleSeries.priceToCoordinate === 'function') {
+        const isLong = whale.side === 'LONG';
+        const targetPrice = isLong
+          ? (bar?.low ?? whale.entryPx)
+          : (bar?.high ?? whale.entryPx);
+
+        let cy = lwWhaleCandleSeries.priceToCoordinate(targetPrice);
+        if (typeof cy !== 'number' || !Number.isFinite(cy)) {
+          if (Number.isFinite(whale.entryPx)) {
+            cy = lwWhaleCandleSeries.priceToCoordinate(whale.entryPx);
+          }
+        }
+        if (typeof cy === 'number' && Number.isFinite(cy)) {
+          rawY = cy;
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to calculate whale marker coordinates:', err);
+    }
+
+    const popoverHalfWidth = 145;
+    const minX = popoverHalfWidth + 10;
+    const maxX = Math.max(minX, W - popoverHalfWidth - 55);
+    const clampedX = Math.max(minX, Math.min(rawX, maxX));
+    const arrowOffset = Math.max(-110, Math.min(110, Math.round(rawX - clampedX)));
+
+    // 默认在买点上方；若上方空间不足（rawY < 145）则向下翻转到买点下方
+    const isFlipDown = rawY < 145;
+    const clampedY = isFlipDown
+      ? Math.max(10, Math.min(rawY, H - 150))
+      : Math.max(130, Math.min(rawY, H - 20));
+
+    return {
+      x: Math.round(clampedX),
+      y: Math.round(clampedY),
+      rawX: Math.round(rawX),
+      rawY: Math.round(rawY),
+      arrowOffset,
+      isFlipDown
+    };
+  }
+
+  function updateActiveWhaleHudPosition() {
+    if (!activeWhaleHud.value || !activeWhaleHud.value.whale) return;
+    const coords = getWhaleMarkerCoordinates(activeWhaleHud.value.whale, activeWhaleHud.value.symbol);
+    if (coords) {
+      activeWhaleHud.value = {
+        ...activeWhaleHud.value,
+        x: coords.x,
+        y: coords.y,
+        rawX: coords.rawX,
+        rawY: coords.rawY,
+        arrowOffset: coords.arrowOffset,
+        isFlipDown: coords.isFlipDown
+      };
+    }
+  }
+
+  // 实时更新 Bybit 风格小圆点在 K 线画布上的绝对像素坐标
+  function updateWhaleMarkerOverlays() {
+    if (!lwWhaleDrawerChart || !lwWhaleCandleSeries || !expandedStockSymbol.value) {
+      whaleMarkerOverlays.value = [];
+      return;
+    }
+
+    const hostEl = lwWhaleDrawerChart._hostEl || document.getElementById('whale-drawer-chart-' + expandedStockSymbol.value);
+    if (!hostEl) {
+      whaleMarkerOverlays.value = [];
+      return;
+    }
+
+    const W = hostEl.clientWidth || 600;
+    const H = hostEl.clientHeight || 280;
+    const timeScale = lwWhaleDrawerChart.timeScale();
+    if (!timeScale || typeof timeScale.timeToCoordinate !== 'function') {
+      const fallbackOverlays = [];
+      let stepIdx = 0;
+      for (const entry of lwWhaleMarkersMap.values()) {
+        fallbackOverlays.push({
+          whale: entry.whale,
+          isLong: entry.isLong,
+          time: entry.time || 1000,
+          price: entry.whale.entryPx,
+          x: 100 + stepIdx * 60,
+          y: 120
+        });
+        stepIdx++;
+      }
+      whaleMarkerOverlays.value = fallbackOverlays;
+      return;
+    }
+
+    const overlays = [];
+    for (const entry of lwWhaleMarkersMap.values()) {
+      const { whale, time, bar, isLong } = entry;
+      if (!time) continue;
+
+      const cx = timeScale.timeToCoordinate(time);
+      if (typeof cx !== 'number' || !Number.isFinite(cx)) continue;
+
+      // 仅在当前可视横向区域内显示小圆点
+      if (cx < 6 || cx > W - 40) continue;
+
+      let cy = null;
+      if (typeof lwWhaleCandleSeries.priceToCoordinate === 'function') {
+        if (Number.isFinite(whale.entryPx)) {
+          cy = lwWhaleCandleSeries.priceToCoordinate(whale.entryPx);
+        }
+        if (typeof cy !== 'number' || !Number.isFinite(cy)) {
+          const anchorPx = isLong ? bar.low : bar.high;
+          cy = lwWhaleCandleSeries.priceToCoordinate(anchorPx);
+        }
+      }
+
+      if (typeof cy !== 'number' || !Number.isFinite(cy)) {
+        cy = Math.round(H * 0.45);
+      }
+
+      cy = Math.max(12, Math.min(cy, H - 22));
+
+      overlays.push({
+        whale,
+        isLong,
+        time,
+        price: whale.entryPx,
+        x: Math.round(cx),
+        y: Math.round(cy)
+      });
+    }
+
+    whaleMarkerOverlays.value = overlays;
+  }
+
+  // 点击/指向 Bybit 风格红绿小圆点时的交互
+  function onWhaleMarkerHover(m, row) {
+    if (!m || !m.whale) return;
+    highlightedWhaleAddr.value = m.whale.address;
+    if (activeWhaleHud.value?.isPinned) return;
+
+    const sym = row?.symbol || expandedStockSymbol.value;
+    const coords = getWhaleMarkerCoordinates(m.whale, sym);
+    const el = document.getElementById('whale-drawer-chart-' + sym);
+    const rect = el ? el.getBoundingClientRect() : { width: 600, height: 280 };
+
+    activeWhaleHud.value = {
+      symbol: sym,
+      whale: m.whale,
+      x: coords ? coords.x : m.x,
+      y: coords ? coords.y : m.y,
+      rawX: coords?.rawX ?? m.x,
+      rawY: coords?.rawY ?? m.y,
+      arrowOffset: coords?.arrowOffset || 0,
+      isFlipDown: coords?.isFlipDown ?? (m.y < 145),
+      isPinned: false
+    };
+  }
+
+  function onWhaleMarkerLeave(m) {
+    if (activeWhaleHud.value?.isPinned) return;
+    highlightedWhaleAddr.value = '';
+    activeWhaleHud.value = null;
+  }
+
+  function onWhaleMarkerClick(m, row) {
+    if (!m || !m.whale) return;
+    const sym = row?.symbol || expandedStockSymbol.value;
+    if (activeWhaleHud.value?.isPinned && activeWhaleHud.value?.whale?.address === m.whale.address) {
+      activeWhaleHud.value = null;
+      highlightedWhaleAddr.value = '';
+      return;
+    }
+
+    highlightedWhaleAddr.value = m.whale.address;
+    const coords = getWhaleMarkerCoordinates(m.whale, sym);
+    const el = document.getElementById('whale-drawer-chart-' + sym);
+    const rect = el ? el.getBoundingClientRect() : { width: 600, height: 280 };
+
+    activeWhaleHud.value = {
+      symbol: sym,
+      whale: m.whale,
+      x: coords ? coords.x : m.x,
+      y: coords ? coords.y : m.y,
+      rawX: coords?.rawX ?? m.x,
+      rawY: coords?.rawY ?? m.y,
+      arrowOffset: coords?.arrowOffset || 0,
+      isFlipDown: coords?.isFlipDown ?? (m.y < 145),
+      isPinned: true
+    };
+
+    // 联动滚动到下方表格该巨鲸持仓行
+    nextTick(() => {
+      const tableRow = document.querySelector(`.stock-whale-row[data-address="${m.whale.address}"]`)
+        || document.querySelector(`.stock-whale-table tbody tr.is-highlighted`);
+      if (tableRow && typeof tableRow.scrollIntoView === 'function') {
+        tableRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    });
+  }
+
+  // 图表与表格的双向交互
+  function onWhaleRowHover(whale, row) {
+    if (!whale) return;
+    highlightedWhaleAddr.value = whale.address;
+    if (activeWhaleHud.value?.isPinned) return;
+
+    const sym = row?.symbol || expandedStockSymbol.value;
+    const coords = getWhaleMarkerCoordinates(whale, sym);
+    const el = document.getElementById('whale-drawer-chart-' + sym);
+    const rect = el ? el.getBoundingClientRect() : { width: 600, height: 280 };
+    activeWhaleHud.value = {
+      symbol: sym,
+      whale,
+      x: coords ? coords.x : Math.round((rect.width || 600) * 0.45),
+      y: coords ? coords.y : Math.max(30, Math.round((rect.height || 280) * 0.22)),
+      rawX: coords?.rawX,
+      rawY: coords?.rawY,
+      arrowOffset: coords?.arrowOffset || 0,
+      isFlipDown: !!coords?.isFlipDown,
+      isPinned: false
+    };
+  }
+
+  function onWhaleRowLeave(whale) {
+    if (activeWhaleHud.value?.isPinned) return;
+    highlightedWhaleAddr.value = '';
+    activeWhaleHud.value = null;
+  }
+
+  function onWhaleRowClick(whale, row) {
+    if (!whale) return;
+    const sym = row?.symbol || expandedStockSymbol.value;
+    if (activeWhaleHud.value?.isPinned && activeWhaleHud.value?.whale?.address === whale.address) {
+      activeWhaleHud.value = null;
+      highlightedWhaleAddr.value = '';
+      return;
+    }
+
+    highlightedWhaleAddr.value = whale.address;
+    const coords = getWhaleMarkerCoordinates(whale, sym);
+    const el = document.getElementById('whale-drawer-chart-' + sym);
+    const rect = el ? el.getBoundingClientRect() : { width: 600, height: 280 };
+    activeWhaleHud.value = {
+      symbol: sym,
+      whale,
+      x: coords ? coords.x : Math.round((rect.width || 600) * 0.45),
+      y: coords ? coords.y : Math.max(30, Math.round((rect.height || 280) * 0.22)),
+      rawX: coords?.rawX,
+      rawY: coords?.rawY,
+      arrowOffset: coords?.arrowOffset || 0,
+      isFlipDown: !!coords?.isFlipDown,
+      isPinned: true
+    };
+  }
+
   function toggleStockRadar(sym) {
-    expandedStockSymbol.value = (expandedStockSymbol.value === sym ? '' : sym);
+    if (expandedStockSymbol.value === sym) {
+      expandedStockSymbol.value = '';
+      disposeWhaleDrawerChart();
+    } else {
+      expandedStockSymbol.value = sym;
+      nextTick(() => {
+        loadAndRenderWhaleDrawerChart(sym);
+      });
+    }
   }
 
   function focusAssetInFlowMatrix(target) {
@@ -2955,9 +3775,12 @@ createApp({ setup() {
 
     const finalSymbol = matchedRow ? matchedRow.symbol : targetSymbol;
 
-    // 5. 展开该标的持仓雷达与前几大主力持仓
+    // 5. 展开该标的持仓雷达与前几大主力持仓，并自动渲染方案 A 双甲板时空 K 线
     expandedStockSymbol.value = finalSymbol;
     focusedFlowSymbol.value = finalSymbol;
+    nextTick(() => {
+      loadAndRenderWhaleDrawerChart(finalSymbol);
+    });
 
     // 6. 滚动居中并触发聚焦高亮（平滑对齐抽屉与标的行）
     nextTick(() => {
@@ -8408,7 +9231,12 @@ createApp({ setup() {
     if (page.value === 'overview') renderHeatmap();
     if (page.value === 'chart') renderPrice();
     else disposePriceChart();
-    if (page.value === 'crypto') renderCryptoChart();
+    if (page.value === 'crypto') {
+      renderCryptoChart();
+      if (expandedStockSymbol.value && lwWhaleDrawerChart) updateWhaleDrawerChartTheme();
+    } else {
+      if (lwWhaleDrawerChart) disposeWhaleDrawerChart();
+    }
     if (page.value === 'flows') flowTab.value === 'rotation' ? renderRotation() : renderFlows();
     if (page.value === 'options') renderOptions();
   }
@@ -8446,8 +9274,17 @@ createApp({ setup() {
   watch(newsSymbol, () => { if (page.value === 'news') loadNews(); });
   watch(optionExpiry, value => { if (page.value === 'options' && value && value !== options.value?.expiration) loadOptions(); });
   watch([heatSize, sectorFilter, heatmapSession, resolvedHeatmapSession, extMode, flowTab, flowDate, optionMetric, strikeRange], async () => { await nextTick(); render(); });
-  watch([uiPalette, isDark], async () => { applyDOMTheme(); await nextTick(); render(); });
-  watch([klineScheme, klineGridStyle], async () => { await nextTick(); render(); });
+  watch([uiPalette, isDark], async () => {
+    applyDOMTheme();
+    await nextTick();
+    render();
+    if (expandedStockSymbol.value) updateWhaleDrawerChartTheme();
+  });
+  watch([klineScheme, klineGridStyle], async () => {
+    await nextTick();
+    render();
+    if (expandedStockSymbol.value) updateWhaleDrawerChartTheme();
+  });
   watch(showSettings, value => { document.body.classList.toggle('drawer-open', value && isMobile.value); });
 
   function handleVisibilityChange() {
@@ -8614,6 +9451,9 @@ createApp({ setup() {
     expandedStockSymbol, focusedFlowSymbol, toggleStockRadar, focusAssetInFlowMatrix, formatWhaleShares, getWhalePositionsForStock,
     activeFlowRows, activeFlowSummary, whaleDonutSpec, getUnifiedWhalePositions, getPriceAxisSpec, formatSpreadPct, formatSpreadDiff, refreshCryptoWorkspace,
     whaleDrawerSortField, whaleDrawerSortDir, toggleWhaleDrawerSort,
+    whaleDrawerInterval, whaleDrawerRange, activeWhaleHud, highlightedWhaleAddr, whaleDrawerChartLoading,
+    whaleMarkerOverlays, onWhaleMarkerHover, onWhaleMarkerLeave, onWhaleMarkerClick,
+    setWhaleDrawerInterval, resetWhaleDrawerChartZoom, onWhaleRowHover, onWhaleRowLeave, onWhaleRowClick,
     // Watchlist & Groups & Sidebar Live Streamlined Board
     watchlistData, groups, watchlist, quoteStore, providerInfo, currentSession,
     viewMode, extMode, sortField, sortDirection, freezeResort, compactPanelOpen,

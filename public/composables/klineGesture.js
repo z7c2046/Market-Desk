@@ -477,6 +477,7 @@ export function bindKlineGestures(element, chart, series, options = {}) {
 
     if (admitted) {
       e.preventDefault();
+      try { e.stopPropagation(); } catch (_) {}
     }
 
     for (const action of actions) {

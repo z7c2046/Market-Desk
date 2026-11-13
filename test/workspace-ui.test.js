@@ -1930,6 +1930,47 @@ test('Crypto Workspace: Sankey distribution, 4 scoped KPIs, 2-column whale-posit
   assert.ok(activeDrawerTr, 'Inline whale positions drawer opened for clicked asset');
   assert.match(activeDrawerTr.textContent, /NVDA/, 'Drawer corresponds to clicked symbol NVDA');
 
+  // Verify Scheme A Dual-Deck (K-line chart deck + interactive Bybit-style popover + timeframes)
+  const whaleChartDeck = activeDrawerTr.querySelector('.cw-whale-chart-deck');
+  assert.ok(whaleChartDeck, 'Scheme A whale chart deck rendered in inline drawer');
+  assert.ok(whaleChartDeck.querySelector('.cw-whale-chart-host-wrap'), 'Whale chart host container exists');
+  const tfBtns = whaleChartDeck.querySelectorAll('.cw-tf-btn');
+  assert.equal(tfBtns.length, 3, 'Three timeframe switcher buttons (15m, 1h, 1d) exist');
+  assert.ok(tfBtns[0].classList.contains('active'), '15m timeframe is active by default');
+
+  // Verify bidirectional table-chart interaction (hover row highlights table row and surfaces HUD)
+  const firstWhaleRow = activeDrawerTr.querySelector('.stock-whale-table tbody tr');
+  assert.ok(firstWhaleRow, 'First whale position row exists');
+  firstWhaleRow.dispatchEvent(new ui.w.MouseEvent('mouseenter', { bubbles: true }));
+  await tick();
+  assert.ok(firstWhaleRow.classList.contains('is-highlighted'), 'Table row receives is-highlighted class on hover');
+  let hudPopover = activeDrawerTr.querySelector('.cw-bybit-hud-popover');
+  assert.ok(hudPopover, 'Bybit-style HUD popover appears on hovering whale row');
+  assert.match(hudPopover.textContent, /开仓均价/, 'HUD popover displays entry price');
+
+  firstWhaleRow.dispatchEvent(new ui.w.MouseEvent('mouseleave', { bubbles: true }));
+  await tick();
+
+  // Verify Bybit-style interactive red and green marker dot badges on the K-line chart
+  const markersLayer = activeDrawerTr.querySelector('.cw-bybit-markers-layer');
+  assert.ok(markersLayer, 'Bybit markers layer rendered on top of whale K-line chart');
+  const markerDots = activeDrawerTr.querySelectorAll('.cw-bybit-marker-dot');
+  assert.ok(markerDots.length >= 1, 'At least one Bybit-style marker dot badge rendered');
+
+  // Clicking marker dot surfaces detailed position HUD popover with wallet name and position specs
+  markerDots[0].click();
+  await tick();
+  hudPopover = activeDrawerTr.querySelector('.cw-bybit-hud-popover');
+  assert.ok(hudPopover, 'Clicking marker dot opens HUD popover beside the marker');
+  assert.ok(hudPopover.querySelector('.cw-hud-name'), 'HUD popover displays whale wallet name');
+  assert.match(hudPopover.textContent, /名义仓位/, 'HUD popover displays position size');
+
+  const closeHudBtn = hudPopover.querySelector('.cw-hud-close-btn');
+  assert.ok(closeHudBtn, 'HUD close button exists');
+  closeHudBtn.click();
+  await tick();
+  assert.equal(activeDrawerTr.querySelector('.cw-bybit-hud-popover'), null, 'HUD popover closed after clicking close button');
+
   // Verify whale positions list includes both long and short positions and is sorted by positionValue descending
   const whalePosRows = activeDrawerTr.querySelectorAll('.stock-whale-table tbody tr');
   assert.ok(whalePosRows.length >= 2, 'At least top 2 whale positions rendered for clicked asset');

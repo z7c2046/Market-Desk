@@ -89,24 +89,29 @@ export function createPriceMotionController(chart, candleSeries, options = {}) {
     });
   }
 
+  let isAutoScaleDisabled = false;
+
   function commitManualPrice(range) {
     if (!range || !Number.isFinite(range.from) || !Number.isFinite(range.to)) return;
     const scale = getPriceScale();
     if (!scale) return;
 
-    if (typeof scale.setAutoScale === 'function') {
-      scale.setAutoScale(false);
-    } else if (typeof scale.applyOptions === 'function') {
-      scale.applyOptions({ autoScale: false });
+    if (!isAutoScaleDisabled) {
+      if (typeof scale.setAutoScale === 'function') {
+        scale.setAutoScale(false);
+      } else if (typeof scale.applyOptions === 'function') {
+        scale.applyOptions({ autoScale: false });
+      }
+      isAutoScaleDisabled = true;
     }
 
     if (typeof scale.setVisibleRange === 'function') {
       try {
+        const from = Math.min(range.from, range.to);
+        const to = Math.max(range.from, range.to);
         scale.setVisibleRange({
-          from: range.from,
-          to: range.to,
-          minValue: range.from,
-          maxValue: range.to
+          from,
+          to
         });
       } catch (_) {}
     }
@@ -308,6 +313,7 @@ export function createPriceMotionController(chart, candleSeries, options = {}) {
   function resetPriceScale() {
     cancelMotion('reset');
     setPriceMode('auto');
+    isAutoScaleDisabled = false;
     manualDisplayRange = null;
     manualTargetRange = null;
     manualAnchorPrice = null;

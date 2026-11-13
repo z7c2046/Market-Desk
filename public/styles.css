@@ -19660,6 +19660,432 @@ html.dark .cw-custom-item {
   }
 }
 
+/* ============================================================
+   方案 A：巨鲸时空 K 线与资金流向抽屉一体化双甲板系统 (Dual-Deck)
+   ============================================================ */
+.cw-whale-chart-deck {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--surface-card, #12151d);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+.cw-chart-deck-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+}
+
+.cw-cdh-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cw-cdh-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--semantic-up, #00c087);
+  box-shadow: 0 0 8px var(--semantic-up, #00c087);
+  display: inline-block;
+}
+
+.cw-cdh-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-main, #f3f4f6);
+  letter-spacing: 0.3px;
+}
+
+.cw-cdh-tag {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(59, 130, 246, 0.12);
+  color: #3b82f6;
+  border: 1px solid rgba(59, 130, 246, 0.25);
+}
+
+.cw-cdh-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cw-tf-switcher {
+  display: flex;
+  align-items: center;
+  background: var(--surface-sunken, rgba(0, 0, 0, 0.15));
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  border-radius: 5px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.cw-tf-btn {
+  background: transparent;
+  border: none;
+  font-size: 11px;
+  color: var(--text-muted, #94a3b8);
+  padding: 2px 7px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cw-tf-btn:hover {
+  color: var(--text-main, #f3f4f6);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.cw-tf-btn.active {
+  background: var(--accent-primary, #2563eb);
+  color: #fff;
+  font-weight: 600;
+}
+
+.cw-chart-reset-btn {
+  background: var(--surface-sunken, rgba(0, 0, 0, 0.12));
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  color: var(--text-muted, #94a3b8);
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cw-chart-reset-btn:hover {
+  background: var(--surface-hover, rgba(255, 255, 255, 0.08));
+  color: var(--text-main, #fff);
+}
+
+/* K 线画布宿主容器与骨架屏 */
+.cw-whale-chart-host-wrap {
+  position: relative;
+  width: 100%;
+  height: 280px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--surface-sunken, #0a0d14);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+}
+
+.cw-whale-chart-host {
+  width: 100%;
+  height: 100%;
+  outline: none;
+}
+
+.cw-whale-chart-skeleton {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted, #94a3b8);
+  font-size: 12px;
+  background: var(--surface-sunken, #0a0d14);
+  z-index: 2;
+}
+
+.cw-whale-chart-skeleton .cw-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(59, 130, 246, 0.2);
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: cwSpin 0.8s linear infinite;
+}
+
+@keyframes cwSpin {
+  to { transform: rotate(360deg); }
+}
+
+/* Bybit 风格买卖点位交互层与红绿小圆点 */
+.cw-bybit-markers-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+  overflow: hidden;
+}
+
+.cw-bybit-marker-dot {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1.5px solid rgba(255, 255, 255, 0.9);
+  cursor: pointer;
+  pointer-events: auto;
+  transition: transform 0.16s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.16s ease;
+  user-select: none;
+  background-clip: padding-box;
+}
+
+/* 做多买点：Bybit 绿色小圆点 */
+.cw-bybit-marker-dot.is-long {
+  background: #00c087;
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(0, 192, 135, 0.45);
+}
+
+/* 做空卖点：Bybit 红色小圆点 */
+.cw-bybit-marker-dot.is-short {
+  background: #f6465d;
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(246, 70, 93, 0.45);
+}
+
+.cw-bybit-marker-dot:hover,
+.cw-bybit-marker-dot.is-active,
+.cw-bybit-marker-dot.is-highlighted {
+  transform: translate(-50%, -50%) scale(1.25);
+  z-index: 6;
+}
+
+.cw-bybit-marker-dot.is-long:hover,
+.cw-bybit-marker-dot.is-long.is-active {
+  box-shadow: 0 0 0 3px rgba(0, 192, 135, 0.4), 0 4px 12px rgba(0, 192, 135, 0.6);
+}
+
+.cw-bybit-marker-dot.is-short:hover,
+.cw-bybit-marker-dot.is-short.is-active {
+  box-shadow: 0 0 0 3px rgba(246, 70, 93, 0.4), 0 4px 12px rgba(246, 70, 93, 0.6);
+}
+
+.cw-marker-glyph {
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}
+
+.cw-marker-pulse {
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.cw-bybit-marker-dot.is-active .cw-marker-pulse,
+.cw-bybit-marker-dot:hover .cw-marker-pulse {
+  opacity: 1;
+  animation: cwMarkerPulseAnim 1.8s infinite ease-out;
+}
+
+@keyframes cwMarkerPulseAnim {
+  0% { transform: scale(1); opacity: 0.8; }
+  100% { transform: scale(1.8); opacity: 0; }
+}
+
+/* Bybit 风格半透明 HUD 详情弹窗 */
+.cw-bybit-hud-popover {
+  position: absolute;
+  z-index: 10;
+  min-width: 260px;
+  max-width: 320px;
+  padding: 10px 12px;
+  background: rgba(18, 24, 38, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(12px);
+  border-radius: 8px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  pointer-events: auto;
+  user-select: none;
+  transform: translate(-50%, -100%) translateY(-12px);
+  transition: opacity 0.15s ease, transform 0.12s ease-out;
+}
+
+:root:not(.dark) .cw-bybit-hud-popover {
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.04);
+}
+
+.cw-bybit-hud-popover.is-pinned {
+  border-color: #3b82f6;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.7), 0 0 0 2px rgba(59, 130, 246, 0.4);
+}
+
+/* 向上/向下翻转逻辑 */
+.cw-bybit-hud-popover.is-flip-down {
+  transform: translate(-50%, 0) translateY(12px);
+}
+
+/* 指向买点 Marker 的小三角气泡箭头 */
+.cw-bybit-hud-popover::after {
+  content: '';
+  position: absolute;
+  bottom: -6px;
+  left: calc(50% + var(--hud-arrow-offset, 0px));
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 6px solid rgba(18, 24, 38, 0.94);
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.3));
+}
+
+:root:not(.dark) .cw-bybit-hud-popover::after {
+  border-top-color: rgba(255, 255, 255, 0.96);
+}
+
+.cw-bybit-hud-popover.is-flip-down::after {
+  bottom: auto;
+  top: -6px;
+  border-top: none;
+  border-bottom: 6px solid rgba(18, 24, 38, 0.94);
+  filter: drop-shadow(0 -2px 2px rgba(0, 0, 0, 0.15));
+}
+
+:root:not(.dark) .cw-bybit-hud-popover.is-flip-down::after {
+  border-bottom-color: rgba(255, 255, 255, 0.96);
+}
+
+.cw-hud-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+:root:not(.dark) .cw-hud-head {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.cw-hud-title-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-width: 175px;
+}
+
+.cw-hud-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-main, #f3f4f6);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cw-hud-addr {
+  font-size: 9.5px;
+  color: var(--text-muted, #94a3b8);
+  letter-spacing: 0.2px;
+}
+
+.cw-hud-dir-tag {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 3px;
+  letter-spacing: 0.2px;
+}
+
+.cw-hud-dir-tag.is-long {
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--semantic-up, #10b981);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.cw-hud-dir-tag.is-short {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--semantic-down, #ef4444);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.cw-hud-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 10px;
+  font-size: 11px;
+}
+
+.cw-hud-cell {
+  display: flex;
+  flex-direction: column;
+}
+
+.cw-hud-lbl {
+  font-size: 9.5px;
+  color: var(--text-muted, #94a3b8);
+}
+
+.cw-hud-val {
+  font-size: 11.5px;
+  color: var(--text-main, #f3f4f6);
+  margin-top: 1px;
+}
+
+.cw-hud-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 10.5px;
+  color: var(--text-muted, #94a3b8);
+}
+
+:root:not(.dark) .cw-hud-foot {
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.cw-hud-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted, #94a3b8);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px 4px;
+  line-height: 1;
+}
+
+.cw-hud-close-btn:hover {
+  color: var(--text-main, #f3f4f6);
+}
+
+/* 巨鲸表格双向联动高亮样式 */
+.stock-whale-table tbody tr {
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+}
+
+.stock-whale-table tbody tr.is-highlighted {
+  background: rgba(59, 130, 246, 0.15) !important;
+  box-shadow: inset 3px 0 0 #3b82f6;
+  outline: 1px solid rgba(59, 130, 246, 0.35);
+}
+
+
 
 
 
