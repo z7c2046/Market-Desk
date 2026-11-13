@@ -725,6 +725,7 @@ export class OnchainStocksService {
         const unrealizedPnl = Math.round(isLong ? (markPx - entryPx) * shares : (entryPx - markPx) * shares);
         const returnOnEquity = Number(((unrealizedPnl / (positionValue / leverageVal)) || 0).toFixed(3));
         const liquidationPx = pos.liquidationPx ? parseFloat(pos.liquidationPx) : (isLong ? Number((entryPx * (1 - 0.8 / leverageVal)).toFixed(2)) : Number((entryPx * (1 + 0.8 / leverageVal)).toFixed(2)));
+        const entryTime = pos.entryTime || pos.openedAt || pos.time || null;
 
         list.push({
           name: w.name,
@@ -743,6 +744,7 @@ export class OnchainStocksService {
           unrealizedPnl,
           returnOnEquity,
           liquidationPx,
+          entryTime,
           action: isLong ? '持有做多仓位' : '持有做空仓位',
           actionTime: '实时',
           tactic: '主力持仓'

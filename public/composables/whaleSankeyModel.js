@@ -134,6 +134,21 @@ export function truncateVisualText(str, maxUnits = 28) {
   return `${s.slice(0, end)}…`;
 }
 
+export function isPositionLong(p) {
+  if (!p) return false;
+  if (p.isLong === true || p.isLong === 'true') return true;
+  if (p.isLong === false || p.isLong === 'false') return false;
+  const side = String(p.side || '').toUpperCase();
+  if (side === 'LONG' || side === 'BUY') return true;
+  if (side === 'SHORT' || side === 'SELL') return false;
+  const sideLabel = String(p.sideLabel || '');
+  if (sideLabel.includes('多') || sideLabel.includes('买')) return true;
+  if (sideLabel.includes('空') || sideLabel.includes('卖')) return false;
+  const szi = parseFloat(p.szi);
+  if (Number.isFinite(szi) && Math.abs(szi) > 1e-6) return szi > 0;
+  return false;
+}
+
 /**
  * Ensures every wallet in the active dataset has a deterministic unique `walletKey`,
  * even if upstream data reuses an address across distinct curated strategies.
@@ -148,16 +163,24 @@ export function disambiguateWallets(whales = []) {
     const shortAddress = w?.shortAddress || (
       rawAddr.length > 10 ? `${rawAddr.slice(0, 6)}...${rawAddr.slice(-4)}` : rawAddr
     );
-    const positions = Array.isArray(w?.positions) ? w.positions : [];
+    const rawPositions = Array.isArray(w?.positions) ? w.positions : [];
     let longSum = 0;
     let shortSum = 0;
     let unrealizedPnl = 0;
-    for (const p of positions) {
+    const positions = rawPositions.map(p => {
+      const isLong = isPositionLong(p);
       const val = Math.max(0, Number(p?.positionValue) || 0);
-      if (p?.isLong || String(p?.side || '').toUpperCase() === 'LONG') longSum += val;
+      if (isLong) longSum += val;
       else shortSum += val;
       unrealizedPnl += Number(p?.unrealizedPnl) || 0;
-    }
+      return {
+        ...p,
+        isLong,
+        side: p?.side || (isLong ? 'LONG' : 'SHORT'),
+        sideLabel: p?.sideLabel || (isLong ? '做多' : '做空'),
+        positionValue: val
+      };
+    });
     const grossPos = longSum + shortSum;
     const totalNtl = Number(w?.totalNtlPos) > 0 && grossPos === 0 ? Number(w.totalNtlPos) : grossPos;
     const longPct = totalNtl > 0 ? Math.round((longSum / totalNtl) * 100) : 50;
@@ -166,6 +189,7 @@ export function disambiguateWallets(whales = []) {
       ...w,
       walletKey,
       shortAddress,
+      positions,
       longNotional: longSum,
       shortNotional: shortSum,
       grossPositionNotional: grossPos,
@@ -185,7 +209,7 @@ function normalizeWalletCoinMap(wallet) {
     if (!coin) continue;
     const val = Math.max(0, Number(p?.positionValue) || 0);
     if (val <= 0) continue;
-    const isLong = Boolean(p?.isLong || String(p?.side || '').toUpperCase() === 'LONG');
+    const isLong = isPositionLong(p);
     if (!map.has(coin)) {
       map.set(coin, {
         coin,
@@ -376,9 +400,9 @@ export function computeWhaleSankeyGraph({
     }
   }
 
-  // Aggregate asset totals across displayed wallets
+  // Aggregate asset totals across all eligible candidate wallets
   const assetAggregate = new Map();
-  for (const w of displayWallets) {
+  for (const w of candidates) {
     for (const pair of w.coinMap.values()) {
       const mVal = measurePair(pair, activeMode);
       if (mVal <= 0) continue;
@@ -649,6 +673,10 @@ export function computeWhaleSankeyGraph({
       ? (a.label && a.label !== a.symbol ? `${a.label} · 量 ${formattedVolume}` : `量 ${formattedVolume}`)
       : a.label;
 
+    const displayTotalVal = activeMode === 'long'
+      ? a.longVal
+      : (activeMode === 'short' ? a.shortVal : grossPair);
+
     return {
       symbol: a.symbol,
       displaySymbol: a.isOther ? '其他' : a.symbol,
@@ -659,14 +687,16 @@ export function computeWhaleSankeyGraph({
       subLabel,
       chartSymbol: a.chartSymbol,
       isOther: Boolean(a.isOther),
-      totalVal: totalA,
-      formattedVal: formatWhaleCompactUsd(totalA),
+      totalVal: displayTotalVal,
+      formattedVal: formatWhaleCompactUsd(displayTotalVal),
+      flowVal: totalA,
+      formattedFlowVal: formatWhaleCompactUsd(totalA),
       longVal: a.longVal,
       shortVal: a.shortVal,
       longPct: Math.round(longShare * 100),
       longBarW: Number((48 * longShare).toFixed(1)),
       selectedContribVal: contribVal,
-      selectedContribText: contribVal > 0 ? `占 ${totalA > 0 ? Math.round((contribVal / totalA) * 100) : 0}% · ${formatWhaleCompactUsd(contribVal)}` : '',
+      selectedContribText: contribVal > 0 ? `占 ${displayTotalVal > 0 ? Math.round((contribVal / displayTotalVal) * 100) : 0}% · ${formatWhaleCompactUsd(contribVal)}` : '',
       y: slot.y,
       h: slot.h,
       middleY,
@@ -720,7 +750,7 @@ export function buildAggregatedPositions(whales = [], { mode = 'all', searchQuer
       }
       const val = Math.max(0, Number(p?.positionValue) || 0);
       if (val <= 0) continue;
-      const isLong = Boolean(p?.isLong || String(p?.side || '').toUpperCase() === 'LONG');
+      const isLong = isPositionLong(p);
       if (activeMode === 'long' && !isLong) continue;
       if (activeMode === 'short' && isLong) continue;
 

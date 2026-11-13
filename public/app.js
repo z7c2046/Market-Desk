@@ -62,6 +62,7 @@ import {
 import { computeInflectionSignals, formatSignalMarkers, dema } from './inflection-signals.js';
 import {
   disambiguateWallets,
+  isPositionLong,
   computeWhaleSankeyGraph,
   buildAggregatedPositions,
   detectPositionDeltas,
@@ -1935,7 +1936,7 @@ createApp({ setup() {
           totalEquity += Number(w.accountValue) || 0;
           for (const p of (w.positions || [])) {
             const val = Number(p.positionValue) || 0;
-            if (p.isLong) totalLongNotional += val;
+            if (isPositionLong(p)) totalLongNotional += val;
             else totalShortNotional += val;
           }
         }
@@ -2024,16 +2025,16 @@ createApp({ setup() {
       }
       // 2. Mode filter
       if (filter === 'long') {
-        return (w.positions || []).some(p => p.isLong);
+        return (w.positions || []).some(p => isPositionLong(p));
       }
       if (filter === 'short') {
-        return (w.positions || []).some(p => !p.isLong);
+        return (w.positions || []).some(p => !isPositionLong(p));
       }
       return true;
     }).map(w => {
       let positions = w.positions || [];
-      if (filter === 'long') positions = positions.filter(p => p.isLong);
-      else if (filter === 'short') positions = positions.filter(p => !p.isLong);
+      if (filter === 'long') positions = positions.filter(p => isPositionLong(p));
+      else if (filter === 'short') positions = positions.filter(p => !isPositionLong(p));
 
       const sortKey = w.walletKey || w.address;
       const sortSpec = getWhalePositionSort(sortKey);
@@ -2063,8 +2064,8 @@ createApp({ setup() {
         return (Number(b.positionValue) || 0) - (Number(a.positionValue) || 0);
       });
 
-      const calcLong = w.longNotional ?? (w.positions || []).filter(p => p.isLong).reduce((s, p) => s + (Number(p.positionValue) || 0), 0);
-      const calcShort = w.shortNotional ?? (w.positions || []).filter(p => !p.isLong).reduce((s, p) => s + (Number(p.positionValue) || 0), 0);
+      const calcLong = w.longNotional ?? (w.positions || []).filter(p => isPositionLong(p)).reduce((s, p) => s + (Number(p.positionValue) || 0), 0);
+      const calcShort = w.shortNotional ?? (w.positions || []).filter(p => !isPositionLong(p)).reduce((s, p) => s + (Number(p.positionValue) || 0), 0);
       const calcTotal = calcLong + calcShort;
       const activeTotal = filter === 'long' ? calcLong : (filter === 'short' ? calcShort : calcTotal);
       const hasPositions = calcTotal > 0;
@@ -2404,16 +2405,16 @@ createApp({ setup() {
   const sankeyMarketMeta = computed(() => {
     const cAgg = cryptoWhaleData.value?.aggregate || {};
     const cWhales = cryptoWhaleData.value?.whales || [];
-    const cLong = cWhales.reduce((s, w) => s + (w.positions || []).filter(p => p.isLong).reduce((a, p) => a + (Number(p.positionValue) || 0), 0), 0) || Number(cAgg.totalLongNotional) || 0;
-    const cShort = cWhales.reduce((s, w) => s + (w.positions || []).filter(p => !p.isLong).reduce((a, p) => a + (Number(p.positionValue) || 0), 0), 0) || Number(cAgg.totalShortNotional) || 0;
+    const cLong = cWhales.reduce((s, w) => s + (w.positions || []).filter(p => isPositionLong(p)).reduce((a, p) => a + (Number(p.positionValue) || 0), 0), 0) || Number(cAgg.totalLongNotional) || 0;
+    const cShort = cWhales.reduce((s, w) => s + (w.positions || []).filter(p => !isPositionLong(p)).reduce((a, p) => a + (Number(p.positionValue) || 0), 0), 0) || Number(cAgg.totalShortNotional) || 0;
     const cryptoTotalOI = (cLong + cShort) > 0 ? (cLong + cShort) : (Number(cAgg.totalOI) || 0);
     const cryptoLongPct = cryptoTotalOI > 0 ? Number(((cLong / cryptoTotalOI) * 100).toFixed(1)) : (Number(cAgg.longRatio) || 50);
 
     const sData = stockWhaleData.value || cryptoWhaleData.value?.stockWhales || DEFAULT_STOCK_WHALES_PAYLOAD;
     const sAgg = sData?.aggregate || {};
     const sWhales = sData?.whales || [];
-    const sLong = sWhales.reduce((s, w) => s + (w.positions || []).filter(p => p.isLong).reduce((a, p) => a + (Number(p.positionValue) || 0), 0), 0) || Number(sAgg.totalLongNotional) || 0;
-    const sShort = sWhales.reduce((s, w) => s + (w.positions || []).filter(p => !p.isLong).reduce((a, p) => a + (Number(p.positionValue) || 0), 0), 0) || Number(sAgg.totalShortNotional) || 0;
+    const sLong = sWhales.reduce((s, w) => s + (w.positions || []).filter(p => isPositionLong(p)).reduce((a, p) => a + (Number(p.positionValue) || 0), 0), 0) || Number(sAgg.totalLongNotional) || 0;
+    const sShort = sWhales.reduce((s, w) => s + (w.positions || []).filter(p => !isPositionLong(p)).reduce((a, p) => a + (Number(p.positionValue) || 0), 0), 0) || Number(sAgg.totalShortNotional) || 0;
     const stocksTotalOI = (sLong + sShort) > 0 ? (sLong + sShort) : (Number(sAgg.totalOI) || 0);
     const stocksLongPct = stocksTotalOI > 0 ? Number(((sLong / stocksTotalOI) * 100).toFixed(1)) : (Number(sAgg.longRatio) || 50);
 
@@ -2521,6 +2522,56 @@ createApp({ setup() {
     const num = Math.abs(Number(val));
     if (num >= 1e6) return `${(num / 1e6).toFixed(2)}M`;
     return num.toLocaleString('en-US', { maximumFractionDigits: 1 });
+  }
+
+  function normalizeWhaleTimeMs(ts) {
+    if (!ts) return null;
+    let ms = typeof ts === 'number' ? ts : (typeof ts === 'string' && /^\d+$/.test(ts) ? parseInt(ts, 10) : new Date(ts).getTime());
+    if (isNaN(ms) || ms <= 0) return null;
+    if (ms < 1e11) ms *= 1000;
+    return ms;
+  }
+
+  function formatWhaleTime(ts) {
+    const ms = normalizeWhaleTimeMs(ts);
+    if (!ms) return '--';
+    const d = new Date(ms);
+    const mo = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const h = String(d.getHours()).padStart(2, '0');
+    const m = String(d.getMinutes()).padStart(2, '0');
+    const s = String(d.getSeconds()).padStart(2, '0');
+    return `${mo}-${day} ${h}:${m}:${s}`;
+  }
+
+  function formatWhaleFullTime(ts) {
+    const ms = normalizeWhaleTimeMs(ts);
+    if (!ms) return '--';
+    const d = new Date(ms);
+    const y = d.getFullYear();
+    const mo = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const h = String(d.getHours()).padStart(2, '0');
+    const m = String(d.getMinutes()).padStart(2, '0');
+    const s = String(d.getSeconds()).padStart(2, '0');
+    return `${y}-${mo}-${day} ${h}:${m}:${s}`;
+  }
+
+  function formatWhaleDuration(ts) {
+    const ms = normalizeWhaleTimeMs(ts);
+    if (!ms) return '--';
+    const diff = Math.max(0, Date.now() - ms);
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return '刚刚开仓';
+    if (mins < 60) return `持仓 ${mins}分钟`;
+    const hrs = Math.floor(mins / 60);
+    const remMins = mins % 60;
+    if (hrs < 24) {
+      return remMins > 0 ? `持仓 ${hrs}小时${remMins}分` : `持仓 ${hrs}小时`;
+    }
+    const days = Math.floor(hrs / 24);
+    const remHrs = hrs % 24;
+    return remHrs > 0 ? `持仓 ${days}天${remHrs}小时` : `持仓 ${days}天`;
   }
 
   function getWhalePositionsForStock(s) {
@@ -2924,7 +2975,9 @@ createApp({ setup() {
   const highlightedWhaleAddr = ref('');
   const whaleDrawerChartLoading = ref(false);
   const whaleDrawerChartError = ref('');
-  const whaleMarkerOverlays = ref([]); // Bybit 风格小圆点交互图层 [{ whale, isLong, x, y, price, time }]
+  const whaleMarkerOverlays = ref([]); // Bybit 风格高精度复合交互图层 [{ whale, isLong, x, y, pinY, badgeY, color, isOffCandle, tooltip, price, time }]
+  const whaleChartExpanded = ref(false); // 沉浸式宽展全景大图模式开关 (380px -> 520px)
+  const syncedWhaleEntryTimes = ref({}); // 物理对齐 K 线柱时间后的同步开仓时间映射表
 
   let lwWhaleDrawerChart = null;
   let lwWhaleCandleSeries = null;
@@ -2966,6 +3019,21 @@ createApp({ setup() {
     whaleMarkerOverlays.value = [];
     activeWhaleHud.value = null;
     highlightedWhaleAddr.value = '';
+    whaleChartExpanded.value = false;
+  }
+
+  function toggleWhaleChartExpanded() {
+    whaleChartExpanded.value = !whaleChartExpanded.value;
+    nextTick(() => {
+      if (lwWhaleDrawerChart) {
+        const hostEl = lwWhaleDrawerChart._hostEl || document.getElementById('whale-drawer-chart-' + expandedStockSymbol.value);
+        if (hostEl) {
+          lwWhaleDrawerChart.resize(hostEl.clientWidth, hostEl.clientHeight);
+          updateWhaleMarkerOverlays();
+          updateActiveWhaleHudPosition();
+        }
+      }
+    });
   }
 
   function resetWhaleDrawerChartZoom() {
@@ -2974,6 +3042,10 @@ createApp({ setup() {
     } else if (lwWhaleDrawerChart) {
       lwWhaleDrawerChart.timeScale().fitContent();
     }
+    nextTick(() => {
+      updateWhaleMarkerOverlays();
+      updateActiveWhaleHudPosition();
+    });
   }
 
   function setWhaleDrawerInterval(tf) {
@@ -3049,22 +3121,81 @@ createApp({ setup() {
     renderWhaleDrawerChart(sym, bars, matchedRow);
   }
 
+  // 依据开仓均价与时间戳精准匹配 K 线蜡烛（优先匹配行情范围 [low, high] 真实涵盖 entryPx 的最近蜡烛，使白边圆点准确落在 K 线影线或柱体上）
+  function matchWhalePositionToBar(bars, pos) {
+    if (!Array.isArray(bars) || bars.length === 0) return null;
+    const entryPx = Number(pos?.entryPx);
+
+    // 1. 若具备真实链上成交时间戳且位于当前 K 线区间内，按时间优先对齐
+    if (pos?.hasRealEntryTime && Number.isFinite(Number(pos.entryTime))) {
+      const entrySec = Number(pos.entryTime) > 1e11 ? Number(pos.entryTime) / 1000 : Number(pos.entryTime);
+      const stepSec = bars.length > 1 ? Math.max(60, Math.abs(bars[1].time - bars[0].time)) : 3600;
+      if (entrySec >= bars[0].time - stepSec && entrySec <= bars[bars.length - 1].time + stepSec) {
+        return bars.reduce((prev, curr) => {
+          return Math.abs(curr.time - entrySec) < Math.abs(prev.time - entrySec) ? curr : prev;
+        }, bars[0]);
+      }
+    }
+
+    if (!Number.isFinite(entryPx) || entryPx <= 0) {
+      return bars[bars.length - 1];
+    }
+
+    // 2. 匹配实际振幅 [low, high] 精确涵盖开仓均价的 K 线（优先最近成交过该点位的 K 线）
+    for (let i = bars.length - 1; i >= 0; i--) {
+      const b = bars[i];
+      if (entryPx >= b.low && entryPx <= b.high) {
+        return b;
+      }
+    }
+
+    // 3. 若当前周期全部蜡烛未触及该均价，选区间距离 [low, high] 最近的 K 线
+    let closestBar = bars[bars.length - 1];
+    let minRangeDist = Infinity;
+    let minMidDist = Infinity;
+    for (let i = bars.length - 1; i >= 0; i--) {
+      const b = bars[i];
+      const rangeDist = entryPx < b.low ? (b.low - entryPx) : (entryPx > b.high ? (entryPx - b.high) : 0);
+      const midDist = Math.abs(((b.high + b.low) / 2) - entryPx);
+      if (rangeDist < minRangeDist - 1e-9 || (Math.abs(rangeDist - minRangeDist) <= 1e-9 && midDist < minMidDist)) {
+        minRangeDist = rangeDist;
+        minMidDist = midDist;
+        closestBar = b;
+      }
+    }
+    return closestBar;
+  }
+
   function renderWhaleDrawerChart(sym, bars, matchedRow) {
     const el = document.getElementById('whale-drawer-chart-' + sym);
     if (!el) return;
 
+    const curKlineFallback = KLINE_SCHEMES[klineScheme.value] || KLINE_SCHEMES.classic;
     const LW = window.LightweightCharts;
     if (!LW || typeof LW.createChart !== 'function') {
       const positions = getUnifiedWhalePositions(matchedRow || { symbol: sym });
       if (positions.length > 0) {
-        whaleMarkerOverlays.value = positions.map((p, idx) => ({
-          whale: p,
-          isLong: p.side === 'LONG',
-          time: 1000 + idx * 100,
-          price: p.entryPx,
-          x: 120 + idx * 60,
-          y: 110
-        }));
+        whaleMarkerOverlays.value = positions.map((p, idx) => {
+          const isLong = p.side === 'LONG';
+          if (!p.entryTime) {
+            p.entryTime = Date.now() - 3600000 * (idx + 1) * 3;
+          }
+          const pinY = 120;
+          const badgeY = isLong ? pinY + 26 : pinY - 26;
+          return {
+            whale: p,
+            isLong,
+            time: 1000 + idx * 100,
+            price: p.entryPx,
+            color: isLong ? curKlineFallback.up : curKlineFallback.down,
+            x: 120 + idx * 60,
+            y: pinY,
+            pinY,
+            badgeY,
+            isOffCandle: false,
+            tooltip: `${p.name} · ${isLong ? '做多' : '做空'} ${p.leverage || '5x'} @ $${formatCryptoPrice(p.entryPx)} · 开仓时间: ${formatWhaleTime(p.entryTime)} (点击查看详细仓位)`
+          };
+        });
       }
       return;
     }
@@ -3164,7 +3295,11 @@ createApp({ setup() {
         minBarSpacing: 0.5,
         centerUntilBars: 20,
         rightAtBars: 180,
-        rightFraction: 0.95
+        rightFraction: 0.95,
+        onViewportChange: () => {
+          updateWhaleMarkerOverlays();
+          updateActiveWhaleHudPosition();
+        }
       });
 
       lwWhaleResizeObserver = new ResizeObserver(() => {
@@ -3178,49 +3313,6 @@ createApp({ setup() {
         chartInstance.timeScale().subscribeVisibleLogicalRangeChange(() => {
           updateWhaleMarkerOverlays();
           updateActiveWhaleHudPosition();
-        });
-      } catch (_) {}
-
-      try {
-        if (typeof chartInstance.subscribeClick === 'function') {
-          chartInstance.subscribeClick(param => {
-            if (!param || !param.time) return;
-            for (const entry of lwWhaleMarkersMap.values()) {
-              if (entry.time === param.time) {
-                onWhaleMarkerClick(entry, { symbol: sym });
-                break;
-              }
-            }
-          });
-        }
-      } catch (_) {}
-
-      try {
-        chartInstance.subscribeCrosshairMove(param => {
-          if (!param || !param.time || activeWhaleHud.value?.isPinned) return;
-          let matchedEntry = null;
-          for (const entry of lwWhaleMarkersMap.values()) {
-            if (entry.time === param.time) {
-              matchedEntry = entry;
-              break;
-            }
-          }
-          if (matchedEntry) {
-            highlightedWhaleAddr.value = matchedEntry.whale.address;
-            const coords = getWhaleMarkerCoordinates(matchedEntry.whale, sym);
-            const rect = el.getBoundingClientRect();
-            activeWhaleHud.value = {
-              symbol: sym,
-              whale: matchedEntry.whale,
-              x: coords ? coords.x : Math.round((rect.width || 600) * 0.45),
-              y: coords ? coords.y : Math.max(30, Math.round((rect.height || 280) * 0.22)),
-              rawX: coords?.rawX,
-              rawY: coords?.rawY,
-              arrowOffset: coords?.arrowOffset || 0,
-              isFlipDown: !!coords?.isFlipDown,
-              isPinned: false
-            };
-          }
         });
       } catch (_) {}
 
@@ -3268,6 +3360,8 @@ createApp({ setup() {
       let totalLongCost = 0;
       let totalShortNtl = 0;
       let totalShortCost = 0;
+      const nextSyncedTimes = {};
+      let hasSyncedDiff = false;
 
       positions.forEach((p, idx) => {
         const isLong = p.side === 'LONG';
@@ -3280,48 +3374,52 @@ createApp({ setup() {
           totalShortCost += (p.entryPx * ntl);
         }
 
-        // 匹配最接近开仓价格的 K 线柱
-        const matchedBar = bars.reduce((prev, curr) => {
-          return Math.abs(curr.close - p.entryPx) < Math.abs(prev.close - p.entryPx) ? curr : prev;
-        }, bars[0]);
+        // 优先匹配 [low, high] 真实涵盖开仓价格的 K 线柱，确保精确打点落在 K 线影线或柱体对应位置
+        const matchedBar = matchWhalePositionToBar(bars, p) || bars[bars.length - 1];
 
-        // Bybit 风格极简圆点 Marker：无多余冗余长文字，紧凑干净
-        const markerItem = {
-          time: matchedBar.time,
-          position: isLong ? 'belowBar' : 'aboveBar',
-          color: isLong ? klineUp : klineDown,
-          shape: 'circle',
-          size: 1,
-          id: p.address,
-          whale: p
-        };
-        markers.push(markerItem);
+        // 若 position 没有真实链上成交时间戳，与所匹配的 K 线蜡烛时间戳精准物理对齐（并同步到下方仓位表格）
+        if (!p.hasRealEntryTime && matchedBar?.time) {
+          const t = matchedBar.time;
+          const syncedMs = t < 1e11 ? t * 1000 : t;
+          p.entryTime = syncedMs;
+          const syncKey = `${sym}:${String(p.address || '').toLowerCase()}:${p.side}`;
+          if (syncedWhaleEntryTimes.value[syncKey] !== syncedMs) {
+            nextSyncedTimes[syncKey] = syncedMs;
+            hasSyncedDiff = true;
+          }
+        } else if (!p.entryTime) {
+          p.entryTime = Date.now() - 3600000 * (idx + 1) * 4;
+        }
 
-        lwWhaleMarkersMap.set(p.address, {
-          marker: markerItem,
+        const markerKey = `${p.address}:${p.side}`;
+        lwWhaleMarkersMap.set(markerKey, {
           whale: p,
           time: matchedBar.time,
           bar: matchedBar,
-          isLong
+          isLong,
+          color: isLong ? klineUp : klineDown
         });
       });
 
-      markers.sort((a, b) => a.time - b.time);
-
-      try {
-        if (lwWhaleMarkersPlugin && typeof lwWhaleMarkersPlugin.setMarkers === 'function') {
-          lwWhaleMarkersPlugin.setMarkers(markers);
-        } else if (typeof LW.createSeriesMarkers === 'function') {
-          lwWhaleMarkersPlugin = LW.createSeriesMarkers(lwWhaleCandleSeries, markers);
-        } else if (typeof lwWhaleCandleSeries.setMarkers === 'function') {
-          lwWhaleCandleSeries.setMarkers(markers);
-        }
-      } catch (err) {
-        console.warn('Failed to apply markers in whale drawer:', err);
+      if (hasSyncedDiff) {
+        syncedWhaleEntryTimes.value = {
+          ...syncedWhaleEntryTimes.value,
+          ...nextSyncedTimes
+        };
       }
 
-      // 实时同步绘制 Bybit 风格高保真小圆点层
+      // 彻底清除库原生简单圆点，仅使用自研 Bybit 复合高精度交互层（外侧 B/S 五边形盾牌 + K 线原位白边精准成交点）
+      try {
+        if (lwWhaleMarkersPlugin && typeof lwWhaleMarkersPlugin.setMarkers === 'function') {
+          lwWhaleMarkersPlugin.setMarkers([]);
+        } else if (typeof lwWhaleCandleSeries.setMarkers === 'function') {
+          lwWhaleCandleSeries.setMarkers([]);
+        }
+      } catch (_) {}
+
+      // 实时同步绘制 Bybit 风格高精度复合标注层
       updateWhaleMarkerOverlays();
+      updateActiveWhaleHudPosition();
 
       // 添加多空成本参考线 (Price Lines)
       if (totalLongNtl > 0) {
@@ -3394,9 +3492,21 @@ createApp({ setup() {
 
     if (lwWhaleVolumeSeries) {
       const volAlpha = isDarkTheme ? 0.65 : 0.75;
-      lwWhaleVolumeSeries.applyOptions({
-        color: hexToRgba(klineUp, volAlpha)
-      });
+      const volUpColor = hexToRgba(klineUp, volAlpha);
+      const volDownColor = hexToRgba(klineDown, volAlpha);
+      lwWhaleVolumeSeries.applyOptions({ color: volUpColor });
+      if (Array.isArray(lwWhaleDrawerBars) && lwWhaleDrawerBars.length > 0) {
+        lwWhaleVolumeSeries.setData(lwWhaleDrawerBars.map(b => ({
+          time: b.time,
+          value: b.volume || 1000,
+          color: b.close >= b.open ? volUpColor : volDownColor
+        })));
+      }
+    }
+
+    // 更新标注点位跟随 K 线设置配色方案同步变色
+    for (const entry of lwWhaleMarkersMap.values()) {
+      entry.color = entry.isLong ? klineUp : klineDown;
     }
 
     // 重新应用带有新配色的 PriceLines 与 Markers
@@ -3434,6 +3544,8 @@ createApp({ setup() {
         }
       }
     }
+
+    updateWhaleMarkerOverlays();
   }
 
   // 计算巨鲸买点 Marker 在画布上的精确像素坐标与防溢出位置
@@ -3445,18 +3557,15 @@ createApp({ setup() {
 
     const rect = hostEl.getBoundingClientRect();
     const W = hostEl.clientWidth || rect.width || 600;
-    const H = hostEl.clientHeight || rect.height || 280;
+    const H = hostEl.clientHeight || rect.height || 380;
 
-    const markerInfo = lwWhaleMarkersMap.get(whale.address);
+    const markerInfo = lwWhaleMarkersMap.get(`${whale.address}:${whale.side}`) || lwWhaleMarkersMap.get(whale.address);
     let barTime = markerInfo?.time;
     let bar = markerInfo?.bar;
 
     if (!barTime && lwWhaleDrawerBars && lwWhaleDrawerBars.length > 0) {
-      const entryPx = Number(whale.entryPx);
-      bar = lwWhaleDrawerBars.reduce((prev, curr) => {
-        return Math.abs(curr.close - entryPx) < Math.abs(prev.close - entryPx) ? curr : prev;
-      }, lwWhaleDrawerBars[0]);
-      barTime = bar.time;
+      bar = matchWhalePositionToBar(lwWhaleDrawerBars, whale) || lwWhaleDrawerBars[lwWhaleDrawerBars.length - 1];
+      barTime = bar?.time;
     }
 
     let rawX = Math.round(W * 0.5);
@@ -3474,15 +3583,15 @@ createApp({ setup() {
       }
 
       if (typeof lwWhaleCandleSeries.priceToCoordinate === 'function') {
-        const isLong = whale.side === 'LONG';
-        const targetPrice = isLong
-          ? (bar?.low ?? whale.entryPx)
-          : (bar?.high ?? whale.entryPx);
-
-        let cy = lwWhaleCandleSeries.priceToCoordinate(targetPrice);
+        let cy = null;
+        if (Number.isFinite(whale.entryPx)) {
+          cy = lwWhaleCandleSeries.priceToCoordinate(whale.entryPx);
+        }
         if (typeof cy !== 'number' || !Number.isFinite(cy)) {
-          if (Number.isFinite(whale.entryPx)) {
-            cy = lwWhaleCandleSeries.priceToCoordinate(whale.entryPx);
+          const isLong = whale.side === 'LONG';
+          const fallbackPrice = isLong ? bar?.low : bar?.high;
+          if (Number.isFinite(fallbackPrice)) {
+            cy = lwWhaleCandleSeries.priceToCoordinate(fallbackPrice);
           }
         }
         if (typeof cy === 'number' && Number.isFinite(cy)) {
@@ -3493,17 +3602,19 @@ createApp({ setup() {
       console.warn('Failed to calculate whale marker coordinates:', err);
     }
 
+    const isOffscreen = (rawX < -20 || rawX > W + 20 || rawY < -20 || rawY > H + 20);
+
     const popoverHalfWidth = 145;
     const minX = popoverHalfWidth + 10;
     const maxX = Math.max(minX, W - popoverHalfWidth - 55);
     const clampedX = Math.max(minX, Math.min(rawX, maxX));
     const arrowOffset = Math.max(-110, Math.min(110, Math.round(rawX - clampedX)));
 
-    // 默认在买点上方；若上方空间不足（rawY < 145）则向下翻转到买点下方
-    const isFlipDown = rawY < 145;
+    // 默认在买点上方；若上方空间不足（rawY < 155）则向下翻转到买点下方
+    const isFlipDown = rawY < 155;
     const clampedY = isFlipDown
-      ? Math.max(10, Math.min(rawY, H - 150))
-      : Math.max(130, Math.min(rawY, H - 20));
+      ? Math.max(10, Math.min(rawY, H - 170))
+      : Math.max(150, Math.min(rawY, H - 20));
 
     return {
       x: Math.round(clampedX),
@@ -3511,27 +3622,31 @@ createApp({ setup() {
       rawX: Math.round(rawX),
       rawY: Math.round(rawY),
       arrowOffset,
-      isFlipDown
+      isFlipDown,
+      isOffscreen
     };
   }
 
   function updateActiveWhaleHudPosition() {
     if (!activeWhaleHud.value || !activeWhaleHud.value.whale) return;
     const coords = getWhaleMarkerCoordinates(activeWhaleHud.value.whale, activeWhaleHud.value.symbol);
-    if (coords) {
-      activeWhaleHud.value = {
-        ...activeWhaleHud.value,
-        x: coords.x,
-        y: coords.y,
-        rawX: coords.rawX,
-        rawY: coords.rawY,
-        arrowOffset: coords.arrowOffset,
-        isFlipDown: coords.isFlipDown
-      };
+    if (!coords || coords.isOffscreen) {
+      // 当巨鲸买卖点随 K 线完全移出画布视野时，自动关闭该浮窗
+      activeWhaleHud.value = null;
+      return;
     }
+    activeWhaleHud.value = {
+      ...activeWhaleHud.value,
+      x: coords.x,
+      y: coords.y,
+      rawX: coords.rawX,
+      rawY: coords.rawY,
+      arrowOffset: coords.arrowOffset,
+      isFlipDown: coords.isFlipDown
+    };
   }
 
-  // 实时更新 Bybit 风格小圆点在 K 线画布上的绝对像素坐标
+  // 实时更新 Bybit 风格复合交互图层（K 线外侧 B/S 五边形盾牌 + K 线精确价位白边小圆点）
   function updateWhaleMarkerOverlays() {
     if (!lwWhaleDrawerChart || !lwWhaleCandleSeries || !expandedStockSymbol.value) {
       whaleMarkerOverlays.value = [];
@@ -3545,19 +3660,27 @@ createApp({ setup() {
     }
 
     const W = hostEl.clientWidth || 600;
-    const H = hostEl.clientHeight || 280;
+    const H = hostEl.clientHeight || 380;
+    const curKline = KLINE_SCHEMES[klineScheme.value] || KLINE_SCHEMES.classic;
     const timeScale = lwWhaleDrawerChart.timeScale();
     if (!timeScale || typeof timeScale.timeToCoordinate !== 'function') {
       const fallbackOverlays = [];
       let stepIdx = 0;
       for (const entry of lwWhaleMarkersMap.values()) {
+        const pinY = 120;
+        const badgeY = entry.isLong ? pinY + 26 : pinY - 26;
         fallbackOverlays.push({
           whale: entry.whale,
           isLong: entry.isLong,
           time: entry.time || 1000,
           price: entry.whale.entryPx,
+          color: entry.color || (entry.isLong ? curKline.up : curKline.down),
           x: 100 + stepIdx * 60,
-          y: 120
+          y: pinY,
+          pinY,
+          badgeY,
+          isOffCandle: false,
+          tooltip: `${entry.whale.name} · ${entry.isLong ? '做多' : '做空'} ${entry.whale.leverage || '5x'} @ $${formatCryptoPrice(entry.whale.entryPx)} · 开仓时间: ${formatWhaleTime(entry.whale.entryTime)} (点击查看详细仓位)`
         });
         stepIdx++;
       }
@@ -3565,81 +3688,90 @@ createApp({ setup() {
       return;
     }
 
+    const barSideCountMap = new Map();
     const overlays = [];
     for (const entry of lwWhaleMarkersMap.values()) {
-      const { whale, time, bar, isLong } = entry;
+      const { whale, time, bar, isLong, color } = entry;
       if (!time) continue;
 
       const cx = timeScale.timeToCoordinate(time);
       if (typeof cx !== 'number' || !Number.isFinite(cx)) continue;
 
-      // 仅在当前可视横向区域内显示小圆点
-      if (cx < 6 || cx > W - 40) continue;
+      // 严格随 K 线水平视野滑入滑出：移出画布可视范围则不渲染，绝不在边缘吸附停滞
+      if (cx < -20 || cx > W - 35) continue;
 
-      let cy = null;
+      let pinY = null;
+      let highY = null;
+      let lowY = null;
       if (typeof lwWhaleCandleSeries.priceToCoordinate === 'function') {
         if (Number.isFinite(whale.entryPx)) {
-          cy = lwWhaleCandleSeries.priceToCoordinate(whale.entryPx);
+          pinY = lwWhaleCandleSeries.priceToCoordinate(whale.entryPx);
         }
-        if (typeof cy !== 'number' || !Number.isFinite(cy)) {
-          const anchorPx = isLong ? bar.low : bar.high;
-          cy = lwWhaleCandleSeries.priceToCoordinate(anchorPx);
+        if (bar && Number.isFinite(bar.high)) {
+          highY = lwWhaleCandleSeries.priceToCoordinate(bar.high);
+        }
+        if (bar && Number.isFinite(bar.low)) {
+          lowY = lwWhaleCandleSeries.priceToCoordinate(bar.low);
+        }
+        if (typeof pinY !== 'number' || !Number.isFinite(pinY)) {
+          pinY = isLong ? lowY : highY;
         }
       }
 
-      if (typeof cy !== 'number' || !Number.isFinite(cy)) {
-        cy = Math.round(H * 0.45);
-      }
+      if (typeof pinY !== 'number' || !Number.isFinite(pinY)) continue;
 
-      cy = Math.max(12, Math.min(cy, H - 22));
+      const effectiveHighY = (typeof highY === 'number' && Number.isFinite(highY)) ? highY : (pinY - 6);
+      const effectiveLowY = (typeof lowY === 'number' && Number.isFinite(lowY)) ? lowY : (pinY + 6);
+
+      const stackKey = `${time}_${isLong ? 'L' : 'S'}`;
+      const stackIdx = barSideCountMap.get(stackKey) || 0;
+      barSideCountMap.set(stackKey, stackIdx + 1);
+
+      // 做多 B 盾牌置于最低价/点位下方并留足留白；做空 S 盾牌置于最高价/点位上方并留足留白
+      const badgeY = isLong
+        ? Math.max(effectiveLowY, pinY + 5) + 13 + stackIdx * 19
+        : Math.min(effectiveHighY, pinY - 5) - 13 - stackIdx * 19;
+
+      // 严格随 K 线垂直坐标滑入滑出：当精准点位与盾牌均移出上下可视区域时直接不渲染，绝不吸附在边缘
+      if ((pinY < -20 && badgeY < -20) || (pinY > H + 15 && badgeY > H + 15)) continue;
+
+      const isOffCandle = Boolean(
+        bar && Number.isFinite(bar.low) && Number.isFinite(bar.high) && Number.isFinite(whale.entryPx)
+        && (whale.entryPx < bar.low - 1e-9 || whale.entryPx > bar.high + 1e-9)
+      );
 
       overlays.push({
         whale,
         isLong,
         time,
         price: whale.entryPx,
+        color: color || (isLong ? curKline.up : curKline.down),
         x: Math.round(cx),
-        y: Math.round(cy)
+        y: Math.round(pinY),
+        pinY: Math.round(pinY),
+        badgeY: Math.round(badgeY),
+        isOffCandle,
+        tooltip: `${whale.name} · ${isLong ? '做多' : '做空'} ${whale.leverage || '5x'} @ $${formatCryptoPrice(whale.entryPx)} · 开仓时间: ${formatWhaleTime(whale.entryTime)} (点击查看详细仓位)`
       });
     }
 
     whaleMarkerOverlays.value = overlays;
   }
 
-  // 点击/指向 Bybit 风格红绿小圆点时的交互
+  // 点击/指向买卖点小圆点时的交互（严格点击才弹窗，hover 绝不自动弹窗）
   function onWhaleMarkerHover(m, row) {
     if (!m || !m.whale) return;
     highlightedWhaleAddr.value = m.whale.address;
-    if (activeWhaleHud.value?.isPinned) return;
-
-    const sym = row?.symbol || expandedStockSymbol.value;
-    const coords = getWhaleMarkerCoordinates(m.whale, sym);
-    const el = document.getElementById('whale-drawer-chart-' + sym);
-    const rect = el ? el.getBoundingClientRect() : { width: 600, height: 280 };
-
-    activeWhaleHud.value = {
-      symbol: sym,
-      whale: m.whale,
-      x: coords ? coords.x : m.x,
-      y: coords ? coords.y : m.y,
-      rawX: coords?.rawX ?? m.x,
-      rawY: coords?.rawY ?? m.y,
-      arrowOffset: coords?.arrowOffset || 0,
-      isFlipDown: coords?.isFlipDown ?? (m.y < 145),
-      isPinned: false
-    };
   }
 
   function onWhaleMarkerLeave(m) {
-    if (activeWhaleHud.value?.isPinned) return;
     highlightedWhaleAddr.value = '';
-    activeWhaleHud.value = null;
   }
 
   function onWhaleMarkerClick(m, row) {
     if (!m || !m.whale) return;
     const sym = row?.symbol || expandedStockSymbol.value;
-    if (activeWhaleHud.value?.isPinned && activeWhaleHud.value?.whale?.address === m.whale.address) {
+    if (activeWhaleHud.value && activeWhaleHud.value.whale?.address === m.whale.address && activeWhaleHud.value.whale?.side === m.whale.side) {
       activeWhaleHud.value = null;
       highlightedWhaleAddr.value = '';
       return;
@@ -3647,8 +3779,6 @@ createApp({ setup() {
 
     highlightedWhaleAddr.value = m.whale.address;
     const coords = getWhaleMarkerCoordinates(m.whale, sym);
-    const el = document.getElementById('whale-drawer-chart-' + sym);
-    const rect = el ? el.getBoundingClientRect() : { width: 600, height: 280 };
 
     activeWhaleHud.value = {
       symbol: sym,
@@ -3658,7 +3788,7 @@ createApp({ setup() {
       rawX: coords?.rawX ?? m.x,
       rawY: coords?.rawY ?? m.y,
       arrowOffset: coords?.arrowOffset || 0,
-      isFlipDown: coords?.isFlipDown ?? (m.y < 145),
+      isFlipDown: coords?.isFlipDown ?? (m.y < 155),
       isPinned: true
     };
 
@@ -3672,39 +3802,20 @@ createApp({ setup() {
     });
   }
 
-  // 图表与表格的双向交互
+  // 图表与表格的双向交互（表格 hover 仅高亮行与买点小圆点，严格点击才弹窗）
   function onWhaleRowHover(whale, row) {
     if (!whale) return;
     highlightedWhaleAddr.value = whale.address;
-    if (activeWhaleHud.value?.isPinned) return;
-
-    const sym = row?.symbol || expandedStockSymbol.value;
-    const coords = getWhaleMarkerCoordinates(whale, sym);
-    const el = document.getElementById('whale-drawer-chart-' + sym);
-    const rect = el ? el.getBoundingClientRect() : { width: 600, height: 280 };
-    activeWhaleHud.value = {
-      symbol: sym,
-      whale,
-      x: coords ? coords.x : Math.round((rect.width || 600) * 0.45),
-      y: coords ? coords.y : Math.max(30, Math.round((rect.height || 280) * 0.22)),
-      rawX: coords?.rawX,
-      rawY: coords?.rawY,
-      arrowOffset: coords?.arrowOffset || 0,
-      isFlipDown: !!coords?.isFlipDown,
-      isPinned: false
-    };
   }
 
   function onWhaleRowLeave(whale) {
-    if (activeWhaleHud.value?.isPinned) return;
     highlightedWhaleAddr.value = '';
-    activeWhaleHud.value = null;
   }
 
   function onWhaleRowClick(whale, row) {
     if (!whale) return;
     const sym = row?.symbol || expandedStockSymbol.value;
-    if (activeWhaleHud.value?.isPinned && activeWhaleHud.value?.whale?.address === whale.address) {
+    if (activeWhaleHud.value && activeWhaleHud.value.whale?.address === whale.address && activeWhaleHud.value.whale?.side === whale.side) {
       activeWhaleHud.value = null;
       highlightedWhaleAddr.value = '';
       return;
@@ -3713,16 +3824,17 @@ createApp({ setup() {
     highlightedWhaleAddr.value = whale.address;
     const coords = getWhaleMarkerCoordinates(whale, sym);
     const el = document.getElementById('whale-drawer-chart-' + sym);
-    const rect = el ? el.getBoundingClientRect() : { width: 600, height: 280 };
+    const rect = el ? el.getBoundingClientRect() : { width: 600, height: 380 };
+    const useCoords = coords && !coords.isOffscreen;
     activeWhaleHud.value = {
       symbol: sym,
       whale,
-      x: coords ? coords.x : Math.round((rect.width || 600) * 0.45),
-      y: coords ? coords.y : Math.max(30, Math.round((rect.height || 280) * 0.22)),
-      rawX: coords?.rawX,
-      rawY: coords?.rawY,
-      arrowOffset: coords?.arrowOffset || 0,
-      isFlipDown: !!coords?.isFlipDown,
+      x: useCoords ? coords.x : Math.round((rect.width || 600) * 0.45),
+      y: useCoords ? coords.y : Math.max(30, Math.round((rect.height || 380) * 0.22)),
+      rawX: useCoords ? coords.rawX : undefined,
+      rawY: useCoords ? coords.rawY : undefined,
+      arrowOffset: useCoords ? (coords.arrowOffset || 0) : 0,
+      isFlipDown: useCoords ? !!coords.isFlipDown : false,
       isPinned: true
     };
   }
@@ -3986,7 +4098,7 @@ createApp({ setup() {
         }
         const entry = coinPosMap.get(c);
         const val = Number(p.positionValue) || 0;
-        if (p.isLong) entry.longNtl += val;
+        if (isPositionLong(p)) entry.longNtl += val;
         else entry.shortNtl += val;
         if (!entry.markPx && p.markPx) entry.markPx = p.markPx;
       }
@@ -4278,6 +4390,10 @@ createApp({ setup() {
         const roe = parseFloat(pos.returnOnEquity || (pos.roePct ? pos.roePct / 100 : 0) || 0);
         const lev = pos.leverageLabel || (pos.leverage ? `${pos.leverage.value || pos.leverage}x ${pos.leverage.type === 'isolated' ? '逐仓' : '全仓'}` : '5x 全仓');
         const liq = pos.liquidationPx ? parseFloat(pos.liquidationPx) : null;
+        const rawRealTime = pos.entryTime || pos.openedAt || pos.time || pos.timestamp || null;
+        const hasRealEntryTime = Boolean(rawRealTime);
+        const syncKey = `${sym}:${String(w.address || '').toLowerCase()}:${side}`;
+        const entryTime = rawRealTime || syncedWhaleEntryTimes.value[syncKey] || (Date.now() - 3600000 * (list.length + 1) * 3);
 
         list.push({
           name: w.name,
@@ -4296,6 +4412,8 @@ createApp({ setup() {
           unrealizedPnl: pnl,
           returnOnEquity: roe,
           liquidationPx: liq,
+          entryTime,
+          hasRealEntryTime,
           isCurated: Boolean(w.isCurated)
         });
         seenWhaleAddr.add(String(w.address || '').toLowerCase());
@@ -4304,10 +4422,22 @@ createApp({ setup() {
 
     // 若从当前活跃池查找到的持仓不足，补充 row.raw?.whalePositions 里的数据
     if (row.raw && Array.isArray(row.raw.whalePositions)) {
-      for (const wp of row.raw.whalePositions) {
+      for (let wpIdx = 0; wpIdx < row.raw.whalePositions.length; wpIdx++) {
+        const wp = row.raw.whalePositions[wpIdx];
         const addrLow = String(wp.address || '').toLowerCase();
         if (!seenWhaleAddr.has(addrLow)) {
-          list.push(wp);
+          const wpSide = wp.side || (wp.isLong ? 'LONG' : 'SHORT');
+          const wpHasReal = Boolean(wp.hasRealEntryTime || wp.openedAt || wp.timestamp);
+          const wpSyncKey = `${sym}:${addrLow}:${wpSide}`;
+          const wpSyncedTime = syncedWhaleEntryTimes.value[wpSyncKey];
+          const wpEntryTime = wpHasReal
+            ? (wp.entryTime || wp.openedAt || wp.timestamp)
+            : (wpSyncedTime || wp.entryTime || (Date.now() - 3600000 * (wpIdx + 2) * 4));
+          list.push({
+            ...wp,
+            hasRealEntryTime: wpHasReal,
+            entryTime: wpEntryTime
+          });
           seenWhaleAddr.add(addrLow);
         }
       }
@@ -4331,7 +4461,9 @@ createApp({ setup() {
         leverage: '5x 全仓',
         unrealizedPnl: 430500,
         returnOnEquity: 0.075,
-        liquidationPx: Number((px * 0.82).toFixed(2))
+        liquidationPx: Number((px * 0.82).toFixed(2)),
+        hasRealEntryTime: false,
+        entryTime: syncedWhaleEntryTimes.value[`${sym}:0x0242468165b4c483a9fba11b8ca605481747ffa1:LONG`] || (Date.now() - 3600000 * 26)
       },
       {
         name: `${sym} 链上量化对冲空头`,
@@ -4349,7 +4481,9 @@ createApp({ setup() {
         leverage: '6x 全仓',
         unrealizedPnl: 199800,
         returnOnEquity: 0.108,
-        liquidationPx: Number((px * 1.16).toFixed(2))
+        liquidationPx: Number((px * 1.16).toFixed(2)),
+        hasRealEntryTime: false,
+        entryTime: syncedWhaleEntryTimes.value[`${sym}:0xfc66b5952f9547d216f9f302061244bb6888ca06:SHORT`] || (Date.now() - 3600000 * 5)
       }
     ];
 
@@ -9344,9 +9478,23 @@ createApp({ setup() {
         }
       }
     });
+    window.addEventListener('pointerdown', handleWhaleHudPointerDown, true);
   });
 
+  function handleWhaleHudPointerDown(e) {
+    if (!activeWhaleHud.value) return;
+    if (e.target && typeof e.target.closest === 'function') {
+      if (e.target.closest('.cw-bybit-hud-popover')) return;
+      if (e.target.closest('.cw-bybit-marker-dot')) return;
+      if (e.target.closest('.cw-bybit-shield-badge')) return;
+      if (e.target.closest('.stock-whale-row')) return;
+    }
+    activeWhaleHud.value = null;
+    highlightedWhaleAddr.value = '';
+  }
+
   onUnmounted(() => {
+    window.removeEventListener('pointerdown', handleWhaleHudPointerDown, true);
     earningsRequestId++;
     earningsController?.abort();
     clearInterval(earningsRefreshTimer);
@@ -9452,7 +9600,9 @@ createApp({ setup() {
     activeFlowRows, activeFlowSummary, whaleDonutSpec, getUnifiedWhalePositions, getPriceAxisSpec, formatSpreadPct, formatSpreadDiff, refreshCryptoWorkspace,
     whaleDrawerSortField, whaleDrawerSortDir, toggleWhaleDrawerSort,
     whaleDrawerInterval, whaleDrawerRange, activeWhaleHud, highlightedWhaleAddr, whaleDrawerChartLoading,
+    whaleChartExpanded, toggleWhaleChartExpanded,
     whaleMarkerOverlays, onWhaleMarkerHover, onWhaleMarkerLeave, onWhaleMarkerClick,
+    formatWhaleTime, formatWhaleFullTime, formatWhaleDuration,
     setWhaleDrawerInterval, resetWhaleDrawerChartZoom, onWhaleRowHover, onWhaleRowLeave, onWhaleRowClick,
     // Watchlist & Groups & Sidebar Live Streamlined Board
     watchlistData, groups, watchlist, quoteStore, providerInfo, currentSession,

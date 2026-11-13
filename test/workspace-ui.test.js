@@ -1938,33 +1938,84 @@ test('Crypto Workspace: Sankey distribution, 4 scoped KPIs, 2-column whale-posit
   assert.equal(tfBtns.length, 3, 'Three timeframe switcher buttons (15m, 1h, 1d) exist');
   assert.ok(tfBtns[0].classList.contains('active'), '15m timeframe is active by default');
 
-  // Verify bidirectional table-chart interaction (hover row highlights table row and surfaces HUD)
+  // Verify "Bybit 模式" pill tag is completely removed from chart header
+  assert.equal(activeDrawerTr.querySelector('.cw-cdh-tag'), null, 'Bybit 模式 tag must be deleted');
+
+  // Verify Expand / Collapse chart button (⤢ 展开大图 -> ⤡ 还原)
+  const expandBtn = whaleChartDeck.querySelector('.cw-chart-expand-btn');
+  assert.ok(expandBtn, 'Expand button exists in chart toolbar');
+  assert.match(expandBtn.textContent, /展开大图/, 'Default state shows 展开大图');
+  assert.ok(!whaleChartDeck.classList.contains('is-expanded'), 'Chart deck is not expanded initially');
+
+  expandBtn.click();
+  await tick();
+  assert.ok(whaleChartDeck.classList.contains('is-expanded'), 'Chart deck receives is-expanded class');
+  assert.match(expandBtn.textContent, /还原/, 'Button text updates to 还原');
+
+  expandBtn.click();
+  await tick();
+  assert.ok(!whaleChartDeck.classList.contains('is-expanded'), 'Chart deck restores to standard view');
+  assert.match(expandBtn.textContent, /展开大图/, 'Button text restores to 展开大图');
+
+  // Verify bidirectional table-chart interaction (hovering row strictly highlights, does NOT auto-open HUD popover)
   const firstWhaleRow = activeDrawerTr.querySelector('.stock-whale-table tbody tr');
   assert.ok(firstWhaleRow, 'First whale position row exists');
   firstWhaleRow.dispatchEvent(new ui.w.MouseEvent('mouseenter', { bubbles: true }));
   await tick();
   assert.ok(firstWhaleRow.classList.contains('is-highlighted'), 'Table row receives is-highlighted class on hover');
-  let hudPopover = activeDrawerTr.querySelector('.cw-bybit-hud-popover');
-  assert.ok(hudPopover, 'Bybit-style HUD popover appears on hovering whale row');
-  assert.match(hudPopover.textContent, /开仓均价/, 'HUD popover displays entry price');
+  assert.equal(activeDrawerTr.querySelector('.cw-bybit-hud-popover'), null, 'Hovering row must NOT auto-open HUD popover');
 
   firstWhaleRow.dispatchEvent(new ui.w.MouseEvent('mouseleave', { bubbles: true }));
   await tick();
 
-  // Verify Bybit-style interactive red and green marker dot badges on the K-line chart
+  // Verify interactive compound Bybit markers (outer shield badge B/S + exact-price pinpoint dot)
   const markersLayer = activeDrawerTr.querySelector('.cw-bybit-markers-layer');
-  assert.ok(markersLayer, 'Bybit markers layer rendered on top of whale K-line chart');
-  const markerDots = activeDrawerTr.querySelectorAll('.cw-bybit-marker-dot');
-  assert.ok(markerDots.length >= 1, 'At least one Bybit-style marker dot badge rendered');
+  assert.ok(markersLayer, 'Markers layer rendered on top of whale K-line chart');
+  const markerGroups = activeDrawerTr.querySelectorAll('.cw-bybit-marker-group');
+  assert.ok(markerGroups.length >= 1, 'At least one compound marker group rendered');
+  const shieldBadges = activeDrawerTr.querySelectorAll('.cw-bybit-shield-badge');
+  assert.equal(shieldBadges.length, markerGroups.length, 'Each marker group renders an outer B/S shield badge');
+  const markerDots = activeDrawerTr.querySelectorAll('.cw-bybit-marker-dot.cw-bybit-pin-dot');
+  assert.equal(markerDots.length, markerGroups.length, 'Each marker group renders an exact-price pinpoint dot');
+  assert.ok(markerDots[0].querySelector('.cw-pin-core'), 'Pinpoint dot renders inner white-rimmed core');
+  assert.match(markerDots[0].getAttribute('title'), /开仓时间/, 'Marker dot title includes entry time');
 
-  // Clicking marker dot surfaces detailed position HUD popover with wallet name and position specs
+  // Clicking shield badge also opens HUD popover
+  shieldBadges[0].click();
+  await tick();
+  assert.ok(activeDrawerTr.querySelector('.cw-bybit-hud-popover'), 'Clicking B/S shield badge opens HUD popover');
+  shieldBadges[0].click();
+  await tick();
+  assert.equal(activeDrawerTr.querySelector('.cw-bybit-hud-popover'), null, 'Re-clicking shield badge closes HUD popover');
+
+  // Hovering marker dot does NOT auto-open HUD popover
+  markerDots[0].dispatchEvent(new ui.w.MouseEvent('mouseenter', { bubbles: true }));
+  await tick();
+  assert.equal(activeDrawerTr.querySelector('.cw-bybit-hud-popover'), null, 'Hovering marker dot must NOT auto-open HUD popover');
+  markerDots[0].dispatchEvent(new ui.w.MouseEvent('mouseleave', { bubbles: true }));
+  await tick();
+
+  // ONLY clicking marker dot surfaces detailed position HUD popover beside the marker
+  markerDots[0].click();
+  await tick();
+  let hudPopover = activeDrawerTr.querySelector('.cw-bybit-hud-popover');
+  assert.ok(hudPopover, 'Clicking marker dot opens HUD popover beside the marker');
+  assert.ok(hudPopover.querySelector('.cw-hud-name'), 'HUD popover displays whale wallet name');
+  assert.match(hudPopover.textContent, /开仓均价/, 'HUD popover displays entry price');
+  assert.match(hudPopover.textContent, /名义仓位/, 'HUD popover displays position size');
+  assert.match(hudPopover.textContent, /开仓时间/, 'HUD popover displays entry time');
+  assert.match(hudPopover.textContent, /持仓时长/, 'HUD popover displays position duration');
+
+  // Clicking outside (e.g. on chart background) automatically closes the HUD popover
+  ui.w.document.dispatchEvent(new ui.w.MouseEvent('pointerdown', { bubbles: true }));
+  await tick();
+  assert.equal(activeDrawerTr.querySelector('.cw-bybit-hud-popover'), null, 'Clicking outside must close HUD popover');
+
+  // Clicking marker dot again opens it, and clicking close button closes it
   markerDots[0].click();
   await tick();
   hudPopover = activeDrawerTr.querySelector('.cw-bybit-hud-popover');
-  assert.ok(hudPopover, 'Clicking marker dot opens HUD popover beside the marker');
-  assert.ok(hudPopover.querySelector('.cw-hud-name'), 'HUD popover displays whale wallet name');
-  assert.match(hudPopover.textContent, /名义仓位/, 'HUD popover displays position size');
-
+  assert.ok(hudPopover, 'Re-clicking marker dot re-opens HUD popover');
   const closeHudBtn = hudPopover.querySelector('.cw-hud-close-btn');
   assert.ok(closeHudBtn, 'HUD close button exists');
   closeHudBtn.click();
@@ -1974,6 +2025,7 @@ test('Crypto Workspace: Sankey distribution, 4 scoped KPIs, 2-column whale-posit
   // Verify whale positions list includes both long and short positions and is sorted by positionValue descending
   const whalePosRows = activeDrawerTr.querySelectorAll('.stock-whale-table tbody tr');
   assert.ok(whalePosRows.length >= 2, 'At least top 2 whale positions rendered for clicked asset');
+  assert.ok(activeDrawerTr.querySelector('.cw-wp-entry-time'), 'Whale table displays entry time tag');
   const dirPills = [...whalePosRows].map(r => r.querySelector('.cw-dir-pill').textContent.trim());
   assert.ok(dirPills.some(p => p.includes('多')), 'Positions list contains LONG position');
   assert.ok(dirPills.some(p => p.includes('空')), 'Positions list contains SHORT position');
@@ -2205,6 +2257,133 @@ test('K-Line Lightweight Charts stub path: mounts LightweightCharts instance and
   assert.ok(createdChart, 'LightweightCharts createChart was called');
   assert.ok(ui.w.document.getElementById('price-chart'), 'Price chart container exists');
   assert.ok(ui.w.klineGestureCtrl, 'klineGestureCtrl was assigned on window');
+  assert.deepEqual(ui.errors, []);
+});
+
+test('Crypto Workspace: Whale drawer LightweightCharts compound markers pinpoint inside candle & leave viewport without clamping', async t => {
+  let yOffset = 0;
+  let rangeChangeCb = null;
+  const baseTime = 1762992000;
+  const mockBars = [
+    { time: baseTime - 1800, open: 176, high: 180, low: 174, close: 177, volume: 12000 },
+    { time: baseTime - 900, open: 177, high: 182, low: 175, close: 178, volume: 15000 },
+    // Target candle with wide wick [140, 190] covering all whale entryPx values
+    { time: baseTime, open: 155, high: 190, low: 140, close: 162, volume: 35000 }
+  ];
+
+  const ui = await mount(t, async url => {
+    if (String(url).includes('/api/market/chart')) {
+      return {
+        ok: true,
+        json: async () => ({
+          symbol: 'NVDA',
+          interval: '15m',
+          bars: mockBars
+        })
+      };
+    }
+    return { ok: true, json: async () => fixture(url) };
+  }, null, w => {
+    const stubTimeScale = {
+      subscribeVisibleLogicalRangeChange(cb) { rangeChangeCb = cb; },
+      unsubscribeVisibleLogicalRangeChange() {},
+      getVisibleLogicalRange: () => ({ from: 0, to: 10 }),
+      setVisibleLogicalRange() {},
+      fitContent() {},
+      timeToCoordinate: (ts) => 300 + ((ts - baseTime) / 900) * 16
+    };
+    const stubSeries = {
+      applyOptions() {},
+      setData() {},
+      createPriceLine() { return {}; },
+      removePriceLine() {},
+      coordinateToPrice: (y) => 200 - (y - yOffset) * 0.25,
+      priceToCoordinate: (p) => (200 - p) * 4 + yOffset,
+      priceScale: () => ({ setAutoScale() {}, applyOptions() {} })
+    };
+    const stubChart = {
+      _hostEl: null,
+      applyOptions() {},
+      resize() {},
+      remove() {},
+      paneSize: () => ({ width: 700, height: 380 }),
+      subscribeCrosshairMove() {},
+      timeScale: () => stubTimeScale,
+      priceScale: () => ({ applyOptions() {}, setAutoScale() {}, getVisibleRange: () => ({ from: 130, to: 200 }) }),
+      addSeries: () => stubSeries
+    };
+    w.LightweightCharts = {
+      ColorType: { Solid: 'solid' },
+      CrosshairMode: { Normal: 1 },
+      LineStyle: { Dashed: 2 },
+      CandlestickSeries: 'Candlestick',
+      HistogramSeries: 'Histogram',
+      LineSeries: 'Line',
+      createChart: (el) => {
+        stubChart._hostEl = el;
+        return stubChart;
+      }
+    };
+  });
+
+  // Switch to Crypto -> TradFi stocks
+  const cryptoNavBtn = [...ui.w.document.querySelectorAll('.nav-item')].find(el => el.dataset.id === 'crypto');
+  assert.ok(cryptoNavBtn, 'Crypto nav button exists');
+  cryptoNavBtn.click();
+  await tick();
+
+  const catBtns = ui.w.document.querySelectorAll('.whale-cat-btn');
+  assert.ok(catBtns.length >= 2, 'Crypto / TradFi category switcher buttons exist');
+  catBtns[1].click();
+  await tick();
+
+  // Open secondary drawer if collapsed
+  const toggleBtn = ui.w.document.querySelector('.cw-sec-toggle-btn');
+  if (toggleBtn && !ui.w.document.querySelector('.onchain-stocks-panel')) {
+    toggleBtn.click();
+    await tick();
+  }
+
+  // Click NVDA radar button
+  const radarBtn = ui.w.document.querySelector('.onchain-radar-btn');
+  assert.ok(radarBtn, 'NVDA radar button exists');
+  radarBtn.click();
+  await tick();
+  await new Promise(resolve => setTimeout(resolve, 60));
+
+  const hostEl = ui.w.document.querySelector('.cw-whale-chart-host');
+  assert.ok(hostEl, 'Whale chart host mounted');
+  Object.defineProperty(hostEl, 'clientWidth', { configurable: true, value: 700 });
+  Object.defineProperty(hostEl, 'clientHeight', { configurable: true, value: 380 });
+  rangeChangeCb?.();
+  await tick();
+
+  const groups = [...ui.w.document.querySelectorAll('.cw-bybit-marker-group')];
+  assert.ok(groups.length >= 1, 'LightweightCharts compound marker groups rendered');
+
+  const lowY = (200 - 140) * 4;  // 240px
+  const highY = (200 - 190) * 4; // 40px
+  for (const grp of groups) {
+    const shieldTop = parseFloat(grp.querySelector('.cw-bybit-shield-badge').style.top);
+    const pinTop = parseFloat(grp.querySelector('.cw-bybit-pin-dot').style.top);
+    if (grp.classList.contains('is-long')) {
+      assert.ok(shieldTop > Math.max(lowY, pinTop), `Long shield B (top=${shieldTop}) must sit cleanly below candle low (${lowY}) & pinpoint (${pinTop})`);
+    } else {
+      assert.ok(shieldTop < Math.min(highY, pinTop), `Short shield S (top=${shieldTop}) must sit cleanly above candle high (${highY}) & pinpoint (${pinTop})`);
+    }
+  }
+
+  // Pan K-line far upward off-screen -> markers must vanish cleanly instead of clamping to top border (y=12)
+  yOffset = -1200;
+  rangeChangeCb?.();
+  await tick();
+  assert.equal(ui.w.document.querySelectorAll('.cw-bybit-marker-group').length, 0, 'Offscreen markers must NOT clamp/stick to top edge');
+
+  // Pan K-line back into view -> markers reappear immediately
+  yOffset = 0;
+  rangeChangeCb?.();
+  await tick();
+  assert.ok(ui.w.document.querySelectorAll('.cw-bybit-marker-group').length >= 1, 'Markers reappear cleanly when panning back into view');
   assert.deepEqual(ui.errors, []);
 });
 

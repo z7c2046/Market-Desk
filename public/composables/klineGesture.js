@@ -103,7 +103,11 @@ export function bindKlineGestures(element, chart, series, options = {}) {
     rate: 21.5,
     friction: 12.0,
     settlePx: 0.25,
-    onFrameTick: ({ dt }) => priceMotion.stepAutoPrice(dt),
+    onFrameTick: ({ dt }) => {
+      priceMotion.stepAutoPrice(dt);
+      options.onFrameTick?.({ dt });
+      options.onViewportChange?.();
+    },
     onPhaseChange: () => emitState()
   });
 
@@ -400,6 +404,8 @@ export function bindKlineGestures(element, chart, series, options = {}) {
       priceMotion.dragScalePrice(totalDy, active.startPrice, active.startAnchorPrice, active.plotHeight);
     }
 
+    options.onViewportChange?.();
+
     e.preventDefault();
   }
 
@@ -494,6 +500,10 @@ export function bindKlineGestures(element, chart, series, options = {}) {
         priceMotion.queuePriceZoom(action.delta, action.pointerY, h, { gain: action.gain });
       }
     }
+
+    if (actions.length > 0) {
+      options.onViewportChange?.();
+    }
   }
 
   function onDblClick(e) {
@@ -506,6 +516,7 @@ export function bindKlineGestures(element, chart, series, options = {}) {
     } else {
       reset();
     }
+    options.onViewportChange?.();
     e.preventDefault();
   }
 

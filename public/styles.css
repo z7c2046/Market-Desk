@@ -17850,6 +17850,13 @@ html.dark .cw-drawer-tr {
 }
 
 .cw-wp-entity {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-start;
+}
+
+.cw-wp-entity-main {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -17858,6 +17865,25 @@ html.dark .cw-drawer-tr {
 .cw-wp-name {
   color: var(--text-secondary);
   font-size: 12px;
+}
+
+.cw-wp-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: var(--text-tertiary, #64748b);
+  letter-spacing: 0.2px;
+  padding-left: 2px;
+}
+
+.cw-wp-time-lbl {
+  opacity: 0.75;
+}
+
+.cw-wp-entry-time {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary, #94a3b8);
 }
 
 /* 6. Whale Wallets & Live Feed Panel */
@@ -19755,6 +19781,31 @@ html.dark .cw-custom-item {
   font-weight: 600;
 }
 
+.cw-chart-expand-btn {
+  background: var(--surface-sunken, rgba(0, 0, 0, 0.12));
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  color: var(--text-muted, #94a3b8);
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.cw-chart-expand-btn:hover {
+  background: var(--surface-hover, rgba(255, 255, 255, 0.08));
+  color: var(--text-main, #fff);
+  border-color: rgba(59, 130, 246, 0.4);
+}
+
+.cw-chart-expand-btn.active {
+  background: rgba(59, 130, 246, 0.18);
+  border-color: rgba(59, 130, 246, 0.55);
+  color: #60a5fa;
+  font-weight: 600;
+}
+
 .cw-chart-reset-btn {
   background: var(--surface-sunken, rgba(0, 0, 0, 0.12));
   border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
@@ -19775,11 +19826,16 @@ html.dark .cw-custom-item {
 .cw-whale-chart-host-wrap {
   position: relative;
   width: 100%;
-  height: 280px;
+  height: 380px;
   border-radius: 6px;
   overflow: hidden;
   background: var(--surface-sunken, #0a0d14);
   border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+  transition: height 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.cw-whale-chart-deck.is-expanded .cw-whale-chart-host-wrap {
+  height: 520px;
 }
 
 .cw-whale-chart-host {
@@ -19815,7 +19871,7 @@ html.dark .cw-custom-item {
   to { transform: rotate(360deg); }
 }
 
-/* Bybit 风格买卖点位交互层与红绿小圆点 */
+/* Bybit 风格高精度复合买卖点位交互层（K 线外侧 B/S 五边形盾牌 + K 线原位白边精准成交点） */
 .cw-bybit-markers-layer {
   position: absolute;
   inset: 0;
@@ -19824,81 +19880,163 @@ html.dark .cw-custom-item {
   overflow: hidden;
 }
 
-.cw-bybit-marker-dot {
+.cw-bybit-marker-group {
   position: absolute;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  pointer-events: none;
+}
+
+.cw-bybit-marker-group.is-active,
+.cw-bybit-marker-group.is-highlighted {
+  z-index: 8;
+}
+
+/* 垂直导引虚线：正常打在 K 线实体/影线时不遮挡；当脱靶或悬停/选中时清晰串联外侧盾牌与精准成交点 */
+.cw-bybit-marker-stem {
+  position: absolute;
+  left: 0;
+  width: 1px;
+  transform: translateX(-50%);
+  border-left: 1px dashed var(--marker-color, #94a3b8);
+  opacity: 0;
+  transition: opacity 0.16s ease;
+  pointer-events: none;
+}
+
+.cw-bybit-marker-stem.is-off-candle {
+  opacity: 0.38;
+}
+
+.cw-bybit-marker-group:hover .cw-bybit-marker-stem,
+.cw-bybit-marker-group.is-highlighted .cw-bybit-marker-stem,
+.cw-bybit-marker-group.is-active .cw-bybit-marker-stem {
+  opacity: 0.85;
+}
+
+/* 1. K 线极值外侧五边形 B/S 盾牌徽标 */
+.cw-bybit-shield-badge {
+  position: absolute;
+  left: 0;
+  width: 15px;
+  height: 17px;
+  padding: 0;
+  border: none;
+  background: transparent;
   transform: translate(-50%, -50%);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0;
-  border: 1.5px solid rgba(255, 255, 255, 0.9);
   cursor: pointer;
   pointer-events: auto;
-  transition: transform 0.16s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.16s ease;
   user-select: none;
-  background-clip: padding-box;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.55));
+  transition: transform 0.16s cubic-bezier(0.16, 1, 0.3, 1), filter 0.16s ease;
 }
 
-/* 做多买点：Bybit 绿色小圆点 */
-.cw-bybit-marker-dot.is-long {
-  background: #00c087;
+.cw-shield-shape {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: #ffffff;
-  box-shadow: 0 2px 6px rgba(0, 192, 135, 0.45);
-}
-
-/* 做空卖点：Bybit 红色小圆点 */
-.cw-bybit-marker-dot.is-short {
-  background: #f6465d;
-  color: #ffffff;
-  box-shadow: 0 2px 6px rgba(246, 70, 93, 0.45);
-}
-
-.cw-bybit-marker-dot:hover,
-.cw-bybit-marker-dot.is-active,
-.cw-bybit-marker-dot.is-highlighted {
-  transform: translate(-50%, -50%) scale(1.25);
-  z-index: 6;
-}
-
-.cw-bybit-marker-dot.is-long:hover,
-.cw-bybit-marker-dot.is-long.is-active {
-  box-shadow: 0 0 0 3px rgba(0, 192, 135, 0.4), 0 4px 12px rgba(0, 192, 135, 0.6);
-}
-
-.cw-bybit-marker-dot.is-short:hover,
-.cw-bybit-marker-dot.is-short.is-active {
-  box-shadow: 0 0 0 3px rgba(246, 70, 93, 0.4), 0 4px 12px rgba(246, 70, 93, 0.6);
-}
-
-.cw-marker-glyph {
   font-size: 9px;
   font-weight: 800;
   line-height: 1;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.38);
+}
+
+/* 做多 B：绿色五边形，尖角朝上指向 K 线底部下影线 */
+.cw-bybit-shield-badge.is-long .cw-shield-shape {
+  background: var(--marker-color, #0ecb81);
+  clip-path: polygon(50% 0%, 100% 28%, 100% 100%, 0% 100%, 0% 28%);
+  padding-top: 3px;
+}
+
+/* 做空 S：红色五边形，尖角朝下指向 K 线顶部上影线 */
+.cw-bybit-shield-badge.is-short .cw-shield-shape {
+  background: var(--marker-color, #f6465d);
+  clip-path: polygon(0% 0%, 100% 0%, 100% 72%, 50% 100%, 0% 72%);
+  padding-bottom: 3px;
+}
+
+.cw-bybit-marker-group:hover .cw-bybit-shield-badge,
+.cw-bybit-marker-group.is-highlighted .cw-bybit-shield-badge,
+.cw-bybit-marker-group.is-active .cw-bybit-shield-badge,
+.cw-bybit-shield-badge:hover {
+  transform: translate(-50%, -50%) scale(1.18);
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.72));
+}
+
+/* 2. K 线精准开仓价格锚点圆点（16px 交互热区 + 8px 高对比白边红/绿小圆点，精准落在 K 线影线或柱体上下） */
+.cw-bybit-marker-dot.cw-bybit-pin-dot {
+  position: absolute;
+  left: 0;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  pointer-events: auto;
+  user-select: none;
+  z-index: 6;
+}
+
+.cw-pin-core {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1.5px solid #ffffff;
+  background: var(--marker-color, #0ecb81);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.45);
+  transition: transform 0.16s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.16s ease;
   pointer-events: none;
+}
+
+.cw-bybit-marker-dot.cw-bybit-pin-dot.is-short .cw-pin-core {
+  background: var(--marker-color, #f6465d);
+}
+
+.cw-bybit-marker-group:hover .cw-pin-core,
+.cw-bybit-marker-group.is-highlighted .cw-pin-core,
+.cw-bybit-marker-group.is-active .cw-pin-core,
+.cw-bybit-marker-dot.cw-bybit-pin-dot:hover .cw-pin-core,
+.cw-bybit-marker-dot.cw-bybit-pin-dot.is-active .cw-pin-core,
+.cw-bybit-marker-dot.cw-bybit-pin-dot.is-highlighted .cw-pin-core {
+  transform: scale(1.38);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9), 0 0 10px var(--marker-color, rgba(14, 203, 129, 0.85));
 }
 
 .cw-marker-pulse {
   position: absolute;
-  inset: -3px;
+  inset: 0;
   border-radius: 50%;
+  border: 1.5px solid var(--marker-color, #0ecb81);
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.2s ease;
 }
 
+.cw-bybit-marker-group.is-active .cw-marker-pulse,
+.cw-bybit-marker-group:hover .cw-marker-pulse,
 .cw-bybit-marker-dot.is-active .cw-marker-pulse,
 .cw-bybit-marker-dot:hover .cw-marker-pulse {
   opacity: 1;
-  animation: cwMarkerPulseAnim 1.8s infinite ease-out;
+  animation: cwMarkerPulseAnim 1.6s infinite ease-out;
 }
 
 @keyframes cwMarkerPulseAnim {
-  0% { transform: scale(1); opacity: 0.8; }
-  100% { transform: scale(1.8); opacity: 0; }
+  0% { transform: scale(0.7); opacity: 0.9; }
+  100% { transform: scale(1.9); opacity: 0; }
 }
 
 /* Bybit 风格半透明 HUD 详情弹窗 */
@@ -20042,6 +20180,21 @@ html.dark .cw-custom-item {
   font-size: 11.5px;
   color: var(--text-main, #f3f4f6);
   margin-top: 1px;
+}
+
+.cw-hud-time {
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.2px;
+}
+
+.cw-hud-duration {
+  font-size: 10.5px;
+  color: var(--text-secondary, #cbd5e1);
+}
+
+:root:not(.dark) .cw-hud-duration {
+  color: var(--text-secondary, #475569);
 }
 
 .cw-hud-foot {

@@ -444,6 +444,7 @@ export class CryptoWhaleService {
     const leverageType = p.leverage?.type === 'isolated' ? '逐仓' : '全仓';
     const liquidationPx = p.liquidationPx ? parseFloat(p.liquidationPx) : null;
     const markPx = p.markPx ? parseFloat(p.markPx) : (priceInfo?.markPx ? parseFloat(priceInfo.markPx) : (positionValue && Math.abs(szi) > 0 ? positionValue / Math.abs(szi) : entryPx));
+    const entryTime = p.entryTime || p.openedAt || p.time || p.timestamp || null;
 
     // 预估强平安全垫百分比
     let liqDistancePct = null;
@@ -470,7 +471,8 @@ export class CryptoWhaleService {
       leverageLabel: `${leverageVal}x ${leverageType}`,
       liquidationPx,
       liqDistancePct: liqDistancePct != null ? Number(liqDistancePct.toFixed(1)) : null,
-      marginUsed: parseFloat(p.marginUsed || 0)
+      marginUsed: parseFloat(p.marginUsed || 0),
+      entryTime
     };
   }
 

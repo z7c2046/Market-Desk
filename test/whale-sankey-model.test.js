@@ -535,4 +535,104 @@ test('TradFi Top 10 filter: computeWhaleSankeyGraph & buildAggregatedPositions s
   }
 });
 
+test('Sankey & aggregation: in "all" mode, asset totalVal strictly equals longVal + shortVal and reflects multi-whale mix (never defaults to short-only)', () => {
+  // Simulate 8 wallets where wallets 1-6 are heavy short whales, and wallets 7-8 hold substantial NVDA long positions without explicit isLong/side fields (only szi)
+  const testWhales = [
+    {
+      address: '0x0001',
+      name: 'Mega Short 1',
+      totalNtlPos: 60_000_000,
+      positions: [
+        { coin: 'NVDA', szi: '-200000', positionValue: 30_000_000, unrealizedPnl: 100_000 },
+        { coin: 'BRENTOIL', szi: '-150000', positionValue: 30_000_000, unrealizedPnl: 50_000 }
+      ]
+    },
+    {
+      address: '0x0002',
+      name: 'Mega Short 2',
+      totalNtlPos: 55_000_000,
+      positions: [
+        { coin: 'NVDA', szi: '-80000', positionValue: 12_200_000, unrealizedPnl: 80_000 },
+        { coin: 'CL', szi: '-200000', positionValue: 42_800_000, unrealizedPnl: -20_000 }
+      ]
+    },
+    { address: '0x0003', name: 'Short Whale 3', totalNtlPos: 50_000_000, positions: [{ coin: 'BRENTOIL', szi: '-100000', positionValue: 18_600_000 }] },
+    { address: '0x0004', name: 'Short Whale 4', totalNtlPos: 45_000_000, positions: [{ coin: 'SILVER', szi: '-50000', positionValue: 12_700_000 }] },
+    { address: '0x0005', name: 'Short Whale 5', totalNtlPos: 40_000_000, positions: [{ coin: 'SKHY', szi: '-60000', positionValue: 15_200_000 }] },
+    { address: '0x0006', name: 'Short Whale 6', totalNtlPos: 35_000_000, positions: [{ coin: 'CL', szi: '-80000', positionValue: 20_000_000 }] },
+    // Wallets 7 and 8 have lower total equity ($28M and $26M), so they rank 7th and 8th and are outside displayWallets (maxWallets = 6)
+    {
+      address: '0x0007',
+      name: 'Long Whale Alpha (Rank 7)',
+      totalNtlPos: 28_000_000,
+      positions: [
+        // Raw position with positive szi, missing isLong and missing side
+        { coin: 'NVDA', szi: '120000', positionValue: 18_400_000, sideLabel: '做多' },
+        { coin: 'SKHY', szi: '40000', positionValue: 9_600_000 }
+      ]
+    },
+    {
+      address: '0x0008',
+      name: 'Long Whale Beta (Rank 8)',
+      totalNtlPos: 26_000_000,
+      positions: [
+        // Raw position with positive szi
+        { coin: 'NVDA', szi: '55000', positionValue: 8_400_000 }
+      ]
+    }
+  ];
+
+  // 1. In 'all' mode: NVDA must sum both the short ($42.2M) and long ($26.8M) = $69.0M
+  const graphAll = computeWhaleSankeyGraph({
+    whales: testWhales,
+    mode: 'all',
+    maxWallets: 6,
+    maxAssets: 5
+  });
+
+  const nvdaNode = graphAll.assetNodes.find(a => a.symbol === 'NVDA');
+  assert.ok(nvdaNode, 'NVDA must exist in Sankey asset nodes');
+  assert.equal(nvdaNode.longVal, 26_800_000, 'NVDA longVal must include off-rank long whales');
+  assert.equal(nvdaNode.shortVal, 42_200_000, 'NVDA shortVal must equal total shorts');
+  assert.equal(nvdaNode.totalVal, 69_000_000, 'In all mode, totalVal must be strictly longVal + shortVal ($69.0M), NOT short-only ($42.2M)');
+  assert.equal(nvdaNode.formattedVal, '$69.0M', 'Formatted value must show $69.0M');
+  assert.ok(nvdaNode.longPct > 35 && nvdaNode.longPct < 42, `longPct must reflect mix ratio (~39%), got ${nvdaNode.longPct}%`);
+  assert.ok(nvdaNode.longBarW > 15, `longBarW must be positive to render green bar, got ${nvdaNode.longBarW}`);
+
+  // 2. In 'long' mode: NVDA totalVal must equal $26.8M and longPct must be 100%
+  const graphLong = computeWhaleSankeyGraph({
+    whales: testWhales,
+    mode: 'long',
+    maxWallets: 6,
+    maxAssets: 5
+  });
+  const nvdaLongNode = graphLong.assetNodes.find(a => a.symbol === 'NVDA');
+  assert.ok(nvdaLongNode);
+  assert.equal(nvdaLongNode.totalVal, 26_800_000);
+  assert.equal(nvdaLongNode.formattedVal, '$26.8M');
+  assert.equal(nvdaLongNode.longPct, 100);
+
+  // 3. In 'short' mode: NVDA totalVal must equal $42.2M and longPct must be 0%
+  const graphShort = computeWhaleSankeyGraph({
+    whales: testWhales,
+    mode: 'short',
+    maxWallets: 6,
+    maxAssets: 5
+  });
+  const nvdaShortNode = graphShort.assetNodes.find(a => a.symbol === 'NVDA');
+  assert.ok(nvdaShortNode);
+  assert.equal(nvdaShortNode.totalVal, 42_200_000);
+  assert.equal(nvdaShortNode.formattedVal, '$42.2M');
+  assert.equal(nvdaShortNode.longPct, 0);
+
+  // 4. In buildAggregatedPositions: totalVal must also equal $69.0M
+  const aggPositions = buildAggregatedPositions(testWhales, { mode: 'all' });
+  const nvdaAgg = aggPositions.find(p => p.symbol === 'NVDA');
+  assert.ok(nvdaAgg);
+  assert.equal(nvdaAgg.totalVal, 69_000_000);
+  assert.equal(nvdaAgg.longVal, 26_800_000);
+  assert.equal(nvdaAgg.shortVal, 42_200_000);
+  assert.equal(nvdaAgg.longPct, 39);
+});
+
 

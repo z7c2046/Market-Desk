@@ -10,7 +10,7 @@
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/styles.css?v=2.9.0">
+<link rel="stylesheet" href="/styles.css?v=2.11.0">
 <link rel="stylesheet" href="/mobile-layout.css?v=2.9.0">
 <link rel="stylesheet" href="/color-palettes.css?v=2.9.0">
 <style>
@@ -25,7 +25,7 @@
   display: none !important;
 }
 </style>
-<script defer src="/vendor/vue.js"></script><script defer src="/vendor/echarts.js"></script><script defer src="/vendor/lightweight-charts.standalone.js"></script><script type="module" src="/app.js?v=2.10.0"></script>
+<script defer src="/vendor/vue.js"></script><script defer src="/vendor/echarts.js"></script><script defer src="/vendor/lightweight-charts.standalone.js"></script><script type="module" src="/app.js?v=2.11.0"></script>
 </head><body><div id="app" v-cloak>
 <aside class="nav-rail desktop-only" aria-label="工作台主导航">
   <div class="rail-top">
@@ -2844,12 +2844,11 @@
                     <td :colspan="whaleCategory === 'stocks' ? 9 : 8" class="cw-drawer-td">
                       <div class="stock-radar-container cw-inline-drawer">
                         <!-- 方案 A：双甲板上层 —— Bybit 风格巨鲸时空 K 线图 -->
-                        <div class="cw-whale-chart-deck">
+                        <div class="cw-whale-chart-deck" :class="{ 'is-expanded': whaleChartExpanded }">
                           <div class="cw-chart-deck-header">
                             <div class="cw-cdh-left">
                               <span class="cw-cdh-live-dot" aria-hidden="true"></span>
                               <span class="cw-cdh-title font-mono">{{ r.symbol }} · 巨鲸开仓点位与多空时空博弈</span>
-                              <span class="cw-cdh-tag">Bybit 模式</span>
                             </div>
                             <div class="cw-cdh-right">
                               <div class="cw-tf-switcher" role="group" aria-label="K线周期">
@@ -2862,6 +2861,13 @@
                                   @click.stop="setWhaleDrawerInterval(tf)"
                                 >{{ tf }}</button>
                               </div>
+                              <button
+                                type="button"
+                                class="cw-chart-expand-btn font-mono"
+                                :class="{ active: whaleChartExpanded }"
+                                :title="whaleChartExpanded ? '收起为标准视图 (380px)' : '展开为沉浸全景大图 (520px)'"
+                                @click.stop="toggleWhaleChartExpanded"
+                              >{{ whaleChartExpanded ? '⤡ 还原' : '⤢ 展开大图' }}</button>
                               <button
                                 type="button"
                                 class="cw-chart-reset-btn font-mono"
@@ -2880,29 +2886,66 @@
                               aria-label="巨鲸开仓K线图"
                             ></div>
 
-                            <!-- Bybit 风格高保真买卖点位交互层 (Red/Green Whale Dot Badges) -->
+                            <!-- Bybit 风格高精度复合买卖点位交互层（K 线外侧 B/S 五边形盾牌 + K 线原位白边精准成交点） -->
                             <div class="cw-bybit-markers-layer" aria-hidden="false">
-                              <button
+                              <div
                                 v-for="m in whaleMarkerOverlays"
                                 :key="m.whale.address + m.whale.side"
-                                type="button"
-                                class="cw-bybit-marker-dot"
+                                class="cw-bybit-marker-group"
                                 :class="[
                                   m.isLong ? 'is-long' : 'is-short',
                                   {
-                                    'is-active': activeWhaleHud && activeWhaleHud.whale && activeWhaleHud.whale.address === m.whale.address,
+                                    'is-active': activeWhaleHud && activeWhaleHud.whale && activeWhaleHud.whale.address === m.whale.address && activeWhaleHud.whale.side === m.whale.side,
                                     'is-highlighted': highlightedWhaleAddr === m.whale.address
                                   }
                                 ]"
-                                :style="{ left: m.x + 'px', top: m.y + 'px' }"
-                                :title="m.whale.name + ' · ' + (m.isLong ? '做多' : '做空') + ' ' + (m.whale.leverage || '5x') + ' @ $' + formatCryptoPrice(m.price) + ' (点击查看详细仓位)'"
-                                @mouseenter="onWhaleMarkerHover(m, r)"
-                                @mouseleave="onWhaleMarkerLeave(m)"
-                                @click.stop="onWhaleMarkerClick(m, r)"
+                                :style="{ left: m.x + 'px', '--marker-color': m.color || (m.isLong ? '#0ecb81' : '#f6465d') }"
                               >
-                                <span class="cw-marker-pulse"></span>
-                                <span class="cw-marker-glyph font-mono">{{ m.isLong ? 'B' : 'S' }}</span>
-                              </button>
+                                <!-- 垂直连接虚线（仅在脱离柱体或悬停/选中时清晰连接盾牌与精准成交点） -->
+                                <div
+                                  class="cw-bybit-marker-stem"
+                                  :class="{ 'is-off-candle': m.isOffCandle }"
+                                  :style="{
+                                    top: Math.min(m.pinY ?? m.y, m.badgeY ?? m.y) + 'px',
+                                    height: Math.max(2, Math.abs((m.badgeY ?? m.y) - (m.pinY ?? m.y))) + 'px'
+                                  }"
+                                ></div>
+
+                                <!-- 1. K 线外侧五边形 B/S 盾牌徽标（B 朝上置于最低价下方，S 朝下置于最高价上方） -->
+                                <button
+                                  type="button"
+                                  class="cw-bybit-shield-badge"
+                                  :class="m.isLong ? 'is-long' : 'is-short'"
+                                  :style="{ top: (m.badgeY ?? (m.isLong ? m.y + 26 : m.y - 26)) + 'px' }"
+                                  :title="m.tooltip || (m.whale.name + ' · ' + (m.isLong ? '做多' : '做空') + ' ' + (m.whale.leverage || '5x') + ' @ $' + formatCryptoPrice(m.price) + ' · 开仓时间: ' + formatWhaleTime(m.whale.entryTime) + ' (点击查看详细仓位)')"
+                                  @mouseenter="onWhaleMarkerHover(m, r)"
+                                  @mouseleave="onWhaleMarkerLeave(m)"
+                                  @click.stop="onWhaleMarkerClick(m, r)"
+                                >
+                                  <span class="cw-shield-shape font-mono">{{ m.isLong ? 'B' : 'S' }}</span>
+                                </button>
+
+                                <!-- 2. K 线精确价位白边小圆点（精准定位在 K 线上下影线或柱体对应价格位置） -->
+                                <button
+                                  type="button"
+                                  class="cw-bybit-marker-dot cw-bybit-pin-dot"
+                                  :class="[
+                                    m.isLong ? 'is-long' : 'is-short',
+                                    {
+                                      'is-active': activeWhaleHud && activeWhaleHud.whale && activeWhaleHud.whale.address === m.whale.address && activeWhaleHud.whale.side === m.whale.side,
+                                      'is-highlighted': highlightedWhaleAddr === m.whale.address
+                                    }
+                                  ]"
+                                  :style="{ top: (m.pinY ?? m.y) + 'px' }"
+                                  :title="m.tooltip || (m.whale.name + ' · ' + (m.isLong ? '做多' : '做空') + ' ' + (m.whale.leverage || '5x') + ' @ $' + formatCryptoPrice(m.price) + ' · 开仓时间: ' + formatWhaleTime(m.whale.entryTime) + ' (点击查看详细仓位)')"
+                                  @mouseenter="onWhaleMarkerHover(m, r)"
+                                  @mouseleave="onWhaleMarkerLeave(m)"
+                                  @click.stop="onWhaleMarkerClick(m, r)"
+                                >
+                                  <span class="cw-marker-pulse"></span>
+                                  <span class="cw-pin-core"></span>
+                                </button>
+                              </div>
                             </div>
 
                             <div v-if="whaleDrawerChartLoading" class="cw-whale-chart-skeleton" aria-hidden="true">
@@ -2920,6 +2963,7 @@
                                 top: activeWhaleHud.y + 'px',
                                 '--hud-arrow-offset': (activeWhaleHud.arrowOffset || 0) + 'px'
                               }"
+                              @click.stop
                             >
                               <div class="cw-hud-head">
                                 <div class="cw-hud-title-wrap">
@@ -2948,6 +2992,18 @@
                                 <div class="cw-hud-cell">
                                   <span class="cw-hud-lbl">预估强平</span>
                                   <strong class="cw-hud-val text-warning">${{ activeWhaleHud.whale.liquidationPx ? formatCryptoPrice(activeWhaleHud.whale.liquidationPx) : '--' }}</strong>
+                                </div>
+                                <div class="cw-hud-cell">
+                                  <span class="cw-hud-lbl">开仓时间</span>
+                                  <strong class="cw-hud-val cw-hud-time font-mono" :title="'精准开仓时间: ' + formatWhaleFullTime(activeWhaleHud.whale.entryTime)">
+                                    {{ formatWhaleTime(activeWhaleHud.whale.entryTime) }}
+                                  </strong>
+                                </div>
+                                <div class="cw-hud-cell">
+                                  <span class="cw-hud-lbl">持仓时长</span>
+                                  <strong class="cw-hud-val cw-hud-duration font-mono">
+                                    {{ formatWhaleDuration(activeWhaleHud.whale.entryTime) }}
+                                  </strong>
                                 </div>
                               </div>
                               <div class="cw-hud-foot font-mono">
@@ -3070,11 +3126,19 @@
                               >
                                 <td class="text-left">
                                   <div class="cw-wp-entity">
-                                    <button class="cw-addr-copy font-mono" @click.stop="copyWhaleAddress(wp.address)" :title="wp.address">
-                                      {{ wp.shortAddress || (wp.address ? (wp.address.slice(0, 6) + '...' + wp.address.slice(-4)) : '') }}
-                                      <span v-if="copiedWhaleAddress === wp.address" class="cw-copied">✓</span>
-                                    </button>
-                                    <span class="cw-wp-name">{{ wp.name }}</span>
+                                    <div class="cw-wp-entity-main">
+                                      <button class="cw-addr-copy font-mono" @click.stop="copyWhaleAddress(wp.address)" :title="wp.address">
+                                        {{ wp.shortAddress || (wp.address ? (wp.address.slice(0, 6) + '...' + wp.address.slice(-4)) : '') }}
+                                        <span v-if="copiedWhaleAddress === wp.address" class="cw-copied">✓</span>
+                                      </button>
+                                      <span class="cw-wp-name">{{ wp.name }}</span>
+                                    </div>
+                                    <div v-if="wp.entryTime" class="cw-wp-meta font-mono">
+                                      <span class="cw-wp-time-lbl">开仓:</span>
+                                      <span class="cw-wp-entry-time" :title="'开仓时间: ' + formatWhaleFullTime(wp.entryTime)">
+                                        {{ formatWhaleTime(wp.entryTime) }}
+                                      </span>
+                                    </div>
                                   </div>
                                 </td>
                                 <td class="text-left">
