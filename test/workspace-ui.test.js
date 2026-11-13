@@ -163,7 +163,7 @@ async function mount(t, fetchImpl, initStorage = null, configureWindow = null) {
     .replace("import { parseFlows } from './flows.js';", 'const parseFlows = window.parseFlows;')
     .replace("import { bindKlineGestures } from './composables/klineGesture.js';", 'const bindKlineGestures = window.bindKlineGestures;')
     .replace("import { createChartDerivedData } from './composables/chartDerivedData.js';", 'const { createChartDerivedData } = window;')
-    .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/composables\/whaleSankeyModel\.js';/, 'const { getAssetLabel, formatWhaleCompactUsd, disambiguateWallets, computeWhaleSankeyGraph, buildAggregatedPositions, detectPositionDeltas } = window;')
+    .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/composables\/whaleSankeyModel\.js';/, 'const { getAssetLabel, formatWhaleCompactUsd, disambiguateWallets, isPositionLong, computeWhaleSankeyGraph, buildAggregatedPositions, detectPositionDeltas } = window;')
     .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/watchlist-model\.js';/, 'const { WatchlistManager, sortWatchlistRows, getSelectedExtQuote, getCurrentSession, getNyTime, SESSION_TYPES, MAX_UNIQUE_SYMBOLS, validSymbol, SYMBOL_NAMES, NASDAQ100_STOCKS, SP500_STOCKS, isLeveragedEtf, isCryptoSymbol, STOCK_MARKET_CAPS, getStockMarketCap, sortSymbolsByMarketCap } = window;')
     .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/earnings-calendar-model\.js';/, 'const { AI_SECTOR_FILTERS, CORPORATE_LOGOS, getEarningsCalendarDate, getEarningsWeeks, MACRO_CALENDAR_ITEMS, filterEarningsByDay, parseMetricNumber, getMetricSurprise, getMetricYoy } = window;')
     .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/inflection-signals\.js';/, 'const { computeInflectionSignals, formatSignalMarkers, dema } = window;')
@@ -3263,5 +3263,326 @@ test('Crypto Workspace Skeleton: renders complete Sankey, 4 KPI cards and 2-colu
 
   assert.deepEqual(ui.errors, []);
 });
+
+function attachFullChartLwStub(w) {
+  const activePriceLines = new Set();
+  const createdPriceLines = [];
+  const visibleRangesSet = [];
+  let lastPriceFormat = null;
+  let barTimes = [];
+  let minPx = 0;
+  let maxPx = 100;
+  let rangeCb = null;
+
+  const stubTimeScale = {
+    subscribeVisibleLogicalRangeChange(cb) { rangeCb = cb; },
+    unsubscribeVisibleLogicalRangeChange() {},
+    getVisibleLogicalRange: () => ({ from: 0, to: Math.max(10, barTimes.length - 1) }),
+    setVisibleLogicalRange(r) { visibleRangesSet.push(r); },
+    fitContent() {},
+    timeToCoordinate: (t) => {
+      if (!barTimes.length) return 300;
+      const idx = barTimes.findIndex(bt => bt === t);
+      const normIdx = idx >= 0 ? idx : Math.floor(barTimes.length / 2);
+      return 80 + (normIdx / Math.max(1, barTimes.length - 1)) * 620;
+    }
+  };
+  const stubSeries = {
+    applyOptions(opts) { if (opts?.priceFormat) lastPriceFormat = opts.priceFormat; },
+    setData(data) {
+      if (Array.isArray(data) && data.length > 0 && 'close' in data[0]) {
+        barTimes = data.map(d => d.time);
+        const lows = data.map(d => d.low);
+        const highs = data.map(d => d.high);
+        minPx = Math.min(...lows) * 0.96;
+        maxPx = Math.max(...highs) * 1.04;
+      }
+    },
+    createPriceLine(spec) {
+      const token = { ...spec };
+      activePriceLines.add(token);
+      createdPriceLines.push(spec);
+      return token;
+    },
+    removePriceLine(token) { activePriceLines.delete(token); },
+    coordinateToPrice: (y) => maxPx - ((y - 40) / 480) * (maxPx - minPx),
+    priceToCoordinate: (p) => 40 + ((maxPx - p) / Math.max(1e-6, maxPx - minPx)) * 480,
+    priceScale: () => ({ setAutoScale() {}, applyOptions() {} })
+  };
+  const stubChart = {
+    _hostEl: null,
+    applyOptions() {},
+    resize() {},
+    remove() {},
+    paneSize: () => ({ width: 800, height: 620 }),
+    subscribeCrosshairMove() {},
+    timeScale: () => stubTimeScale,
+    priceScale: () => ({ applyOptions() {}, setAutoScale() {}, getVisibleRange: () => ({ from: minPx, to: maxPx }) }),
+    addSeries: () => stubSeries
+  };
+  w.LightweightCharts = {
+    ColorType: { Solid: 'solid' },
+    CrosshairMode: { Normal: 1 },
+    LineStyle: { Solid: 0, Dashed: 2, Dotted: 3 },
+    CandlestickSeries: 'Candlestick',
+    HistogramSeries: 'Histogram',
+    LineSeries: 'Line',
+    createChart: (el) => {
+      stubChart._hostEl = el;
+      Object.defineProperty(el, 'clientWidth', { configurable: true, get: () => 800 });
+      Object.defineProperty(el, 'clientHeight', { configurable: true, get: () => 620 });
+      return stubChart;
+    }
+  };
+  return {
+    getActivePriceLines: () => [...activePriceLines],
+    getCreatedPriceLines: () => createdPriceLines,
+    getLastPriceFormat: () => lastPriceFormat,
+    triggerRangeChange: () => rangeCb?.()
+  };
+}
+
+test('#chart Whale Workspace: auto-applies 4h/1mo preset, bridges TradFi & Crypto positions, isolates PriceLines/TimeGuide, and supports manual timeframe changes', async t => {
+  const chartRequests = [];
+  const baseSec = 1793800000;
+  let spyBars = [
+    { time: baseSec, open: 580, high: 586, low: 579, close: 584, volume: 1200000 },
+    { time: baseSec + 14400, open: 584, high: 590, low: 583, close: 589, volume: 1500000 },
+    { time: baseSec + 28800, open: 589, high: 597, low: 588, close: 592, volume: 1900000 },
+    { time: baseSec + 43200, open: 592, high: 595, low: 587, close: 590, volume: 1100000 }
+  ];
+
+  const stockWhalePayload = {
+    ok: true,
+    category: 'stocks',
+    isLive: true,
+    isSample: false,
+    source: 'hyperliquid-xyz-api',
+    fetchedAt: new Date().toISOString(),
+    aggregate: { totalTrackedWhales: 2, totalLongNotional: 18000000, totalShortNotional: 12000000, longRatio: 60, shortRatio: 40 },
+    whales: [
+      {
+        address: '0x111111111111111111111111111111111111aaaa',
+        shortAddress: '0x1111...aaaa',
+        name: 'HIP-3 标普多头巨鲸',
+        tag: '核心机构',
+        avatar: '🏛️',
+        positions: [
+          { coin: 'xyz:SP500', chartSymbol: 'SPY', side: 'LONG', isLong: true, size: 30900, entryPx: 582.5, markPx: 590, positionValue: 18000000, unrealizedPnl: 231750, returnOnEquity: 0.128, leverageLabel: '10x 全仓', liquidationPx: 512.0, entryTime: (baseSec + 200) * 1000, hasRealEntryTime: true }
+        ]
+      },
+      {
+        address: '0x222222222222222222222222222222222222bbbb',
+        shortAddress: '0x2222...bbbb',
+        name: '美股指数对冲空头',
+        tag: '实时巨鲸',
+        avatar: '⚡',
+        positions: [
+          { coin: 'SP500', chartSymbol: 'SPY', side: 'SHORT', isLong: false, size: 20200, entryPx: 594.0, markPx: 590, positionValue: 12000000, unrealizedPnl: 80800, returnOnEquity: 0.067, leverageLabel: '5x 全仓', liquidationPx: 660.0, entryTime: (baseSec + 29000) * 1000, hasRealEntryTime: true }
+        ]
+      }
+    ]
+  };
+
+  let lwSpy = null;
+  const ui = await mount(t, async url => {
+    const u = new URL(url, 'http://localhost');
+    if (u.pathname === '/api/market/chart') {
+      const req = { symbol: u.searchParams.get('symbol'), range: u.searchParams.get('range'), interval: u.searchParams.get('interval') };
+      chartRequests.push(req);
+      return { ok: true, json: async () => ({ symbol: req.symbol, range: req.range, interval: req.interval, currency: 'USD', source: 'Test', delay: '实时', bars: spyBars }) };
+    }
+    if (u.pathname === '/api/crypto/whales') {
+      return { ok: true, json: async () => (u.searchParams.get('category') === 'stocks' ? stockWhalePayload : fixture(url)) };
+    }
+    return { ok: true, json: async () => fixture(url) };
+  }, null, w => {
+    lwSpy = attachFullChartLwStub(w);
+  });
+
+  // Navigate to #chart (starts on SPY, default 3mo / 1d with whale overlay OFF)
+  const chartNavBtn = [...ui.w.document.querySelectorAll('.nav-item')].find(el => el.dataset.id === 'chart');
+  assert.ok(chartNavBtn, 'Chart nav button exists');
+  chartNavBtn.click();
+  await tick();
+  await tick();
+
+  assert.equal(ui.w.document.querySelector('.chart-whale-dock'), null, 'Whale dock is hidden by default on #chart');
+
+  // Toggle on "🐋 巨鲸点位" -> must automatically switch to 4h / 1mo preset and mount right Dock + markers
+  const toggleBtn = ui.w.document.querySelector('.chart-whale-switch-btn');
+  assert.ok(toggleBtn, 'Legend whale switch button exists in #chart');
+  toggleBtn.click();
+  await tick();
+  await new Promise(resolve => setTimeout(resolve, 40));
+  await tick();
+
+  assert.ok(chartRequests.some(r => r.symbol === 'SPY' && r.range === '1mo' && r.interval === '4h'), 'Enabling #chart whale mode loads 1mo & 4h preset');
+  assert.ok(ui.w.document.querySelector('.chart-workspace-body.has-whale-dock'), 'Workspace splits cleanly with active Dock class');
+
+  const dock = ui.w.document.querySelector('aside.chart-whale-dock');
+  assert.ok(dock, 'Right 340px whale insight dock renders');
+  const cards = [...dock.querySelectorAll('.chart-whale-card')];
+  assert.ok(cards.length >= 2, `Dock bridges LONG & SHORT SP500->SPY whale positions (got ${cards.length}: ${cards.map(c => c.querySelector('.cw-card-name')?.textContent).join(', ')})`);
+  assert.ok(cards.some(c => /HIP-3 标普多头巨鲸/.test(c.textContent)), 'Dock card shows LONG SPY whale name & 582.50');
+  assert.ok(cards.some(c => /美股指数对冲空头/.test(c.textContent)), 'Dock card shows SHORT SPY hedge whale');
+  const longSpyCard = cards.find(c => /HIP-3 标普多头巨鲸/.test(c.textContent));
+  assert.match(longSpyCard.textContent, /582\.50/, 'Dock card shows exact entry price');
+
+  // Verify compound Bybit markers + weighted avg PriceLines exist
+  const markerGroups = [...ui.w.document.querySelectorAll('.chart-whale-markers-layer .cw-bybit-marker-group')];
+  assert.equal(markerGroups.length, cards.length, 'Main #chart canvas renders compound whale marker groups matching Dock cards');
+  const initialLines = lwSpy.getActivePriceLines();
+  assert.ok(initialLines.some(pl => pl.title.includes('多头均价')), 'Draws weighted LONG avg PriceLine');
+  assert.ok(initialLines.some(pl => pl.title.includes('空头均价')), 'Draws weighted SHORT avg PriceLine');
+
+  // Hovering a card highlights marker without opening HUD popover
+  longSpyCard.dispatchEvent(new ui.w.MouseEvent('mouseenter', { bubbles: true }));
+  await tick();
+  assert.equal(ui.w.document.querySelector('.chart-whale-hud-popover'), null, 'Hovering dock card must NOT auto-open HUD popover');
+
+  // Clicking a card isolates that whale: replaces avg PriceLines with Entry + Liq lines, renders vertical Time Guide, dims other marker, opens HUD
+  longSpyCard.click();
+  await tick();
+  assert.ok(longSpyCard.classList.contains('is-selected'), 'Clicked dock card shows selected ring');
+  const isolatedLines = lwSpy.getActivePriceLines();
+  assert.ok(isolatedLines.some(pl => pl.title.includes('开仓')), 'Isolated mode draws individual Entry PriceLine');
+  assert.ok(isolatedLines.some(pl => pl.title.includes('预估强平')), 'Isolated mode draws Liquidation PriceLine');
+  assert.ok(!isolatedLines.some(pl => pl.title.includes('多头均价')), 'Isolated mode removes aggregate LONG avg line');
+  assert.ok(ui.w.document.querySelector('.chart-whale-time-guide .chart-whale-time-pill'), 'Renders vertical entry-time guide & duration pill');
+  assert.ok(ui.w.document.querySelector('.chart-whale-markers-layer .cw-bybit-marker-group.is-dimmed'), 'Non-selected markers dim smoothly');
+  const hud = ui.w.document.querySelector('.chart-whale-hud-popover');
+  assert.ok(hud && /582\.50/.test(hud.textContent), 'Clicking dock card opens HUD popover');
+
+  // Clicking outside on document dismisses HUD popover cleanly
+  ui.w.document.dispatchEvent(new ui.w.MouseEvent('pointerdown', { bubbles: true }));
+  await tick();
+  assert.equal(ui.w.document.querySelector('.chart-whale-hud-popover'), null, 'Clicking outside closes HUD popover');
+
+  // Manual timeframe switch to 1d stays on 1d without being forced back to 4h
+  const oneDayBtn = [...ui.w.document.querySelectorAll('.interval-pill-btn')].find(el => el.textContent.includes('日线') || el.textContent.trim() === '日K' || el.textContent.trim() === '1d');
+  if (oneDayBtn) {
+    oneDayBtn.click();
+    await tick();
+    await new Promise(resolve => setTimeout(resolve, 40));
+    await tick();
+    assert.equal(chartRequests.at(-1).interval, '1d', 'Manual timeframe change is respected after whale mode preset');
+  }
+
+  // Collapse & reopen Dock
+  const collapseBtn = ui.w.document.querySelector('.cw-dock-collapse-btn');
+  assert.ok(collapseBtn, 'Collapse dock button exists');
+  collapseBtn.click();
+  await tick();
+  assert.equal(ui.w.document.querySelector('aside.chart-whale-dock'), null, 'Dock collapses cleanly');
+  const reopenBtn = ui.w.document.querySelector('.chart-whale-dock-reopen');
+  assert.ok(reopenBtn, 'Floating reopen pill renders when Dock is collapsed');
+  reopenBtn.click();
+  await tick();
+  assert.ok(ui.w.document.querySelector('aside.chart-whale-dock'), 'Clicking floating pill reopens Dock');
+
+  assert.deepEqual(ui.errors, []);
+});
+
+test('#crypto Mini K-Line Drawer keeps inline preview and jumps directly to #chart (4h/1mo) for both TradFi & Crypto whales', async t => {
+  const chartRequests = [];
+  const baseSec = 1793800000;
+  let lwSpy = null;
+
+  const ui = await mount(t, async url => {
+    const u = new URL(url, 'http://localhost');
+    if (u.pathname === '/api/market/chart') {
+      const sym = u.searchParams.get('symbol');
+      const range = u.searchParams.get('range');
+      const interval = u.searchParams.get('interval');
+      chartRequests.push({ symbol: sym, range, interval });
+      const basePx = sym === 'BTC-USD' ? 78600 : 185;
+      const bars = [
+        { time: baseSec, open: basePx * 0.98, high: basePx * 1.02, low: basePx * 0.97, close: basePx, volume: 10000 },
+        { time: baseSec + 14400, open: basePx, high: basePx * 1.03, low: basePx * 0.99, close: basePx * 1.01, volume: 14000 }
+      ];
+      return { ok: true, json: async () => ({ symbol: sym, range, interval, currency: 'USD', source: 'Test', delay: '实时', bars }) };
+    }
+    return { ok: true, json: async () => fixture(url) };
+  }, null, w => {
+    lwSpy = attachFullChartLwStub(w);
+  });
+
+  // 1. Navigate to #crypto and switch to Crypto category (BTC mini drawer & jump button)
+  const cryptoNavBtn = [...ui.w.document.querySelectorAll('.nav-item')].find(el => el.dataset.id === 'crypto');
+  cryptoNavBtn.click();
+  await tick();
+  await new Promise(resolve => setTimeout(resolve, 60));
+  await tick();
+
+  const initCatBtns = ui.w.document.querySelectorAll('.whale-cat-btn');
+  assert.ok(initCatBtns.length >= 2, 'Market category switcher buttons exist');
+  initCatBtns[0].click();
+  await tick();
+
+  // Open secondary flow matrix if collapsed and expand BTC mini drawer
+  const secToggle = ui.w.document.querySelector('.cw-sec-toggle-btn');
+  if (secToggle && !ui.w.document.querySelector('.onchain-stocks-panel')) {
+    secToggle.click();
+    await tick();
+  }
+  const btcRow = ui.w.document.querySelector('tr.cw-flow-row[data-symbol="BTC"]');
+  assert.ok(btcRow, 'BTC flow row renders in crypto workspace');
+  btcRow.click();
+  await tick();
+  await new Promise(resolve => setTimeout(resolve, 40));
+  await tick();
+
+  assert.ok(ui.w.document.querySelector('.cw-drawer-tr'), 'Mini K-line drawer remains inline for quick preview on #crypto');
+  const jumpBtn = ui.w.document.querySelector('.cw-open-main-chart-btn');
+  assert.ok(jumpBtn, 'Direct #chart jump button renders inside mini drawer header');
+
+  // 2. Click "⤢ 大屏分析" -> navigates directly to #chart with BTC-USD + 4h/1mo + Crypto whales
+  jumpBtn.click();
+  await tick();
+  await new Promise(resolve => setTimeout(resolve, 60));
+  await tick();
+
+  const lastCryptoChartReq = chartRequests.findLast(r => r.symbol === 'BTC-USD');
+  assert.ok(lastCryptoChartReq, 'Jumping from BTC mini drawer loads BTC-USD on #chart');
+  assert.equal(lastCryptoChartReq.range, '1mo', 'Jumped chart uses 1mo range preset');
+  assert.equal(lastCryptoChartReq.interval, '4h', 'Jumped chart uses 4h interval preset');
+  assert.ok(ui.w.document.querySelector('aside.chart-whale-dock'), '#chart Dock opens automatically after jump');
+  const btcCards = [...ui.w.document.querySelectorAll('.chart-whale-card')];
+  assert.ok(btcCards.length >= 2, `Crypto whale positions for BTC-USD render on #chart Dock (got ${btcCards.length})`);
+  const btcMarkers = [...ui.w.document.querySelectorAll('.chart-whale-markers-layer .cw-bybit-marker-group')];
+  assert.ok(btcMarkers.length >= 2, `Crypto whale compound markers render on #chart (got ${btcMarkers.length}, cards=${btcCards.length}, loading=${!!ui.w.document.querySelector('.chart-skeleton')}, host=${!!ui.w.document.querySelector('#price-chart')})`);
+  assert.ok(lwSpy.getLastPriceFormat() !== null, 'Price axis format updates dynamically');
+
+  // 3. Go back to #crypto -> TradFi -> open NVDA mini drawer -> click "⤢ 大屏分析" -> loads NVDA 4h/1mo on #chart
+  cryptoNavBtn.click();
+  await tick();
+  const catBtns = ui.w.document.querySelectorAll('.whale-cat-btn');
+  catBtns[1].click();
+  await tick();
+  await new Promise(resolve => setTimeout(resolve, 40));
+  await tick();
+
+  const nvdaBtn = ui.w.document.querySelector('tr.cw-flow-row[data-symbol="NVDA"]');
+  assert.ok(nvdaBtn, 'NVDA TradFi flow row renders');
+  nvdaBtn.click();
+  await tick();
+  await new Promise(resolve => setTimeout(resolve, 40));
+  await tick();
+
+  const tradfiJumpBtn = ui.w.document.querySelector('.cw-open-main-chart-btn');
+  assert.ok(tradfiJumpBtn, 'Jump button exists in TradFi NVDA mini drawer');
+  tradfiJumpBtn.click();
+  await tick();
+  await new Promise(resolve => setTimeout(resolve, 60));
+  await tick();
+
+  const lastNvdaReq = chartRequests.findLast(r => r.symbol === 'NVDA');
+  assert.ok(lastNvdaReq && lastNvdaReq.range === '1mo' && lastNvdaReq.interval === '4h', 'TradFi NVDA jumps to #chart with 4h/1mo preset');
+  assert.ok(ui.w.document.querySelectorAll('.chart-whale-card').length >= 1, 'NVDA whale cards render on #chart Dock');
+
+  assert.deepEqual(ui.errors, []);
+});
+
 
 

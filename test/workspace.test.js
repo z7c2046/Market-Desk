@@ -72,3 +72,35 @@ test('crypto workspace fetches multi-bar history and maps 24h ranges', async () 
   assert.equal(btc.bars.length, 3);
 });
 
+test('crypto -USD 4h chart falls back to Hyperliquid candleSnapshot when Yahoo has no data', async () => {
+  const requests = [];
+  const mockFetch = async (url, init = {}) => {
+    const u = String(url);
+    requests.push({ url: u, method: init.method || 'GET', body: init.body ? JSON.parse(init.body) : null });
+    if (u.includes('hyperliquid.xyz/info') && requests.at(-1).body?.type === 'candleSnapshot') {
+      return new Response(JSON.stringify([
+        { t: 1730001600000, o: '230.5', h: '245.0', l: '228.0', c: '240.2', v: '15000.5' },
+        { t: 1730016000000, o: '240.2', h: '252.4', l: '238.1', c: '249.8', v: '21400.25' }
+      ]), { status: 200 });
+    }
+    return new Response(JSON.stringify({ chart: { result: [] } }), { status: 404 });
+  };
+  const { createMarketWorkspace } = await import('../src/market-workspace.js');
+  const ws = createMarketWorkspace({ fetchImpl: mockFetch });
+  const chartData = await ws.chart({ symbol: 'ZEC-USD', range: '1mo', interval: '4h' });
+  assert.equal(chartData.symbol, 'ZEC-USD');
+  assert.equal(chartData.interval, '4h');
+  assert.equal(chartData.bars.length, 2);
+  assert.equal(chartData.bars[0].time, 1730001600);
+  assert.equal(chartData.bars[1].close, 249.8);
+  assert.match(chartData.source, /Hyperliquid/);
+
+  const hlCall = requests.find(r => r.url.includes('hyperliquid.xyz/info'));
+  assert.ok(hlCall, 'Called Hyperliquid info API fallback');
+  assert.equal(hlCall.body.req.coin, 'ZEC');
+  assert.equal(hlCall.body.req.interval, '4h');
+
+  // Non-crypto equity ticker should NOT fall back to Hyperliquid when Yahoo fails
+  await assert.rejects(() => ws.chart({ symbol: 'AAPL', range: '1mo', interval: '4h' }));
+});
+

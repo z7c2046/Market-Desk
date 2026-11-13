@@ -155,6 +155,67 @@ export function createMarketWorkspace({ fetchImpl = fetch, now = () => new Date(
       note: '精选 18 只美股样本与核心宏观指标。面积按最新价 × 当日成交股数估算成交额；颜色为相对前收盘涨跌幅。'
     };
   }
+  async function fetchHyperliquidCandles(symbol, range, interval) {
+    const coin = symbol.replace(/-USD$/i, '').replace(/\/USD$/i, '').toUpperCase();
+    const rangeMsMap = {
+      '1d': 2 * 86400 * 1000,
+      '1mo': 30 * 86400 * 1000,
+      '3mo': 90 * 86400 * 1000,
+      '6mo': 180 * 86400 * 1000,
+      '1y': 365 * 86400 * 1000,
+      '2y': 730 * 86400 * 1000
+    };
+    const endTime = now().getTime();
+    const startTime = endTime - (rangeMsMap[range] || 30 * 86400 * 1000);
+    return cache.get(`hl-chart:${coin}:${range}:${interval}`, 60000, async () => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 10000);
+      try {
+        const res = await fetchImpl('https://api.hyperliquid.xyz/info', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'candleSnapshot', req: { coin, interval, startTime, endTime } }),
+          signal: controller.signal
+        });
+        if (!res.ok) throw new Error(`Hyperliquid candleSnapshot HTTP ${res.status}`);
+        const raw = await res.json();
+        if (!Array.isArray(raw) || raw.length === 0) throw new Error('Hyperliquid 无可用 K 线数据');
+        const bars = raw
+          .map(k => ({
+            time: Math.floor(Number(k.t) / 1000),
+            open: Number(k.o),
+            high: Number(k.h),
+            low: Number(k.l),
+            close: Number(k.c),
+            volume: Number(k.v || 0)
+          }))
+          .filter(b => Number.isFinite(b.time) && Number.isFinite(b.open) && Number.isFinite(b.close))
+          .sort((a, b) => a.time - b.time);
+        if (!bars.length) throw new Error('Hyperliquid K 线解析为空');
+        const last = bars[bars.length - 1];
+        const prev = bars.length >= 2 ? bars[bars.length - 2] : null;
+        const baseClose = prev?.close || last.open || last.close;
+        const changePercent = baseClose ? Number(((last.close / baseClose - 1) * 100).toFixed(2)) : 0;
+        return {
+          symbol,
+          name: `${coin}/USD 永续`,
+          currency: 'USD',
+          price: last.close,
+          previousClose: baseClose,
+          changePercent,
+          bars,
+          range,
+          interval,
+          source: 'Hyperliquid DEX',
+          delay: '实时 24/7',
+          fetchedAt: now().toISOString()
+        };
+      } finally {
+        clearTimeout(timer);
+      }
+    });
+  }
+
   async function chart(params) {
     const symbol = ticker(params.symbol);
     const range = params.range || '3mo';
@@ -177,12 +238,24 @@ export function createMarketWorkspace({ fetchImpl = fetch, now = () => new Date(
       }
     }
 
-    const data = await quote(symbol, upstreamRange, upstreamInterval);
-    let bars = data.bars || [];
-    if (interval === '4h') {
-      bars = aggregateBarsTo4H(bars);
+    try {
+      const data = await quote(symbol, upstreamRange, upstreamInterval);
+      let bars = data.bars || [];
+      if (interval === '4h') {
+        bars = aggregateBarsTo4H(bars);
+      }
+      if (bars.length > 0 || !/-USD$/i.test(symbol)) {
+        return { ...data, bars, range, interval };
+      }
+    } catch (err) {
+      if (!/-USD$/i.test(symbol)) throw err;
+      try {
+        return await fetchHyperliquidCandles(symbol, range, interval);
+      } catch (_) {
+        throw err;
+      }
     }
-    return { ...data, bars, range, interval };
+    return await fetchHyperliquidCandles(symbol, range, interval);
   }
   async function news(params) {
     const symbol = params.symbol ? ticker(params.symbol) : '';
