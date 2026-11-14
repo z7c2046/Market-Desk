@@ -535,7 +535,6 @@
           <template v-else>
             <div class="mobile-page-title">
               <span class="m-title">{{ mobileTitleInfo.title }}</span>
-              <span v-if="mobileTitleInfo.subtitle" class="m-sub">{{ mobileTitleInfo.subtitle }}</span>
             </div>
           </template>
         </div>
@@ -681,7 +680,7 @@
                             </div>
                             <div class="index-card-foot">
                               <span v-if="q.turnover">成交: ${{compact(q.turnover)}} · {{time(q.asOf)}}</span>
-                              <span v-else>指数点位 · {{time(q.asOf)}}</span>
+                              <span v-else>{{time(q.asOf)}}</span>
                               <span v-if="q.stale" class="warning">· 旧快照</span>
                             </div>
                           </button>
@@ -731,9 +730,7 @@
                             <div class="index-card-foot vol-card-foot">
                               <span class="vol-spread-indicator" :title="'纳指与标普波动率利差 (VXN - VIX)：' + volatilitySpread">
                                 利差 <strong>{{ volatilitySpread >= 0 ? '+' : '' }}{{ volatilitySpread }}</strong>
-                                <span class="vol-spread-note">({{ volatilitySpread >= 4 ? '科技溢价走阔' : '常态溢价' }})</span>
                               </span>
-                              <span class="macro-open-hint">全景 ↗</span>
                             </div>
                           </button>
 
@@ -743,7 +740,6 @@
                             <div class="index-card-head">
                               <div class="index-name">
                                 <strong>CNN 恐慌贪婪</strong>
-                                <span class="macro-badge-tag">情绪指数</span>
                               </div>
                               <div class="vix-warn-badge"
                                 :class="fearGreedIndex.score <= 45 ? 'vix-warn' : 'vix-normal'">
@@ -764,7 +760,6 @@
                             <div class="index-card-foot">
                               <span>前收: {{ fearGreedIndex.previousClose }} · 1周: {{ fearGreedIndex.previousWeek }} · 1月:
                                 {{ fearGreedIndex.previousMonth }}</span>
-                              <span class="macro-open-hint">原版仪表盘 ↗</span>
                             </div>
                           </button>
                         </div>
@@ -780,7 +775,6 @@
                                 <strong>黄金连续</strong>
                                 <span>XAU/USD</span>
                               </div>
-                              <span class="macro-asset-tag gold-tag">避险锚</span>
                             </div>
                             <div class="index-price-row">
                               <span class="price-val">${{ num(goldContract.price) }}</span>
@@ -793,10 +787,9 @@
                               :title="'国际金衡盎司经实时汇率换算：1 oz t ≈ 31.1035 g，当前汇率：' + goldCnyPerGram.rate">
                               <span class="gold-cny-val">折合 <strong>¥{{ goldCnyPerGram.price }}</strong>/克</span>
                               <span class="gold-cny-rate">汇率 {{ goldCnyPerGram.rateShort }}</span>
-                              <span class="gold-foot-sub">· 24h 避险中枢</span>
                             </div>
                             <div class="index-card-foot" v-else>
-                              <span>COMEX 黄金连续 · 24h 避险中枢</span>
+                              <span>COMEX · XAU/USD</span>
                             </div>
                           </button>
 
@@ -807,12 +800,12 @@
                               <div class="index-name">
                                 <strong>美债收益率</strong>
                               </div>
-                              <span class="macro-asset-tag rates-tag">曲线全景 ↗</span>
+                              <span class="macro-asset-tag rates-tag">↗</span>
                             </div>
                             <div class="index-price-row">
                               <div class="macro-compact-val">
                                 <span class="price-val">{{ formatMacroPrice(macroMap.US10Y) }}</span>
-                                <span class="price-val-unit">10Y基准</span>
+                                <span class="price-val-unit">10Y</span>
                               </div>
                               <span class="pct-pill"
                                 :class="(macroMap.US10Y?.changePercent || 0) >= 0 ? 'badge-pos' : 'badge-neg'">
@@ -846,7 +839,7 @@
                               </span>
                             </div>
                             <div class="index-card-foot">
-                              <span>ICE 美元指数 · 24h 汇率锚</span>
+                              <span>ICE · DXY</span>
                             </div>
                           </button>
 
@@ -871,7 +864,7 @@
                               </span>
                             </div>
                             <div class="index-card-foot">
-                              <span>ICE 伦敦原油连续 · 能源基准</span>
+                              <span>ICE · Brent</span>
                             </div>
                           </button>
 
@@ -882,7 +875,7 @@
                                 <strong>比特币龙头</strong>
                                 <span>BTC/USD</span>
                               </div>
-                              <span class="macro-asset-tag crypto-tag">24/7 加密 ↗</span>
+                              <span class="macro-asset-tag crypto-tag">24/7 ↗</span>
                             </div>
                             <div class="index-price-row">
                               <span class="price-val">${{ formatCryptoPrice(cryptoList[0]?.price) }}</span>
@@ -892,7 +885,7 @@
                               </span>
                             </div>
                             <div class="index-card-foot">
-                              <span>市值: ${{ cryptoList[0]?.marketCap }} · 前6大主流币 ➔</span>
+                              <span>市值: ${{ cryptoList[0]?.marketCap }}</span>
                             </div>
                           </button>
                         </div>
@@ -975,9 +968,7 @@
                         <div class="wl-header-bar">
                           <div class="wl-title-area">
                             <div class="wl-title-row">
-                              <h2 class="wl-main-title">自选看板 · 全景多时段工作台</h2>
-                              <span class="wl-summary-badge">共 {{ watchlist.length }} 支自选标的 · {{ groups.length }}
-                                大自定义分组</span>
+                              <h2 class="wl-main-title">自选看板</h2>
                             </div>
                           </div>
 
@@ -1924,7 +1915,6 @@
 
                             <div v-else class="cw-dock-empty">
                               <div class="cw-dock-empty-title">暂无 {{ symbol }} 链上巨鲸合约持仓</div>
-                              <p class="cw-dock-empty-sub muted small">热门巨鲸标的：</p>
                               <div class="cw-dock-quick-chips">
                                 <button v-for="qa in chartWhaleQuickAssets" :key="qa.symbol" type="button"
                                   class="cw-dock-quick-btn font-mono" @click="openSymbolInWhaleMainChart(qa.symbol)">🐋
@@ -2283,8 +2273,8 @@
                               </div>
                               <strong class="cw-tel-num cw-kpi-num font-mono">${{
                                 formatWhaleUsd(sankeyKpiSummary.totalOI) }}</strong>
-                              <span class="cw-tel-sub font-mono">{{ sankeyKpiSummary.walletCount }} 个跟踪钱包 · {{
-                                sankeyKpiSummary.assetCount }} 个标的</span>
+                              <span class="cw-tel-sub font-mono">{{ sankeyKpiSummary.walletCount }} 钱包 · {{
+                                sankeyKpiSummary.assetCount }} 标的</span>
                             </div>
                           </div>
 
@@ -2297,7 +2287,6 @@
                               </div>
                               <strong class="cw-tel-num cw-kpi-num font-mono text-pos">${{
                                 formatWhaleUsd(sankeyKpiSummary.longNotional) }}</strong>
-                              <span class="cw-tel-sub font-mono">占当前市场 <b>{{ sankeyKpiSummary.longPct }}%</b></span>
                             </div>
                           </div>
 
@@ -2310,7 +2299,6 @@
                               </div>
                               <strong class="cw-tel-num cw-kpi-num font-mono text-neg">${{
                                 formatWhaleUsd(sankeyKpiSummary.shortNotional) }}</strong>
-                              <span class="cw-tel-sub font-mono">占当前市场 <b>{{ sankeyKpiSummary.shortPct }}%</b></span>
                             </div>
                           </div>
 
@@ -2322,7 +2310,7 @@
                                 <span class="cw-tel-label">多空净敞口</span>
                                 <span class="cw-tag-pill font-mono"
                                   :class="{ 'cw-sample-pill': isWhaleDatasetSample, 'cw-offline-pill': !isWhaleDatasetSample && !isWhaleDatasetLive }">
-                                  {{ isWhaleDatasetSample ? '样本模型' : (isWhaleDatasetLive ? '实时净值' : '离线缓存') }}
+                                  {{ isWhaleDatasetSample ? '样本' : (isWhaleDatasetLive ? '实时' : '缓存') }}
                                 </span>
                               </div>
                               <div class="cw-kpi-val-cluster">
@@ -2339,12 +2327,9 @@
                               </div>
                               <span class="cw-tel-sub font-mono">
                                 浮盈亏 {{ (sankeyKpiSummary.totalPnl >= 0 ? '+' : '-') + '$' +
-                                formatWhaleUsd(sankeyKpiSummary.totalPnl) }} · <template
-                                  v-if="isWhaleDatasetSample">静态样本策略（非实盘流）</template><template
-                                  v-else-if="sankeyKpiSummary.deltaCount > 0">本轮变动 {{ sankeyKpiSummary.deltaCount }}
-                                  笔</template><template v-else-if="sankeyKpiSummary.liveFillCount > 0">5m 实盘 {{
-                                  sankeyKpiSummary.liveFillCount }} 笔</template><template v-else>12H 成交 {{
-                                  sankeyKpiSummary.activityCount }} 条</template>
+                                formatWhaleUsd(sankeyKpiSummary.totalPnl) }}<template
+                                  v-if="!isWhaleDatasetSample && sankeyKpiSummary.deltaCount > 0"> · +{{ sankeyKpiSummary.deltaCount }} 笔</template><template v-else-if="!isWhaleDatasetSample && sankeyKpiSummary.liveFillCount > 0"> · 5m {{
+                                  sankeyKpiSummary.liveFillCount }} 笔</template>
                               </span>
 
                               <!-- 红绿多空条状对比条：单行紧凑排列 -->
@@ -2370,9 +2355,8 @@
                               <h2 id="cw-flow-title">{{ whaleCategory === 'stocks' ? 'TradFi' : '加密货币' }} · 巨鲸持仓分布</h2>
                               <span class="cw-tag-pill cw-selection-badge">{{ selectedWhaleRecord ?
                                 selectedWhaleRecord.name : '全部钱包' }}</span>
-                              <span v-if="isWhaleDatasetSample" class="cw-tag-pill cw-sample-pill">样本持仓策略 ·
-                                静态演示账户</span>
-                              <span v-else-if="!isWhaleDatasetLive" class="cw-tag-pill cw-offline-pill">离线缓存</span>
+                              <span v-if="isWhaleDatasetSample" class="cw-tag-pill cw-sample-pill">样本</span>
+                              <span v-else-if="!isWhaleDatasetLive" class="cw-tag-pill cw-offline-pill">缓存</span>
                             </div>
 
                             <div class="cw-ph-tools">
@@ -2513,8 +2497,7 @@
                                 <h2 id="cw-wallets-title">{{ whaleCategory === 'stocks' ? 'TradFi' : '加密货币' }} · 巨鲸钱包
                                 </h2>
                                 <span class="cw-tag-pill font-mono"
-                                  :class="{ 'cw-sample-pill': isWhaleDatasetSample }">{{ isWhaleDatasetSample ?
-                                  leftWalletRows.length + ' 个样本账户' : leftWalletRows.length + ' 个账户' }}</span>
+                                  :class="{ 'cw-sample-pill': isWhaleDatasetSample }">{{ leftWalletRows.length }} 账户</span>
                               </div>
                               <div class="cw-ph-tools">
                                 <div v-if="!isWhaleDatasetSample && customWallets.length > 0"
@@ -3307,7 +3290,7 @@
                         </div>
 
                         <span class="muted small font-mono" style="display:inline-flex;align-items:center;gap:6px;">
-                          <span class="status-dot-pulse"></span> {{ dateLabel }} · 实时跨行业流动
+                          <span class="status-dot-pulse"></span> {{ dateLabel }}
                         </span>
                       </div>
 
@@ -3318,7 +3301,6 @@
                           <div class="kpi-card">
                             <div class="kpi-head">
                               <span>当日主力增仓板块</span>
-                              <span class="kpi-pill kpi-pill-green">强势首选</span>
                             </div>
                             <div class="kpi-body">
                               <span class="kpi-val">{{ topGainerSector ? topGainerSector.name + ' (' +
@@ -3326,7 +3308,7 @@
                               <span class="kpi-subval pos-text">{{ pct(topGainerSector?.changePercent) }}</span>
                             </div>
                             <div class="kpi-foot">
-                              <span>领跑龙头: {{ SECTOR_LEADERS[topGainerSector?.symbol] || '行业龙头' }}</span>
+                              <span>{{ SECTOR_LEADERS[topGainerSector?.symbol] || '' }}</span>
                               <span class="font-mono">成交 {{ compact(topGainerSector?.turnover) }}</span>
                             </div>
                           </div>
@@ -3334,7 +3316,6 @@
                           <div class="kpi-card">
                             <div class="kpi-head">
                               <span>资金流出最深</span>
-                              <span class="kpi-pill kpi-pill-red">避险减持</span>
                             </div>
                             <div class="kpi-body">
                               <span class="kpi-val">{{ topLoserSector ? topLoserSector.name + ' (' +
@@ -3342,7 +3323,7 @@
                               <span class="kpi-subval neg-text">{{ pct(topLoserSector?.changePercent) }}</span>
                             </div>
                             <div class="kpi-foot">
-                              <span>承压龙头: {{ SECTOR_LEADERS[topLoserSector?.symbol] || '行业回调' }}</span>
+                              <span>{{ SECTOR_LEADERS[topLoserSector?.symbol] || '' }}</span>
                               <span class="font-mono">成交 {{ compact(topLoserSector?.turnover) }}</span>
                             </div>
                           </div>
@@ -3350,23 +3331,20 @@
                           <div class="kpi-card">
                             <div class="kpi-head">
                               <span>全行业估算总换手</span>
-                              <span class="kpi-pill kpi-pill-blue">11 Sectors</span>
                             </div>
                             <div class="kpi-body">
                               <span class="kpi-val font-mono">{{ compact(totalSectorTurnover) }}</span>
                               <span class="kpi-subval muted font-mono">均值 {{ compact(avgSectorTurnover) }}</span>
                             </div>
                             <div class="kpi-foot">
-                              <span>成交最活跃: {{ mostActiveSector ? mostActiveSector.name + ' (' + mostActiveSector.symbol
+                              <span>最活跃: {{ mostActiveSector ? mostActiveSector.name + ' (' + mostActiveSector.symbol
                                 + ')' : '—' }}</span>
-                              <span class="font-mono">活跃放量</span>
                             </div>
                           </div>
                           <!-- Card 4: Ratio -->
                           <div class="kpi-card">
                             <div class="kpi-head">
                               <span>整体多空成交比</span>
-                              <span class="kpi-pill kpi-pill-amber">Ratio</span>
                             </div>
                             <div class="kpi-body">
                               <span class="kpi-val font-mono">{{ sectorBullBearRatio }}</span>
@@ -3376,8 +3354,7 @@
                               </span>
                             </div>
                             <div class="kpi-foot">
-                              <span>上涨 {{ upSectorsCount }} / 下跌 {{ downSectorsCount }} 板块</span>
-                              <span>结构分化</span>
+                              <span>上涨 {{ upSectorsCount }} / 下跌 {{ downSectorsCount }}</span>
                             </div>
                           </div>
                         </div>
@@ -3434,7 +3411,7 @@
                         <!-- 11 Sectors Breakdown Table -->
                         <div class="sector-breakdown-card">
                           <div class="sector-breakdown-head">
-                            <h3>标普 11 大行业板块资金与成交明细 <span class="group-badge">11 Sectors</span></h3>
+                            <h3>板块资金与成交明细</h3>
                           </div>
                           <div style="overflow-x:auto;">
                             <table class="sector-table">
@@ -3502,9 +3479,7 @@
                         <div v-if="!flows.length" class="empty-state">
                           <div class="empty-icon">⇄</div>
                           <h3>接入你有来源的资金流数据</h3>
-                          <p>目前公开行情源不提供可靠的 ETF 每日净申赎。<br>导入发行商或数据服务导出的数值后，即可比较每日资金流向。</p>
                           <code>date,symbol,netFlowUsd,source</code>
-                          <p class="small">使用 YYYY-MM-DD 日期、美元金额、来源名称；每个代码每天一行。<br>导入内容仅保存在当前浏览器。</p>
                         </div>
                         <template v-else>
                           <div id="flows-chart" class="wide-chart" role="img" aria-label="ETF净申赎柱状图"></div>
@@ -3621,14 +3596,9 @@
                             <div class="kpi-card">
                               <div class="kpi-head">
                                 <span>{{ options.symbol }} 标的现价</span>
-                                <span class="kpi-pill kpi-pill-blue">现货基准</span>
                               </div>
                               <div class="kpi-body">
                                 <span class="kpi-val font-mono">${{ num(options.spot) }}</span>
-                              </div>
-                              <div class="kpi-foot">
-                                <span>24小时现货估值</span>
-                                <span class="font-mono">实时/快照</span>
                               </div>
                             </div>
 
@@ -3643,9 +3613,8 @@
                                 <span v-if="callWallDist" class="kpi-subval muted font-mono">(距现价 {{ callWallDist >= 0 ?
                                   '+' : '' }}{{ callWallDist }}%)</span>
                               </div>
-                              <div class="kpi-foot">
-                                <span>聚集合约: {{ options.callOi ? options.callOi.toLocaleString() + ' 张' : '持仓集中'
-                                  }}</span>
+                              <div class="kpi-foot" v-if="options.callOi">
+                                <span>OI {{ options.callOi.toLocaleString() }} 张</span>
                               </div>
                             </div>
 
@@ -3660,8 +3629,8 @@
                                 <span v-if="putWallDist" class="kpi-subval muted font-mono">(距现价 {{ putWallDist >= 0 ?
                                   '+' : '' }}{{ putWallDist }}%)</span>
                               </div>
-                              <div class="kpi-foot">
-                                <span>聚集合约: {{ options.putOi ? options.putOi.toLocaleString() + ' 张' : '持仓集中' }}</span>
+                              <div class="kpi-foot" v-if="options.putOi">
+                                <span>OI {{ options.putOi.toLocaleString() }} 张</span>
                               </div>
                             </div>
 
@@ -3676,11 +3645,6 @@
                               </div>
                               <div class="kpi-body">
                                 <span class="kpi-val font-mono">{{ num(options.putCallRatio) }}</span>
-                                <span class="kpi-subval muted font-mono">参考 1.00</span>
-                              </div>
-                              <div class="kpi-foot">
-                                <span>{{ options.putCallRatio != null ? (options.putCallRatio > 1.0 ? 'Put 持仓量高于 Call' :
-                                  'Call 持仓量高于 Put') : '—' }}</span>
                               </div>
                             </div>
 
@@ -3696,9 +3660,6 @@
                               <div class="kpi-body">
                                 <span class="kpi-val font-mono" :class="tone(options.netGex)">{{ options.netGex != null
                                   ? compact(options.netGex) : '—' }}</span>
-                              </div>
-                              <div class="kpi-foot">
-                                <span>翻转点: 未计算 (需完整行权价模型)</span>
                               </div>
                             </div>
                           </div>
@@ -3784,22 +3745,18 @@
                           <button class="news-view-btn" :class="{ active: newsSubView === 'ai_search' }"
                             @click="newsSubView = 'ai_search'">
                             <span class="btn-icon">🤖</span> AI 全网深度检索
-                            <span class="badge-fire-pill">Tavily · Exa · Firecrawl</span>
                           </button>
                           <button class="news-view-btn" :class="{ active: newsSubView === 'tree_news' }"
                             @click="newsSubView = 'tree_news'">
                             <span class="btn-icon">⚡</span> 毫秒级突发快讯
-                            <span class="badge-fire-pill">Tree News WS 直连</span>
                           </button>
                           <button class="news-view-btn" :class="{ active: newsSubView === 'geopolitics' }"
                             @click="newsSubView = 'geopolitics'">
                             <span class="btn-icon">🌍</span> 全球地缘政治看板
-                            <span class="badge-fire-pill">Hot Radar</span>
                           </button>
                           <button class="news-view-btn" :class="{ active: newsSubView === 'earnings' }"
                             @click="newsSubView = 'earnings'">
                             <span class="btn-icon">📅</span> 科技与 AI 财报周历
-                            <span class="badge-fire-pill">Nasdaq 日历</span>
                           </button>
                           <button class="news-view-btn" :class="{ active: newsSubView === 'macro' }"
                             @click="newsSubView = 'macro'">
@@ -3810,15 +3767,8 @@
                         <!-- Quick Telemetry & Stats -->
                         <div v-if="newsSubView === 'tree_news'" class="earnings-header-stats">
                           <span class="stat-pill"><span class="pulse-dot"
-                              :class="{ green: treeNewsConnected, red: !treeNewsConnected }"></span> WebSocket
-                            长连接：<strong>{{ treeNewsConnected ? '在线广播中 (100~300ms)' : '正在连接...' }}</strong></span>
-                          <span class="stat-pill stat-accent">核心专线：彭博终端 · 路透社 · SEC Form 8-K · 官方突发</span>
-                          <span class="stat-pill">实时快讯库：<strong>{{ treeNewsList.length }}</strong> 条</span>
-                        </div>
-                        <div v-if="newsSubView === 'ai_search'" class="earnings-header-stats">
-                          <span class="stat-pill"><span class="pulse-dot"></span> 3 大 AI 搜索引擎协同在线：Tavily · Exa ·
-                            Firecrawl</span>
-                          <span class="stat-pill stat-accent">穿透信源：Reddit · X · 路透社 · 华尔街日报 · 彭博 · FT</span>
+                              :class="{ green: treeNewsConnected, red: !treeNewsConnected }"></span> {{ treeNewsConnected ? '在线' : '连接中' }}</span>
+                          <span class="stat-pill"><strong>{{ treeNewsList.length }}</strong> 条</span>
                         </div>
                         <div v-if="newsSubView === 'earnings'" class="earnings-header-stats">
                           <div class="earnings-week-tabs">
@@ -3830,12 +3780,10 @@
                             </button>
                           </div>
                           <span class="stat-pill">📅 {{ currentEarningsWeekInfo.rangeText }}</span>
-                          <span class="stat-pill stat-accent">AI 关注池 &amp; 百亿大盘 · 该周 {{ earningsList.length }}
-                            家披露</span>
+                          <span class="stat-pill stat-accent">{{ earningsList.length }} 家</span>
                         </div>
                         <div v-if="newsSubView === 'geopolitics'" class="earnings-header-stats">
-                          <span class="stat-pill"><span class="pulse-dot"></span> 全球地缘风险指数：高位戒备 (84.6)</span>
-                          <span class="stat-pill stat-accent">重点监控：中东霍尔木兹 · 东欧北约军费 · 印太芯片管制</span>
+                          <span class="stat-pill"><span class="pulse-dot"></span> 全球地缘风险指数：84.6</span>
                         </div>
                       </div>
 
@@ -4030,7 +3978,6 @@
                                     <div v-else class="front-logo-wrapper front-name-fallback">{{ item.name }}</div>
                                     <div class="front-ticker-row"><span class="front-ticker">{{ item.symbol
                                         }}</span><span class="flip-hint-badge">⤢ 展开</span></div>
-                                    <span class="small muted">{{ item.statusBadgeText }}</span>
                                   </div>
                                   <div v-if="!getDayEarnings(d.id, 'UNKNOWN').length"
                                     class="subcol-empty-card subcol-empty-full">
@@ -4295,56 +4242,35 @@
                             </div>
                             <div class="kpi-body">
                               <span class="kpi-val font-mono" style="color:var(--apple-red);">84.6</span>
-                              <span class="kpi-subval font-mono neg-text">处近 3 年 89% 分位数</span>
-                            </div>
-                            <div class="kpi-foot">
-                              <span>多重冲突点同步共振</span>
-                              <span>战略威慑升级</span>
+                              <span class="kpi-subval font-mono neg-text">近 3 年 89% 分位</span>
                             </div>
                           </div>
 
                           <div class="kpi-card">
                             <div class="kpi-head">
                               <span>原油地缘溢价估算</span>
-                              <span class="kpi-pill kpi-pill-amber">Brent Premium</span>
                             </div>
                             <div class="kpi-body">
                               <span class="kpi-val font-mono" style="color:#d97706;">+$4.50</span>
                               <span class="kpi-subval font-mono">占现价 ~$75/bbl 的 6%</span>
-                            </div>
-                            <div class="kpi-foot">
-                              <span>霍尔木兹海峡及红海防务</span>
-                              <span>高油价对冲通胀</span>
                             </div>
                           </div>
 
                           <div class="kpi-card">
                             <div class="kpi-head">
                               <span>避险黄金主权中枢</span>
-                              <span class="kpi-pill kpi-pill-green">Gold Safe-Haven</span>
                             </div>
                             <div class="kpi-body">
                               <span class="kpi-val font-mono" style="color:#10b981;">$2,720+</span>
-                              <span class="kpi-subval font-mono pos-text">全球央行持续净购金</span>
-                            </div>
-                            <div class="kpi-foot">
-                              <span>去美元化与信用对冲</span>
-                              <span>抗地缘违约资产</span>
                             </div>
                           </div>
 
                           <div class="kpi-card">
                             <div class="kpi-head">
                               <span>海运关键航道吸纳率</span>
-                              <span class="kpi-pill kpi-pill-blue">Cape of Good Hope</span>
                             </div>
                             <div class="kpi-body">
                               <span class="kpi-val font-mono" style="color:var(--apple-blue);">+8.2%</span>
-                              <span class="kpi-subval font-mono">额外消耗有效集装箱运力</span>
-                            </div>
-                            <div class="kpi-foot">
-                              <span>曼德海峡绕行好望角 +12天</span>
-                              <span>即期运价与保费高位</span>
                             </div>
                           </div>
                         </div>
@@ -4478,8 +4404,7 @@
                         <div class="ai-search-console-card">
                           <div class="ai-search-top-row">
                             <div class="ai-search-brand">
-                              <span class="ai-brand-badge">MULTI-ENGINE AI INTELLIGENCE</span>
-                              <h2 class="ai-search-heading">AI 全网财经与股市深度检索</h2>
+                              <h2 class="ai-search-heading">AI 财经检索</h2>
                             </div>
                             <div class="ai-engines-status-pills">
                               <span v-for="engine in ['tavily', 'exa', 'firecrawl']" :key="engine"
@@ -4644,7 +4569,7 @@
                               <h3 class="ai-card-title">{{ item.title }}</h3>
                             </a>
 
-                            <p class="ai-card-snippet">{{ item.snippet || '该新闻未提供正文摘要，点击下方按钮直达完整原文报道。' }}</p>
+                            <p v-if="item.snippet" class="ai-card-snippet">{{ item.snippet }}</p>
                             <p v-if="item.evidenceType === 'social_unverified'" class="ai-search-hint">社交讨论 · 未经核实</p>
                             <p v-if="item.engines?.length > 1" class="ai-search-hint">{{ item.engines.length }}
                               个渠道收录同一报道，不代表独立证实。</p>
@@ -4671,7 +4596,7 @@
                         <div v-else-if="!aiSearchLoading && !aiSearchError" class="ai-search-empty-state">
                           <div class="empty-icon">🔍</div>
                           <h3>未检索到匹配的资讯结果</h3>
-                          <p>当前主题、来源与时间范围内没有匹配结果。可扩大到最近 7 天，或勾选时间不明资料；系统不会用无关新闻补满列表。</p>
+                          <p>当前条件暂无匹配结果</p>
                           <div class="empty-actions">
                             <button class="ai-btn-direct-jump" @click="selectAiSearchPreset(AI_SEARCH_PRESETS[0])">
                               浏览华尔街核心焦点
@@ -4686,8 +4611,7 @@
                         <div class="tree-news-console-card">
                           <div class="tree-news-top-row">
                             <div class="tree-news-brand">
-                              <span class="tree-brand-badge">LIVE WEBSOCKET STREAM (TREE OF ALPHA)</span>
-                              <h2 class="tree-news-heading">Tree News 毫秒级突发财讯与大事件流</h2>
+                              <h2 class="tree-news-heading">Tree News 实时快讯</h2>
                             </div>
                             <div class="tree-engines-status-pills">
                               <span class="engine-live-pill" :class="{ 'live-online': treeNewsConnected }">
@@ -4739,21 +4663,6 @@
                               @click="treeNewsSourceFilter = s.id">
                               {{ s.label }} <span v-if="s.count !== undefined" class="pill-count">({{ s.count }})</span>
                             </button>
-                          </div>
-                        </div>
-
-                        <!-- Live Telemetry Bar -->
-                        <div class="tree-telemetry-strip">
-                          <div class="telemetry-left">
-                            <span class="telemetry-pill">
-                              ⚡ 广播节点：<strong>news.treeofalpha.com</strong>
-                            </span>
-                            <span class="telemetry-pill">
-                              📑 符合筛选：<strong>{{ filteredTreeNews.length }}</strong> / {{ treeNewsList.length }} 条
-                            </span>
-                            <span class="telemetry-pill">
-                              ⏱️ 延迟：<strong>毫秒级 (100~300ms)</strong>
-                            </span>
                           </div>
                         </div>
 
@@ -4816,8 +4725,8 @@
                         <div v-else class="tree-news-empty-state">
                           <div class="empty-icon">📡</div>
                           <h3>{{ treeNewsList.length ? '当前筛选条件下暂无快讯' : '正在保持 WebSocket 毫秒级长连接...' }}</h3>
-                          <p v-if="treeNewsList.length">可以尝试清空筛选框或切换来源范围。</p>
-                          <p v-else>公共广播节点已就绪。全球彭博终端、路透社及官方最新快讯发布时将毫秒级自动推送到此处。</p>
+                          <p v-if="treeNewsList.length">暂无匹配快讯</p>
+                          <p v-else>等待实时快讯推送...</p>
                           <div class="empty-actions" v-if="treeNewsSearch || treeNewsSourceFilter !== 'all'">
                             <button class="ai-btn-direct-jump"
                               @click="treeNewsSearch = ''; treeNewsSourceFilter = 'all'">
@@ -4945,7 +4854,6 @@
                       <div class="pref-section-header">
                         <div class="pref-section-title-wrap">
                           <h4 class="pref-section-title">K 线配色方案</h4>
-                          <span class="pref-badge">经典 / 荧光 / 赛博 / Demo同款</span>
                         </div>
                       </div>
 
@@ -4956,11 +4864,9 @@
                           tabindex="0" @keydown.enter.space.prevent="setKlineScheme('classic')">
                           <div class="scheme-radio-indicator">
                             <span class="radio-circle"></span>
-                            <span class="scheme-order-tag">图一 · 默认</span>
                           </div>
                           <div class="scheme-info">
-                            <div class="scheme-title">经典绿红 (OKX / 默认)</div>
-                            <div class="scheme-desc">翡翠绿与珊瑚红，沉稳清晰，全球交易所通用标配</div>
+                            <div class="scheme-title">经典绿红 (默认)</div>
                           </div>
                           <!-- 迷你 K 线与成交量柱示意图 -->
                           <div class="kline-mini-preview preview-classic">
@@ -4996,11 +4902,9 @@
                           tabindex="0" @keydown.enter.space.prevent="setKlineScheme('neon')">
                           <div class="scheme-radio-indicator">
                             <span class="radio-circle"></span>
-                            <span class="scheme-order-tag highlight-neon">图二 · 荧光</span>
                           </div>
                           <div class="scheme-info">
-                            <div class="scheme-title">荧光极光 (亮绿 / 玫粉)</div>
-                            <div class="scheme-desc">鲜亮荧光黄绿与鲜亮芭比玫粉，高对比度视觉冲击</div>
+                            <div class="scheme-title">荧光极光</div>
                           </div>
                           <!-- 迷你 K 线与成交量柱示意图 -->
                           <div class="kline-mini-preview preview-neon">
@@ -5036,11 +4940,9 @@
                           tabindex="0" @keydown.enter.space.prevent="setKlineScheme('cyberpunk')">
                           <div class="scheme-radio-indicator">
                             <span class="radio-circle"></span>
-                            <span class="scheme-order-tag highlight-cyber">图三 · 赛博</span>
                           </div>
                           <div class="scheme-info">
-                            <div class="scheme-title">赛博霓虹 (青蓝 / 品红)</div>
-                            <div class="scheme-desc">电光青蓝与炫彩品红，赛博朋克极客风尚，暗夜视觉拔群</div>
+                            <div class="scheme-title">赛博霓虹</div>
                           </div>
                           <!-- 迷你 K 线与成交量柱示意图 -->
                           <div class="kline-mini-preview preview-cyber">
@@ -5077,11 +4979,9 @@
                           @keydown.enter.space.prevent="setKlineScheme('bluepurple')">
                           <div class="scheme-radio-indicator">
                             <span class="radio-circle"></span>
-                            <span class="scheme-order-tag highlight-bluepurple">Demo同款 · 蓝紫</span>
                           </div>
                           <div class="scheme-info">
-                            <div class="scheme-title">极光蓝紫 (Demo 主图同款)</div>
-                            <div class="scheme-desc">Demo 演示主图同款蔚蓝与紫罗兰，期权多空持仓经典质感</div>
+                            <div class="scheme-title">极光蓝紫</div>
                           </div>
                           <!-- 迷你 K 线与成交量柱示意图 -->
                           <div class="kline-mini-preview preview-bluepurple">
@@ -5118,11 +5018,9 @@
                           @keydown.enter.space.prevent="setKlineScheme('deepbluepurple')">
                           <div class="scheme-radio-indicator">
                             <span class="radio-circle"></span>
-                            <span class="scheme-order-tag highlight-deepbluepurple">期权中心 · 深邃</span>
                           </div>
                           <div class="scheme-info">
-                            <div class="scheme-title">深邃蓝紫 (Demo 期权中心同款)</div>
-                            <div class="scheme-desc">Demo 演示原型期权持仓中心 ATM 聚类同款深邃宝蓝与高贵紫罗兰，色彩浓郁饱和，多空层次分明</div>
+                            <div class="scheme-title">深邃蓝紫</div>
                           </div>
                           <!-- 迷你 K 线与成交量柱示意图 -->
                           <div class="kline-mini-preview preview-deepbluepurple">
@@ -5159,7 +5057,6 @@
                       <div class="pref-section-header">
                         <div class="pref-section-title-wrap">
                           <h4 class="pref-section-title">热力图配色方案</h4>
-                          <span class="pref-badge">5 大主题配色</span>
                         </div>
                       </div>
 
@@ -5171,11 +5068,9 @@
                           @keydown.enter.space.prevent="setHeatmapScheme('classic')">
                           <div class="scheme-radio-indicator">
                             <span class="radio-circle"></span>
-                            <span class="scheme-order-tag">图一 · 默认</span>
                           </div>
                           <div class="scheme-info">
                             <div class="scheme-title">经典绿红 (默认)</div>
-                            <div class="scheme-desc">翡翠绿与珊瑚红，沉稳清晰，层次丰富，全球交易所通用标配</div>
                           </div>
                           <!-- 迷你热力图区块示意 -->
                           <div class="heatmap-mini-preview preview-classic">
@@ -5206,11 +5101,9 @@
                           tabindex="0" @keydown.enter.space.prevent="setHeatmapScheme('neon')">
                           <div class="scheme-radio-indicator">
                             <span class="radio-circle"></span>
-                            <span class="scheme-order-tag highlight-neon">图二 · 荧光</span>
                           </div>
                           <div class="scheme-info">
-                            <div class="scheme-title">荧光极光 (亮绿 / 玫粉)</div>
-                            <div class="scheme-desc">鲜亮荧光黄绿与鲜亮芭比玫粉，高对比度视觉冲击，多空瞬间洞察</div>
+                            <div class="scheme-title">荧光极光</div>
                           </div>
                           <!-- 迷你热力图区块示意 -->
                           <div class="heatmap-mini-preview preview-neon">
@@ -5242,11 +5135,9 @@
                           @keydown.enter.space.prevent="setHeatmapScheme('cyberpunk')">
                           <div class="scheme-radio-indicator">
                             <span class="radio-circle"></span>
-                            <span class="scheme-order-tag highlight-cyber">图三 · 赛博</span>
                           </div>
                           <div class="scheme-info">
-                            <div class="scheme-title">赛博霓虹 (青蓝 / 品红)</div>
-                            <div class="scheme-desc">电光青蓝与炫彩品红，赛博朋克极客风尚，暗夜视觉拔群</div>
+                            <div class="scheme-title">赛博霓虹</div>
                           </div>
                           <!-- 迷你热力图区块示意 -->
                           <div class="heatmap-mini-preview preview-cyber">
@@ -5278,11 +5169,9 @@
                           @keydown.enter.space.prevent="setHeatmapScheme('bluepurple')">
                           <div class="scheme-radio-indicator">
                             <span class="radio-circle"></span>
-                            <span class="scheme-order-tag highlight-bluepurple">Demo同款 · 蓝紫</span>
                           </div>
                           <div class="scheme-info">
-                            <div class="scheme-title">极光蓝紫 (Demo 主图同款)</div>
-                            <div class="scheme-desc">Demo 演示主图同款蔚蓝与紫罗兰，期权多空经典质感，优雅科技风</div>
+                            <div class="scheme-title">极光蓝紫</div>
                           </div>
                           <!-- 迷你热力图区块示意 -->
                           <div class="heatmap-mini-preview preview-bluepurple">
@@ -5315,11 +5204,9 @@
                           @keydown.enter.space.prevent="setHeatmapScheme('deepbluepurple')">
                           <div class="scheme-radio-indicator">
                             <span class="radio-circle"></span>
-                            <span class="scheme-order-tag highlight-deepbluepurple">期权中心 · 深邃</span>
                           </div>
                           <div class="scheme-info">
-                            <div class="scheme-title">深邃蓝紫 (Demo 期权中心同款)</div>
-                            <div class="scheme-desc">Demo 原型期权持仓中心同款深邃宝蓝与高贵紫罗兰，色彩浓郁饱和，多空层次分明</div>
+                            <div class="scheme-title">深邃蓝紫</div>
                           </div>
                           <!-- 迷你热力图区块示意 -->
                           <div class="heatmap-mini-preview preview-deepbluepurple">
@@ -5351,9 +5238,7 @@
                       <div class="pref-section-header">
                         <div class="pref-section-title-wrap">
                           <h4 class="pref-section-title">默认打开页面 (Default Launch Page)</h4>
-                          <span class="pref-badge">启动偏好记忆</span>
                         </div>
-                        <span class="pref-section-desc">直接访问工作台根网址或重新打开浏览器时，默认优先显示的模块</span>
                       </div>
 
                       <div class="pref-default-page-grid">
@@ -5369,7 +5254,6 @@
                             <span v-if="defaultPage === item.id" class="pref-default-tag">默认启动</span>
                             <span v-else class="pref-radio-circle"></span>
                           </div>
-                          <p class="pref-page-desc">{{ item.desc }}</p>
                         </div>
                       </div>
                     </section>
@@ -5379,9 +5263,7 @@
                       <div class="pref-section-header">
                         <div class="pref-section-title-wrap">
                           <h4 class="pref-section-title">界面配色</h4>
-                          <span class="pref-badge">两套独立配色</span>
                         </div>
-                        <span class="pref-section-desc">经典终端与蓝灰数据均完美适配白天与黑夜模式</span>
                       </div>
 
                       <div class="pref-palette-options" role="radiogroup" aria-label="界面配色">
@@ -5392,7 +5274,6 @@
                             <span class="palette-card-title">经典终端</span>
                             <span v-if="uiPalette === 'terminal'" class="theme-active-tag">当前生效</span>
                           </div>
-                          <div class="palette-card-desc">纯白与黑曜石，沿用当前外观</div>
                           <div class="palette-swatches-preview">
                             <div class="swatch-row">
                               <span class="swatch-label">白天</span>
@@ -5420,7 +5301,6 @@
                             <span class="palette-card-title">蓝灰数据</span>
                             <span v-if="uiPalette === 'cobalt'" class="theme-active-tag">当前生效</span>
                           </div>
-                          <div class="palette-card-desc">中性灰底与蓝色强调，来自配色演示</div>
                           <div class="palette-swatches-preview">
                             <div class="swatch-row">
                               <span class="swatch-label">白天</span>
@@ -5457,7 +5337,7 @@
                           <span class="theme-icon">💻</span>
                           <div class="theme-card-text">
                             <strong>跟随系统 (Auto)</strong>
-                            <span>{{ isDark ? '当前系统为深色' : '当前系统为浅色' }} · 自动切换</span>
+                            <span>{{ isDark ? '深色' : '浅色' }}</span>
                           </div>
                           <span v-if="themePreference === 'system'" class="theme-active-tag">当前生效</span>
                         </button>
@@ -5467,7 +5347,6 @@
                           <span class="theme-icon">☀️</span>
                           <div class="theme-card-text">
                             <strong>白天模式 (Light)</strong>
-                            <span>适合明亮环境 · 清爽柔和</span>
                           </div>
                           <span v-if="themePreference === 'light'" class="theme-active-tag">当前生效</span>
                         </button>
@@ -5477,7 +5356,6 @@
                           <span class="theme-icon">🌙</span>
                           <div class="theme-card-text">
                             <strong>黑夜模式 (Dark)</strong>
-                            <span>适合较暗环境 · 护眼沉浸</span>
                           </div>
                           <span v-if="themePreference === 'dark'" class="theme-active-tag">当前生效</span>
                         </button>
@@ -5495,7 +5373,7 @@
                       <div class="pref-grid-options">
                         <button class="pref-grid-btn" :class="{ active: klineGridStyle === 'dashed' }"
                           @click="setKlineGrid('dashed')" type="button">
-                          <span class="grid-icon">┄┄</span> 浅灰虚线 (图一默认)
+                          <span class="grid-icon">┄┄</span> 浅灰虚线
                         </button>
                         <button class="pref-grid-btn" :class="{ active: klineGridStyle === 'solid' }"
                           @click="setKlineGrid('solid')" type="button">
@@ -5537,7 +5415,6 @@
                               <strong class="pref-ma-name"
                                 :style="{ color: klineMaVisibility[m.key] ? m.color : 'inherit' }">{{ m.label
                                 }}</strong>
-                              <span class="pref-ma-desc">{{ m.desc }}</span>
                             </div>
                           </div>
                           <div class="pref-ma-switch-pill" :class="{ 'is-on': klineMaVisibility[m.key] }">
@@ -5560,11 +5437,8 @@
                           </div>
                           <div class="pref-inflection-content">
                             <div class="pref-inflection-title-row">
-                              <strong class="pref-ma-name">⚡ 拐点猎手算法 (DEMA 14 & 30 快慢线综合多因子评分)</strong>
-                              <span class="pref-algo-tag">DEMA 多因子</span>
+                              <strong class="pref-ma-name">⚡ 拐点猎手算法 (DEMA 14 & 30)</strong>
                             </div>
-                            <span class="pref-ma-desc">基于双重指数平滑均线 (DEMA) 间距/斜率/偏离度 (ATR归一化) + 变异动量因子 (Mutant Momentum) +
-                              20日成交量放大系数，在 K 线图精准标注 EB (买入观察)、B (确认买入)、ES (卖出观察)、S (确认卖出) 拐点信号</span>
                           </div>
                         </div>
                         <div class="pref-ma-switch-pill" :class="{ 'is-on': showInflectionSignals }">
@@ -5578,7 +5452,6 @@
                       <div class="pref-section-header">
                         <div class="pref-section-title-wrap">
                           <h4 class="pref-section-title">AI 搜索引擎配置 (AI Intelligence Engines)</h4>
-                          <span class="pref-badge">3 大前沿 AI 引擎在线</span>
                         </div>
                       </div>
                       <div class="ai-engines-pref-grid">
@@ -5587,30 +5460,27 @@
                             <span class="pref-engine-name">🔍 Tavily Search API</span>
                             <div class="pref-card-badges">
                               <span class="status-indicator-tag green">● 200 OK 在线</span>
-                              <span class="pref-key-display">密钥：已在环境变量配置（••••••••••••••••）</span>
+                              <span class="pref-key-display">已配置环境变量</span>
                             </div>
                           </div>
-                          <div class="pref-key-usage">专长：实时事实抓取、深度网页发现、Reddit/X 散户与交易圈挖掘</div>
                         </div>
                         <div class="ai-engine-pref-card">
                           <div class="pref-card-header">
                             <span class="pref-engine-name">🔥 Firecrawl Web Search</span>
                             <div class="pref-card-badges">
                               <span class="status-indicator-tag green">● 200 OK 在线</span>
-                              <span class="pref-key-display">密钥：已在环境变量配置（••••••••••••••••）</span>
+                              <span class="pref-key-display">已配置环境变量</span>
                             </div>
                           </div>
-                          <div class="pref-key-usage">专长：全网精准爬取、Markdown 结构化金融文本解析</div>
                         </div>
                         <div class="ai-engine-pref-card">
                           <div class="pref-card-header">
                             <span class="pref-engine-name">🧠 Exa Neural Search</span>
                             <div class="pref-card-badges">
                               <span class="status-indicator-tag green">● 200 OK 在线</span>
-                              <span class="pref-key-display">密钥：已在环境变量配置（••••••••••••••••）</span>
+                              <span class="pref-key-display">已配置环境变量</span>
                             </div>
                           </div>
-                          <div class="pref-key-usage">专长：基于语义神经网络的金融深度长文、权威主流媒体深度检索</div>
                         </div>
                       </div>
                     </section>
@@ -5656,7 +5526,6 @@
                     @click="showBackupModal=false">×</button>
                 </div>
                 <div class="modal-body">
-                  <p class="small">可复制以下配置到安全位置备份，或粘贴已有备份文本后点击“导入配置”。</p>
                   <textarea v-model="backupJsonText" spellcheck="false" placeholder="在此粘贴 JSON 配置..."></textarea>
                   <div class="modal-actions">
                     <button type="button" @click="showBackupModal=false">取消</button>
@@ -5674,8 +5543,6 @@
                 <div class="modal-heading">
                   <div>
                     <h2>自定义巨鲸钱包监控</h2>
-                    <p class="cw-custom-modal-sub muted">与 Hyperliquid L1 / HIP-3 (xyz) 榜单 Top {{ whaleTopN }} 自动合并 ·
-                      即使当前 0 持仓也将每 60s 同步状态</p>
                   </div>
                   <button type="button" class="modal-close" aria-label="关闭" @click="closeCustomWalletManager">×</button>
                 </div>
@@ -5709,11 +5576,10 @@
                 <div class="cw-custom-list-section">
                   <div class="cw-custom-list-head">
                     <span>已添加的自选监控钱包</span>
-                    <span class="muted font-mono">本地持久化保存</span>
                   </div>
 
                   <div v-if="customWallets.length === 0" class="cw-custom-empty muted">
-                    暂无自定义监控地址。填入任意 0x 钱包地址，即可实时查看其 Hyperliquid 永续合约持仓、保证金净值与成交通知。
+                    暂无自选钱包
                   </div>
 
                   <ul v-else class="cw-custom-list">
@@ -5825,7 +5691,6 @@
                       <span class="cnn-logo-pill">CNN</span>
                       <h2>Fear & Greed Index</h2>
                     </div>
-                    <p class="cnn-fg-subtitle">What emotion is driving the market now?</p>
                   </div>
                   <button class="stock-modal-close-btn" aria-label="关闭弹窗" @click="closeFearGreedModal">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
@@ -5985,7 +5850,6 @@
                     <div class="cnn-indicators-header">
                       <span class="cnn-ind-bar">|</span>
                       <h3>7 FEAR & GREED INDICATORS</h3>
-                      <span class="cnn-ind-sub">七大驱动情绪子指标拆解</span>
                     </div>
                     <div class="cnn-indicators-grid">
                       <div v-for="ind in fearGreedIndicators" :key="ind.id" class="cnn-indicator-card">
@@ -5994,7 +5858,6 @@
                           <span class="cnn-ind-rating-pill" :class="ind.toneClass">{{ ind.status }}</span>
                         </div>
                         <div class="cnn-ind-metric">{{ ind.metric }}</div>
-                        <p class="cnn-ind-desc">{{ ind.desc }}</p>
                       </div>
                     </div>
                   </div>
@@ -6012,7 +5875,6 @@
                       <span class="treasury-flag-badge">🇺🇸 US TREASURY</span>
                       <h2>美国国债收益率全景</h2>
                     </div>
-                    <p class="treasury-subtitle">全球无风险资产定价中枢 · 10年、20年、30年基准国债收益率与期限利差</p>
                   </div>
                   <button class="stock-modal-close-btn" aria-label="关闭弹窗" @click="closeTreasuryModal">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
@@ -6040,7 +5902,6 @@
                     <div class="treasury-rate-card card-highlight">
                       <div class="tr-card-top">
                         <div class="tr-term-pill">10 年期基准 (10Y)</div>
-                        <span class="tr-role-tag">全球定价锚</span>
                       </div>
                       <div class="tr-symbol">US10Y · ^TNX</div>
                       <div class="tr-yield-row">
@@ -6063,10 +5924,6 @@
                           <span class="val font-mono">{{ macroMap.US10Y?.previousClose ?
                             macroMap.US10Y.previousClose.toFixed(3) + '%' : '—' }}</span>
                         </div>
-                        <div class="tr-metric-row">
-                          <span class="label">主要影响领域</span>
-                          <span class="val desc">科技股估值贴现、房贷抵押利率</span>
-                        </div>
                       </div>
                       <button class="tr-action-btn" @click="selectSymbol('^TNX'); closeTreasuryModal();">
                         <span>查看 10Y K线走势</span>
@@ -6078,7 +5935,6 @@
                     <div class="treasury-rate-card">
                       <div class="tr-card-top">
                         <div class="tr-term-pill">20 年期国债 (20Y)</div>
-                        <span class="tr-role-tag">超长久期配置</span>
                       </div>
                       <div class="tr-symbol">US20Y</div>
                       <div class="tr-yield-row">
@@ -6102,19 +5958,13 @@
                             0)).toFixed(3) }}% (+{{ (((macroMap.US20Y?.price || 0) - (macroMap.US10Y?.price || 0)) *
                             100).toFixed(1) }} bp)</span>
                         </div>
-                        <div class="tr-metric-row">
-                          <span class="label">主要影响领域</span>
-                          <span class="val desc">养老金资产匹配、长期主权固收</span>
-                        </div>
                       </div>
-                      <div class="tr-passive-badge">20Y 标杆利率基准</div>
                     </div>
 
                     <!-- 30年期美债 (US30Y) -->
                     <div class="treasury-rate-card">
                       <div class="tr-card-top">
                         <div class="tr-term-pill">30 年期国债 (30Y)</div>
-                        <span class="tr-role-tag">通胀与财政赤字</span>
                       </div>
                       <div class="tr-symbol">US30Y · ^TYX</div>
                       <div class="tr-yield-row">
@@ -6138,10 +5988,6 @@
                             0)).toFixed(3) }}% (+{{ (((macroMap.US30Y?.price || 0) - (macroMap.US10Y?.price || 0)) *
                             100).toFixed(1) }} bp)</span>
                         </div>
-                        <div class="tr-metric-row">
-                          <span class="label">主要影响领域</span>
-                          <span class="val desc">长端通胀预期、美债发债供给压力</span>
-                        </div>
                       </div>
                       <button class="tr-action-btn" @click="selectSymbol('^TYX'); closeTreasuryModal();">
                         <span>查看 30Y K线走势</span>
@@ -6154,7 +6000,6 @@
                   <div class="treasury-curve-panel">
                     <div class="curve-panel-header">
                       <strong>美债收益率曲线斜率 (10Y ➔ 20Y ➔ 30Y)</strong>
-                      <span class="curve-badge">期限溢价观察</span>
                     </div>
                     <div class="curve-bars-wrap">
                       <div class="curve-bar-col">
@@ -6191,19 +6036,6 @@
                       </div>
                     </div>
                   </div>
-
-                  <!-- 交易员策略洞察备忘录 -->
-                  <div class="treasury-insights-box">
-                    <div class="insights-title">📊 交易员微观指引：美债收益率如何影响美股板块</div>
-                    <ul class="insights-list">
-                      <li><strong>科技与AI芯片股（NVDA / AMD / MSFT）</strong>：10年期美债收益率是高成长科技股的估值折现率分母。当 10Y
-                        收益率快速回落时，高PE科技股估值弹性最大；反之冲高将引发科技成长板块估值压缩。</li>
-                      <li><strong>银行与金融板块（XLF / JPM）</strong>：关注 10Y-2Y 与 30Y-10Y 利差。收益率曲线正常陡峭有利于商业银行“借短贷长”实现净息差（NIM）扩张。
-                      </li>
-                      <li><strong>超长端赤字压力（20Y / 30Y）</strong>：若 20Y 与 30Y 收益率相对 10Y
-                        居高不下，往往反映财政部大规模发行超长债带来的期限溢价补偿与避险承接能力考验。</li>
-                    </ul>
-                  </div>
                 </div>
               </div>
             </div>
@@ -6218,7 +6050,6 @@
                       <span class="volatility-flag-badge">⚡ CBOE VOLATILITY MATRIX</span>
                       <h2>CBOE 波动率指数全景 · VIX vs VXN 联动雷达</h2>
                     </div>
-                    <p class="volatility-subtitle">标普 500 系统性风险中枢与纳斯达克 100 科技股期权恐慌定价全景透视</p>
                   </div>
                   <button class="stock-modal-close-btn" aria-label="关闭弹窗" @click="closeVolatilityModal">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
@@ -6239,8 +6070,7 @@
                         <span class="vol-diagnostic-badge">{{ volatilityDiagnostic.badge }}</span>
                       </div>
                       <span>VXN - VIX 实时利差: <strong>{{ volatilitySpread >= 0 ? '+' : '' }}{{ volatilitySpread }}
-                          pt</strong> · 科技/大盘波动率比值: <strong>{{ volatilitySpreadRatio }}x</strong> · {{
-                        volatilityDiagnostic.desc }}</span>
+                          pt</strong> · 波动率比值: <strong>{{ volatilitySpreadRatio }}x</strong></span>
                     </div>
                   </div>
 
@@ -6250,7 +6080,6 @@
                     <div class="vol-rate-card card-highlight">
                       <div class="vol-card-top">
                         <div class="vol-term-pill">标普 500 波动率 (30D)</div>
-                        <span class="vol-role-tag">全球大盘恐慌总舵</span>
                       </div>
                       <div class="vol-symbol font-mono">CBOE VIX · ^VIX</div>
                       <div class="vol-price-row">
@@ -6261,26 +6090,26 @@
                       </div>
                       <div class="vol-metrics-list">
                         <div class="vol-metric-row">
-                          <span class="label">跟踪核心标的</span>
-                          <span class="val font-mono">标普 500 指数 (^GSPC)</span>
+                          <span class="label">跟踪标的</span>
+                          <span class="val font-mono">S&P 500 (^GSPC)</span>
                         </div>
                         <div class="vol-metric-row">
-                          <span class="label">当前恐慌定性</span>
+                          <span class="label">状态</span>
                           <span class="val font-mono" :class="vixQuote.price > 20 ? 'text-warn' : 'text-pos'">
-                            {{ vixQuote.price < 15 ? '极度低波 (贪婪亢奋)' : vixQuote.price <=20 ? '常态低波 (平稳博弈)' :
-                              vixQuote.price <=30 ? '恐慌抬升 (加仓对冲)' : '极度恐慌 (多杀多危机)' }} </span>
+                            {{ vixQuote.price < 15 ? '低波' : vixQuote.price <=20 ? '常态' :
+                              vixQuote.price <=30 ? '抬升' : '危机' }} </span>
                         </div>
                         <div class="vol-metric-row">
-                          <span class="label">50 日均线对比 (18.2)</span>
-                          <span class="val font-mono">{{ vixQuote.price >= 18.2 ? '▲ 均线上方 · 避险升温' : '▼ 均线下方 · 情绪受控'
+                          <span class="label">50 日均线 (18.2)</span>
+                          <span class="val font-mono">{{ vixQuote.price >= 18.2 ? '▲ 均线上方' : '▼ 均线下方'
                             }}</span>
                         </div>
                         <div class="vol-metric-row">
-                          <span class="label">历史常态中枢</span>
-                          <span class="val font-mono">12.0 ~ 20.0 (基准 16.0)</span>
+                          <span class="label">常态区间</span>
+                          <span class="val font-mono">12.0 ~ 20.0</span>
                         </div>
                         <div class="vol-metric-row">
-                          <span class="label">期权隐含年化波动率</span>
+                          <span class="label">隐含年化波动率</span>
                           <span class="val font-mono">{{ num(vixQuote.price) }}%</span>
                         </div>
                       </div>
@@ -6290,7 +6119,6 @@
                     <div class="vol-rate-card card-highlight">
                       <div class="vol-card-top">
                         <div class="vol-term-pill">纳指 100 波动率 (30D)</div>
-                        <span class="vol-role-tag">高贝塔科技期权定价</span>
                       </div>
                       <div class="vol-symbol font-mono">CBOE VXN · ^VXN</div>
                       <div class="vol-price-row">
@@ -6301,25 +6129,25 @@
                       </div>
                       <div class="vol-metrics-list">
                         <div class="vol-metric-row">
-                          <span class="label">跟踪核心标的</span>
-                          <span class="val font-mono">纳斯达克 100 指数 (^NDX)</span>
+                          <span class="label">跟踪标的</span>
+                          <span class="val font-mono">Nasdaq 100 (^NDX)</span>
                         </div>
                         <div class="vol-metric-row">
-                          <span class="label">当前恐慌定性</span>
+                          <span class="label">状态</span>
                           <span class="val font-mono" :class="vxnQuote.price > 24 ? 'text-warn' : 'text-pos'">
-                            {{ vxnQuote.price < 18 ? '低估值波动' : vxnQuote.price <=24 ? '常态科技溢价' : vxnQuote.price <=34
-                              ? '科技重仓踩踏' : '极度恐慌 (爆仓挤兑)' }} </span>
+                            {{ vxnQuote.price < 18 ? '低波' : vxnQuote.price <=24 ? '常态' : vxnQuote.price <=34
+                              ? '高压' : '极端' }} </span>
                         </div>
                         <div class="vol-metric-row">
-                          <span class="label">高贝塔敏感弹性</span>
-                          <span class="val font-mono">~ 1.25x 标普弹性 (高弹性)</span>
+                          <span class="label">弹性系数</span>
+                          <span class="val font-mono">~ 1.25x</span>
                         </div>
                         <div class="vol-metric-row">
-                          <span class="label">历史常态中枢</span>
-                          <span class="val font-mono">16.0 ~ 25.0 (基准 20.5)</span>
+                          <span class="label">常态区间</span>
+                          <span class="val font-mono">16.0 ~ 25.0</span>
                         </div>
                         <div class="vol-metric-row">
-                          <span class="label">期权隐含年化波动率</span>
+                          <span class="label">隐含年化波动率</span>
                           <span class="val font-mono">{{ num(vxnQuote.price) }}%</span>
                         </div>
                       </div>
@@ -6329,8 +6157,7 @@
                   <!-- 波动率点位与利差柱状条对比 -->
                   <div class="vol-curve-panel">
                     <div class="curve-panel-header">
-                      <strong>波动率对比与科技溢价利差柱 (VIX ➔ VXN)</strong>
-                      <span class="curve-badge">跨品种相对价值</span>
+                      <strong>波动率对比 (VIX ➔ VXN)</strong>
                     </div>
                     <div class="vol-bars-wrap">
                       <div class="vol-bar-col">
@@ -6352,37 +6179,6 @@
                           </div>
                         </div>
                         <div class="vol-bar-sub">Nasdaq 100</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- 实战交易员策略与风控指引 -->
-                  <div class="vol-tactical-box">
-                    <div class="vol-tactical-title">🎯 交易员实战指引：VIX 与 VXN 联动如何指导操作</div>
-                    <div class="vol-tactical-grid">
-                      <div class="vol-tactical-card">
-                        <div class="tac-header">
-                          <span class="tac-icon">📈</span>
-                          <strong>正股与 ETF 现货风控</strong>
-                        </div>
-                        <p>当 <strong>VXN - VIX 利差 &gt; 4.0</strong>
-                          时，科技股正遭遇集中单边抛压（如半导体与存储芯片踩踏）。此时纳指科技股日内反弹面临极重空头均价防守，切忌盲目左侧抄底，应以逢高控仓或向大盘防御板块轮动为主。</p>
-                      </div>
-                      <div class="vol-tactical-card">
-                        <div class="tac-header">
-                          <span class="tac-icon">⚡</span>
-                          <strong>期权 IV 溢价与 Vega 风险</strong>
-                        </div>
-                        <p>当 <strong>VXN 处于高位（&gt; 25）</strong> 时，科技股看跌期权（Put）隐含波动率极度高企。此时追空单腿买 Put 成本极贵且面临严重的“波动率压制（IV
-                          Crush）”亏损风险；推荐采用垂直价差（Bear Put Spread）降低 Vega 敞口。</p>
-                      </div>
-                      <div class="vol-tactical-card">
-                        <div class="tac-header">
-                          <span class="tac-icon">🔄</span>
-                          <strong>极值情绪反转与均值回归</strong>
-                        </div>
-                        <p>当 <strong>VXN 突破 35 且利差超过 8 点</strong>
-                          时，通常反映市场对科技成长股出现非理性的极度恐慌与踩踏逼仓。历史表明该极端读数往往对应阶段性恐慌高潮，左侧量化与对冲基金可能在企稳后发起爆发性超跌反弹。</p>
                       </div>
                     </div>
                   </div>
@@ -6661,7 +6457,6 @@
                       @click="toggleShowExtSessionSetting">
                       <div class="rw-dropdown-item-left">
                         <span class="rw-setting-title">显示延长时段 (EXT%)</span>
-                        <span class="rw-setting-desc">盘后/盘前时段展示涨跌幅</span>
                       </div>
                       <div class="rw-toggle-switch" :class="{ active: showExtSessionSetting }">
                         <span class="rw-toggle-knob"></span>
@@ -6671,7 +6466,6 @@
                       @click="toggleShowVolumeSetting">
                       <div class="rw-dropdown-item-left">
                         <span class="rw-setting-title">显示成交量 (Volume)</span>
-                        <span class="rw-setting-desc">美股收盘量 / 加密 24H 成交量</span>
                       </div>
                       <div class="rw-toggle-switch" :class="{ active: showVolumeSetting }">
                         <span class="rw-toggle-knob"></span>
