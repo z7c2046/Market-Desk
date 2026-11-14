@@ -1847,7 +1847,7 @@ test('Crypto Workspace: Sankey distribution, 4 scoped KPIs, 2-column whale-posit
   catBtns[1].click();
   await tick();
   assert.match(sankeyPanel.textContent, /TradFi · 巨鲸持仓分布/);
-  assert.match(sankeyPanel.textContent, /样本持仓策略 · 静态演示账户/);
+  assert.equal(sankeyPanel.querySelector('.cw-sample-pill')?.textContent?.trim(), '样本');
   assert.equal(sankeyPanel.querySelector('.cw-now-strip'), null, 'TradFi static sample hides 正在调仓 pseudo-live ticker');
   assert.equal(sankeySvg.querySelectorAll('.cw-sk-pulse-beam').length, 0, 'TradFi static sample never flashes pulse beams');
   assert.match(sankeySvg.textContent, /NVDA/);
@@ -2060,7 +2060,7 @@ test('Volatility Matrix: Row 1 renders Volatility Twin Card (VIX vs VXN), and cl
   assert.match(volModal.textContent, /CBOE 波动率指数全景 · VIX vs VXN 联动雷达/);
   assert.match(volModal.textContent, /标普 500 波动率/);
   assert.match(volModal.textContent, /纳指 100 波动率/);
-  assert.match(volModal.textContent, /交易员实战指引/);
+  assert.equal(volModal.querySelector('.vol-tactical-box'), null, 'Verbose tactical textbook removed from volatility modal');
 
   // 4. Close modal via close button
   const closeBtn = volModal.querySelector('.stock-modal-close-btn');
@@ -4001,6 +4001,84 @@ test('#chart Docked K-line Header: global system topbar scrolls upward away whil
   assert.ok(docsPanel, '#sources documentation panel renders');
   assert.match(docsPanel.textContent, /个股行情与 K 线/, 'K-line methodology consolidated into 说明');
   assert.match(docsPanel.textContent, /期权持仓墙/, 'Options methodology consolidated into 说明');
+
+  assert.deepEqual(ui.errors, []);
+});
+
+test('System-wide UI clutter audit: removes redundant gray subtitles, explanatory essays, and filler badges across all pages and modals', async t => {
+  const ui = await mount(t, async url => ({ ok: true, json: async () => fixture(url) }));
+
+  // 1. #overview
+  assert.equal(ui.w.document.querySelector('.vol-spread-note'), null, 'Overview VIX card removes verbose spread note');
+  assert.equal(ui.w.document.querySelector('.macro-open-hint'), null, 'Overview cards remove open-hint prose');
+  assert.equal(ui.w.document.querySelector('.gold-foot-sub'), null, 'Overview gold card removes 24h safe-haven filler');
+  assert.equal(ui.w.document.querySelector('.gold-tag'), null, 'Overview gold card removes 避险锚 tag');
+
+  // 2. #watchlist
+  await ui.click('自选看板');
+  await tick();
+  assert.equal(ui.w.document.querySelector('.wl-summary-badge'), null, 'Watchlist header removes redundant summary badge');
+
+  // 3. #crypto
+  await ui.click('加密货币');
+  await tick();
+  assert.ok(!ui.w.document.body.textContent.includes('静态样本策略（非实盘流）'), 'Crypto KPI omits verbose sample strategy sentence');
+
+  // 4. #flows
+  await ui.click('资金观察');
+  await tick();
+  assert.ok(!ui.w.document.body.textContent.includes('实时跨行业流动'), 'Flows header omits redundant subtitle');
+  assert.ok(!ui.w.document.body.textContent.includes('强势首选'), 'Flows KPI omits decorative tag 强势首选');
+
+  // 5. #options
+  await ui.click('期权墙');
+  await tick();
+  assert.ok(!ui.w.document.body.textContent.includes('翻转点: 未计算'), 'Options GEX card omits uncomputed footnote');
+  assert.ok(!ui.w.document.body.textContent.includes('参考 1.00'), 'Options PCR card omits static reference note');
+
+  // 6. #news
+  await ui.click('新闻资讯');
+  await tick();
+  assert.equal(ui.w.document.querySelector('.badge-fire-pill'), null, 'News switch tabs omit decorative source pills');
+  ui.w.document.querySelectorAll('.news-view-btn')[1].click();
+  await tick();
+  assert.equal(ui.w.document.querySelector('.ai-brand-badge'), null, 'AI search hides brand banner badge');
+  ui.w.document.querySelectorAll('.news-view-btn')[2].click();
+  await tick();
+  assert.equal(ui.w.document.querySelector('.tree-brand-badge'), null, 'Tree news hides brand banner badge');
+  assert.equal(ui.w.document.querySelector('.tree-telemetry-strip'), null, 'Tree news removes duplicate telemetry strip');
+
+  // 7. Modals: Preferences, CNN Fear & Greed, Treasury, Volatility
+  ui.w.document.querySelector('.settings-modal-btn').click();
+  await tick();
+  const prefModal = ui.w.document.querySelector('.preferences-modal-card');
+  assert.ok(prefModal, 'Preferences modal opens');
+  assert.equal(prefModal.querySelector('.pref-badge'), null, 'Preferences removes decorative badges');
+  assert.equal(prefModal.querySelector('.scheme-desc'), null, 'Preferences removes scheme descriptions');
+  assert.equal(prefModal.querySelector('.pref-page-desc'), null, 'Preferences removes page descriptions');
+  assert.equal(prefModal.querySelector('.pref-key-usage'), null, 'Preferences removes AI engine capability essays');
+  prefModal.querySelector('.pref-close-btn').click();
+  await tick();
+
+  await ui.click('市场总览');
+  await tick();
+  ui.w.document.querySelector('[aria-label*="CNN"]').click();
+  await tick();
+  const fgModal = ui.w.document.querySelector('.cnn-fg-modal-card');
+  assert.ok(fgModal, 'CNN Fear & Greed modal opens');
+  assert.equal(fgModal.querySelector('.cnn-fg-subtitle'), null, 'CNN modal removes subtitle');
+  assert.equal(fgModal.querySelector('.cnn-ind-desc'), null, 'CNN indicator cards remove explanatory prose');
+  fgModal.querySelector('.stock-modal-close-btn').click();
+  await tick();
+
+  ui.w.document.querySelector('.treasury-overview-card').click();
+  await tick();
+  const trModal = ui.w.document.querySelector('.treasury-modal-card');
+  assert.ok(trModal, 'Treasury modal opens');
+  assert.equal(trModal.querySelector('.treasury-subtitle'), null, 'Treasury modal removes subtitle');
+  assert.equal(trModal.querySelector('.treasury-insights-box'), null, 'Treasury modal removes multi-paragraph guide');
+  trModal.querySelector('.stock-modal-close-btn').click();
+  await tick();
 
   assert.deepEqual(ui.errors, []);
 });
