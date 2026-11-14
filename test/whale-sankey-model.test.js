@@ -635,4 +635,90 @@ test('Sankey & aggregation: in "all" mode, asset totalVal strictly equals longVa
   assert.equal(nvdaAgg.longPct, 39);
 });
 
+test('computeWhaleSankeyGraph keeps stable Top 6 wallets by real position value and refuses pulse displacement', () => {
+  const whales = Array.from({ length: 8 }, (_, idx) => ({
+    address: `0x900000000000000000000000000000000000000${idx + 1}`,
+    name: `TopRank-${idx + 1}`,
+    positions: [
+      { coin: 'BTC', isLong: true, side: 'LONG', positionValue: (100 - idx * 10) * 1_000_000 }
+    ]
+  }));
+
+  // Wallet #8 triggers a live pulse, but must NOT kick Wallet #6 out of the left Top 6 column
+  const outsidePulse = new Map([[`${whales[7].address}::BTC`, { isLong: true, isIncrease: true }]]);
+  const graph = computeWhaleSankeyGraph({
+    whales,
+    mode: 'all',
+    pulseKeys: outsidePulse,
+    maxWallets: 6,
+    maxAssets: 5
+  });
+
+  const names = graph.walletNodes.map(n => n.name);
+  assert.deepEqual(names, ['TopRank-1', 'TopRank-2', 'TopRank-3', 'TopRank-4', 'TopRank-5', 'TopRank-6']);
+  assert.equal(graph.links.filter(l => l.isPulseActive).length, 0);
+
+  // When Wallet #1 (inside Top 6) pulses, its link animates while Top 6 order stays unchanged
+  const topPulse = new Map([[`${whales[0].address}::BTC`, { isLong: true, isIncrease: true }]]);
+  const graphTopPulse = computeWhaleSankeyGraph({
+    whales,
+    mode: 'all',
+    pulseKeys: topPulse,
+    maxWallets: 6,
+    maxAssets: 5
+  });
+  assert.deepEqual(graphTopPulse.walletNodes.map(n => n.name), names);
+  assert.equal(graphTopPulse.links.filter(l => l.isPulseActive).length, 1);
+
+  // Default detectPositionDeltas threshold is $100,000+
+  const prev = [{ address: whales[0].address, name: whales[0].name, positions: [{ coin: 'BTC', isLong: true, side: 'LONG', size: 100, positionValue: 10_000_000 }] }];
+  const minorNext = [{ address: whales[0].address, name: whales[0].name, positions: [{ coin: 'BTC', isLong: true, side: 'LONG', size: 100.5, positionValue: 10_050_000 }] }];
+  assert.equal(detectPositionDeltas(prev, minorNext).length, 0, 'Sub-$100K position delta should not trigger rebalance delta');
+});
+
+test('computeWhaleSankeyGraph excludes zero-contribution wallets under topAssetsLimit and ranks by scoped Top N notional', () => {
+  const coins12 = ['NVDA', 'MU', 'AMD', 'SP500', 'SPY', 'TSLA', 'SOXL', 'QQQ', 'XYZ100', 'AAPL', 'GOLD', 'SILVER'];
+  const volumeMap = new Map();
+  coins12.forEach((c, idx) => {
+    volumeMap.set(c, (500 - idx * 30) * 1_000_000);
+  });
+
+  // Wallet 3 & Wallet 5 have massive positions exclusively in ranks 11+ (GOLD / SILVER) -> $0 in Top 10
+  // Wallet 7 & Wallet 8 hold positions inside Top 10 -> must replace zero-contribution wallets in Sankey
+  const whales = [
+    { address: '0x0001', name: 'W1-Top10', positions: [{ coin: 'NVDA', isLong: true, side: 'LONG', positionValue: 41_800_000 }, { coin: 'GOLD', isLong: false, side: 'SHORT', positionValue: 88_800_000 }] },
+    { address: '0x0002', name: 'W2-Top10', positions: [{ coin: 'SPY', isLong: true, side: 'LONG', positionValue: 48_700_000 }, { coin: 'SILVER', isLong: true, side: 'LONG', positionValue: 37_800_000 }] },
+    { address: '0x0003', name: 'W3-OffTop10-Only', positions: [{ coin: 'GOLD', isLong: true, side: 'LONG', positionValue: 81_700_000 }] },
+    { address: '0x0004', name: 'W4-Top10', positions: [{ coin: 'MU', isLong: false, side: 'SHORT', positionValue: 23_200_000 }, { coin: 'GOLD', isLong: false, side: 'SHORT', positionValue: 42_100_000 }] },
+    { address: '0x0005', name: 'W5-OffTop10-Only', positions: [{ coin: 'SILVER', isLong: false, side: 'SHORT', positionValue: 55_310_000 }] },
+    { address: '0x0006', name: 'W6-Top10', positions: [{ coin: 'MU', isLong: false, side: 'SHORT', positionValue: 38_600_000 }] },
+    { address: '0x0007', name: 'W7-Top10', positions: [{ coin: 'SP500', isLong: true, side: 'LONG', positionValue: 50_300_000 }] },
+    { address: '0x0008', name: 'W8-Top10', positions: [{ coin: 'QQQ', isLong: true, side: 'LONG', positionValue: 39_700_000 }] },
+    // Ensure remaining top 10 tickers are present in aggregate so eligibleAssets strictly picks ranks 1-10
+    { address: '0x0009', name: 'W9-Seed', positions: ['AMD', 'TSLA', 'SOXL', 'XYZ100', 'AAPL'].map(c => ({ coin: c, isLong: true, side: 'LONG', positionValue: 1_000_000 })) }
+  ];
+
+  const graph = computeWhaleSankeyGraph({
+    whales,
+    mode: 'all',
+    assetVolumeMap: volumeMap,
+    maxWallets: 6,
+    maxAssets: 5,
+    topAssetsLimit: 10
+  });
+
+  // Zero-contribution wallets W3 and W5 must NOT occupy Sankey slots; all 6 nodes must have positive scoped totals
+  assert.equal(graph.walletNodes.length, 6);
+  for (const wNode of graph.walletNodes) {
+    assert.ok(wNode.totalVal > 0, `${wNode.name} in Sankey must not show $0`);
+    assert.notEqual(wNode.name, 'W3-OffTop10-Only');
+    assert.notEqual(wNode.name, 'W5-OffTop10-Only');
+  }
+  assert.deepEqual(
+    graph.walletNodes.map(w => w.name),
+    ['W7-Top10', 'W2-Top10', 'W1-Top10', 'W8-Top10', 'W6-Top10', 'W4-Top10']
+  );
+});
+
+
 

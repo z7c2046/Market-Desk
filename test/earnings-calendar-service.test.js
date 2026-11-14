@@ -57,6 +57,20 @@ test('Nasdaq rows keep missing metrics missing, normalize negative/zero EPS, and
     assert.equal(item.revConsensus, null);
     assert.equal(item.aiCatalyst, null);
   }
+
+  const largeCapAndCurated = normalizeEarningsRows([
+    { symbol: 'NBIS', name: 'Nebius Group N.V.', marketCap: '$35,000,000,000', eps: '$0.10', epsForecast: '$0.05', time: 'time-not-supplied' },
+    { symbol: 'FOO', name: 'Foo Global Corp', marketCap: '$45,000,000,000', eps: '$1.50', epsForecast: '$1.40', time: 'time-not-supplied' },
+    { symbol: 'FOO.A', name: 'Foo Global Corp Class A', marketCap: '$45,000,000,000', eps: '$1.50', epsForecast: '$1.40', time: 'time-not-supplied' },
+    { symbol: 'TINY', name: 'Tiny Micro Cap', marketCap: '$500,000,000', eps: '$0.01', time: 'time-pre-market' }
+  ], monday, 'provider date', initialTime);
+  assert.deepEqual(largeCapAndCurated.map(item => item.symbol), ['NBIS', 'FOO']);
+  assert.equal(largeCapAndCurated[0].sectorId, 'cloud');
+  assert.equal(largeCapAndCurated[0].isAiSupplyChain, true);
+  assert.equal(largeCapAndCurated[1].sectorId, 'broad');
+  assert.equal(largeCapAndCurated[1].isAiSupplyChain, false);
+  assert.equal(largeCapAndCurated[1].reportStatus, 'beat');
+  assert.equal(largeCapAndCurated[1].timing, 'UNKNOWN');
 });
 
 test('week loading shares concurrent requests, caches for ten minutes, and supports explicit refresh', async () => {

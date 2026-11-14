@@ -141,3 +141,27 @@ test('klineViewportMotion: cancelMotion stops pending frames and increments epoc
   motion.dispose();
 });
 
+test('klineViewportMotion: queuePanPx coalesces multiple drag moves into one commit via flushPan', () => {
+  let range = { from: 10.5, to: 109.5 };
+  let commitCount = 0;
+  const motion = createViewportMotionController({
+    timeScale: {
+      setVisibleLogicalRange: (r) => { range = r; commitCount++; },
+      getVisibleLogicalRange: () => range
+    },
+    getWidth: () => 1000
+  });
+  motion.seedFromRange(range);
+
+  motion.queuePanPx(20, 1000);
+  motion.queuePanPx(30, 1000);
+  assert.equal(commitCount, 0, 'queuePanPx defers setVisibleLogicalRange until frame/flush');
+
+  motion.flushPan();
+  assert.equal(commitCount, 1, 'flushPan commits coalesced drag moves in a single call');
+  near(range.from, 10.5 - 5, 1e-6);
+  near(range.to, 109.5 - 5, 1e-6);
+
+  motion.dispose();
+});
+

@@ -235,13 +235,18 @@ test('klinePriceMotion: panPrice shifts range with 1:1 mouse movement without ji
   const priceCtrl = createPriceMotionController(mockChart, mockSeries);
   const startPrice = { from: 100, to: 200 };
 
-  // Pan downwards by 40px: shift = +40 * 0.25 = +10
+  // Pan downwards by 40px: shift = +40 * 0.25 = +10 (flushes on first rAF stepMotion without 1-frame lag)
   priceCtrl.panPrice(40, startPrice, 400);
-  priceCtrl.endDrag();
+  priceCtrl.stepMotion(1000);
 
   near(visibleRange.from, 110, 1e-4);
   near(visibleRange.to, 210, 1e-4);
   near(visibleRange.to - visibleRange.from, 100, 1e-4); // Span stays strictly constant
+
+  priceCtrl.panPrice(80, startPrice, 400);
+  priceCtrl.endDrag();
+  near(visibleRange.from, 120, 1e-4);
+  near(visibleRange.to, 220, 1e-4);
 
   priceCtrl.dispose();
 });

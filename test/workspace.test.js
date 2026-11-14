@@ -100,7 +100,70 @@ test('crypto -USD 4h chart falls back to Hyperliquid candleSnapshot when Yahoo h
   assert.equal(hlCall.body.req.coin, 'ZEC');
   assert.equal(hlCall.body.req.interval, '4h');
 
-  // Non-crypto equity ticker should NOT fall back to Hyperliquid when Yahoo fails
+  // Non-crypto equity ticker should NOT fall back to Hyperliquid when Yahoo fails in default venue
   await assert.rejects(() => ws.chart({ symbol: 'AAPL', range: '1mo', interval: '4h' }));
+});
+
+test('TradFi venue=hyperliquid routes directly to HIP-3 xyz:* 24/7 perpetual candles with lowercase prefix and Yahoo fallback', async () => {
+  const requests = [];
+  const mockFetch = async (url, init = {}) => {
+    const u = String(url);
+    const body = init.body ? JSON.parse(init.body) : null;
+    requests.push({ url: u, body });
+    if (u.includes('hyperliquid.xyz/info') && body?.type === 'candleSnapshot') {
+      const coin = body.req?.coin;
+      if (coin === 'xyz:NVDA' || coin === 'xyz:SP500' || coin === 'xyz:XYZ100' || coin === 'xyz:MU') {
+        const px = coin === 'xyz:SP500' ? '7530.5' : coin === 'xyz:XYZ100' ? '27720.0' : '162.4';
+        return new Response(JSON.stringify([
+          { t: 1794369600000, o: px, h: String(Number(px) + 2), l: String(Number(px) - 2), c: px, v: '42000' },
+          { t: 1794384000000, o: px, h: String(Number(px) + 3), l: String(Number(px) - 1), c: String(Number(px) + 1.5), v: '51000' }
+        ]), { status: 200 });
+      }
+      return new Response('null', { status: 500 });
+    }
+    if (u.includes('query1.finance.yahoo.com')) {
+      return Response.json({
+        chart: {
+          result: [{
+            meta: { regularMarketPrice: 99.5, previousClose: 98.0, regularMarketTime: 1794384000 },
+            timestamp: [1794369600, 1794384000],
+            indicators: { quote: [{ open: [98, 99], high: [100, 101], low: [97, 98.5], close: [99, 99.5], volume: [1000, 1200] }] }
+          }]
+        }
+      });
+    }
+    return new Response('{}', { status: 404 });
+  };
+
+  const { createMarketWorkspace } = await import('../src/market-workspace.js');
+  const ws = createMarketWorkspace({ fetchImpl: mockFetch });
+
+  // 1. NVDA with venue=hyperliquid -> queries Hyperliquid directly for xyz:NVDA (native 4h), skipping Yahoo
+  const nvdaHl = await ws.chart({ symbol: 'NVDA', range: '1mo', interval: '4h', venue: 'hyperliquid' });
+  assert.equal(nvdaHl.symbol, 'NVDA');
+  assert.equal(nvdaHl.perpCoin, 'xyz:NVDA');
+  assert.equal(nvdaHl.venue, 'hyperliquid');
+  assert.equal(nvdaHl.source, 'Hyperliquid HIP-3');
+  assert.equal(nvdaHl.bars.length, 2);
+  assert.equal(requests.filter(r => r.url.includes('yahoo.com')).length, 0);
+
+  // 2. Index & mixed-case deployer coin mapping: SPY -> xyz:SP500, QQQ -> xyz:XYZ100, XYZ:MU -> xyz:MU
+  const spyHl = await ws.chart({ symbol: 'SPY', range: '1mo', interval: '4h', venue: 'hyperliquid' });
+  assert.equal(spyHl.perpCoin, 'xyz:SP500');
+  assert.equal(spyHl.price, 7532);
+  const qqqHl = await ws.chart({ symbol: 'QQQ', range: '1mo', interval: '15m', venue: 'hyperliquid' });
+  assert.equal(qqqHl.perpCoin, 'xyz:XYZ100');
+  const muHl = await ws.chart({ symbol: 'MU', range: '1mo', interval: '4h', venue: 'hyperliquid', coin: 'XYZ:MU' });
+  assert.equal(muHl.perpCoin, 'xyz:MU');
+
+  // 3. Unsupported HIP-3 ticker falls back cleanly to Yahoo equity bars instead of breaking UI
+  const noHip3 = await ws.chart({ symbol: 'TESTNOHIP3', range: '1mo', interval: '1d', venue: 'hyperliquid' });
+  assert.equal(noHip3.venue, 'yahoo');
+  assert.equal(noHip3.venueFallback, true);
+  assert.equal(noHip3.bars.length, 2);
+
+  // 4. Rejects invalid venue or coin injection
+  await assert.rejects(() => ws.chart({ symbol: 'NVDA', venue: 'bad_venue' }), { status: 400 });
+  await assert.rejects(() => ws.chart({ symbol: 'NVDA', venue: 'hyperliquid', coin: '../bad' }), { status: 400 });
 });
 

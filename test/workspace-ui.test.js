@@ -12,6 +12,7 @@ import * as mobileWorkspace from '../public/mobile-workspace.js';
 import * as mobileQuoteView from '../public/mobile-quote-view.js';
 import * as chartDerivedData from '../public/composables/chartDerivedData.js';
 import * as whaleSankeyModel from '../public/composables/whaleSankeyModel.js';
+import * as whaleMarkerCanvasPrimitive from '../public/composables/whaleMarkerCanvasPrimitive.js';
 import { AiSearchService } from '../src/ai-search-service.js';
 import { createServer } from '../src/server.js';
 const tick = () => new Promise(resolve => setTimeout(resolve, 30));
@@ -19,13 +20,17 @@ const tick = () => new Promise(resolve => setTimeout(resolve, 30));
 function earningsFixture(weekStart, symbol = 'PLTR', epsActual = '$0.32') {
   const week = earningsCalendarModel.getEarningsWeeks(weekStart).current;
   const fetchedAt = new Date().toISOString();
-  return { weekStart, weekEnd: week.weekEnd, status: 'ready', fetchedAt,
+  return {
+    weekStart, weekEnd: week.weekEnd, status: 'ready', fetchedAt,
     source: 'Nasdaq 财报日历', days: week.days.map(day => ({ date: day.fullDate, status: 'ready', fetchedAt })),
-    items: [{ symbol, name: symbol === 'PLTR' ? 'Palantir' : 'Apple', day: 'mon', fullDate: weekStart,
+    items: [{
+      symbol, name: symbol === 'PLTR' ? 'Palantir' : 'Apple', day: 'mon', fullDate: weekStart,
       timing: 'UNKNOWN', sectorId: 'cloud', sectorName: '云计算', aiTag: '企业软件', isAiSupplyChain: true,
       epsActual, epsConsensus: '$0.30', epsPrev: null, revActual: null, revConsensus: null,
       reportStatus: 'beat', statusBadgeText: 'EPS 超预期', fiscalQuarter: 'Sep/2026', fetchedAt,
-      source: 'Nasdaq 财报日历', sourceUrl: 'https://www.nasdaq.com/market-activity/earnings' }] };
+      source: 'Nasdaq 财报日历', sourceUrl: 'https://www.nasdaq.com/market-activity/earnings'
+    }]
+  };
 }
 
 test('earnings calendar loads live weeks, labels missing data, refreshes, and closes via backdrop/Escape with focus restored', async t => {
@@ -54,6 +59,10 @@ test('earnings calendar loads live weeks, labels missing data, refreshes, and cl
   assert.equal(requests[0].searchParams.get('weekStart'), earningsCalendarModel.getEarningsWeeks(new Date(now)).current.weekStart);
   assert.equal(document.querySelectorAll('.earnings-wall-card').length, 1, 'No static demo rows');
   assert.match(document.querySelector('.earnings-unknown-subcol').textContent, /时段未提供.*PLTR/s);
+  const mondayCol = document.querySelector('.earnings-day-col');
+  assert.equal(mondayCol.querySelector('.bmo-subcol'), null, 'UNKNOWN-only day collapses empty BMO placeholder');
+  assert.equal(mondayCol.querySelector('.amc-subcol'), null, 'UNKNOWN-only day collapses empty AMC placeholder');
+  assert.match(mondayCol.querySelector('.earnings-unknown-subcol .card-corner-mask').textContent, /BEAT/);
   const trigger = document.querySelector('.earnings-wall-card');
   trigger.focus(); trigger.click(); await tick(); await tick();
   let dialog = document.querySelector('.earnings-hero-expanded-card');
@@ -129,29 +138,29 @@ async function mount(t, fetchImpl, initStorage = null, configureWindow = null) {
   const html = await fs.readFile(new URL('../public/index.html', import.meta.url), 'utf8');
   const dom = new JSDOM(html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, ''), { url: 'http://localhost/', runScripts: 'outside-only', virtualConsole });
   t.after(() => dom.window.close()); const w = dom.window;
-  w.fetch = fetchImpl; w.parseFlows = parseFlows; w.ResizeObserver = class { observe() {} disconnect() {} };
-  w.EventSource = class { constructor() {} close() {} };
+  w.fetch = fetchImpl; w.parseFlows = parseFlows; w.ResizeObserver = class { observe() { } disconnect() { } };
+  w.EventSource = class { constructor() { } close() { } };
   w.requestAnimationFrame = cb => setTimeout(cb, 16);
   w.cancelAnimationFrame = id => clearTimeout(id);
-  Object.assign(w, watchlistModel, earningsCalendarModel, inflectionSignals, themeModel, mobileWorkspace, mobileQuoteView, chartDerivedData, whaleSankeyModel);
+  Object.assign(w, watchlistModel, earningsCalendarModel, inflectionSignals, themeModel, mobileWorkspace, mobileQuoteView, chartDerivedData, whaleSankeyModel, whaleMarkerCanvasPrimitive);
   Object.defineProperty(w.HTMLElement.prototype, 'clientWidth', { get: () => 800 });
-  w.echarts = { init: el => ({ setOption: config => configs.set(el.id, config), off() {}, on() {}, resize() {}, dispose() {}, dispatchAction() {} }) };
+  w.echarts = { init: el => ({ setOption: config => configs.set(el.id, config), off() { }, on() { }, resize() { }, dispose() { }, dispatchAction() { } }) };
   w.eval(await fs.readFile(new URL('../node_modules/vue/dist/vue.global.prod.js', import.meta.url), 'utf8'));
   w.bindKlineGestures = () => ({
-    focusLatest() {},
-    reset() {},
-    resetPriceScale() {},
-    cancelMotion() {},
-    replaceData() {},
-    invalidateGeometry() {},
-    setInputPolicy() {},
+    focusLatest() { },
+    reset() { },
+    resetPriceScale() { },
+    cancelMotion() { },
+    replaceData() { },
+    invalidateGeometry() { },
+    setInputPolicy() { },
     getInputPolicy() { return 'desktop'; },
-    zoomIn() {},
-    zoomOut() {},
-    attachSeriesProvider() {},
-    detachSeriesProvider() {},
+    zoomIn() { },
+    zoomOut() { },
+    attachSeriesProvider() { },
+    detachSeriesProvider() { },
     getState() { return { navigation: 'follow-latest', phase: 'idle', priceMode: 'auto' }; },
-    dispose() {},
+    dispose() { },
     isFollowingLatest() { return true; }
   });
   if (initStorage) {
@@ -164,6 +173,7 @@ async function mount(t, fetchImpl, initStorage = null, configureWindow = null) {
     .replace("import { bindKlineGestures } from './composables/klineGesture.js';", 'const bindKlineGestures = window.bindKlineGestures;')
     .replace("import { createChartDerivedData } from './composables/chartDerivedData.js';", 'const { createChartDerivedData } = window;')
     .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/composables\/whaleSankeyModel\.js';/, 'const { getAssetLabel, formatWhaleCompactUsd, disambiguateWallets, isPositionLong, computeWhaleSankeyGraph, buildAggregatedPositions, detectPositionDeltas } = window;')
+    .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/composables\/whaleMarkerCanvasPrimitive\.js';/, 'const { createWhaleDotCanvasPrimitive } = window;')
     .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/watchlist-model\.js';/, 'const { WatchlistManager, sortWatchlistRows, getSelectedExtQuote, getCurrentSession, getNyTime, SESSION_TYPES, MAX_UNIQUE_SYMBOLS, validSymbol, SYMBOL_NAMES, NASDAQ100_STOCKS, SP500_STOCKS, isLeveragedEtf, isCryptoSymbol, STOCK_MARKET_CAPS, getStockMarketCap, sortSymbolsByMarketCap } = window;')
     .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/earnings-calendar-model\.js';/, 'const { AI_SECTOR_FILTERS, CORPORATE_LOGOS, getEarningsCalendarDate, getEarningsWeeks, MACRO_CALENDAR_ITEMS, filterEarningsByDay, parseMetricNumber, getMetricSurprise, getMetricYoy } = window;')
     .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/inflection-signals\.js';/, 'const { computeInflectionSignals, formatSignalMarkers, dema } = window;')
@@ -404,10 +414,12 @@ const fixture = url => {
 
 test('AI news UI sends the typed query and controls through HTTP to the real search service', async t => {
   const providerQueries = [], requests = [];
-  const service = new AiSearchService({ keys: { tavily: 'test', exa: '', firecrawl: '' }, enableLiveFeeds: false, fetchImpl: async (_, options) => {
-    providerQueries.push(JSON.parse(options.body).query);
-    return new Response(JSON.stringify({ results: [{ title: 'Nvidia earnings demand improves', url: 'https://reuters.com/markets/nvidia-earnings', published_date: new Date().toISOString(), content: 'Nvidia earnings and demand' }] }));
-  } });
+  const service = new AiSearchService({
+    keys: { tavily: 'test', exa: '', firecrawl: '' }, enableLiveFeeds: false, fetchImpl: async (_, options) => {
+      providerQueries.push(JSON.parse(options.body).query);
+      return new Response(JSON.stringify({ results: [{ title: 'Nvidia earnings demand improves', url: 'https://reuters.com/markets/nvidia-earnings', published_date: new Date().toISOString(), content: 'Nvidia earnings and demand' }] }));
+    }
+  });
   const server = createServer({ aiSearchService: service, workspace: {}, quoteService: {}, watchlist: async () => [] });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   t.after(() => new Promise(resolve => { server.closeAllConnections(); server.close(resolve); }));
@@ -552,7 +564,7 @@ test('network failure renders a recoverable error with no fabricated quote cards
 test('K-line color schemes: defaults to classic (图一), switches to neon (图二) and cyberpunk (图三), adapts day/night backgrounds and persists in settings', async t => {
   const ui = await mount(t, async url => ({ ok: true, json: async () => fixture(url) }));
   await ui.click('个股行情');
-  
+
   // 1. Initial default state: Classic (图一: #10B981 up, #F43F5E down)
   let chartCfg = ui.configs.get('price-chart');
   assert.ok(chartCfg, 'Price chart config exists');
@@ -659,7 +671,7 @@ test('K-line MA switches: clicking MA5/MA20 toggles visibility in readout strip 
 
 test('Default launch page preference: configurable in modal, persists to localStorage, and controls initial landing page', async t => {
   const ui = await mount(t, async url => ({ ok: true, json: async () => fixture(url) }));
-  
+
   // 1. Initial page defaults to overview
   assert.ok(ui.w.document.querySelector('#heatmap-chart'), 'Default landing page is overview');
 
@@ -1003,7 +1015,7 @@ test('Heatmap color schemes: defaults to classic (经典绿红), switches to neo
   const ui = await mount(t, async url => ({ ok: true, json: async () => fixture(url) }));
   await tick();
   assert.ok(ui.w.document.querySelector('#heatmap-chart'));
-  
+
   ui.w.document.querySelector('.settings-modal-btn').click();
   await tick();
   const modal = ui.w.document.querySelector('.preferences-modal-backdrop');
@@ -1512,7 +1524,7 @@ test('Watchlist table: displays accurate session status (☀️ 常规交易) an
 
 test('UI Palette selection: defaults to terminal, switches to cobalt in preferences modal, and persists to localStorage', async t => {
   const ui = await mount(t, async url => ({ ok: true, json: async () => fixture(url) }));
-  
+
   // 1. Initial palette is terminal
   assert.equal(ui.w.document.documentElement.getAttribute('data-palette'), 'terminal');
 
@@ -1553,7 +1565,7 @@ test('UI Palette selection: defaults to terminal, switches to cobalt in preferen
 
 test('Mobile Workspace Redesign: 5 bottom tabs, dedicated search overlay, more functions sheet, and vertical card list', async t => {
   const ui = await mount(t, async url => ({ ok: true, json: async () => fixture(url) }));
-  
+
   // 0. Desktop Guard: on desktop viewports, mobile overlay root is not rendered
   assert.equal(ui.w.document.querySelector('#mobile-overlay-root'), null, 'Mobile overlay root is strictly omitted on desktop');
 
@@ -1593,16 +1605,20 @@ test('Mobile Workspace Redesign: 5 bottom tabs, dedicated search overlay, more f
 });
 
 test('Crypto Workspace: Sankey distribution, 4 scoped KPIs, 2-column whale-position linking, Crypto/TradFi switch, and collapsible secondary flow drawer', async t => {
-  const ui = await mount(t, async url => ({ ok: true, json: async () => {
-    const data = fixture(url);
-    if (new URL(url, 'http://localhost').pathname !== '/api/crypto/onchain-stocks') return data;
-    const nvda = data.top10[0];
-    return { ...data, top10: [
-      { ...nvda, symbol: 'NVDA', chartSymbol: 'NVDA', name: '英伟达', price: 148.5, tradFiClose: 147.8, premiumPct: 0.47, priceDiff: 0.7, volume24h: 64820000, netFlow: 18408880, buyRatio: 64.2, sellRatio: 35.8 },
-      { ...nvda, symbol: 'AMD', chartSymbol: 'AMD', name: '超威半导体', price: 150.0, tradFiClose: 145.0, premiumPct: 3.45, priceDiff: 5.0, volume24h: 8000000, netFlow: 350000, buyRatio: 80, sellRatio: 20 },
-      { ...nvda, symbol: 'TSLA', chartSymbol: 'TSLA', name: '特斯拉', price: 210.0, tradFiClose: 215.0, premiumPct: -2.33, priceDiff: -5.0, volume24h: 20000000, netFlow: -3000000, buyRatio: 20, sellRatio: 80 }
-    ] };
-  } }));
+  const ui = await mount(t, async url => ({
+    ok: true, json: async () => {
+      const data = fixture(url);
+      if (new URL(url, 'http://localhost').pathname !== '/api/crypto/onchain-stocks') return data;
+      const nvda = data.top10[0];
+      return {
+        ...data, top10: [
+          { ...nvda, symbol: 'NVDA', chartSymbol: 'NVDA', name: '英伟达', price: 148.5, tradFiClose: 147.8, premiumPct: 0.47, priceDiff: 0.7, volume24h: 64820000, netFlow: 18408880, buyRatio: 64.2, sellRatio: 35.8 },
+          { ...nvda, symbol: 'AMD', chartSymbol: 'AMD', name: '超威半导体', price: 150.0, tradFiClose: 145.0, premiumPct: 3.45, priceDiff: 5.0, volume24h: 8000000, netFlow: 350000, buyRatio: 80, sellRatio: 20 },
+          { ...nvda, symbol: 'TSLA', chartSymbol: 'TSLA', name: '特斯拉', price: 210.0, tradFiClose: 215.0, premiumPct: -2.33, priceDiff: -5.0, volume24h: 20000000, netFlow: -3000000, buyRatio: 20, sellRatio: 80 }
+        ]
+      };
+    }
+  }));
 
   // 1. Navigate to Crypto module
   await ui.click('加密货币');
@@ -1646,8 +1662,7 @@ test('Crypto Workspace: Sankey distribution, 4 scoped KPIs, 2-column whale-posit
   assert.ok(sankeyPanel, 'Sankey panel rendered');
   assert.match(sankeyPanel.textContent, /加密货币 · 巨鲸持仓分布/);
   assert.match(sankeyPanel.querySelector('.cw-selection-badge').textContent, /全部钱包/);
-  assert.ok(sankeyPanel.querySelector('.cw-now-strip'), 'Live rebalance marquee strip rendered');
-  assert.match(sankeyPanel.querySelector('.cw-now-strip').textContent, /暂无 5 分钟内新成交/);
+  assert.equal(sankeyPanel.querySelector('.cw-now-strip'), null, '正在调仓 bar is removed for cleaner layout');
 
   const sankeySvg = sankeyPanel.querySelector('.cw-sankey-svg');
   assert.ok(sankeySvg, 'Responsive SVG Sankey chart rendered');
@@ -1865,7 +1880,9 @@ test('Crypto Workspace: Sankey distribution, 4 scoped KPIs, 2-column whale-posit
   const onchainPanel = ui.w.document.querySelector('.onchain-stocks-panel');
   assert.ok(onchainPanel, 'Capital Flow Matrix panel revealed after expanding secondary toggle');
   assert.match(onchainPanel.textContent, /NVDA/);
-  assert.match(onchainPanel.textContent, /英伟达/);
+  assert.equal(onchainPanel.querySelector('.cw-asset-cn'), null, 'Flow rows show symbol/ticker only without Chinese name');
+  assert.equal(onchainPanel.querySelector('.cw-spread-sub'), null, 'Flow rows hide verbose spread price diff subline below badge');
+  assert.doesNotMatch(onchainPanel.querySelector('.col-asset').textContent, /英伟达/);
   assert.match(onchainPanel.querySelector('.netflow-val').textContent, /^\+\$[0-9]/, 'positive TradFi net flow formatted cleanly');
 
   const flowSymbols = () => [...onchainPanel.querySelectorAll('.cw-flow-row .cw-ticker')].map(el => el.textContent.trim());
@@ -1894,8 +1911,8 @@ test('Crypto Workspace: Sankey distribution, 4 scoped KPIs, 2-column whale-posit
   await tick();
 
   // Expand inline whale drawer under NVDA row -> verify cost axis & 钱包 ↘ filter jump
-  const radarBtn = onchainPanel.querySelector('.onchain-radar-btn');
-  assert.ok(radarBtn, 'onchain-radar-btn exists');
+  const radarBtn = onchainPanel.querySelector('.onchain-jump-btn');
+  assert.ok(radarBtn, 'onchain-jump-btn expand toggle exists');
   radarBtn.click();
   await tick();
   const radarContainer = onchainPanel.querySelector('.stock-radar-container');
@@ -1930,97 +1947,22 @@ test('Crypto Workspace: Sankey distribution, 4 scoped KPIs, 2-column whale-posit
   assert.ok(activeDrawerTr, 'Inline whale positions drawer opened for clicked asset');
   assert.match(activeDrawerTr.textContent, /NVDA/, 'Drawer corresponds to clicked symbol NVDA');
 
-  // Verify Scheme A Dual-Deck (K-line chart deck + interactive Bybit-style popover + timeframes)
-  const whaleChartDeck = activeDrawerTr.querySelector('.cw-whale-chart-deck');
-  assert.ok(whaleChartDeck, 'Scheme A whale chart deck rendered in inline drawer');
-  assert.ok(whaleChartDeck.querySelector('.cw-whale-chart-host-wrap'), 'Whale chart host container exists');
-  const tfBtns = whaleChartDeck.querySelectorAll('.cw-tf-btn');
-  assert.equal(tfBtns.length, 3, 'Three timeframe switcher buttons (15m, 1h, 1d) exist');
-  assert.ok(tfBtns[0].classList.contains('active'), '15m timeframe is active by default');
+  // Verify inline table drawer opens directly to cost-axis summary + institution position table (no inline K-line clutter)
+  assert.equal(activeDrawerTr.querySelector('.cw-whale-chart-deck'), null, 'Inline mini K-line chart is removed from horizontal table row');
+  assert.ok(activeDrawerTr.querySelector('.cw-axis-bar'), 'Cost axis bar (多均/现/空均) renders cleanly above position table');
+  assert.ok(activeDrawerTr.querySelector('.cw-open-main-chart-btn'), 'Jump-to-main-chart button renders in drawer axis bar');
+  const firstFlowKlineBtn = ui.w.document.querySelector('.cw-flow-row .cw-row-kline-btn');
+  assert.ok(firstFlowKlineBtn, 'Main flow row right-side renders jump button to fullscreen K-line chart');
 
-  // Verify "Bybit 模式" pill tag is completely removed from chart header
-  assert.equal(activeDrawerTr.querySelector('.cw-cdh-tag'), null, 'Bybit 模式 tag must be deleted');
-
-  // Verify Expand / Collapse chart button (⤢ 展开大图 -> ⤡ 还原)
-  const expandBtn = whaleChartDeck.querySelector('.cw-chart-expand-btn');
-  assert.ok(expandBtn, 'Expand button exists in chart toolbar');
-  assert.match(expandBtn.textContent, /展开大图/, 'Default state shows 展开大图');
-  assert.ok(!whaleChartDeck.classList.contains('is-expanded'), 'Chart deck is not expanded initially');
-
-  expandBtn.click();
-  await tick();
-  assert.ok(whaleChartDeck.classList.contains('is-expanded'), 'Chart deck receives is-expanded class');
-  assert.match(expandBtn.textContent, /还原/, 'Button text updates to 还原');
-
-  expandBtn.click();
-  await tick();
-  assert.ok(!whaleChartDeck.classList.contains('is-expanded'), 'Chart deck restores to standard view');
-  assert.match(expandBtn.textContent, /展开大图/, 'Button text restores to 展开大图');
-
-  // Verify bidirectional table-chart interaction (hovering row strictly highlights, does NOT auto-open HUD popover)
+  // Verify institution table row hover & right-side K-line jump action
   const firstWhaleRow = activeDrawerTr.querySelector('.stock-whale-table tbody tr');
   assert.ok(firstWhaleRow, 'First whale position row exists');
+  assert.ok(firstWhaleRow.querySelector('.cw-wp-kline-btn'), 'Each institution row renders right-side K-line jump button');
   firstWhaleRow.dispatchEvent(new ui.w.MouseEvent('mouseenter', { bubbles: true }));
   await tick();
   assert.ok(firstWhaleRow.classList.contains('is-highlighted'), 'Table row receives is-highlighted class on hover');
-  assert.equal(activeDrawerTr.querySelector('.cw-bybit-hud-popover'), null, 'Hovering row must NOT auto-open HUD popover');
-
   firstWhaleRow.dispatchEvent(new ui.w.MouseEvent('mouseleave', { bubbles: true }));
   await tick();
-
-  // Verify interactive compound Bybit markers (outer shield badge B/S + exact-price pinpoint dot)
-  const markersLayer = activeDrawerTr.querySelector('.cw-bybit-markers-layer');
-  assert.ok(markersLayer, 'Markers layer rendered on top of whale K-line chart');
-  const markerGroups = activeDrawerTr.querySelectorAll('.cw-bybit-marker-group');
-  assert.ok(markerGroups.length >= 1, 'At least one compound marker group rendered');
-  const shieldBadges = activeDrawerTr.querySelectorAll('.cw-bybit-shield-badge');
-  assert.equal(shieldBadges.length, markerGroups.length, 'Each marker group renders an outer B/S shield badge');
-  const markerDots = activeDrawerTr.querySelectorAll('.cw-bybit-marker-dot.cw-bybit-pin-dot');
-  assert.equal(markerDots.length, markerGroups.length, 'Each marker group renders an exact-price pinpoint dot');
-  assert.ok(markerDots[0].querySelector('.cw-pin-core'), 'Pinpoint dot renders inner white-rimmed core');
-  assert.match(markerDots[0].getAttribute('title'), /开仓时间/, 'Marker dot title includes entry time');
-
-  // Clicking shield badge also opens HUD popover
-  shieldBadges[0].click();
-  await tick();
-  assert.ok(activeDrawerTr.querySelector('.cw-bybit-hud-popover'), 'Clicking B/S shield badge opens HUD popover');
-  shieldBadges[0].click();
-  await tick();
-  assert.equal(activeDrawerTr.querySelector('.cw-bybit-hud-popover'), null, 'Re-clicking shield badge closes HUD popover');
-
-  // Hovering marker dot does NOT auto-open HUD popover
-  markerDots[0].dispatchEvent(new ui.w.MouseEvent('mouseenter', { bubbles: true }));
-  await tick();
-  assert.equal(activeDrawerTr.querySelector('.cw-bybit-hud-popover'), null, 'Hovering marker dot must NOT auto-open HUD popover');
-  markerDots[0].dispatchEvent(new ui.w.MouseEvent('mouseleave', { bubbles: true }));
-  await tick();
-
-  // ONLY clicking marker dot surfaces detailed position HUD popover beside the marker
-  markerDots[0].click();
-  await tick();
-  let hudPopover = activeDrawerTr.querySelector('.cw-bybit-hud-popover');
-  assert.ok(hudPopover, 'Clicking marker dot opens HUD popover beside the marker');
-  assert.ok(hudPopover.querySelector('.cw-hud-name'), 'HUD popover displays whale wallet name');
-  assert.match(hudPopover.textContent, /开仓均价/, 'HUD popover displays entry price');
-  assert.match(hudPopover.textContent, /名义仓位/, 'HUD popover displays position size');
-  assert.match(hudPopover.textContent, /开仓时间/, 'HUD popover displays entry time');
-  assert.match(hudPopover.textContent, /持仓时长/, 'HUD popover displays position duration');
-
-  // Clicking outside (e.g. on chart background) automatically closes the HUD popover
-  ui.w.document.dispatchEvent(new ui.w.MouseEvent('pointerdown', { bubbles: true }));
-  await tick();
-  assert.equal(activeDrawerTr.querySelector('.cw-bybit-hud-popover'), null, 'Clicking outside must close HUD popover');
-
-  // Clicking marker dot again opens it, and clicking close button closes it
-  markerDots[0].click();
-  await tick();
-  hudPopover = activeDrawerTr.querySelector('.cw-bybit-hud-popover');
-  assert.ok(hudPopover, 'Re-clicking marker dot re-opens HUD popover');
-  const closeHudBtn = hudPopover.querySelector('.cw-hud-close-btn');
-  assert.ok(closeHudBtn, 'HUD close button exists');
-  closeHudBtn.click();
-  await tick();
-  assert.equal(activeDrawerTr.querySelector('.cw-bybit-hud-popover'), null, 'HUD popover closed after clicking close button');
 
   // Verify whale positions list includes both long and short positions and is sorted by positionValue descending
   const whalePosRows = activeDrawerTr.querySelectorAll('.stock-whale-table tbody tr');
@@ -2040,7 +1982,7 @@ test('Crypto Workspace: Sankey distribution, 4 scoped KPIs, 2-column whale-posit
   };
   const posValues = [...whalePosRows].map(r => parseVal(r.querySelectorAll('td')[2].textContent));
   for (let i = 0; i < posValues.length - 1; i++) {
-    assert.ok(posValues[i] >= posValues[i + 1], `Top positions must sort by positionValue descending: got ${posValues[i]} vs ${posValues[i+1]}`);
+    assert.ok(posValues[i] >= posValues[i + 1], `Top positions must sort by positionValue descending: got ${posValues[i]} vs ${posValues[i + 1]}`);
   }
 
   // Verify interactive sorting on whale positions table headers (e.g. clicking '仓位' toggles ascending)
@@ -2051,7 +1993,7 @@ test('Crypto Workspace: Sankey distribution, 4 scoped KPIs, 2-column whale-posit
   const ascWhaleRows = activeDrawerTr.querySelectorAll('.stock-whale-table tbody tr');
   const ascPosValues = [...ascWhaleRows].map(r => parseVal(r.querySelectorAll('td')[2].textContent));
   for (let i = 0; i < ascPosValues.length - 1; i++) {
-    assert.ok(ascPosValues[i] <= ascPosValues[i + 1], `Positions correctly sorted by positionValue ascending: got ${ascPosValues[i]} vs ${ascPosValues[i+1]}`);
+    assert.ok(ascPosValues[i] <= ascPosValues[i + 1], `Positions correctly sorted by positionValue ascending: got ${ascPosValues[i]} vs ${ascPosValues[i + 1]}`);
   }
 
   // Restore to descending order for subsequent checks
@@ -2128,12 +2070,11 @@ test('K-Line TradingView Ruler Tool & 15m Default Timeframe', async t => {
   await ui.click('个股行情');
   await tick();
 
-  // 2. Verify 15m timeframe button is labeled '15分' and select has '日内 · 15 分钟'
+  // 2. Verify 1d range button is labeled '1日' and redundant range select is removed
   const rangeTools = ui.w.document.querySelector('.chart-range-tools');
   assert.ok(rangeTools, 'chart-range-tools exists');
-  assert.match(rangeTools.textContent, /15分/, 'Shows 15分 label for intraday');
-  const rangeSelect = ui.w.document.querySelector('.chart-range-select');
-  assert.match(rangeSelect.textContent, /日内 · 15 分钟/, 'Select contains 日内 · 15 分钟');
+  assert.match(rangeTools.textContent, /1日/, 'Shows 1日 label for 1d range');
+  assert.equal(ui.w.document.querySelector('.chart-range-select'), null, 'Redundant chart-range-select is removed');
 
   // 2b. Verify K-line interval tools (15分, 1小时, 4小时, 日K) and default to 日K
   const intervalTools = ui.w.document.querySelector('.chart-interval-tools');
@@ -2208,29 +2149,29 @@ test('K-Line Lightweight Charts stub path: mounts LightweightCharts instance and
   const attachedProviders = [];
   const stubChart = {
     _hostEl: null,
-    applyOptions() {},
-    resize() {},
-    remove() {},
+    applyOptions() { },
+    resize() { },
+    remove() { },
     subscribeCrosshairMove(cb) { this._crosshairCb = cb; },
     timeScale: () => ({
-      subscribeVisibleLogicalRangeChange() {},
+      subscribeVisibleLogicalRangeChange() { },
       getVisibleLogicalRange: () => ({ from: 10, to: 100 }),
-      setVisibleLogicalRange() {},
-      fitContent() {}
+      setVisibleLogicalRange() { },
+      fitContent() { }
     }),
     priceScale: () => ({
-      applyOptions() {},
-      setAutoScale() {},
+      applyOptions() { },
+      setAutoScale() { },
       getVisibleRange: () => ({ from: 100, to: 200 })
     }),
     addSeries: () => ({
       applyOptions: (o) => {
         if (o?.autoscaleInfoProvider) attachedProviders.push(o.autoscaleInfoProvider);
       },
-      setData() {},
+      setData() { },
       coordinateToPrice: (y) => 200 - y * 0.25,
       priceToCoordinate: (p) => (200 - p) * 4,
-      priceScale: () => ({ setAutoScale() {}, applyOptions() {} })
+      priceScale: () => ({ setAutoScale() { }, applyOptions() { } })
     })
   };
 
@@ -2260,13 +2201,14 @@ test('K-Line Lightweight Charts stub path: mounts LightweightCharts instance and
   assert.deepEqual(ui.errors, []);
 });
 
-test('Crypto Workspace: Whale drawer LightweightCharts compound markers pinpoint inside candle & leave viewport without clamping', async t => {
+test('#chart Fullscreen K-Line: compound markers pinpoint inside candle, leave viewport without clamping, and do not jump scroll on dot click', async t => {
   let yOffset = 0;
   let rangeChangeCb = null;
+  let scrollIntoViewCalls = 0;
   const baseTime = 1762992000;
   const mockBars = [
-    { time: baseTime - 1800, open: 176, high: 180, low: 174, close: 177, volume: 12000 },
-    { time: baseTime - 900, open: 177, high: 182, low: 175, close: 178, volume: 15000 },
+    { time: baseTime - 28800, open: 176, high: 180, low: 174, close: 177, volume: 12000 },
+    { time: baseTime - 14400, open: 177, high: 182, low: 175, close: 178, volume: 15000 },
     // Target candle with wide wick [140, 190] covering all whale entryPx values
     { time: baseTime, open: 155, high: 190, low: 140, close: 162, volume: 35000 }
   ];
@@ -2277,45 +2219,49 @@ test('Crypto Workspace: Whale drawer LightweightCharts compound markers pinpoint
         ok: true,
         json: async () => ({
           symbol: 'NVDA',
-          interval: '15m',
+          interval: '4h',
+          range: '1mo',
+          venue: 'hyperliquid',
+          perpCoin: 'xyz:NVDA',
           bars: mockBars
         })
       };
     }
     return { ok: true, json: async () => fixture(url) };
   }, null, w => {
+    w.Element.prototype.scrollIntoView = () => { scrollIntoViewCalls++; };
     const stubTimeScale = {
       subscribeVisibleLogicalRangeChange(cb) { rangeChangeCb = cb; },
-      unsubscribeVisibleLogicalRangeChange() {},
+      unsubscribeVisibleLogicalRangeChange() { },
       getVisibleLogicalRange: () => ({ from: 0, to: 10 }),
-      setVisibleLogicalRange() {},
-      fitContent() {},
-      timeToCoordinate: (ts) => 300 + ((ts - baseTime) / 900) * 16
+      setVisibleLogicalRange() { },
+      fitContent() { },
+      timeToCoordinate: (ts) => 300 + ((ts - baseTime) / 14400) * 16
     };
     const stubSeries = {
-      applyOptions() {},
-      setData() {},
+      applyOptions() { },
+      setData() { },
       createPriceLine() { return {}; },
-      removePriceLine() {},
+      removePriceLine() { },
       coordinateToPrice: (y) => 200 - (y - yOffset) * 0.25,
       priceToCoordinate: (p) => (200 - p) * 4 + yOffset,
-      priceScale: () => ({ setAutoScale() {}, applyOptions() {} })
+      priceScale: () => ({ setAutoScale() { }, applyOptions() { } })
     };
     const stubChart = {
       _hostEl: null,
-      applyOptions() {},
-      resize() {},
-      remove() {},
-      paneSize: () => ({ width: 700, height: 380 }),
-      subscribeCrosshairMove() {},
+      applyOptions() { },
+      resize() { },
+      remove() { },
+      paneSize: () => ({ width: 800, height: 480 }),
+      subscribeCrosshairMove() { },
       timeScale: () => stubTimeScale,
-      priceScale: () => ({ applyOptions() {}, setAutoScale() {}, getVisibleRange: () => ({ from: 130, to: 200 }) }),
+      priceScale: () => ({ applyOptions() { }, setAutoScale() { }, getVisibleRange: () => ({ from: 130, to: 200 }) }),
       addSeries: () => stubSeries
     };
     w.LightweightCharts = {
       ColorType: { Solid: 'solid' },
       CrosshairMode: { Normal: 1 },
-      LineStyle: { Dashed: 2 },
+      LineStyle: { Dashed: 2, Dotted: 3 },
       CandlestickSeries: 'Candlestick',
       HistogramSeries: 'Histogram',
       LineSeries: 'Line',
@@ -2326,7 +2272,7 @@ test('Crypto Workspace: Whale drawer LightweightCharts compound markers pinpoint
     };
   });
 
-  // Switch to Crypto -> TradFi stocks
+  // Switch to Crypto -> TradFi stocks -> open NVDA drawer -> click jump button to fullscreen #chart
   const cryptoNavBtn = [...ui.w.document.querySelectorAll('.nav-item')].find(el => el.dataset.id === 'crypto');
   assert.ok(cryptoNavBtn, 'Crypto nav button exists');
   cryptoNavBtn.click();
@@ -2337,57 +2283,60 @@ test('Crypto Workspace: Whale drawer LightweightCharts compound markers pinpoint
   catBtns[1].click();
   await tick();
 
-  // Open secondary drawer if collapsed
   const toggleBtn = ui.w.document.querySelector('.cw-sec-toggle-btn');
   if (toggleBtn && !ui.w.document.querySelector('.onchain-stocks-panel')) {
     toggleBtn.click();
     await tick();
   }
 
-  // Click NVDA radar button
-  const radarBtn = ui.w.document.querySelector('.onchain-radar-btn');
-  assert.ok(radarBtn, 'NVDA radar button exists');
-  radarBtn.click();
+  const jumpBtn = ui.w.document.querySelector('.cw-flow-row .cw-row-kline-btn');
+  assert.ok(jumpBtn, 'NVDA row right-side K-line jump button exists');
+  jumpBtn.click();
   await tick();
   await new Promise(resolve => setTimeout(resolve, 60));
+  await tick();
 
-  const hostEl = ui.w.document.querySelector('.cw-whale-chart-host');
-  assert.ok(hostEl, 'Whale chart host mounted');
-  Object.defineProperty(hostEl, 'clientWidth', { configurable: true, value: 700 });
-  Object.defineProperty(hostEl, 'clientHeight', { configurable: true, value: 380 });
+  const hostEl = ui.w.document.querySelector('#price-chart');
+  assert.ok(hostEl, 'Fullscreen #chart host mounted');
+  Object.defineProperty(hostEl, 'clientWidth', { configurable: true, value: 800 });
+  Object.defineProperty(hostEl, 'clientHeight', { configurable: true, value: 480 });
   rangeChangeCb?.();
   await tick();
 
-  const groups = [...ui.w.document.querySelectorAll('.cw-bybit-marker-group')];
-  assert.ok(groups.length >= 1, 'LightweightCharts compound marker groups rendered');
+  const groups = [...ui.w.document.querySelectorAll('.chart-whale-markers-layer .cw-bybit-marker-group')];
+  assert.ok(groups.length >= 1, 'LightweightCharts compound marker groups rendered on fullscreen #chart');
 
   const lowY = (200 - 140) * 4;  // 240px
   const highY = (200 - 190) * 4; // 40px
   for (const grp of groups) {
-    const shieldTop = parseFloat(grp.querySelector('.cw-bybit-shield-badge').style.top);
+    assert.equal(grp.querySelector('.cw-bybit-shield-badge'), null, 'Shield badge B/S must not render');
+    assert.equal(grp.querySelector('.cw-pin-callout'), null, 'Callout label must not render');
     const pinTop = parseFloat(grp.querySelector('.cw-bybit-pin-dot').style.top);
-    if (grp.classList.contains('is-long')) {
-      assert.ok(shieldTop > Math.max(lowY, pinTop), `Long shield B (top=${shieldTop}) must sit cleanly below candle low (${lowY}) & pinpoint (${pinTop})`);
-    } else {
-      assert.ok(shieldTop < Math.min(highY, pinTop), `Short shield S (top=${shieldTop}) must sit cleanly above candle high (${highY}) & pinpoint (${pinTop})`);
-    }
+    assert.ok(pinTop >= highY && pinTop <= lowY, `Pinpoint dot (${pinTop}px) must sit inside candle [${highY}, ${lowY}]`);
   }
+
+  // Clicking pinpoint dot opens HUD card WITHOUT calling scrollIntoView
+  scrollIntoViewCalls = 0;
+  groups[0].querySelector('.cw-bybit-pin-dot').click();
+  await tick();
+  assert.ok(ui.w.document.querySelector('.chart-whale-hud-popover'), 'Clicking dot opens HUD popover');
+  assert.equal(scrollIntoViewCalls, 0, 'Clicking dot on K-line chart MUST NOT scrollIntoView/jump down away from card');
 
   // Pan K-line far upward off-screen -> markers must vanish cleanly instead of clamping to top border (y=12)
   yOffset = -1200;
   rangeChangeCb?.();
   await tick();
-  assert.equal(ui.w.document.querySelectorAll('.cw-bybit-marker-group').length, 0, 'Offscreen markers must NOT clamp/stick to top edge');
+  assert.equal(ui.w.document.querySelectorAll('.chart-whale-markers-layer .cw-bybit-marker-group').length, 0, 'Offscreen markers must NOT clamp/stick to top edge');
 
   // Pan K-line back into view -> markers reappear immediately
   yOffset = 0;
   rangeChangeCb?.();
   await tick();
-  assert.ok(ui.w.document.querySelectorAll('.cw-bybit-marker-group').length >= 1, 'Markers reappear cleanly when panning back into view');
+  assert.ok(ui.w.document.querySelectorAll('.chart-whale-markers-layer .cw-bybit-marker-group').length >= 1, 'Markers reappear cleanly when panning back into view');
   assert.deepEqual(ui.errors, []);
 });
 
-test('Right watchlist sidebar: defaults to collapsed state and toggles via topbar button and floating tab', async t => {
+test('Right watchlist sidebar: defaults to collapsed state and toggles exclusively via topbar button', async t => {
   const ui = await mount(t, async url => ({ ok: true, json: async () => fixture(url) }));
   await tick();
   await tick();
@@ -2399,18 +2348,15 @@ test('Right watchlist sidebar: defaults to collapsed state and toggles via topba
   const topbarToggle = ui.w.document.querySelector('.toggle-rw-btn');
   assert.ok(topbarToggle, 'Topbar toggle button exists');
   assert.ok(topbarToggle.classList.contains('is-collapsed'), 'Topbar toggle button reflects collapsed state');
+  assert.equal(ui.w.document.querySelector('.floating-expand-rw-btn'), null, 'Side floating expand button is removed');
 
-  const floatingTab = ui.w.document.querySelector('.floating-expand-rw-btn');
-  assert.ok(floatingTab, 'Floating expand button is visible when sidebar is collapsed');
-
-  // Click floating tab to expand
-  floatingTab.click();
+  // Click topbar toggle button to expand
+  topbarToggle.click();
   await tick();
 
-  assert.equal(rwSidebar.classList.contains('is-collapsed'), false, 'Sidebar expands after clicking floating tab');
+  assert.equal(rwSidebar.classList.contains('is-collapsed'), false, 'Sidebar expands after clicking topbar toggle');
   assert.equal(topbarToggle.classList.contains('is-collapsed'), false, 'Topbar toggle reflects expanded state');
-  const activeFloatingTab = ui.w.document.querySelector('.floating-expand-rw-btn');
-  assert.ok(!activeFloatingTab || activeFloatingTab._isLeaving, 'Floating tab is leaving or removed when expanded');
+  assert.equal(ui.w.document.querySelector('.floating-expand-rw-btn'), null, 'Side floating expand button remains absent when expanded');
 
   // Click topbar toggle button to collapse back
   topbarToggle.click();
@@ -2418,11 +2364,11 @@ test('Right watchlist sidebar: defaults to collapsed state and toggles via topba
 
   assert.ok(rwSidebar.classList.contains('is-collapsed'), 'Sidebar collapses again after clicking topbar toggle');
   assert.ok(topbarToggle.classList.contains('is-collapsed'), 'Topbar toggle reflects collapsed state again');
-  assert.ok(ui.w.document.querySelector('.floating-expand-rw-btn'), 'Floating tab reappears');
+  assert.equal(ui.w.document.querySelector('.floating-expand-rw-btn'), null, 'Side floating expand button does not reappear');
   assert.deepEqual(ui.errors, []);
 });
 
-test('Crypto Workspace: truth-gated Sankey pulses only on fresh fills or contract size deltas and polls every 15s while visible', async t => {
+test('Crypto Workspace: truth-gated Sankey pulses only on fresh >= $100K fills or contract size deltas and polls every 60s while visible', async t => {
   const intervals = new Map();
   let intervalId = 200000;
   let now = 1_794_300_000_000;
@@ -2480,7 +2426,7 @@ test('Crypto Workspace: truth-gated Sankey pulses only on fresh fills or contrac
     };
   });
 
-  // Navigate to Crypto tab -> default is TradFi, switch to "加密货币" to activate 15s crypto poller
+  // Navigate to Crypto tab -> default is TradFi, switch to "加密货币" to activate 60s crypto poller
   await ui.click('加密货币');
   while (ui.w.document.querySelector('.crypto-skeleton-wrap')) {
     await tick();
@@ -2490,30 +2436,48 @@ test('Crypto Workspace: truth-gated Sankey pulses only on fresh fills or contrac
   await tick();
   await tick();
 
-  const pollEntry = () => [...intervals.values()].find(e => e.ms === 15000);
-  assert.ok(pollEntry(), '15s Crypto whale poller is scheduled while visible on Crypto tab');
-  assert.equal(ui.w.document.querySelectorAll('.cw-sk-pulse-beam').length, 0, 'Fills older than 5m stay calm (0 pulse beams)');
+  const pollEntry = () => [...intervals.values()].find(e => e.ms === 60000 && e.fn?.name === 'pollCryptoWhales');
+  assert.ok(pollEntry(), '60s Crypto whale poller is scheduled while visible on Crypto tab');
+  assert.equal(ui.w.document.querySelectorAll('.cw-sk-pulse-beam').length, 0, 'Fills older than 60s stay calm (0 pulse beams)');
 
   const beforePollRequests = whaleRequests;
 
-  // Poll 1: markPx / positionValue swings by +20% with IDENTICAL contract size -> STILL 0 pulse beams
-  now += 15000;
+  // Poll 1: markPx / positionValue swings by +20% with IDENTICAL contract size AND sub-$100K ($45K) fill -> STILL 0 pulse beams
+  now += 60000;
   currentWhalePayload = () => {
     const base = fixture('/api/crypto/whales');
     base.fetchedAt = new Date(now).toISOString();
     base.whales[0].positions[0].markPx = 2796;
     base.whales[0].positions[0].positionValue = 38_160_000;
-    base.activityLogs = [];
+    base.activityLogs = [
+      {
+        id: 'minor-fill-under-100k',
+        time: now - 10_000,
+        ageMs: 10_000,
+        timeAgo: '刚刚',
+        whaleName: 'SOL 高频套利巨鲸',
+        whaleAddress: '0x3f5ce5fbfe3e9af3971dd833d26ba9b5c936f0be',
+        action: '加仓做多',
+        shortAction: '加多',
+        isLong: true,
+        isIncrease: true,
+        isLiveFill: true,
+        coin: 'SOL',
+        chartSymbol: 'SOL-USD',
+        valueUsd: 45_000,
+        valueText: '$45.00K'
+      }
+    ];
     return base;
   };
   pollEntry().fn();
   await tick();
   await tick();
-  assert.equal(whaleRequests, beforePollRequests + 1, '15s poller requested updated whale snapshot');
-  assert.equal(ui.w.document.querySelectorAll('.cw-sk-pulse-beam').length, 0, 'Mark-price swing without size change emits 0 beams');
+  assert.equal(whaleRequests, beforePollRequests + 1, '60s poller requested updated whale snapshot');
+  assert.equal(ui.w.document.querySelectorAll('.cw-sk-pulse-beam').length, 0, 'Mark-price swing and sub-$100K fill emit 0 beams');
 
-  // Poll 2: fresh fill (30s ago, $180K) AND real contract size reduction on ETH (-1000 contracts) -> beam pulses with is-reverse!
-  now += 15000;
+  // Poll 2: fresh fill (30s ago, $180K >= $100K) AND real contract size reduction on ETH (-1000 contracts) -> beam pulses with is-reverse!
+  now += 60000;
   const freshSolFillTime = now - 30_000;
   currentWhalePayload = () => {
     const base = fixture('/api/crypto/whales');
@@ -2549,9 +2513,7 @@ test('Crypto Workspace: truth-gated Sankey pulses only on fresh fills or contrac
   assert.equal(beams.length, 2, 'Both contract trim delta (ETH) and fresh 5m fill (SOL) illuminate pulse beams');
   assert.ok(beams.some(b => b.classList.contains('is-reverse') && b.classList.contains('is-short')), 'ETH trim renders reverse short pulse');
   assert.ok(beams.some(b => !b.classList.contains('is-reverse') && b.classList.contains('is-long')), 'SOL fresh buy renders forward long pulse');
-  const stripText = ui.w.document.querySelector('.cw-now-strip').textContent;
-  assert.match(stripText, /ETH → HL 亿级多空对冲巨鲸.*减空/);
-  assert.match(stripText, /SOL 高频套利巨鲸 → SOL.*开多/);
+  assert.equal(ui.w.document.querySelector('.cw-now-strip'), null);
 
   // Switch to TradFi -> 15s poller stops, 正在调仓 hidden, beams = 0
   const catBtnsTradFi = ui.w.document.querySelectorAll('.whale-cat-btn');
@@ -2692,7 +2654,8 @@ test('Crypto Workspace: dynamic Leaderboard Top N selector, custom wallet manage
   assert.equal(JSON.parse(ui.w.localStorage.getItem('market-desk-whale-top-n')), 16);
   assert.ok(whaleUrls.some(u => new URL(u, 'http://localhost').searchParams.get('topN') === '16'), 'Changing Top N fetches topN=16');
   assert.equal(ui.w.document.querySelectorAll('.cw-wallet-row').length, 3, '3rd dynamically discovered whale renders in list');
-  assert.match(ui.w.document.querySelector('.cw-market-desc').textContent, /Top 16/);
+  assert.equal(ui.w.document.querySelector('.cw-market-desc'), null, 'Redundant toolbar status text (.cw-market-desc) is removed');
+  assert.equal(ui.w.document.querySelector('.cw-topn-select').value, '16');
 
   // 2. Open Custom Wallet Manager & validate invalid EVM address
   const openBtn = ui.w.document.querySelector('.cw-custom-btn');
@@ -2779,7 +2742,7 @@ test('Crypto Workspace: dynamic Leaderboard Top N selector, custom wallet manage
   assert.deepEqual(ui.errors, []);
 });
 
-test('Crypto Workspace: live HIP-3 (xyz) TradFi mode enables Top N, Custom Wallets, xyz fills, and 15s polling', async t => {
+test('Crypto Workspace: live HIP-3 (xyz) TradFi mode enables Top N, Custom Wallets, xyz fills, and 60s polling', async t => {
   const whaleUrls = [];
   const intervals = new Map();
   let intervalId = 300000;
@@ -2853,10 +2816,10 @@ test('Crypto Workspace: live HIP-3 (xyz) TradFi mode enables Top N, Custom Walle
         sourceType: 'leaderboard',
         sourceLabel: '榜单发现',
         accountValue: 18_000_000,
-        totalNtlPos: 24_000_000,
-        netExposure: 24_000_000,
+        totalNtlPos: 45_000_000,
+        netExposure: 45_000_000,
         netBiasLabel: '净多',
-        longNotional: 24_000_000,
+        longNotional: 45_000_000,
         shortNotional: 0,
         positions: [
           {
@@ -2865,10 +2828,10 @@ test('Crypto Workspace: live HIP-3 (xyz) TradFi mode enables Top N, Custom Walle
             side: 'LONG',
             sideLabel: '做多',
             isLong: true,
-            size: 127320,
+            size: 238727,
             entryPx: 185.0,
             markPx: 188.5,
-            positionValue: 24_000_000,
+            positionValue: 45_000_000,
             unrealizedPnl: 445_000,
             roePct: 21.0,
             leverage: 10,
@@ -3025,14 +2988,15 @@ test('Crypto Workspace: live HIP-3 (xyz) TradFi mode enables Top N, Custom Walle
   assert.ok(catBtns[1].classList.contains('active'), 'TradFi is active by default');
 
   assert.match(ui.w.document.querySelector('#cw-flow-title').textContent, /TradFi · 巨鲸持仓分布/);
-  assert.match(ui.w.document.querySelector('.cw-market-desc').textContent, /Hyperliquid HIP-3 \(xyz\) 实时 · Top 12/);
+  assert.equal(ui.w.document.querySelector('.cw-market-desc'), null, 'Redundant toolbar status text (.cw-market-desc) is removed on live TradFi too');
   assert.equal(ui.w.document.querySelector('.cw-sample-pill'), null, 'Sample pill must not render in live HIP-3 mode');
 
   const topNSelect = ui.w.document.querySelector('.cw-topn-select');
   assert.ok(topNSelect, 'Top N selector renders on live TradFi');
+  assert.equal(topNSelect.value, '12');
   assert.ok(ui.w.document.querySelector('.cw-custom-btn'), 'Custom wallet button renders on live TradFi');
-  assert.ok(ui.w.document.querySelector('.cw-now-strip'), '正在调仓 bar renders on live TradFi');
-  assert.ok([...intervals.values()].some(e => e.ms === 15000), '15s poller stays active on live TradFi');
+  assert.equal(ui.w.document.querySelector('.cw-now-strip'), null, '正在调仓 bar removed on live TradFi too');
+  assert.ok([...intervals.values()].some(e => e.ms === 60000 && e.fn?.name === 'pollCryptoWhales'), '60s poller stays active on live TradFi');
 
   // Change Top N to 16 -> stays on TradFi & fetches category=stocks&topN=16
   topNSelect.value = '16';
@@ -3079,16 +3043,16 @@ test('Crypto Workspace: live HIP-3 (xyz) TradFi mode enables Top N, Custom Walle
   const aggRows = ui.w.document.querySelectorAll('.cw-agg-row');
   assert.ok(aggRows.length <= 10, `TradFi 全部钱包持仓明细 table displays at most 10 rows, got ${aggRows.length}`);
 
-  // Trigger 15s poll on TradFi -> emits live xyz fill pulse beam
-  now += 15000;
+  // Trigger 60s poll on TradFi -> emits live xyz fill pulse beam
+  now += 60000;
   emitFreshXyzFill = true;
-  const pollEntry = [...intervals.values()].find(e => e.ms === 15000);
+  const pollEntry = [...intervals.values()].find(e => e.ms === 60000 && e.fn?.name === 'pollCryptoWhales');
   pollEntry.fn();
   await tick();
   await tick();
 
   assert.equal(ui.w.document.querySelectorAll('.cw-sk-pulse-beam').length, 1, 'Live xyz fill pulses beam on TradFi Sankey');
-  assert.match(ui.w.document.querySelector('.cw-now-strip').textContent, /XyzIndexArb → NVDA.*开多/);
+  assert.equal(ui.w.document.querySelector('.cw-now-strip'), null);
 
   assert.deepEqual(ui.errors, []);
 });
@@ -3107,6 +3071,9 @@ test('Options Butterfly Skeleton: spot row (.is-spot-row) is rendered strictly a
 
   const skeletonContainer = ui.w.document.querySelector('.options-skeleton-container');
   assert.ok(skeletonContainer, 'Options skeleton container is rendered while loading');
+  const toolbarTabs = skeletonContainer.querySelector('.skeleton-options-toolbar .tabs');
+  assert.ok(toolbarTabs && toolbarTabs.classList.contains('panel-tools'), 'Options skeleton toolbar uses horizontal .panel-tools tabs matching live layout');
+  assert.equal(toolbarTabs.querySelectorAll('.sk-pill').length, 2, 'Options skeleton toolbar renders 2 side-by-side metric tab pills');
 
   const rows = Array.from(skeletonContainer.querySelectorAll('.options-butterfly-card .butterfly-row'));
   assert.ok(rows.length > 0, 'Butterfly skeleton rows exist');
@@ -3276,10 +3243,10 @@ function attachFullChartLwStub(w) {
 
   const stubTimeScale = {
     subscribeVisibleLogicalRangeChange(cb) { rangeCb = cb; },
-    unsubscribeVisibleLogicalRangeChange() {},
+    unsubscribeVisibleLogicalRangeChange() { },
     getVisibleLogicalRange: () => ({ from: 0, to: Math.max(10, barTimes.length - 1) }),
     setVisibleLogicalRange(r) { visibleRangesSet.push(r); },
-    fitContent() {},
+    fitContent() { },
     timeToCoordinate: (t) => {
       if (!barTimes.length) return 300;
       const idx = barTimes.findIndex(bt => bt === t);
@@ -3307,18 +3274,31 @@ function attachFullChartLwStub(w) {
     removePriceLine(token) { activePriceLines.delete(token); },
     coordinateToPrice: (y) => maxPx - ((y - 40) / 480) * (maxPx - minPx),
     priceToCoordinate: (p) => 40 + ((maxPx - p) / Math.max(1e-6, maxPx - minPx)) * 480,
-    priceScale: () => ({ setAutoScale() {}, applyOptions() {} })
+    priceScale: () => ({ setAutoScale() { }, applyOptions() { } })
   };
+  const lineSeriesStates = [];
   const stubChart = {
     _hostEl: null,
-    applyOptions() {},
-    resize() {},
-    remove() {},
+    applyOptions() { },
+    resize() { },
+    remove() { },
     paneSize: () => ({ width: 800, height: 620 }),
-    subscribeCrosshairMove() {},
+    subscribeCrosshairMove() { },
     timeScale: () => stubTimeScale,
-    priceScale: () => ({ applyOptions() {}, setAutoScale() {}, getVisibleRange: () => ({ from: minPx, to: maxPx }) }),
-    addSeries: () => stubSeries
+    priceScale: () => ({ applyOptions() { }, setAutoScale() { }, getVisibleRange: () => ({ from: minPx, to: maxPx }) }),
+    addSeries(type, opts) {
+      if (type === 'Line') {
+        const state = { visible: opts?.visible !== false, color: opts?.color || '' };
+        lineSeriesStates.push(state);
+        return {
+          ...stubSeries,
+          applyOptions(nextOpts) {
+            if (nextOpts && 'visible' in nextOpts) state.visible = Boolean(nextOpts.visible);
+          }
+        };
+      }
+      return stubSeries;
+    }
   };
   w.LightweightCharts = {
     ColorType: { Solid: 'solid' },
@@ -3338,6 +3318,7 @@ function attachFullChartLwStub(w) {
     getActivePriceLines: () => [...activePriceLines],
     getCreatedPriceLines: () => createdPriceLines,
     getLastPriceFormat: () => lastPriceFormat,
+    getLineSeriesVisibilities: () => lineSeriesStates.map(s => ({ ...s })),
     triggerRangeChange: () => rangeCb?.()
   };
 }
@@ -3435,20 +3416,25 @@ test('#chart Whale Workspace: auto-applies 4h/1mo preset, bridges TradFi & Crypt
   const initialLines = lwSpy.getActivePriceLines();
   assert.ok(initialLines.some(pl => pl.title.includes('多头均价')), 'Draws weighted LONG avg PriceLine');
   assert.ok(initialLines.some(pl => pl.title.includes('空头均价')), 'Draws weighted SHORT avg PriceLine');
+  const maColors = new Set(['#f97316', '#3b82f6', '#a855f7', '#06b6d4', '#eab308']);
+  const maStates = lwSpy.getLineSeriesVisibilities().filter(s => maColors.has(s.color));
+  assert.ok(maStates.length === 5 && maStates.every(s => s.visible), 'MA5-MA250 lines remain visible without requiring two manual clicks when whale overlay is enabled');
 
   // Hovering a card highlights marker without opening HUD popover
   longSpyCard.dispatchEvent(new ui.w.MouseEvent('mouseenter', { bubbles: true }));
   await tick();
   assert.equal(ui.w.document.querySelector('.chart-whale-hud-popover'), null, 'Hovering dock card must NOT auto-open HUD popover');
 
-  // Clicking a card isolates that whale: replaces avg PriceLines with Entry + Liq lines, renders vertical Time Guide, dims other marker, opens HUD
+  // Clicking a card focuses that institution: draws individual 开仓均价 + 预估强平 WHILE preserving 多头均价 & 空头均价, renders Time Guide, dims other markers, opens HUD
   longSpyCard.click();
   await tick();
   assert.ok(longSpyCard.classList.contains('is-selected'), 'Clicked dock card shows selected ring');
   const isolatedLines = lwSpy.getActivePriceLines();
-  assert.ok(isolatedLines.some(pl => pl.title.includes('开仓')), 'Isolated mode draws individual Entry PriceLine');
-  assert.ok(isolatedLines.some(pl => pl.title.includes('预估强平')), 'Isolated mode draws Liquidation PriceLine');
-  assert.ok(!isolatedLines.some(pl => pl.title.includes('多头均价')), 'Isolated mode removes aggregate LONG avg line');
+  assert.ok(isolatedLines.some(pl => pl.title.includes('开仓均价')), 'Focused mode draws individual institution Entry PriceLine');
+  assert.ok(isolatedLines.some(pl => pl.title.includes('预估强平')), 'Focused mode draws Liquidation PriceLine');
+  assert.ok(isolatedLines.some(pl => pl.title.includes('多头均价')), 'Focused mode keeps aggregate LONG avg PriceLine visible');
+  assert.ok(isolatedLines.some(pl => pl.title.includes('空头均价')), 'Focused mode keeps aggregate SHORT avg PriceLine visible');
+  assert.match(dock.textContent, /机构均价/, 'Dock telemetry displays selected institution entry avg price');
   assert.ok(ui.w.document.querySelector('.chart-whale-time-guide .chart-whale-time-pill'), 'Renders vertical entry-time guide & duration pill');
   assert.ok(ui.w.document.querySelector('.chart-whale-markers-layer .cw-bybit-marker-group.is-dimmed'), 'Non-selected markers dim smoothly');
   const hud = ui.w.document.querySelector('.chart-whale-hud-popover');
@@ -3495,13 +3481,28 @@ test('#crypto Mini K-Line Drawer keeps inline preview and jumps directly to #cha
       const sym = u.searchParams.get('symbol');
       const range = u.searchParams.get('range');
       const interval = u.searchParams.get('interval');
-      chartRequests.push({ symbol: sym, range, interval });
+      const venue = u.searchParams.get('venue') || '';
+      const coin = u.searchParams.get('coin') || '';
+      chartRequests.push({ symbol: sym, range, interval, venue, coin });
       const basePx = sym === 'BTC-USD' ? 78600 : 185;
       const bars = [
         { time: baseSec, open: basePx * 0.98, high: basePx * 1.02, low: basePx * 0.97, close: basePx, volume: 10000 },
         { time: baseSec + 14400, open: basePx, high: basePx * 1.03, low: basePx * 0.99, close: basePx * 1.01, volume: 14000 }
       ];
-      return { ok: true, json: async () => ({ symbol: sym, range, interval, currency: 'USD', source: 'Test', delay: '实时', bars }) };
+      return {
+        ok: true,
+        json: async () => ({
+          symbol: sym,
+          perpCoin: coin || (sym === 'BTC-USD' ? 'BTC' : `xyz:${sym}`),
+          venue: venue === 'hyperliquid' ? 'hyperliquid' : 'yahoo',
+          range,
+          interval,
+          currency: 'USD',
+          source: venue === 'hyperliquid' ? 'Hyperliquid HIP-3' : 'Test',
+          delay: venue === 'hyperliquid' ? '实时 24/7' : '实时',
+          bars
+        })
+      };
     }
     return { ok: true, json: async () => fixture(url) };
   }, null, w => {
@@ -3533,9 +3534,12 @@ test('#crypto Mini K-Line Drawer keeps inline preview and jumps directly to #cha
   await new Promise(resolve => setTimeout(resolve, 40));
   await tick();
 
-  assert.ok(ui.w.document.querySelector('.cw-drawer-tr'), 'Mini K-line drawer remains inline for quick preview on #crypto');
-  const jumpBtn = ui.w.document.querySelector('.cw-open-main-chart-btn');
-  assert.ok(jumpBtn, 'Direct #chart jump button renders inside mini drawer header');
+  assert.ok(ui.w.document.querySelector('.cw-drawer-tr'), 'Flow drawer opens cleanly below row on #crypto');
+  assert.equal(ui.w.document.querySelector('.cw-whale-chart-deck'), null, 'Inline mini K-line chart is omitted from table row');
+  const jumpBtn = ui.w.document.querySelector('.cw-flow-row .cw-row-kline-btn');
+  assert.ok(jumpBtn, 'Direct #chart jump button renders on the right side of the row');
+  const instJumpBtn = ui.w.document.querySelector('.cw-drawer-tr .stock-whale-row .cw-wp-kline-btn');
+  assert.ok(instJumpBtn, 'Institution row right-side K-line jump button renders inside expanded table');
 
   // 2. Click "⤢ 大屏分析" -> navigates directly to #chart with BTC-USD + 4h/1mo + Crypto whales
   jumpBtn.click();
@@ -3554,7 +3558,7 @@ test('#crypto Mini K-Line Drawer keeps inline preview and jumps directly to #cha
   assert.ok(btcMarkers.length >= 2, `Crypto whale compound markers render on #chart (got ${btcMarkers.length}, cards=${btcCards.length}, loading=${!!ui.w.document.querySelector('.chart-skeleton')}, host=${!!ui.w.document.querySelector('#price-chart')})`);
   assert.ok(lwSpy.getLastPriceFormat() !== null, 'Price axis format updates dynamically');
 
-  // 3. Go back to #crypto -> TradFi -> open NVDA mini drawer -> click "⤢ 大屏分析" -> loads NVDA 4h/1mo on #chart
+  // 3. Go back to #crypto -> TradFi -> expand NVDA institution table -> click specific institution's "⤢ 大屏K线" -> loads NVDA 4h/1mo focused on that institution + shows 机构均价/多头均价/空头均价
   cryptoNavBtn.click();
   await tick();
   const catBtns = ui.w.document.querySelectorAll('.whale-cat-btn');
@@ -3570,16 +3574,44 @@ test('#crypto Mini K-Line Drawer keeps inline preview and jumps directly to #cha
   await new Promise(resolve => setTimeout(resolve, 40));
   await tick();
 
-  const tradfiJumpBtn = ui.w.document.querySelector('.cw-open-main-chart-btn');
-  assert.ok(tradfiJumpBtn, 'Jump button exists in TradFi NVDA mini drawer');
+  const nvdaInstRow = ui.w.document.querySelector('.cw-drawer-tr .stock-whale-row');
+  assert.ok(nvdaInstRow, 'Expanded TradFi NVDA drawer shows institution position rows');
+  const expectedInstAddr = nvdaInstRow.getAttribute('data-address');
+  const tradfiJumpBtn = nvdaInstRow.querySelector('.cw-wp-kline-btn');
+  assert.ok(tradfiJumpBtn, 'Jump button exists on right side of NVDA institution row');
   tradfiJumpBtn.click();
   await tick();
   await new Promise(resolve => setTimeout(resolve, 60));
   await tick();
 
+  assert.equal(chartRequests.some(r => r.symbol === 'NVDA' && r.interval === '15m'), false, 'Expanding NVDA row in #crypto no longer fetches 15m inline drawer bars');
+
+  assert.equal(lastCryptoChartReq.venue, 'hyperliquid', 'Crypto BTC jump uses Hyperliquid 24/7 candles');
+  assert.equal(lastCryptoChartReq.coin, 'BTC', 'Crypto BTC jump uses BTC perp coin');
+
   const lastNvdaReq = chartRequests.findLast(r => r.symbol === 'NVDA');
   assert.ok(lastNvdaReq && lastNvdaReq.range === '1mo' && lastNvdaReq.interval === '4h', 'TradFi NVDA jumps to #chart with 4h/1mo preset');
+  assert.equal(lastNvdaReq.venue, 'hyperliquid', 'TradFi NVDA jump to #chart switches to Hyperliquid 24/7 perp K-line');
+  assert.equal(lastNvdaReq.coin, 'xyz:NVDA', 'TradFi NVDA jump passes xyz:NVDA HIP-3 contract coin');
   assert.ok(ui.w.document.querySelectorAll('.chart-whale-card').length >= 1, 'NVDA whale cards render on #chart Dock');
+  const selectedDockCard = ui.w.document.querySelector('.chart-whale-card.is-selected');
+  assert.ok(selectedDockCard && selectedDockCard.getAttribute('data-pos-key')?.startsWith(expectedInstAddr.toLowerCase()), 'Jumping from institution row pre-selects that specific institution on #chart');
+  assert.ok(ui.w.document.querySelector('.chart-whale-hud-popover'), 'Jumping from institution row opens that institution HUD card on #chart');
+  const nvdaLines = lwSpy.getActivePriceLines();
+  assert.ok(nvdaLines.some(pl => pl.title.includes('开仓均价')), 'Fullscreen chart shows clicked institution entry avg PriceLine');
+  assert.ok(nvdaLines.some(pl => pl.title.includes('多头均价')), 'Fullscreen chart shows aggregate LONG avg PriceLine');
+  assert.ok(nvdaLines.some(pl => pl.title.includes('空头均价')), 'Fullscreen chart shows aggregate SHORT avg PriceLine');
+  assert.match(ui.w.document.querySelector('.cw-dock-telemetry').textContent, /机构均价/, 'Dock telemetry displays focused 机构均价');
+
+  const venueBtn = ui.w.document.querySelector('.chart-venue-switch-btn');
+  assert.ok(venueBtn && venueBtn.classList.contains('is-onchain'), '#chart shows active 24/7 on-chain contract venue pill');
+  assert.match(venueBtn.textContent, /xyz:NVDA/, 'Venue pill displays HIP-3 contract symbol');
+  venueBtn.click();
+  await tick();
+  await new Promise(resolve => setTimeout(resolve, 40));
+  await tick();
+  const switchedEquityReq = chartRequests.findLast(r => r.symbol === 'NVDA');
+  assert.equal(switchedEquityReq.venue, '', 'Clicking venue pill toggles back to standard US stock K-line');
 
   assert.deepEqual(ui.errors, []);
 });
@@ -3707,7 +3739,7 @@ test('#chart Whale Index-to-ETF Normalization: scales SP500->SPY prices onto can
   assert.match(bobbyCard.textContent, /76[234]\.\d{2}/, 'Dock card normalizes SP500 7626.77 onto ~763.89 SPY scale');
   assert.match(bobbyCard.textContent, /原 SP500 \$7,626\.77/, 'Dock card preserves original SP500 index reference note');
 
-  // 2. Both green LONG and red SHORT pinpoint dots + direct on-chart callout pills must render inside chart Y bounds
+  // 2. Both green LONG and red SHORT pinpoint dots must render inside chart Y bounds without shield/callout clutter
   const longDot = ui.w.document.querySelector('.chart-whale-markers-layer .cw-bybit-pin-dot.is-long');
   const shortDot = ui.w.document.querySelector('.chart-whale-markers-layer .cw-bybit-pin-dot.is-short');
   assert.ok(longDot, 'Renders green white-bordered LONG pinpoint dot on candle');
@@ -3716,10 +3748,8 @@ test('#chart Whale Index-to-ETF Normalization: scales SP500->SPY prices onto can
   const shortTop = parseFloat(shortDot.style.top);
   assert.ok(longTop > 20 && longTop < 580, `LONG dot Y must sit inside chart viewport (got ${longTop}px)`);
   assert.ok(shortTop > 20 && shortTop < 580, `SHORT dot Y must sit inside chart viewport (got ${shortTop}px)`);
-  const calloutPills = [...ui.w.document.querySelectorAll('.chart-whale-markers-layer .cw-pin-callout')];
-  assert.equal(calloutPills.length, 2, 'Renders direct on-chart position callout pills next to each dot');
-  assert.ok(calloutPills.some(p => /多.*76[234]\.\d{2}.*19\.7/.test(p.textContent)), 'LONG on-chart callout pill shows direction, entry price, and notional directly on K-line');
-  assert.ok(calloutPills.some(p => /空.*75[456]\.\d{2}.*9\.3/.test(p.textContent)), 'SHORT on-chart callout pill shows direction, entry price, and notional directly on K-line');
+  assert.equal(ui.w.document.querySelectorAll('.chart-whale-markers-layer .cw-bybit-shield-badge').length, 0, 'Main #chart omits B/S shield badges');
+  assert.equal(ui.w.document.querySelectorAll('.chart-whale-markers-layer .cw-pin-callout').length, 0, 'Main #chart omits floating callout tags');
 
   // 3. Clicking LONG green dot opens visible HUD popover AND marks right Dock card selected with "已选中" tag
   longDot.click();
@@ -3740,21 +3770,200 @@ test('#chart Whale Index-to-ETF Normalization: scales SP500->SPY prices onto can
   await tick();
   assert.ok(ui.w.document.querySelector('.chart-whale-hud-popover'), 'Dragging/panning the K-line canvas keeps the HUD popover visible');
 
-  // 4. Clicking outside closes HUD; clicking SHORT red dot switches HUD & Dock selection cleanly
+  // 4. Clicking outside or stationary blank K-line canvas clears HUD AND selected card / guide / 机构均价; clicking SHORT red dot switches cleanly
   ui.w.document.dispatchEvent(new ui.w.MouseEvent('pointerdown', { bubbles: true }));
   await tick();
   assert.equal(ui.w.document.querySelector('.chart-whale-hud-popover'), null, 'Outside pointerdown dismisses HUD');
+  assert.equal(ui.w.document.querySelector('.chart-whale-card.is-selected'), null, 'Outside click clears selected Dock card');
+  assert.equal(ui.w.document.querySelector('.chart-whale-time-guide'), null, 'Outside click clears vertical entry-time guide');
+  assert.doesNotMatch(ui.w.document.querySelector('.cw-dock-telemetry').textContent, /机构均价/, 'Outside click clears focused 机构均价 telemetry');
 
   shortDot.click();
   await tick();
   const hudShort = ui.w.document.querySelector('.chart-whale-hud-popover');
-  assert.ok(hudShort && /0xfc66\.\.\.ca06/.test(hudShort.textContent), 'Clicking red pinpoint dot opens SHORT whale HUD');
-  const shortCard = [...ui.w.document.querySelectorAll('.chart-whale-card')].find(c => /0xfc66\.\.\.ca06/.test(c.textContent));
+  assert.ok(hudShort && /HL TradFi 巨鲸/.test(hudShort.textContent), 'Clicking red pinpoint dot opens SHORT whale HUD with clean name');
+  assert.ok(!/0xfc66\.\.\.ca06/.test(hudShort.textContent), 'HUD omits redundant wallet hex string');
+  const shortCard = [...ui.w.document.querySelectorAll('.chart-whale-card')].find(c => /HL TradFi 巨鲸/.test(c.textContent));
+  assert.ok(shortCard && !/0xfc66\.\.\.ca06/.test(shortCard.textContent), 'Dock card omits redundant wallet hex string');
   assert.ok(shortCard.classList.contains('is-selected'), 'Right Dock switches .is-selected highlight to SHORT card');
   assert.match(shortCard.textContent, /已选中/, 'SHORT card shows 已选中 badge');
 
   assert.deepEqual(ui.errors, []);
 });
 
+test('Theme auto-follow: tracks OS prefers-color-scheme changes live, supports explicit lock & 跟随系统 reset, and topbar toggle back to OS restores auto-follow', async t => {
+  let systemDark = false;
+  const listeners = new Set();
+  const ui = await mount(
+    t,
+    async url => ({ ok: true, json: async () => fixture(url) }),
+    null,
+    w => {
+      w.matchMedia = query => {
+        if (String(query).includes('prefers-color-scheme')) {
+          return {
+            media: query,
+            get matches() { return systemDark; },
+            addEventListener(type, fn) {
+              if (type === 'change' && typeof fn === 'function') listeners.add(fn);
+            },
+            removeEventListener(type, fn) {
+              if (type === 'change') listeners.delete(fn);
+            }
+          };
+        }
+        return { media: query, matches: false, addEventListener() { }, removeEventListener() { } };
+      };
+    }
+  );
+
+  // 1. Default without stored preference follows OS (starts light -> switches to dark on OS change)
+  assert.equal(ui.w.document.documentElement.classList.contains('dark'), false);
+  assert.equal(ui.w.localStorage.getItem('market-desk-theme'), null);
+
+  systemDark = true;
+  for (const fn of listeners) fn({ matches: true });
+  await tick();
+  assert.equal(ui.w.document.documentElement.classList.contains('dark'), true, 'Live OS dark switch updates UI automatically');
+  assert.equal(ui.w.localStorage.getItem('market-desk-theme'), null, 'Auto-follow does not lock localStorage');
+
+  // 2. Also syncs on window focus even if matchMedia change event was missed while app was in background
+  systemDark = false;
+  ui.w.dispatchEvent(new ui.w.Event('focus'));
+  await tick();
+  assert.equal(ui.w.document.documentElement.classList.contains('dark'), false, 'Focus re-syncs with OS light mode');
+
+  // 3. Explicit manual selection in Settings modal locks mode and ignores OS changes until 跟随系统 is chosen
+  ui.w.document.querySelector('.settings-modal-btn').click();
+  await tick();
+  const themeCards = [...ui.w.document.querySelectorAll('.pref-theme-card')];
+  assert.equal(themeCards.length, 3, 'Preferences modal renders 跟随系统, 白天模式, and 黑夜模式 cards');
+  const systemCard = themeCards.find(el => el.textContent.includes('跟随系统'));
+  const lightCard = themeCards.find(el => el.textContent.includes('白天模式'));
+  assert.ok(systemCard && lightCard, 'Theme cards found');
+  lightCard.click();
+  await tick();
+  assert.equal(JSON.parse(ui.w.localStorage.getItem('market-desk-theme')), 'light');
+
+  systemDark = true;
+  for (const fn of listeners) fn({ matches: true });
+  await tick();
+  assert.equal(ui.w.document.documentElement.classList.contains('dark'), false, 'Manual Light lock ignores OS dark transition');
+
+  // Click 跟随系统 -> clears override and immediately adopts current OS dark mode
+  systemCard.click();
+  await tick();
+  assert.equal(ui.w.localStorage.getItem('market-desk-theme'), null);
+  assert.equal(ui.w.document.documentElement.classList.contains('dark'), true, '跟随系统 immediately adopts OS dark mode');
+
+  // 4. Topbar toggle back to matching OS restores auto-follow instead of staying permanently stuck
+  await ui.click('Light');
+  assert.equal(JSON.parse(ui.w.localStorage.getItem('market-desk-theme')), 'light');
+  await ui.click('Dark');
+  assert.equal(ui.w.document.documentElement.classList.contains('dark'), true);
+  assert.equal(ui.w.localStorage.getItem('market-desk-theme'), null, 'Toggling back to match OS restores automatic system tracking');
+
+  assert.deepEqual(ui.errors, []);
+});
+
+test('#chart Docked K-line Header: global system topbar scrolls upward away while K-line panel-heading docks cleanly at top', async t => {
+  const requestedCharts = [];
+  const ui = await mount(t, async url => {
+    const u = new URL(url, 'http://localhost');
+    if (u.pathname.endsWith('chart')) {
+      requestedCharts.push({
+        symbol: u.searchParams.get('symbol'),
+        interval: u.searchParams.get('interval'),
+        range: u.searchParams.get('range')
+      });
+    }
+    return { ok: true, json: async () => fixture(url) };
+  }, { 'market-desk-default-page': 'chart' });
+  await tick();
+  await tick();
+
+  const workspace = ui.w.document.querySelector('.workspace');
+  const topbar = ui.w.document.querySelector('.topbar');
+  const scrollEl = ui.w.document.querySelector('.workspace-content');
+  const chartHeading = ui.w.document.querySelector('.chart-panel > .panel-heading');
+  assert.ok(workspace && topbar && scrollEl && chartHeading, 'Workspace, topbar, scroll container, and K-line header exist');
+
+  // 1. Overlapping condensed sticky bar inside .topbar is removed completely
+  assert.equal(ui.w.document.querySelector('.topbar-chart-sticky-bar'), null, 'Condensed overlap bar inside .topbar no longer exists');
+  assert.ok(workspace.classList.contains('is-chart-page'), 'Workspace enters chart desktop scroll mode');
+
+  // 2. At scrollTop 0, global .topbar sits at 0 offset and chart header is not yet docked
+  assert.equal(workspace.style.getPropertyValue('--chart-topbar-offset'), '0px');
+  assert.equal(workspace.classList.contains('is-chart-topbar-hidden'), false);
+  assert.equal(workspace.classList.contains('is-chart-header-docked'), false);
+  assert.equal(topbar.getAttribute('aria-hidden'), null);
+
+  // 3. Scroll down -> global .topbar scrolls upward away and K-line .panel-heading docks cleanly with live controls
+  scrollEl.scrollTop = 140;
+  scrollEl.dispatchEvent(new ui.w.Event('scroll'));
+  await tick();
+
+  assert.equal(workspace.style.getPropertyValue('--chart-topbar-offset'), '-58px', 'Global topbar translates upward off screen');
+  assert.ok(workspace.classList.contains('is-chart-topbar-hidden'), 'Global topbar hidden after scrolling past its height');
+  assert.ok(workspace.classList.contains('is-chart-header-docked'), 'K-line header docks at top of viewport');
+  assert.equal(topbar.getAttribute('aria-hidden'), 'true', 'Scrolled-away global topbar marked aria-hidden');
+  assert.equal(chartHeading.querySelector('.chart-symbol-text').textContent.trim(), 'SPY');
+
+  // 4. Switch K-line interval (4小时) & date range (3月) directly from docked K-line .panel-heading
+  const docked4hBtn = [...chartHeading.querySelectorAll('.chart-interval-tools button')].find(b => b.textContent.trim() === '4小时');
+  const docked3mBtn = [...chartHeading.querySelectorAll('.chart-range-tools button')].find(b => b.textContent.trim() === '3月');
+  assert.ok(docked4hBtn && docked3mBtn, 'Docked K-line header contains interval and range buttons');
+
+  docked4hBtn.click();
+  await tick();
+  assert.ok(docked4hBtn.classList.contains('active'), 'Docked 4小时 button becomes active');
+  docked3mBtn.click();
+  await tick();
+  await tick();
+  assert.ok(docked3mBtn.classList.contains('active'), 'Docked 3月 button becomes active');
+
+  const lastReq = requestedCharts[requestedCharts.length - 1];
+  assert.equal(lastReq.interval, '4h', 'Clicking 4小时 on docked K-line header updates chart interval');
+  assert.equal(lastReq.range, '3mo', 'Clicking 3月 on docked K-line header updates chart range');
+
+  // 5. Scroll back to top -> global system topbar restores cleanly
+  scrollEl.scrollTop = 0;
+  scrollEl.dispatchEvent(new ui.w.Event('scroll'));
+  await tick();
+  assert.equal(workspace.style.getPropertyValue('--chart-topbar-offset'), '0px');
+  assert.equal(workspace.classList.contains('is-chart-topbar-hidden'), false);
+  assert.equal(workspace.classList.contains('is-chart-header-docked'), false);
+  assert.equal(topbar.getAttribute('aria-hidden'), null);
+
+  const css = await fs.readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
+  assert.match(css, /\.workspace-content\s*\{[^}]*scrollbar-gutter:\s*stable;[^}]*padding:\s*12px 10px 28px 10px;/);
+  assert.match(css, /\.topbar\s*\{[^}]*padding:\s*0 18px 0 10px !important;/);
+  assert.match(css, /\.workspace\.is-chart-page \.chart-panel\s*\{[^}]*overflow:\s*clip;/);
+  assert.match(css, /\.workspace\.is-chart-page \.chart-panel > \.panel-heading\s*\{[^}]*position:\s*sticky;[^}]*top:\s*0;/);
+
+  // 5. Verbose footnotes & dense sub-labels removed from chart/crypto/topbar and consolidated into #sources (说明)
+  assert.equal(ui.w.document.querySelector('.chart-panel .panel-note'), null, 'Redundant K-line footnote removed from #chart');
+  assert.equal(ui.w.document.querySelector('.brand-desc'), null, 'Topbar/sidebar brand subtitle clutter removed');
+  await ui.click('加密货币');
+  await tick();
+  assert.equal(ui.w.document.querySelector('.cw-wallet-table .cw-wt-sub'), null, 'Whale wallet table removes dense role/address subline');
+  assert.equal(ui.w.document.querySelector('.cw-agg-positions-table .cw-asset-sub'), null, 'Aggregated positions table removes Chinese/volume subline');
+  assert.equal(ui.w.document.querySelector('.cw-wallet-list-panel .cw-table-footer'), null, 'Whale wallet table footer removed');
+  assert.equal(ui.w.document.querySelector('.cw-positions-detail-panel .cw-table-footer'), null, 'Aggregated positions table footer removed');
+  assert.equal(ui.w.document.querySelector('.cw-sec-summary-sub'), null, 'Secondary toggle bar keeps title only without count subline');
+  assert.equal(ui.w.document.querySelector('.cw-panel-summary'), null, 'Sample summary note removed from wallet header');
+  const firstSankeyAssetLbl = ui.w.document.querySelector('.cw-sk-asset-node:not([data-asset="__OTHER__"]) .cw-sk-asset-lbl');
+  if (firstSankeyAssetLbl) {
+    assert.equal(firstSankeyAssetLbl.textContent.trim(), '', 'Sankey asset nodes omit redundant Chinese asset subtitle');
+  }
+  await ui.click('说明');
+  await tick();
+  const docsPanel = ui.w.document.querySelector('.panel.documentation');
+  assert.ok(docsPanel, '#sources documentation panel renders');
+  assert.match(docsPanel.textContent, /个股行情与 K 线/, 'K-line methodology consolidated into 说明');
+  assert.match(docsPanel.textContent, /期权持仓墙/, 'Options methodology consolidated into 说明');
+
+  assert.deepEqual(ui.errors, []);
+});
 
 

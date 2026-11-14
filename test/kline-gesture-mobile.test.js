@@ -141,3 +141,49 @@ test('Kline Gesture Mobile: zoomIn and zoomOut methods adjust logical time range
 
   controller.dispose();
 });
+
+test('Kline Gesture: double-clicking blank plot area does NOT reset zoomed viewport; time-axis dblclick resets', () => {
+  const el = createMockElement();
+  let range = { from: 60, to: 100 };
+  let fitContentCalls = 0;
+  const chart = {
+    timeScale: () => ({
+      getVisibleLogicalRange: () => range,
+      setVisibleLogicalRange: (r) => { range = r; },
+      fitContent: () => {
+        fitContentCalls++;
+        range = { from: 0, to: 105 };
+      }
+    }),
+    priceScale: () => ({
+      applyOptions: () => {}
+    })
+  };
+  const series = createMockSeries();
+
+  const controller = bindKlineGestures(el, chart, series, {
+    getLatestLogicalIndex: () => 100,
+    getFirstLogicalIndex: () => 0
+  });
+
+  // Double-click blank plot area (w = 800 - 65 = 735, h = 400 - 28 = 372 -> x=300, y=200 is plot)
+  el.dispatchEvent({
+    type: 'dblclick',
+    clientX: 300,
+    clientY: 200,
+    preventDefault: () => {}
+  });
+  assert.equal(fitContentCalls, 0, 'Double-clicking blank plot area MUST NOT reset zoom / fitContent');
+  assert.deepEqual(range, { from: 60, to: 100 });
+
+  // Double-click time-axis (y=385 >= 372) still resets viewport
+  el.dispatchEvent({
+    type: 'dblclick',
+    clientX: 300,
+    clientY: 385,
+    preventDefault: () => {}
+  });
+  assert.equal(fitContentCalls, 1, 'Double-clicking time-axis resets viewport');
+
+  controller.dispose();
+});
