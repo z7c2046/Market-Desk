@@ -1677,8 +1677,8 @@ test('Crypto Workspace: Sankey distribution, 4 scoped KPIs, 2-column whale-posit
   const walletNodes = sankeySvg.querySelectorAll('.cw-sk-wallet-node');
   const assetNodes = sankeySvg.querySelectorAll('.cw-sk-asset-node');
   const ribbonPaths = sankeySvg.querySelectorAll('.cw-sk-ribbon');
-  assert.match(sankeySvg.textContent, /持仓标的/);
-  assert.match(sankeySvg.textContent, /按链上成交量/);
+  assert.equal(sankeySvg.querySelector('.cw-sk-col-hdr'), null, 'Redundant Sankey column small labels removed');
+  assert.equal(sankeySvg.querySelector('.cw-sk-hdr-line'), null, 'Redundant Sankey header divider line removed');
   assert.equal(walletNodes.length, 2, '2 crypto whale wallet nodes in SVG');
   assert.equal(walletNodes[0].querySelector('.cw-sk-avatar-txt').textContent.trim(), '01', 'Numeric monospace badge replaces emoji');
   assert.deepEqual(
