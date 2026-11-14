@@ -1825,16 +1825,6 @@
                                   <div class="cw-dock-ratio-short"
                                     :style="{ width: chartWhaleSummary.shortRatioPct + '%' }"></div>
                                 </div>
-                                <div class="cw-dock-avg-row font-mono">
-                                  <span v-if="chartWhaleSummary.longAvgPx" class="text-pos">多头均价 ${{
-                                    formatCryptoPrice(chartWhaleSummary.longAvgPx) }}</span>
-                                  <span v-else class="muted">多头均价 --</span>
-                                  <span v-if="chartWhaleSummary.spotPx" class="cw-dock-spot">现 ${{
-                                    formatCryptoPrice(chartWhaleSummary.spotPx) }}</span>
-                                  <span v-if="chartWhaleSummary.shortAvgPx" class="text-neg">空头均价 ${{
-                                    formatCryptoPrice(chartWhaleSummary.shortAvgPx) }}</span>
-                                  <span v-else class="muted">空头均价 --</span>
-                                </div>
                                 <div v-if="selectedChartWhalePos" class="cw-dock-selected-avg font-mono">
                                   <span class="cw-dock-sel-lbl">机构均价 · {{
                                     formatWhaleDisplayName(selectedChartWhalePos.name) }}</span>
