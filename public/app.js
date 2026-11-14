@@ -3159,7 +3159,6 @@ createApp({
     const whaleMarkerOverlays = ref([]); // Bybit 风格高精度复合交互图层 [{ whale, isLong, x, y, pinY, badgeY, color, isOffCandle, tooltip, price, time }]
     const drawerWhaleCanvasActive = ref(false);
     const whaleChartExpanded = ref(false); // 沉浸式宽展全景大图模式开关 (380px -> 520px)
-    const syncedWhaleEntryTimes = ref({}); // 物理对齐 K 线柱时间后的同步开仓时间映射表
 
     let lwWhaleDrawerChart = null;
     let lwWhaleCandleSeries = null;
@@ -3644,7 +3643,7 @@ createApp({
             holdShort: formatCompactHoldBadge(entry.whale.entryTime),
             isOffCandle: false,
             isDimmed: Boolean(isolatedKey && posKey !== isolatedKey),
-            tooltip: `${entry.whale.name} · ${entry.isLong ? '做多' : '做空'} ${entry.whale.leverage || '5x'} @ $${formatCryptoPrice(entry.whale.entryPx)} · 开仓时间: ${formatWhaleTime(entry.whale.entryTime)} (点击查看详细仓位)`
+            tooltip: `${entry.whale.name} · ${entry.isLong ? '做多' : '做空'} ${entry.whale.leverage || '5x'} @ $${formatCryptoPrice(entry.whale.entryPx)}${entry.whale.entryTime ? ` · 开仓时间: ${formatWhaleTime(entry.whale.entryTime)}` : ''} (点击查看详细仓位)`
           });
           stepIdx++;
         }
@@ -3712,7 +3711,7 @@ createApp({
           holdShort: formatCompactHoldBadge(whale.entryTime),
           isOffCandle,
           isDimmed: Boolean(isolatedKey && posKey !== isolatedKey),
-          tooltip: `${whale.name} · ${isLong ? '做多' : '做空'} ${whale.leverage || '5x'} @ $${formatCryptoPrice(whale.entryPx)} · 开仓时间: ${formatWhaleTime(whale.entryTime)} (点击查看详细仓位)`
+          tooltip: `${whale.name} · ${isLong ? '做多' : '做空'} ${whale.leverage || '5x'} @ $${formatCryptoPrice(whale.entryPx)}${whale.entryTime ? ` · 开仓时间: ${formatWhaleTime(whale.entryTime)}` : ''} (点击查看详细仓位)`
         });
         rankIdx++;
       }
@@ -3813,9 +3812,6 @@ createApp({
         if (positions.length > 0) {
           whaleMarkerOverlays.value = positions.map((p, idx) => {
             const isLong = p.side === 'LONG';
-            if (!p.entryTime) {
-              p.entryTime = Date.now() - 3600000 * (idx + 1) * 3;
-            }
             const pinY = 120;
             const badgeY = isLong ? pinY + 26 : pinY - 26;
             return {
@@ -3829,7 +3825,7 @@ createApp({
               pinY,
               badgeY,
               isOffCandle: false,
-              tooltip: `${p.name} · ${isLong ? '做多' : '做空'} ${p.leverage || '5x'} @ $${formatCryptoPrice(p.entryPx)} · 开仓时间: ${formatWhaleTime(p.entryTime)} (点击查看详细仓位)`
+              tooltip: `${p.name} · ${isLong ? '做多' : '做空'} ${p.leverage || '5x'} @ $${formatCryptoPrice(p.entryPx)}${p.entryTime ? ` · 开仓时间: ${formatWhaleTime(p.entryTime)}` : ''} (点击查看详细仓位)`
             };
           });
         }
@@ -4037,27 +4033,12 @@ createApp({
       } catch (_) { }
 
       if (positions.length > 0 && bars.length > 0) {
-        const nextSyncedTimes = {};
-        let hasSyncedDiff = false;
         const usedBarTimes = new Set();
 
-        positions.forEach((p, idx) => {
+        positions.forEach(p => {
           const isLong = p.side === 'LONG';
           const matchedBar = matchWhalePositionToBar(bars, p, usedBarTimes) || bars[bars.length - 1];
           if (matchedBar?.time != null) usedBarTimes.add(matchedBar.time);
-
-          if (!p.hasRealEntryTime && matchedBar?.time) {
-            const t = matchedBar.time;
-            const syncedMs = t < 1e11 ? t * 1000 : t;
-            p.entryTime = syncedMs;
-            const syncKey = `${sym}:${whaleDrawerInterval.value}:${String(p.address || '').toLowerCase()}:${p.side}`;
-            if (syncedWhaleEntryTimes.value[syncKey] !== syncedMs) {
-              nextSyncedTimes[syncKey] = syncedMs;
-              hasSyncedDiff = true;
-            }
-          } else if (!p.entryTime) {
-            p.entryTime = Date.now() - 3600000 * (idx + 1) * 4;
-          }
 
           const markerKey = `${p.address}:${p.side}`;
           lwWhaleMarkersMap.set(markerKey, {
@@ -4068,13 +4049,6 @@ createApp({
             color: isLong ? klineUp : klineDown
           });
         });
-
-        if (hasSyncedDiff) {
-          syncedWhaleEntryTimes.value = {
-            ...syncedWhaleEntryTimes.value,
-            ...nextSyncedTimes
-          };
-        }
 
         try {
           if (lwWhaleMarkersPlugin && typeof lwWhaleMarkersPlugin.setMarkers === 'function') {
@@ -4821,11 +4795,8 @@ createApp({
           const lev = pos.leverageLabel || (pos.leverage ? `${pos.leverage.value || pos.leverage}x ${pos.leverage.type === 'isolated' ? '逐仓' : '全仓'}` : '5x 全仓');
           const liq = scaled.liquidationPx;
           const rawRealTime = pos.entryTime || pos.openedAt || pos.time || pos.timestamp || null;
-          const hasRealEntryTime = Boolean(rawRealTime);
-          const addrLow = String(w.address || '').toLowerCase();
-          const syncKey = `${sym}:${whaleDrawerInterval.value}:${addrLow}:${side}`;
-          const legacySyncKey = `${sym}:${addrLow}:${side}`;
-          const entryTime = rawRealTime || syncedWhaleEntryTimes.value[syncKey] || syncedWhaleEntryTimes.value[legacySyncKey] || (Date.now() - 3600000 * (list.length + 1) * 3);
+          const hasRealEntryTime = Boolean(pos.hasRealEntryTime !== false && rawRealTime);
+          const entryTime = hasRealEntryTime ? rawRealTime : null;
 
           list.push({
             name: w.name,
@@ -4863,13 +4834,9 @@ createApp({
           const wp = row.raw.whalePositions[wpIdx];
           const addrLow = String(wp.address || '').toLowerCase();
           if (!seenWhaleAddr.has(addrLow)) {
-            const wpSide = wp.side || (wp.isLong ? 'LONG' : 'SHORT');
-            const wpHasReal = Boolean(wp.hasRealEntryTime || wp.openedAt || wp.timestamp);
-            const wpSyncKey = `${sym}:${addrLow}:${wpSide}`;
-            const wpSyncedTime = syncedWhaleEntryTimes.value[wpSyncKey];
-            const wpEntryTime = wpHasReal
-              ? (wp.entryTime || wp.openedAt || wp.timestamp)
-              : (wpSyncedTime || wp.entryTime || (Date.now() - 3600000 * (wpIdx + 2) * 4));
+            const wpRawTime = wp.entryTime || wp.openedAt || wp.timestamp || null;
+            const wpHasReal = Boolean(wp.hasRealEntryTime !== false && wpRawTime);
+            const wpEntryTime = wpHasReal ? wpRawTime : null;
             list.push({
               ...wp,
               hasRealEntryTime: wpHasReal,
@@ -4900,7 +4867,7 @@ createApp({
           returnOnEquity: 0.075,
           liquidationPx: Number((px * 0.82).toFixed(2)),
           hasRealEntryTime: false,
-          entryTime: syncedWhaleEntryTimes.value[`${sym}:0x0242468165b4c483a9fba11b8ca605481747ffa1:LONG`] || (Date.now() - 3600000 * 26)
+          entryTime: null
         },
         {
           name: `${sym} 链上量化对冲空头`,
@@ -4920,7 +4887,7 @@ createApp({
           returnOnEquity: 0.108,
           liquidationPx: Number((px * 1.16).toFixed(2)),
           hasRealEntryTime: false,
-          entryTime: syncedWhaleEntryTimes.value[`${sym}:0xfc66b5952f9547d216f9f302061244bb6888ca06:SHORT`] || (Date.now() - 3600000 * 5)
+          entryTime: null
         }
       ];
 
@@ -4995,10 +4962,9 @@ createApp({
       const lev = pos.leverageLabel
         || (pos.leverage ? `${pos.leverage.value || pos.leverage}x ${pos.leverage.type === 'isolated' ? '逐仓' : '全仓'}` : '5x 全仓');
       const rawRealTime = pos.entryTime || pos.openedAt || pos.time || pos.timestamp || null;
-      const hasRealEntryTime = Boolean(rawRealTime);
+      const hasRealEntryTime = Boolean(pos.hasRealEntryTime !== false && rawRealTime);
       const canonicalSym = canonicalWhaleAssetKey(targetSym);
-      const syncKey = `${canonicalSym}:${chartInterval.value}:${posKey}`;
-      const entryTime = rawRealTime || syncedWhaleEntryTimes.value[syncKey] || (Date.now() - 3600000 * (idx + 1) * 4);
+      const entryTime = hasRealEntryTime ? rawRealTime : null;
 
       // Price excursion from entry in the position's favor (scale-invariant)
       const favDeltaPct = (entryPx > 0 && markPx > 0)
@@ -5259,7 +5225,9 @@ createApp({
         chartWhaleTimeGuide.value = null;
         return;
       }
-      const label = `${formatWhaleTime(entry.whale.entryTime)} · ${formatWhaleDuration(entry.whale.entryTime)}`;
+      const label = (entry.whale.hasRealEntryTime && entry.whale.entryTime)
+        ? `${formatWhaleTime(entry.whale.entryTime)} · ${formatWhaleDuration(entry.whale.entryTime)}`
+        : `开仓均价 $${formatCryptoPrice(entry.whale.entryPx)}`;
       if (!lwPriceChart || typeof lwPriceChart.timeScale !== 'function') {
         chartWhaleTimeGuide.value = { x: 220, label, color: entry.color, isLong: entry.isLong, visible: true };
         return;
@@ -5384,25 +5352,12 @@ createApp({
       }
 
       const curKline = KLINE_SCHEMES[klineScheme.value] || KLINE_SCHEMES.classic;
-      const nextSyncedTimes = {};
-      let hasSyncedDiff = false;
-      const canonicalSym = canonicalWhaleAssetKey(symbol.value);
       const usedBarTimes = new Set();
 
       for (const p of positions) {
         const isLong = p.side === 'LONG';
         const matchedBar = matchWhalePositionToBar(bars, p, usedBarTimes) || bars[bars.length - 1];
         if (matchedBar?.time != null) usedBarTimes.add(matchedBar.time);
-        if (!p.hasRealEntryTime && matchedBar?.time) {
-          const t = matchedBar.time;
-          const syncedMs = t < 1e11 ? t * 1000 : t;
-          p.entryTime = syncedMs;
-          const syncKey = `${canonicalSym}:${chartInterval.value}:${p.posKey}`;
-          if (syncedWhaleEntryTimes.value[syncKey] !== syncedMs) {
-            nextSyncedTimes[syncKey] = syncedMs;
-            hasSyncedDiff = true;
-          }
-        }
         lwMainWhaleMarkersMap.set(p.posKey, {
           whale: p,
           time: matchedBar.time,
@@ -5410,10 +5365,6 @@ createApp({
           isLong,
           color: isLong ? curKline.up : curKline.down
         });
-      }
-
-      if (hasSyncedDiff) {
-        syncedWhaleEntryTimes.value = { ...syncedWhaleEntryTimes.value, ...nextSyncedTimes };
       }
 
       if (pendingChartFocusWhaleKey.value && !states.chart.loading) {
