@@ -1976,7 +1976,7 @@ test('Crypto Workspace: Sankey distribution, 4 scoped KPIs, 2-column whale-posit
   // Verify whale positions list includes both long and short positions and is sorted by positionValue descending
   const whalePosRows = activeDrawerTr.querySelectorAll('.stock-whale-table tbody tr');
   assert.ok(whalePosRows.length >= 2, 'At least top 2 whale positions rendered for clicked asset');
-  assert.ok(activeDrawerTr.querySelector('.cw-wp-entry-time'), 'Whale table displays entry time tag');
+  assert.equal(activeDrawerTr.querySelector('.cw-wp-entry-time'), null, 'Whale table omits synthetic entry time tag when snapshot lacks real open timestamp');
   const dirPills = [...whalePosRows].map(r => r.querySelector('.cw-dir-pill').textContent.trim());
   assert.ok(dirPills.some(p => p.includes('多')), 'Positions list contains LONG position');
   assert.ok(dirPills.some(p => p.includes('空')), 'Positions list contains SHORT position');
@@ -4079,6 +4079,163 @@ test('System-wide UI clutter audit: removes redundant gray subtitles, explanator
   assert.equal(trModal.querySelector('.treasury-insights-box'), null, 'Treasury modal removes multi-paragraph guide');
   trModal.querySelector('.stock-modal-close-btn').click();
   await tick();
+
+  assert.deepEqual(ui.errors, []);
+});
+
+test('#crypto & #chart Whale Open Time: omits synthetic Date.now()-3h*N open times when clearinghouseState lacks real timestamps', async t => {
+  const realOpenMs = new Date('2026-11-10T08:15:30Z').getTime();
+  const baseSec = 1793800000;
+  const btcBars = [
+    { time: baseSec, open: 67800, high: 68200, low: 67100, close: 67405.45, volume: 12000 },
+    { time: baseSec + 14400, open: 67405.45, high: 67900, low: 67000, close: 67405.45, volume: 9800 }
+  ];
+
+  const whalePayload = {
+    ok: true,
+    isLive: true,
+    provider: 'Hyperliquid L1 DEX',
+    fetchedAt: new Date().toISOString(),
+    whales: [
+      {
+        address: '0xaaaa111111111111111111111111111111111111',
+        shortAddress: '0xaaaa...1111',
+        name: 'HL 巨鲸',
+        tag: 'Hyperliquid 超大巨鲸',
+        avatar: '🐋',
+        accountValue: 50000000,
+        totalNtlPos: 39350000,
+        positions: [
+          {
+            coin: 'BTC',
+            side: 'SHORT',
+            isLong: false,
+            size: 583.78,
+            entryPx: 80819.3,
+            markPx: 67405.45,
+            positionValue: 39350000,
+            unrealizedPnl: 7820000,
+            returnOnEquity: 0.79,
+            leverageLabel: '40x 全仓',
+            liquidationPx: 157693.6,
+            entryTime: null
+          }
+        ]
+      },
+      {
+        address: '0xbbbb222222222222222222222222222222222222',
+        shortAddress: '0xbbbb...2222',
+        name: '近期实盘巨鲸',
+        tag: 'Hyperliquid 榜单巨鲸',
+        avatar: '⚡',
+        accountValue: 12000000,
+        totalNtlPos: 8500000,
+        positions: [
+          {
+            coin: 'BTC',
+            side: 'LONG',
+            isLong: true,
+            size: 126.1,
+            entryPx: 67500,
+            markPx: 67405.45,
+            positionValue: 8500000,
+            unrealizedPnl: -11922,
+            returnOnEquity: -0.02,
+            leverageLabel: '20x 全仓',
+            liquidationPx: 59000,
+            entryTime: realOpenMs
+          }
+        ]
+      }
+    ],
+    aggregate: {
+      totalTrackedWhales: 2,
+      totalOI: 47850000,
+      totalLongNotional: 8500000,
+      totalShortNotional: 39350000,
+      longRatio: 18,
+      shortRatio: 82,
+      totalUnrealizedPnl: 7808078,
+      sentiment: '空头占优',
+      sentimentColor: 'short',
+      topCoins: []
+    },
+    activityLogs: []
+  };
+
+  let lwSpy = null;
+  const ui = await mount(t, async url => {
+    const u = new URL(url, 'http://localhost');
+    if (u.pathname === '/api/crypto/whales') {
+      return { ok: true, json: async () => (u.searchParams.get('category') === 'stocks' ? fixture(url) : whalePayload) };
+    }
+    if (u.pathname === '/api/market/chart') {
+      return {
+        ok: true,
+        json: async () => ({
+          symbol: 'BTC-USD',
+          range: '1mo',
+          interval: '4h',
+          venue: 'hyperliquid',
+          perpCoin: 'BTC',
+          currency: 'USD',
+          source: 'Hyperliquid',
+          delay: '实时 24/7',
+          bars: btcBars
+        })
+      };
+    }
+    return { ok: true, json: async () => fixture(url) };
+  }, null, w => {
+    lwSpy = attachFullChartLwStub(w);
+  });
+
+  await ui.click('加密货币');
+  await tick();
+  await new Promise(resolve => setTimeout(resolve, 60));
+  await tick();
+
+  const catBtns = ui.w.document.querySelectorAll('.whale-cat-btn');
+  assert.ok(catBtns.length >= 2, 'Market category switcher buttons exist');
+  catBtns[0].click();
+  await tick();
+  await new Promise(resolve => setTimeout(resolve, 40));
+  await tick();
+
+  const secToggle = ui.w.document.querySelector('.cw-sec-toggle-btn');
+  if (secToggle && !ui.w.document.querySelector('.onchain-stocks-panel')) {
+    secToggle.click();
+    await tick();
+  }
+  const btcRow = ui.w.document.querySelector('tr.cw-flow-row[data-symbol="BTC"]');
+  assert.ok(btcRow, 'BTC flow row renders');
+  btcRow.click();
+  await tick();
+
+  const rows = [...ui.w.document.querySelectorAll('.cw-drawer-tr .stock-whale-row')];
+  assert.equal(rows.length, 2, 'Expanded drawer renders both BTC whale positions');
+  const unknownTimeRow = rows.find(r => r.dataset.address === '0xaaaa111111111111111111111111111111111111');
+  const realTimeRow = rows.find(r => r.dataset.address === '0xbbbb222222222222222222222222222222222222');
+  assert.equal(unknownTimeRow.querySelector('.cw-wp-meta'), null, 'Position without real entryTime omits fabricated 开仓 timestamp');
+  assert.ok(realTimeRow.querySelector('.cw-wp-entry-time')?.textContent.trim().length > 0, 'Position with real entryTime renders open timestamp');
+
+  // Jump to #chart and inspect Dock card + HUD popover for position without real entryTime
+  unknownTimeRow.querySelector('.cw-wp-kline-btn').click();
+  await tick();
+  await new Promise(resolve => setTimeout(resolve, 60));
+  await tick();
+
+  const cards = [...ui.w.document.querySelectorAll('.chart-whale-card')];
+  const unknownCard = cards.find(c => c.dataset.posKey?.startsWith('0xaaaa'));
+  const realCard = cards.find(c => c.dataset.posKey?.startsWith('0xbbbb'));
+  assert.equal(unknownCard.querySelector('.cw-card-time')?.textContent.trim(), '--', 'Dock card shows -- when open time is unavailable from snapshot');
+  assert.match(realCard.querySelector('.cw-card-time')?.textContent.trim() || '', /^\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/, 'Dock card preserves real open timestamp');
+
+  const hudTime = ui.w.document.querySelector('.chart-whale-hud-popover .cw-hud-time');
+  const hudDur = ui.w.document.querySelector('.chart-whale-hud-popover .cw-hud-duration');
+  assert.equal(hudTime?.textContent.trim(), '--', 'HUD shows -- instead of synthetic open time');
+  assert.equal(hudDur?.textContent.trim(), '--', 'HUD shows -- instead of synthetic duration');
+  assert.ok(lwSpy.getActivePriceLines().some(pl => pl.title.includes('开仓均价')), 'Entry average price line still draws cleanly');
 
   assert.deepEqual(ui.errors, []);
 });
