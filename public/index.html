@@ -1741,7 +1741,7 @@
                                 <div class="cw-hud-cell">
                                   <span class="cw-hud-lbl">开仓时间</span>
                                   <strong class="cw-hud-val cw-hud-time font-mono"
-                                    :title="formatWhaleFullTime(activeChartWhaleHud.whale.entryTime)">{{
+                                    :title="activeChartWhaleHud.whale.entryTime ? formatWhaleFullTime(activeChartWhaleHud.whale.entryTime) : '链上持仓快照不返回历史开仓时间'">{{
                                     formatWhaleTime(activeChartWhaleHud.whale.entryTime) }}</strong>
                                 </div>
                                 <div class="cw-hud-cell">
@@ -1884,9 +1884,9 @@
                                         formatCryptoPrice(p.origEntryPx) }}</span>
                                     </div>
                                     <div class="cw-card-metric-main is-right">
-                                      <span class="cw-card-lbl">波段持仓 · {{ formatWhaleDuration(p.entryTime) }}</span>
-                                      <strong class="cw-card-time" :title="formatWhaleFullTime(p.entryTime)">{{
-                                        formatWhaleTime(p.entryTime) }}</strong>
+                                      <span class="cw-card-lbl">{{ p.entryTime ? ('波段持仓 · ' + formatWhaleDuration(p.entryTime)) : '开仓时间' }}</span>
+                                      <strong class="cw-card-time" :title="p.entryTime ? formatWhaleFullTime(p.entryTime) : '链上持仓快照不返回历史开仓时间'">{{
+                                        p.entryTime ? formatWhaleTime(p.entryTime) : '--' }}</strong>
                                     </div>
                                   </div>
 
@@ -3169,7 +3169,7 @@
                                                           <span class="cw-wp-name">{{ formatWhaleDisplayName(wp.name)
                                                             }}</span>
                                                         </div>
-                                                        <div v-if="wp.entryTime" class="cw-wp-meta font-mono">
+                                                        <div v-if="wp.hasRealEntryTime && wp.entryTime" class="cw-wp-meta font-mono">
                                                           <span class="cw-wp-time-lbl">开仓:</span>
                                                           <span class="cw-wp-entry-time"
                                                             :title="'开仓时间: ' + formatWhaleFullTime(wp.entryTime)">
