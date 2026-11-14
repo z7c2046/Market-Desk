@@ -3476,14 +3476,19 @@ createApp({
           title: `${labelName} 开仓均价 $${formatCryptoPrice(isolated.entryPx)}`
         }));
         if (Number.isFinite(isolated.liquidationPx) && isolated.liquidationPx > 0) {
-          linesList.push(series.createPriceLine({
-            price: isolated.liquidationPx,
-            color: '#f59e0b',
-            lineWidth: 1.5,
-            lineStyle: dotted,
-            axisLabelVisible: true,
-            title: `预估强平 $${formatCryptoPrice(isolated.liquidationPx)}`
-          }));
+          const liqPx = Number(isolated.liquidationPx);
+          const entryPx = Number(isolated.entryPx);
+          const withinScaleBounds = entryPx > 0 && liqPx >= entryPx * 0.2 && liqPx <= entryPx * 3.0;
+          if (withinScaleBounds) {
+            linesList.push(series.createPriceLine({
+              price: liqPx,
+              color: '#f59e0b',
+              lineWidth: 1.5,
+              lineStyle: dotted,
+              axisLabelVisible: true,
+              title: `预估强平 $${formatCryptoPrice(liqPx)}`
+            }));
+          }
         }
       }
     }
@@ -3866,6 +3871,7 @@ createApp({
           rightPriceScale: {
             visible: true,
             autoScale: true,
+            minimumWidth: 68,
             borderColor: gridColorValue,
             scaleMargins: { top: 0.12, bottom: 0.22 }
           },
@@ -10023,6 +10029,7 @@ createApp({
             rightPriceScale: {
               visible: true,
               autoScale: true,
+              minimumWidth: 68,
               borderColor: gridColorValue,
               scaleMargins: { top: 0.08, bottom: 0.22 }
             },
