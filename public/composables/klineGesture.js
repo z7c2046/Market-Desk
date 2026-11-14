@@ -338,6 +338,20 @@ export function bindKlineGestures(element, chart, series, options = {}) {
       startAnchorPrice = price.from + (price.to - price.from) * f;
     }
 
+    let pricePerPx = null;
+    if (series && typeof series.coordinateToPrice === 'function') {
+      const pMid = series.coordinateToPrice(h / 2);
+      const pMidPlus = series.coordinateToPrice(h / 2 + 10);
+      if (Number.isFinite(pMid) && Number.isFinite(pMidPlus)) {
+        const computed = (pMid - pMidPlus) / 10;
+        if (computed > 0) pricePerPx = computed;
+      }
+    }
+    if (!pricePerPx && price) {
+      const span = (price.to - price.from) / Math.max(h, 1);
+      if (span > 0) pricePerPx = span;
+    }
+
     active = {
       pointerId: e.pointerId,
       pointerType: e.pointerType,
@@ -352,6 +366,7 @@ export function bindKlineGestures(element, chart, series, options = {}) {
       plotHeight: h,
       startPrice: price,
       startAnchorPrice,
+      pricePerPx,
       moved: false
     };
 
@@ -394,18 +409,16 @@ export function bindKlineGestures(element, chart, series, options = {}) {
     active.lastTime = now;
 
     if (active.zone === 'plot') {
-      // 绘图区二维平移：水平拖拽直接平移 X 摄像机，有效垂直位移超过 3px 才切手动 Y
-      viewportMotion.panPx(stepDx, active.plotWidth);
+      // 绘图区二维平移：rAF 合并水平拖拽，有效垂直位移超过 3px 才切手动 Y
+      viewportMotion.queuePanPx(stepDx, active.plotWidth);
       if (Math.abs(totalDy) >= 3 && active.startPrice) {
-        priceMotion.panPrice(totalDy, active.startPrice, active.plotHeight);
+        priceMotion.panPrice(totalDy, active.startPrice, active.plotHeight, active.pricePerPx);
       }
     } else if (active.zone === 'time-axis') {
-      viewportMotion.panPx(stepDx, active.plotWidth);
+      viewportMotion.queuePanPx(stepDx, active.plotWidth);
     } else if (active.zone === 'price-axis') {
       priceMotion.dragScalePrice(totalDy, active.startPrice, active.startAnchorPrice, active.plotHeight);
     }
-
-    options.onViewportChange?.();
 
     e.preventDefault();
   }
@@ -419,6 +432,7 @@ export function bindKlineGestures(element, chart, series, options = {}) {
       } catch (_) {}
     }
 
+    viewportMotion.flushPan();
     priceMotion.endDrag();
     const wasActive = active;
     active = null;
@@ -440,9 +454,13 @@ export function bindKlineGestures(element, chart, series, options = {}) {
         viewportMotion.startFling(vx, wasActive.plotWidth);
       } else {
         viewportMotion.setPhase('idle');
+        viewportMotion.seedFromRange(chart.timeScale().getVisibleLogicalRange());
       }
     } else {
       viewportMotion.setPhase('idle');
+      if (wasActive.moved) {
+        viewportMotion.seedFromRange(chart.timeScale().getVisibleLogicalRange());
+      }
     }
 
     emitState();
@@ -453,9 +471,11 @@ export function bindKlineGestures(element, chart, series, options = {}) {
     if (typeof element.hasPointerCapture === 'function' && element.hasPointerCapture(e.pointerId)) {
       try { element.releasePointerCapture(e.pointerId); } catch (_) {}
     }
+    viewportMotion.flushPan();
     priceMotion.endDrag();
     active = null;
     viewportMotion.setPhase('idle');
+    viewportMotion.seedFromRange(chart.timeScale().getVisibleLogicalRange());
     emitState();
   }
 
@@ -496,26 +516,25 @@ export function bindKlineGestures(element, chart, series, options = {}) {
           maxCount: effectiveMaxBars()
         });
       } else if (action.type === 'pan') {
-        viewportMotion.panPx(action.deltaPx, w);
+        viewportMotion.queuePanPx(action.deltaPx, w);
       } else if (action.type === 'price-zoom') {
         priceMotion.queuePriceZoom(action.delta, action.pointerY, h, { gain: action.gain });
       }
     }
-
-    if (actions.length > 0) {
-      options.onViewportChange?.();
-    }
   }
 
   function onDblClick(e) {
-    cancelMotion('dblclick');
     const { x, y } = local(e);
     const zone = hitZone(x, y);
 
     if (zone === 'price-axis') {
+      cancelMotion('dblclick');
       priceMotion.resetPriceScale();
-    } else {
+    } else if (zone === 'time-axis') {
+      cancelMotion('dblclick');
       reset();
+    } else {
+      return;
     }
     options.onViewportChange?.();
     e.preventDefault();

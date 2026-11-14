@@ -122,7 +122,22 @@ export function createPriceMotionController(chart, candleSeries, options = {}) {
   function stepMotion(now) {
     if (lastFrameAt === null) {
       lastFrameAt = now;
-      scheduleFrame();
+      if (pendingDragRange) {
+        const r = pendingDragRange;
+        pendingDragRange = null;
+        commitManualPrice(r);
+      }
+      const needsZoomOrAuto =
+        (manualDisplayRange && manualTargetRange && (
+          Math.abs(manualTargetRange.from - manualDisplayRange.from) > 1e-5 ||
+          Math.abs(manualTargetRange.to - manualDisplayRange.to) > 1e-5
+        )) ||
+        (enableAutoSmooth && priceMode === 'auto');
+      if (needsZoomOrAuto) {
+        scheduleFrame();
+      } else {
+        lastFrameAt = null;
+      }
       return;
     }
 
@@ -433,12 +448,12 @@ export function createPriceMotionController(chart, candleSeries, options = {}) {
   /**
    * 绘图区二维上下平移
    */
-  function panPrice(totalDy, startPrice, paneHeight = 400) {
+  function panPrice(totalDy, startPrice, paneHeight = 400, cachedPricePerPx = null) {
     if (!startPrice || !Number.isFinite(totalDy)) return;
     setPriceMode('manual');
 
-    let pricePerPx = 0;
-    if (candleSeries && typeof candleSeries.coordinateToPrice === 'function') {
+    let pricePerPx = (Number.isFinite(cachedPricePerPx) && cachedPricePerPx > 0) ? cachedPricePerPx : 0;
+    if (pricePerPx === 0 && candleSeries && typeof candleSeries.coordinateToPrice === 'function') {
       const pMid = candleSeries.coordinateToPrice(paneHeight / 2);
       const pMidPlus = candleSeries.coordinateToPrice(paneHeight / 2 + 10);
       if (Number.isFinite(pMid) && Number.isFinite(pMidPlus)) {

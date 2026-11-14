@@ -56,6 +56,7 @@ export function createViewportMotionController(options = {}) {
 
   let submittedRange = null;
   let observedRange = null;
+  let pendingDragPan = false;
 
   function setPhase(nextPhase) {
     if (phase !== nextPhase) {
@@ -99,6 +100,7 @@ export function createViewportMotionController(options = {}) {
     }
     lastFrameAt = null;
     velocityX = 0;
+    pendingDragPan = false;
     targetCount = display.count;
     if (phase !== 'drag') {
       setPhase('idle');
@@ -141,8 +143,8 @@ export function createViewportMotionController(options = {}) {
     scheduleFrame();
   }
 
-  function panPx(deltaPx, width = getWidth()) {
-    if (!Number.isFinite(deltaPx) || deltaPx === 0) return;
+  function applyPanDelta(deltaPx, width = getWidth()) {
+    if (!Number.isFinite(deltaPx) || deltaPx === 0) return false;
     const w = Math.max(width, 1);
     const deltaLogical = -deltaPx * display.count / w;
 
@@ -154,10 +156,29 @@ export function createViewportMotionController(options = {}) {
     anchorLogical += deltaLogical;
 
     setNavigation('history');
+    return true;
+  }
+
+  function panPx(deltaPx, width = getWidth()) {
+    if (!applyPanDelta(deltaPx, width)) return;
+    pendingDragPan = false;
+    commitDisplay();
+  }
+
+  function queuePanPx(deltaPx, width = getWidth()) {
+    if (!applyPanDelta(deltaPx, width)) return;
+    pendingDragPan = true;
+    scheduleFrame();
+  }
+
+  function flushPan() {
+    if (!pendingDragPan) return;
+    pendingDragPan = false;
     commitDisplay();
   }
 
   function startFling(initialVelocityPx, width = getWidth()) {
+    flushPan();
     if (isReducedMotion()) return;
     if (!Number.isFinite(initialVelocityPx)) return;
     const maxV = Math.min(maxFlingVelocity, Math.max(width, 1) * 3);
@@ -193,7 +214,20 @@ export function createViewportMotionController(options = {}) {
   function stepMotion(now) {
     if (lastFrameAt === null) {
       lastFrameAt = now;
-      scheduleFrame();
+      const hadPendingPan = pendingDragPan;
+      if (hadPendingPan) {
+        pendingDragPan = false;
+        commitDisplay();
+        if (typeof onFrameTick === 'function') {
+          onFrameTick({ dt: 0, display, hasWork: false });
+        }
+      }
+      const needsAnim = Math.abs(targetCount - display.count) > 1e-4 || Math.abs(velocityX) >= minFlingVelocity;
+      if (needsAnim || !hadPendingPan) {
+        scheduleFrame();
+      } else {
+        lastFrameAt = null;
+      }
       return;
     }
 
@@ -209,6 +243,7 @@ export function createViewportMotionController(options = {}) {
 
     const width = Math.max(getWidth(), 1);
     let hasWork = false;
+    pendingDragPan = false;
 
     // 1. 推进缩放缓动 (Zoom convergence)
     const countDebt = targetCount - display.count;
@@ -265,7 +300,12 @@ export function createViewportMotionController(options = {}) {
       scheduleFrame();
     } else {
       lastFrameAt = null;
-      setPhase('idle');
+      if (phase !== 'drag' && phase !== 'axis-drag') {
+        setPhase('idle');
+        if (finiteRange(observedRange)) {
+          seedFromRange(observedRange);
+        }
+      }
     }
   }
 
@@ -292,6 +332,8 @@ export function createViewportMotionController(options = {}) {
     seedFromRange,
     queueZoom,
     panPx,
+    queuePanPx,
+    flushPan,
     startFling,
     cancelMotion,
     commitDisplay,
