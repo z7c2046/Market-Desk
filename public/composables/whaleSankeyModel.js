@@ -507,7 +507,7 @@ export function computeWhaleSankeyGraph({
   const total = sum(walletTotals);
 
   const maxNodes = Math.max(displayWallets.length, displayAssets.length);
-  const topY = 50;
+  const topY = 16;
   const bottomPad = 18;
   const gap = maxNodes >= 6 ? 12 : 20;
   const minSourceSlot = 52;

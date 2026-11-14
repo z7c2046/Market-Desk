@@ -2078,14 +2078,6 @@
                           <div class="cw-chart-wrap cw-sankey-skeleton-stage">
                             <svg class="cw-sankey-svg cw-sankey-skeleton-svg" xmlns="http://www.w3.org/2000/svg"
                               :view-box.camel="'0 0 1280 440'" role="group" aria-label="巨鲸桑基图加载中骨架屏">
-                              <!-- 列头引导标题 -->
-                              <text x="15" y="25" class="cw-sk-col-hdr">巨鲸钱包 · 本市场持仓</text>
-                              <text x="626" y="25" class="cw-sk-col-hdr" text-anchor="middle">钱包 → 持仓标的</text>
-                              <text x="1036" y="25" class="cw-sk-col-hdr">持仓标的</text>
-                              <text x="1190" y="25" class="cw-sk-col-hdr" text-anchor="end">按链上成交量</text>
-                              <text x="1266" y="25" class="cw-sk-col-hdr" text-anchor="end">标的总持仓</text>
-                              <line x1="14" y1="39" x2="1266" y2="39" class="cw-sk-hdr-line" />
-
                               <!-- 中心流带骨架层 (曲线流带群) -->
                               <g class="cw-sk-links">
                                 <path v-for="(d, idx) in sankeySkeletonRibbons" :key="idx" class="cw-sk-sankey-ribbon"
@@ -2442,14 +2434,6 @@
                                   <stop offset="100%" class="cw-sk-active-end" />
                                 </linearGradient>
                               </defs>
-
-                              <!-- 列头引导标题 -->
-                              <text x="15" y="25" class="cw-sk-col-hdr">巨鲸钱包 · 本市场持仓</text>
-                              <text x="626" y="25" class="cw-sk-col-hdr" text-anchor="middle">钱包 → 持仓标的</text>
-                              <text x="1036" y="25" class="cw-sk-col-hdr">持仓标的</text>
-                              <text x="1190" y="25" class="cw-sk-col-hdr" text-anchor="end">按链上成交量</text>
-                              <text x="1266" y="25" class="cw-sk-col-hdr" text-anchor="end">标的总持仓</text>
-                              <line x1="14" y1="39" x2="1266" y2="39" class="cw-sk-hdr-line" />
 
                               <!-- 流带层 + 实时调仓光带脉冲层 -->
                               <g class="cw-sk-links">
