@@ -15577,6 +15577,10 @@ th.num,
   }
 
   .workspace.is-chart-page .workspace-content {
+    padding-top: 0;
+  }
+
+  .workspace.is-chart-page .page-container {
     padding-top: 68px;
   }
 
