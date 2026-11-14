@@ -582,23 +582,10 @@ test('K-line color schemes: defaults to classic (图一), switches to neon (图�
   assert.ok(chartCfg.xAxis[0].splitLine.lineStyle.color.includes('255'), 'Dark mode grid is subtle light grey');
   assert.equal(chartCfg.series[6].data[0].itemStyle.color, 'rgba(16, 185, 129, 0.65)', 'Dark volume color is classic green with 0.65 alpha');
 
-  // 3. Switch to neon (图二: #7CE138 up, #FF4D82 down)
-  await ui.click('亮绿玫粉');
-  chartCfg = ui.configs.get('price-chart');
-  assert.equal(chartCfg.series[0].itemStyle.color, '#7CE138', 'Style 2 up color is neon lime #7CE138');
-  assert.equal(chartCfg.series[0].itemStyle.color0, '#FF4D82', 'Style 2 down color is rose pink #FF4D82');
-  assert.equal(chartCfg.series[6].data[0].itemStyle.color, 'rgba(124, 225, 56, 0.65)', 'Volume series matches neon lime #7CE138');
-  assert.equal(JSON.parse(ui.w.localStorage.getItem('market-desk-kline-scheme')), 'neon');
+  // Quick palette bar is removed from #chart header to keep sticky header compact; schemes live in Preferences Modal
+  assert.equal(ui.w.document.querySelector('.kline-palette-quick-selector'), null, 'Quick palette selector is removed from compact chart header');
 
-  // 4. Switch to cyberpunk (图三: #00D2FF up, #FF3377 down)
-  await ui.click('青蓝品红');
-  chartCfg = ui.configs.get('price-chart');
-  assert.equal(chartCfg.series[0].itemStyle.color, '#00D2FF', 'Style 3 up color is electric cyan #00D2FF');
-  assert.equal(chartCfg.series[0].itemStyle.color0, '#FF3377', 'Style 3 down color is electric pink #FF3377');
-  assert.equal(chartCfg.series[6].data[0].itemStyle.color, 'rgba(0, 210, 255, 0.65)', 'Volume series matches cyberpunk cyan #00D2FF');
-  assert.equal(JSON.parse(ui.w.localStorage.getItem('market-desk-kline-scheme')), 'cyberpunk');
-
-  // 5. Open Preferences Modal
+  // 3. Open Preferences Modal and verify neon / cyberpunk / classic / deepbluepurple scheme switching
   const settingsBtn = ui.w.document.querySelector('.settings-modal-btn');
   assert.ok(settingsBtn, 'Settings modal button exists in topbar');
   settingsBtn.click();
@@ -610,7 +597,29 @@ test('K-line color schemes: defaults to classic (图一), switches to neon (图�
   assert.match(modal.textContent, /荧光极光/);
   assert.match(modal.textContent, /赛博霓虹/);
 
-  // Switch back to classic in modal
+  // Switch to neon (图二: #7CE138 up, #FF4D82 down)
+  const neonCard = modal.querySelector('.preview-neon').closest('.kline-scheme-card');
+  assert.ok(neonCard, 'Neon card found in modal');
+  neonCard.click();
+  await tick();
+  chartCfg = ui.configs.get('price-chart');
+  assert.equal(chartCfg.series[0].itemStyle.color, '#7CE138', 'Style 2 up color is neon lime #7CE138');
+  assert.equal(chartCfg.series[0].itemStyle.color0, '#FF4D82', 'Style 2 down color is rose pink #FF4D82');
+  assert.equal(chartCfg.series[6].data[0].itemStyle.color, 'rgba(124, 225, 56, 0.65)', 'Volume series matches neon lime #7CE138');
+  assert.equal(JSON.parse(ui.w.localStorage.getItem('market-desk-kline-scheme')), 'neon');
+
+  // 4. Switch to cyberpunk (图三: #00D2FF up, #FF3377 down)
+  const cyberpunkCard = modal.querySelector('.preview-cyber').closest('.kline-scheme-card');
+  assert.ok(cyberpunkCard, 'Cyberpunk card found in modal');
+  cyberpunkCard.click();
+  await tick();
+  chartCfg = ui.configs.get('price-chart');
+  assert.equal(chartCfg.series[0].itemStyle.color, '#00D2FF', 'Style 3 up color is electric cyan #00D2FF');
+  assert.equal(chartCfg.series[0].itemStyle.color0, '#FF3377', 'Style 3 down color is electric pink #FF3377');
+  assert.equal(chartCfg.series[6].data[0].itemStyle.color, 'rgba(0, 210, 255, 0.65)', 'Volume series matches cyberpunk cyan #00D2FF');
+  assert.equal(JSON.parse(ui.w.localStorage.getItem('market-desk-kline-scheme')), 'cyberpunk');
+
+  // 5. Switch back to classic in modal
   const classicCard = modal.querySelector('.preview-classic').closest('.kline-scheme-card');
   assert.ok(classicCard, 'Classic card found in modal');
   classicCard.click();
@@ -3369,9 +3378,28 @@ test('#chart Whale Workspace: auto-applies 4h/1mo preset, bridges TradFi & Crypt
   const ui = await mount(t, async url => {
     const u = new URL(url, 'http://localhost');
     if (u.pathname === '/api/market/chart') {
-      const req = { symbol: u.searchParams.get('symbol'), range: u.searchParams.get('range'), interval: u.searchParams.get('interval') };
+      const req = {
+        symbol: u.searchParams.get('symbol'),
+        range: u.searchParams.get('range'),
+        interval: u.searchParams.get('interval'),
+        venue: u.searchParams.get('venue') || '',
+        coin: u.searchParams.get('coin') || ''
+      };
       chartRequests.push(req);
-      return { ok: true, json: async () => ({ symbol: req.symbol, range: req.range, interval: req.interval, currency: 'USD', source: 'Test', delay: '实时', bars: spyBars }) };
+      return {
+        ok: true,
+        json: async () => ({
+          symbol: req.symbol,
+          range: req.range,
+          interval: req.interval,
+          venue: req.venue === 'hyperliquid' ? 'hyperliquid' : 'yahoo',
+          perpCoin: req.coin || (req.venue === 'hyperliquid' ? 'xyz:SP500' : ''),
+          currency: 'USD',
+          source: 'Test',
+          delay: req.venue === 'hyperliquid' ? '实时 24/7' : '实时',
+          bars: spyBars
+        })
+      };
     }
     if (u.pathname === '/api/crypto/whales') {
       return { ok: true, json: async () => (u.searchParams.get('category') === 'stocks' ? stockWhalePayload : fixture(url)) };
@@ -3390,15 +3418,20 @@ test('#chart Whale Workspace: auto-applies 4h/1mo preset, bridges TradFi & Crypt
 
   assert.equal(ui.w.document.querySelector('.chart-whale-dock'), null, 'Whale dock is hidden by default on #chart');
 
-  // Toggle on "🐋 巨鲸点位" -> must automatically switch to 4h / 1mo preset and mount right Dock + markers
+  // Toggle on "🐋 巨鲸点位" -> smoothly switches from US equity to 24/7 Hyperliquid perp (4h / 1mo) without flashing .chart-skeleton
   const toggleBtn = ui.w.document.querySelector('.chart-whale-switch-btn');
   assert.ok(toggleBtn, 'Legend whale switch button exists in #chart');
   toggleBtn.click();
   await tick();
+  assert.equal(ui.w.document.querySelector('.chart-skeleton'), null, 'Same-symbol whale switch preserves canvas without flashing chart-skeleton');
   await new Promise(resolve => setTimeout(resolve, 40));
   await tick();
 
-  assert.ok(chartRequests.some(r => r.symbol === 'SPY' && r.range === '1mo' && r.interval === '4h'), 'Enabling #chart whale mode loads 1mo & 4h preset');
+  assert.ok(
+    chartRequests.some(r => r.symbol === 'SPY' && r.range === '1mo' && r.interval === '4h' && r.venue === 'hyperliquid' && r.coin === 'xyz:SP500'),
+    'Enabling #chart whale mode auto-switches US stock K-line to 24/7 Hyperliquid perp (4h/1mo, xyz:SP500)'
+  );
+  assert.ok(ui.w.document.querySelector('.chart-venue-switch-btn.is-onchain'), 'Venue badge reflects active 24/7 on-chain contract K-line');
   assert.ok(ui.w.document.querySelector('.chart-workspace-body.has-whale-dock'), 'Workspace splits cleanly with active Dock class');
 
   const dock = ui.w.document.querySelector('aside.chart-whale-dock');
@@ -3908,6 +3941,9 @@ test('#chart Docked K-line Header: global system topbar scrolls upward away whil
   assert.ok(workspace.classList.contains('is-chart-header-docked'), 'K-line header docks at top of viewport');
   assert.equal(topbar.getAttribute('aria-hidden'), 'true', 'Scrolled-away global topbar marked aria-hidden');
   assert.equal(chartHeading.querySelector('.chart-symbol-text').textContent.trim(), 'SPY');
+  assert.equal(chartHeading.querySelector('.kline-palette-quick-selector'), null, 'Color palette quick selector removed from compact sticky K-line header');
+  assert.equal(chartHeading.querySelector('.stock-price'), null, 'Quote price row moved out of sticky header so only compact strip docks');
+  assert.ok(ui.w.document.querySelector('.chart-panel > .chart-subprice-row'), 'Quote price row remains visible below compact header before scrolling');
 
   // 4. Switch K-line interval (4小时) & date range (3月) directly from docked K-line .panel-heading
   const docked4hBtn = [...chartHeading.querySelectorAll('.chart-interval-tools button')].find(b => b.textContent.trim() === '4小时');
