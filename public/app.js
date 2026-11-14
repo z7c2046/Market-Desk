@@ -581,6 +581,7 @@ createApp({
     let lastRenderedSymbol = '';
     let lastRenderedRange = '';
     let lastRenderedInterval = '';
+    let lastRenderedVenue = '';
     let lwMainWhalePriceLines = [];
     const lwMainWhaleMarkersMap = new Map();
     let lwMainWhaleDotPrimitive = null;
@@ -635,6 +636,7 @@ createApp({
       lastRenderedSymbol = '';
       lastRenderedRange = '';
       lastRenderedInterval = '';
+      lastRenderedVenue = '';
       lwWhaleAutoscaleAttached = false;
       cancelMainChartOverlaySync();
       chartDerivedCache.invalidate();
@@ -1504,8 +1506,8 @@ createApp({
       return `xyz:${cleanBase}`;
     }
 
-    const chartVenue = ref('auto'); // 'auto' | 'hyperliquid'
-    const chartPerpCoin = ref('');
+    const chartVenue = ref(chartWhaleOverlayEnabled.value ? 'hyperliquid' : 'auto'); // 'auto' | 'hyperliquid'
+    const chartPerpCoin = ref(chartWhaleOverlayEnabled.value ? resolveHyperliquidCoinForChart(symbol.value) : '');
     const chartRange = ref(chartWhaleOverlayEnabled.value ? '1mo' : '3mo');
     const chartInterval = ref(chartWhaleOverlayEnabled.value ? '4h' : '1d');
     function setChartInterval(intv) {
@@ -5567,8 +5569,21 @@ createApp({
       hoveredChartWhaleKey.value = '';
     }
 
+    function ensureChartWhaleOnchainVenue(pos = null) {
+      if (chart.value?.venueFallback) return false;
+      const coin = resolveHyperliquidCoinForChart(symbol.value, pos);
+      if (!coin) return false;
+      if (chartVenue.value !== 'hyperliquid' || chartPerpCoin.value !== coin) {
+        chartVenue.value = 'hyperliquid';
+        chartPerpCoin.value = coin;
+        return true;
+      }
+      return false;
+    }
+
     function onMainChartWhaleMarkerClick(m) {
       if (!m?.whale) return;
+      ensureChartWhaleOnchainVenue(m.whale);
       if (activeChartWhaleHud.value?.whale?.posKey === m.posKey) {
         resetChartWhaleIsolation();
         return;
@@ -5588,6 +5603,7 @@ createApp({
 
     function onMainChartWhaleCardClick(pos) {
       if (!pos) return;
+      ensureChartWhaleOnchainVenue(pos);
       if (selectedChartWhaleKey.value === pos.posKey) {
         selectedChartWhaleKey.value = '';
         activeChartWhaleHud.value = null;
@@ -5621,8 +5637,9 @@ createApp({
       if (next) {
         chartWhaleDockOpen.value = true;
         persist('market-desk-chart-whale-dock-open', true);
-        const needsPresetLoad = chartRange.value !== '1mo' || chartInterval.value !== '4h';
-        if (needsPresetLoad) {
+        const switchedVenue = ensureChartWhaleOnchainVenue();
+        const needsPresetLoad = switchedVenue || chartRange.value !== '1mo' || chartInterval.value !== '4h';
+        if (chartRange.value !== '1mo' || chartInterval.value !== '4h') {
           chartRange.value = '1mo';
           chartInterval.value = '4h';
         }
@@ -5640,6 +5657,9 @@ createApp({
     function toggleChartWhaleDock() {
       chartWhaleDockOpen.value = !chartWhaleDockOpen.value;
       persist('market-desk-chart-whale-dock-open', chartWhaleDockOpen.value);
+      if (chartWhaleDockOpen.value && chartWhaleOverlayEnabled.value) {
+        ensureChartWhaleOnchainVenue();
+      }
       nextTick(() => {
         if (lwPriceChart) {
           const el = lwPriceChart._hostEl || document.getElementById('price-chart');
@@ -7761,7 +7781,7 @@ createApp({
     });
 
     function toggleChartVenue() {
-      if (chartVenue.value === 'hyperliquid' || chart.value?.venue === 'hyperliquid') {
+      if (chart.value?.venue === 'hyperliquid' || (chartVenue.value === 'hyperliquid' && !chart.value?.venueFallback)) {
         chartVenue.value = 'auto';
         chartPerpCoin.value = '';
       } else {
@@ -9357,7 +9377,10 @@ createApp({
         pendingChartFocusWhaleKey.value = '';
       }
 
-      const nextVenue = (options.venue === 'hyperliquid' || options.source === 'crypto') ? 'hyperliquid' : 'auto';
+      const useWhaleOnchain = options.venue === 'hyperliquid'
+        || options.source === 'crypto'
+        || (options.venue !== 'auto' && chartWhaleOverlayEnabled.value);
+      const nextVenue = useWhaleOnchain ? 'hyperliquid' : 'auto';
       const nextPerpCoin = nextVenue === 'hyperliquid'
         ? (options.perpCoin || resolveHyperliquidCoinForChart(s, options.row))
         : '';
@@ -9377,7 +9400,11 @@ createApp({
       const seq = sequences[key] = (sequences[key] || 0) + 1;
       controllers[key]?.abort(); const controller = controllers[key] = new AbortController();
       const timer = setTimeout(() => controller.abort(), 85000);
-      states[key] = { loading: true, error: '' }; target.value = null;
+      const isSameChartSymbol = key === 'chart'
+        && target.value
+        && String(target.value.symbol || '').trim().toUpperCase() === String(params?.symbol || '').trim().toUpperCase();
+      states[key] = { loading: true, error: '' };
+      if (!isSameChartSymbol) target.value = null;
       try {
         const response = await fetch(endpoint + '?' + new URLSearchParams(params), { signal: controller.signal });
         calibrateClock(response?.headers?.get?.('date'));
@@ -10001,10 +10028,12 @@ createApp({
       const bars = d.bars || [];
       if (!bars.length) return;
 
-      const isNewSymbolOrRange = (d.symbol !== lastRenderedSymbol || d.range !== lastRenderedRange || d.interval !== lastRenderedInterval);
+      const nextVenue = d.venue || '';
+      const isNewSymbolOrRange = (d.symbol !== lastRenderedSymbol || d.range !== lastRenderedRange || d.interval !== lastRenderedInterval || nextVenue !== lastRenderedVenue);
       lastRenderedSymbol = d.symbol;
       lastRenderedRange = d.range;
       lastRenderedInterval = d.interval || '';
+      lastRenderedVenue = nextVenue;
 
       // 1. Production TradingView + OKX Engine via Lightweight Charts 5.2
       if (LW && typeof LW.createChart === 'function') {
