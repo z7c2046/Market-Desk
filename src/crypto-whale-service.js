@@ -761,7 +761,7 @@ export class CryptoWhaleService {
       whales.push({
         address: c.address,
         shortAddress,
-        name: c.label || `自选钱包 ${shortAddress}`,
+        name: c.label || '自选钱包',
         tag: '自选链上钱包',
         avatar: '⭐',
         isCustom: true,
@@ -849,23 +849,14 @@ export class CryptoWhaleService {
           parsed.push({ address: addr, acctVal, dayVlm, weekVlm, displayName });
         }
 
+        // 仅按账户净值选取高净值长线鲸鱼，排除高频日/周成交刷量钱包对持仓排名的频繁抖动
         const topByAcct = [...parsed]
           .filter(x => x.acctVal >= 500_000 && x.weekVlm >= 200_000)
           .sort((a, b) => b.acctVal - a.acctVal)
-          .slice(0, 50);
-
-        const topByDayVlm = [...parsed]
-          .filter(x => x.acctVal >= 500_000 && x.dayVlm >= 2_000_000)
-          .sort((a, b) => b.dayVlm - a.dayVlm)
-          .slice(0, 20);
-
-        const topByWeekVlm = [...parsed]
-          .filter(x => x.acctVal >= 500_000 && x.weekVlm >= 5_000_000)
-          .sort((a, b) => b.weekVlm - a.weekVlm)
-          .slice(0, 15);
+          .slice(0, 65);
 
         const candidateMap = new Map();
-        for (const item of [...topByAcct, ...topByDayVlm, ...topByWeekVlm]) {
+        for (const item of topByAcct) {
           if (!candidateMap.has(item.address)) {
             candidateMap.set(item.address, item);
           }
@@ -1013,7 +1004,7 @@ export class CryptoWhaleService {
 
     const name = customLabel
       || (isStocks ? (lbName || curated?.name) : (curated?.name || lbName))
-      || (isCustom ? `自选钱包 ${shortAddress}` : (isStocks ? `HL TradFi 巨鲸 ${shortAddress}` : `HL 巨鲸 ${shortAddress}`));
+      || (isCustom ? '自选钱包' : (isStocks ? 'HL TradFi 巨鲸' : 'HL 巨鲸'));
 
     const tag = isCustom
       ? (curated ? `自选 · ${curated.tag}` : (accountValue >= 10_000_000 ? '自选 · 千万级大户' : '自选链上钱包'))
@@ -1161,7 +1152,7 @@ export class CryptoWhaleService {
       fallbackWhales.push({
         address: c.address,
         shortAddress,
-        name: c.label || `自选钱包 ${shortAddress}`,
+        name: c.label || '自选钱包',
         tag: '自选链上钱包',
         avatar: '⭐',
         isCustom: true,

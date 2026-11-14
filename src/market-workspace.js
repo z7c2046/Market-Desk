@@ -155,8 +155,57 @@ export function createMarketWorkspace({ fetchImpl = fetch, now = () => new Date(
       note: '精选 18 只美股样本与核心宏观指标。面积按最新价 × 当日成交股数估算成交额；颜色为相对前收盘涨跌幅。'
     };
   }
-  async function fetchHyperliquidCandles(symbol, range, interval) {
-    const coin = symbol.replace(/-USD$/i, '').replace(/\/USD$/i, '').toUpperCase();
+  const HYPERLIQUID_TRADFI_COIN_MAP = {
+    SPY: 'xyz:SP500',
+    SP500: 'xyz:SP500',
+    QQQ: 'xyz:XYZ100',
+    XYZ100: 'xyz:XYZ100',
+    'GC=F': 'xyz:GOLD',
+    GOLD: 'xyz:GOLD',
+    'SI=F': 'xyz:SILVER',
+    SILVER: 'xyz:SILVER',
+    'CL=F': 'xyz:CL',
+    CL: 'xyz:CL',
+    'BZ=F': 'xyz:BRENTOIL',
+    BRENTOIL: 'xyz:BRENTOIL',
+    'NG=F': 'xyz:NATGAS',
+    NATGAS: 'xyz:NATGAS',
+    'HG=F': 'xyz:COPPER',
+    COPPER: 'xyz:COPPER',
+    'PL=F': 'xyz:PLATINUM',
+    PLATINUM: 'xyz:PLATINUM',
+    'PA=F': 'xyz:PALLADIUM',
+    PALLADIUM: 'xyz:PALLADIUM',
+    '^VIX': 'xyz:VIX',
+    VIX: 'xyz:VIX',
+    DXY: 'xyz:DXY',
+    'DX-Y.NYB': 'xyz:DXY'
+  };
+
+  function normalizeHyperliquidCoin(rawCoin) {
+    const cleaned = String(rawCoin || '').trim().replace(/-USD$/i, '').replace(/\/USD$/i, '');
+    if (!cleaned) return '';
+    const colonIdx = cleaned.indexOf(':');
+    if (colonIdx > 0) {
+      return `${cleaned.slice(0, colonIdx).toLowerCase()}:${cleaned.slice(colonIdx + 1).toUpperCase()}`;
+    }
+    return cleaned.toUpperCase();
+  }
+
+  function resolveHyperliquidCoin(symbol, explicitCoin = '') {
+    const explicit = normalizeHyperliquidCoin(explicitCoin);
+    if (explicit) return explicit;
+    if (/-USD$/i.test(symbol) || /\/USD$/i.test(symbol)) {
+      return normalizeHyperliquidCoin(symbol);
+    }
+    if (HYPERLIQUID_TRADFI_COIN_MAP[symbol]) {
+      return HYPERLIQUID_TRADFI_COIN_MAP[symbol];
+    }
+    return normalizeHyperliquidCoin(`xyz:${symbol}`);
+  }
+
+  async function fetchHyperliquidCandles(symbol, range, interval, explicitCoin = '') {
+    const coin = resolveHyperliquidCoin(symbol, explicitCoin);
     const rangeMsMap = {
       '1d': 2 * 86400 * 1000,
       '1mo': 30 * 86400 * 1000,
@@ -196,9 +245,12 @@ export function createMarketWorkspace({ fetchImpl = fetch, now = () => new Date(
         const prev = bars.length >= 2 ? bars[bars.length - 2] : null;
         const baseClose = prev?.close || last.open || last.close;
         const changePercent = baseClose ? Number(((last.close / baseClose - 1) * 100).toFixed(2)) : 0;
+        const isHip3 = coin.includes(':');
         return {
           symbol,
-          name: `${coin}/USD 永续`,
+          perpCoin: coin,
+          venue: 'hyperliquid',
+          name: isHip3 ? `${coin} 链上合约` : `${coin}/USD 永续`,
           currency: 'USD',
           price: last.close,
           previousClose: baseClose,
@@ -206,7 +258,7 @@ export function createMarketWorkspace({ fetchImpl = fetch, now = () => new Date(
           bars,
           range,
           interval,
-          source: 'Hyperliquid DEX',
+          source: isHip3 ? 'Hyperliquid HIP-3' : 'Hyperliquid DEX',
           delay: '实时 24/7',
           fetchedAt: now().toISOString()
         };
@@ -221,12 +273,20 @@ export function createMarketWorkspace({ fetchImpl = fetch, now = () => new Date(
     const range = params.range || '3mo';
     const validRanges = ['1d', '1mo', '3mo', '6mo', '1y', '2y'];
     const validIntervals = ['15m', '1h', '4h', '1d'];
+    const rawVenue = String(params.venue || '').trim().toLowerCase();
+    const validVenues = ['', 'auto', 'yahoo', 'equity', 'hyperliquid', 'onchain', 'hl'];
+    const explicitCoin = String(params.coin || params.perpCoin || '').trim();
 
     if (!validRanges.includes(range)) throw Object.assign(new Error('不支持该图表周期。'), { status: 400 });
 
     const interval = params.interval || (range === '1d' ? '15m' : '1d');
     if (!validIntervals.includes(interval)) throw Object.assign(new Error('不支持该K线周期。'), { status: 400 });
+    if (!validVenues.includes(rawVenue)) throw Object.assign(new Error('不支持该数据源。'), { status: 400 });
+    if (explicitCoin && !/^([a-z0-9_-]{1,12}:)?[A-Z0-9=-]{1,16}(\/USD)?$/i.test(explicitCoin)) {
+      throw Object.assign(new Error('链上合约代码格式无效。'), { status: 400 });
+    }
 
+    const forceHyperliquid = ['hyperliquid', 'onchain', 'hl'].includes(rawVenue);
     let upstreamInterval = interval;
     let upstreamRange = range;
 
@@ -238,6 +298,24 @@ export function createMarketWorkspace({ fetchImpl = fetch, now = () => new Date(
       }
     }
 
+    if (forceHyperliquid) {
+      try {
+        return await fetchHyperliquidCandles(symbol, range, interval, explicitCoin);
+      } catch (hlErr) {
+        try {
+          const fallbackData = await quote(symbol, upstreamRange, upstreamInterval);
+          let fallbackBars = fallbackData.bars || [];
+          if (interval === '4h') {
+            fallbackBars = aggregateBarsTo4H(fallbackBars);
+          }
+          if (fallbackBars.length > 0) {
+            return { ...fallbackData, bars: fallbackBars, range, interval, venue: 'yahoo', venueFallback: true };
+          }
+        } catch (_) {}
+        throw hlErr;
+      }
+    }
+
     try {
       const data = await quote(symbol, upstreamRange, upstreamInterval);
       let bars = data.bars || [];
@@ -245,17 +323,17 @@ export function createMarketWorkspace({ fetchImpl = fetch, now = () => new Date(
         bars = aggregateBarsTo4H(bars);
       }
       if (bars.length > 0 || !/-USD$/i.test(symbol)) {
-        return { ...data, bars, range, interval };
+        return { ...data, bars, range, interval, venue: 'yahoo' };
       }
     } catch (err) {
       if (!/-USD$/i.test(symbol)) throw err;
       try {
-        return await fetchHyperliquidCandles(symbol, range, interval);
+        return await fetchHyperliquidCandles(symbol, range, interval, explicitCoin);
       } catch (_) {
         throw err;
       }
     }
-    return await fetchHyperliquidCandles(symbol, range, interval);
+    return await fetchHyperliquidCandles(symbol, range, interval, explicitCoin);
   }
   async function news(params) {
     const symbol = params.symbol ? ticker(params.symbol) : '';
