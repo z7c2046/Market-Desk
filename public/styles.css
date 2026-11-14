@@ -2772,7 +2772,7 @@ main {
 
 .price-chart {
   flex: 1;
-  height: calc(100vh - 235px);
+  height: calc(100vh - 200px);
   min-height: 620px;
   width: 100%;
   margin: 0;
@@ -2782,6 +2782,7 @@ main {
   touch-action: none;
   user-select: none;
   cursor: crosshair;
+  transition: opacity 0.22s ease;
 }
 
 .price-chart:active {
@@ -2796,7 +2797,17 @@ main {
 }
 
 .chart-panel > .panel-heading {
-  padding: 12px 14px;
+  padding: 7px 14px;
+  min-height: 44px;
+  gap: 10px;
+}
+
+.chart-panel > .panel-heading .tiny-btn {
+  padding: 4px 9px;
+}
+
+.chart-subprice-row {
+  padding: 4px 14px 4px;
 }
 
 /* Crypto-style K-Line Chart Legend Bar matching ECharts legend */
@@ -12581,8 +12592,8 @@ th.num,
 }
 
 .chart-actions-row .chart-watch-btn {
-  height: 32px;
-  padding: 0 12px;
+  height: 28px;
+  padding: 0 10px;
   font-size: 12px;
   font-weight: 500;
   border-radius: 6px;
@@ -12594,8 +12605,8 @@ th.num,
 }
 
 .chart-actions-row .chart-reset-btn {
-  height: 32px;
-  padding: 0 10px;
+  height: 28px;
+  padding: 0 9px;
   font-size: 12px;
   font-weight: 500;
   border-radius: 6px;
@@ -15596,6 +15607,8 @@ th.num,
     position: sticky;
     top: 0;
     z-index: 40;
+    padding: 6px 14px;
+    min-height: 42px;
     background: var(--surface-card, var(--surface));
     border-bottom: 1px solid var(--border-subtle);
     transition: box-shadow 0.16s ease;
@@ -18715,6 +18728,39 @@ body.is-loading .top-progress,
   min-height: 440px;
   border-radius: 8px;
   overflow: hidden;
+}
+
+.chart-viewport.is-chart-transitioning .price-chart {
+  opacity: 0.76;
+}
+
+.chart-transition-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  z-index: 15;
+  overflow: hidden;
+  pointer-events: none;
+  background: rgba(16, 185, 129, 0.14);
+}
+
+.chart-transition-bar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -35%;
+  width: 35%;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, #10b981, #38bdf8, transparent);
+  animation: chartTransitionSweep 1.05s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes chartTransitionSweep {
+  0% { left: -35%; }
+  100% { left: 100%; }
 }
 
 .chart-skeleton {
@@ -23325,6 +23371,27 @@ html.dark .cw-custom-item {
 
 .chart-whale-hud-popover {
   z-index: 25;
+  animation: cwSoftFadeIn 0.18s ease;
+}
+
+.chart-whale-markers-layer {
+  animation: cwSoftFadeIn 0.2s ease;
+}
+
+@keyframes cwSoftFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes cwDockEnter {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 /* 选中巨鲸开仓时间垂直虚线标尺 */
@@ -23398,7 +23465,7 @@ html.dark .cw-custom-item {
 .chart-whale-dock {
   width: 340px;
   flex-shrink: 0;
-  height: calc(100vh - 235px);
+  height: calc(100vh - 200px);
   min-height: 620px;
   display: flex;
   flex-direction: column;
@@ -23407,6 +23474,7 @@ html.dark .cw-custom-item {
   border-radius: var(--radius-md, 8px);
   overflow: hidden;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.18);
+  animation: cwDockEnter 0.22s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 :root:not(.dark) .chart-whale-dock {
