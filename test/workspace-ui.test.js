@@ -3945,6 +3945,7 @@ test('#chart Docked K-line Header: global system topbar scrolls upward away whil
 
   // 5. Verbose footnotes & dense sub-labels removed from chart/crypto/topbar and consolidated into #sources (说明)
   assert.equal(ui.w.document.querySelector('.chart-panel .panel-note'), null, 'Redundant K-line footnote removed from #chart');
+  assert.equal(ui.w.document.querySelector('.cw-dock-avg-row'), null, 'Redundant avg/spot small-text row removed from whale dock');
   assert.equal(ui.w.document.querySelector('.brand-desc'), null, 'Topbar/sidebar brand subtitle clutter removed');
   await ui.click('加密货币');
   await tick();
