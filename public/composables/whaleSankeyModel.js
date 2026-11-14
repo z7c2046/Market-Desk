@@ -94,6 +94,12 @@ export function getAssetLabel(symbol) {
   return ASSET_ZH_LABELS[key] || '';
 }
 
+function stripHexAddressSuffix(name) {
+  return String(name || '')
+    .replace(/\s*0x[a-f0-9]{4,}\.{3}[a-f0-9]{3,}\s*$/i, '')
+    .trim() || 'HL 巨鲸';
+}
+
 export function formatWhaleCompactUsd(val) {
   if (val == null || Number.isNaN(Number(val))) return '$0';
   const num = Math.abs(Number(val));
@@ -359,48 +365,8 @@ export function computeWhaleSankeyGraph({
     };
   }
 
-  // Pick top N wallets; guarantee selectedWalletKey is included if active
-  let displayWallets = candidates.slice(0, maxWallets);
-  if (selectedWalletKey && !displayWallets.some(w => w.walletKey === selectedWalletKey)) {
-    const picked = candidates.find(w => w.walletKey === selectedWalletKey);
-    if (picked) {
-      if (displayWallets.length >= maxWallets) {
-        displayWallets = [...displayWallets.slice(0, maxWallets - 1), picked];
-      } else {
-        displayWallets = [...displayWallets, picked];
-      }
-    }
-  }
-
-  // Guarantee active pulse wallets are included so live trade animation is visible
-  if (pulseKeys) {
-    const pulseWalletKeys = new Set();
-    const pKeys = (typeof pulseKeys.keys === 'function')
-      ? pulseKeys.keys()
-      : (typeof pulseKeys.values === 'function' ? pulseKeys.values() : []);
-    for (const k of pKeys) {
-      const wKey = String(k).split('::')[0];
-      if (wKey) pulseWalletKeys.add(wKey);
-    }
-    for (const pKey of pulseWalletKeys) {
-      if (!displayWallets.some(w => w.walletKey === pKey)) {
-        const picked = candidates.find(w => w.walletKey === pKey);
-        if (picked) {
-          if (displayWallets.length >= maxWallets) {
-            let replaceIdx = displayWallets.length - 1;
-            if (displayWallets[replaceIdx].walletKey === selectedWalletKey && replaceIdx > 0) {
-              replaceIdx--;
-            }
-            displayWallets[replaceIdx] = picked;
-          } else {
-            displayWallets.push(picked);
-          }
-        }
-      }
-    }
-  }
-
-  // Aggregate asset totals across all eligible candidate wallets
+  // Aggregate asset totals across all eligible candidate wallets first so wallet filtering/ranking
+  // stays consistent with the scoped Top N asset pool (prevents $0 ghost wallets in Sankey).
   const assetAggregate = new Map();
   for (const w of candidates) {
     for (const pair of w.coinMap.values()) {
@@ -448,6 +414,47 @@ export function computeWhaleSankeyGraph({
   const eligibleAssets = (topAssetsLimit > 0 && !q && sortedAssets.length > topAssetsLimit)
     ? sortedAssets.slice(0, topAssetsLimit)
     : sortedAssets;
+  const eligibleSymbolSet = new Set(eligibleAssets.map(a => a.symbol));
+
+  // Rank wallets by their position value inside the eligible asset pool and drop zero-contribution wallets
+  // (unless explicitly selected) so Sankey never displays empty "$0" wallet slots.
+  const scopedCandidates = candidates
+    .map(w => {
+      let scopedTotal = 0;
+      for (const sym of eligibleSymbolSet) {
+        const pair = w.coinMap.get(sym);
+        if (pair) scopedTotal += measurePair(pair, activeMode);
+      }
+      return { ...w, scopedTotal };
+    })
+    .filter(w => w.scopedTotal > 0 || (selectedWalletKey && w.walletKey === selectedWalletKey))
+    .sort((a, b) => (b.scopedTotal - a.scopedTotal) || (b.modeTotal - a.modeTotal));
+
+  if (!scopedCandidates.length) {
+    return {
+      isEmpty: true,
+      mode: activeMode,
+      svgWidth,
+      svgHeight: 340,
+      walletNodes: [],
+      assetNodes: [],
+      links: [],
+      layout: { walletTotals: [], assetTotals: [], total: 0, scale: 0, source: [], target: [], links: [] }
+    };
+  }
+
+  // Pick top N active wallets in scoped assets; guarantee selectedWalletKey is included if user explicitly selected it
+  let displayWallets = scopedCandidates.slice(0, maxWallets);
+  if (selectedWalletKey && !displayWallets.some(w => w.walletKey === selectedWalletKey)) {
+    const picked = scopedCandidates.find(w => w.walletKey === selectedWalletKey);
+    if (picked) {
+      if (displayWallets.length >= maxWallets) {
+        displayWallets = [...displayWallets.slice(0, maxWallets - 1), picked];
+      } else {
+        displayWallets = [...displayWallets, picked];
+      }
+    }
+  }
 
   let displayAssets = eligibleAssets;
   let otherSymbols = null;
@@ -638,9 +645,9 @@ export function computeWhaleSankeyGraph({
       walletKey: w.walletKey,
       address: w.address,
       shortAddress: w.shortAddress,
-      name: w.name,
-      displayName: truncateVisualText(w.name, 28),
-      tagText: truncateVisualText(`${w.tag || '巨鲸'} · ${w.shortAddress}`, 36),
+      name: stripHexAddressSuffix(w.name),
+      displayName: truncateVisualText(stripHexAddressSuffix(w.name), 28),
+      tagText: truncateVisualText(w.tag || '巨鲸', 28),
       rankBadge: String(i + 1).padStart(2, '0'),
       avatar: w.avatar || '🐋',
       totalVal: totalW,
@@ -832,7 +839,7 @@ export function buildAggregatedPositions(whales = [], { mode = 'all', searchQuer
  * When positions carry contract `size` (or `szi`), deltas are computed strictly from quantity
  * changes so mark-price fluctuations alone never trigger false rebalance signals.
  */
-export function detectPositionDeltas(prevWhales = [], nextWhales = [], { minDeltaUsd = 10000, now = Date.now() } = {}) {
+export function detectPositionDeltas(prevWhales = [], nextWhales = [], { minDeltaUsd = 100000, now = Date.now() } = {}) {
   if (!Array.isArray(prevWhales) || !prevWhales.length || !Array.isArray(nextWhales) || !nextWhales.length) {
     return [];
   }
