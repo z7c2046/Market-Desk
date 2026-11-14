@@ -6397,7 +6397,6 @@ createApp({
           score: fg.score || 30,
           tag: (fg.rating || '恐慌') + ' (' + (fg.ratingEn || 'Fear') + ')',
           sub: '前收: ' + (fg.previousClose || 21) + ' · 1周: ' + (fg.previous1Week || 21) + ' · 1月: ' + (fg.previous1Month || 37),
-          actionText: '原版仪表盘 ↗',
           type: 'fearGreed'
         },
         {
@@ -6407,22 +6406,19 @@ createApp({
           price: '$' + num(gold.price),
           change: gold.changePercent,
           chgFormatted: pct(gold.changePercent),
-          tag: '避险锚',
           sub: '折合 ¥865.82/克 (汇率 6.67)',
-          footTag: 'COMEX 24h',
+          footTag: 'COMEX',
           type: 'gold'
         },
         {
           id: 'us10y',
           name: '美债收益率',
-          ticker: '10Y 基准',
+          ticker: '10Y',
           price: (typeof us10y.price === 'number' ? us10y.price.toFixed(3) + '%' : formatMacroPrice(us10y)) + ' US10Y',
           change: us10y.changePercent,
           chgFormatted: pct(us10y.changePercent),
-          tag: '10Y 基准',
-          actionTop: '曲线全景 ↗',
-          sub: '仅显 10Y 基准',
-          actionBottom: '点击展开 10/20/30Y ↗',
+          tag: '10Y',
+          sub: '10Y',
           type: 'treasury'
         },
         {
@@ -6432,7 +6428,7 @@ createApp({
           price: num(dxy.price),
           change: dxy.changePercent,
           chgFormatted: pct(dxy.changePercent),
-          sub: 'ICE 美元指数 · 24h 汇率锚',
+          sub: 'ICE · DXY',
           type: 'sparkline'
         },
         {
@@ -6442,7 +6438,7 @@ createApp({
           price: '$' + num(brent.price),
           change: brent.changePercent,
           chgFormatted: pct(brent.changePercent),
-          sub: 'ICE 伦敦原油连续 · 能源基准',
+          sub: 'ICE · Brent',
           type: 'sparkline'
         },
         {
@@ -6452,9 +6448,8 @@ createApp({
           price: '$' + num(btc.price),
           change: btc.changePercent,
           chgFormatted: pct(btc.changePercent),
-          tag: '24/7 加密 ↗',
+          tag: '24/7 ↗',
           sub: '市值: $' + (btc.marketCap || '1.35T'),
-          actionBottom: '前6大主流币 ➔',
           type: 'crypto'
         }
       ];
@@ -7720,22 +7715,22 @@ createApp({
         };
       }
       if (page.value === 'watchlist') {
-        return { isChart: false, title: '自选看板', subtitle: `${watchlist.value?.length || 0} 支标的` };
+        return { isChart: false, title: '自选看板', subtitle: '' };
       }
       if (page.value === 'overview') {
-        return { isChart: false, title: '美股全景', subtitle: '核心股指 · 热力图' };
+        return { isChart: false, title: '美股全景', subtitle: '' };
       }
       if (page.value === 'crypto') {
-        return { isChart: false, title: '主流加密', subtitle: '24/7 现货行情' };
+        return { isChart: false, title: '主流加密', subtitle: '' };
       }
       if (page.value === 'news') {
-        return { isChart: false, title: 'AI 财经智讯', subtitle: '多源情报 · 深度检索' };
+        return { isChart: false, title: 'AI 财经智讯', subtitle: '' };
       }
       if (page.value === 'options') {
-        return { isChart: false, title: `${optionSymbol.value} 期权墙`, subtitle: '持仓与 Gamma 分布' };
+        return { isChart: false, title: `${optionSymbol.value} 期权墙`, subtitle: '' };
       }
       if (page.value === 'flows') {
-        return { isChart: false, title: '资金流向', subtitle: '板块轮动与 ETF' };
+        return { isChart: false, title: '资金流向', subtitle: '' };
       }
       return { isChart: false, title: currentNav.value?.label || 'Market Desk', subtitle: '' };
     });
