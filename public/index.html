@@ -1375,39 +1375,20 @@
                     <template v-if="page==='chart'">
                       <section class="panel chart-panel">
                         <div class="panel-heading">
-                          <div>
-                            <h2 class="chart-header-title">
-                              <span class="chart-symbol-text">{{symbol}}</span>
-                              <span v-if="chartDelayStatus === 'delayed'" class="tv-delay-badge"
-                                title="行情延迟 15 分钟 (Delayed) · 来自公开市场备用源">D</span>
-                              <span class="muted chart-company-name">{{chart?.name}}</span>
-                              <button v-if="isChartHyperliquidCapable" type="button"
-                                class="chart-venue-switch-btn font-mono"
-                                :class="{ 'is-onchain': chart?.venue === 'hyperliquid' || chartVenue === 'hyperliquid' }"
-                                @click="toggleChartVenue"
-                                :title="(chart?.venue === 'hyperliquid' || chartVenue === 'hyperliquid') ? '当前为 Hyperliquid 24/7 连续链上合约 K 线（无美股跳空），点击切回传统正股' : '点击切换至 Hyperliquid 24/7 链上合约 K 线（无休市跳空缺口）'">{{
-                                (chart?.venue === 'hyperliquid' || chartVenue === 'hyperliquid') ? ('⛓ 24/7 链上合约' +
-                                ((chart?.perpCoin || chartPerpCoin) ? ' · ' + (chart?.perpCoin || chartPerpCoin) : ''))
-                                : '切换链上 24/7 合约' }}</button>
-                            </h2>
-                            <div v-if="chart" class="stock-price">
-                              <span class="stock-reg-quote">
-                                <span class="stock-price-val">{{num(chart.price)}}</span>
-                                <small>{{chart.currency}}</small>
-                                <span :class="tone(chart.changePercent)">{{pct(chart.changePercent)}}</span>
-                              </span>
-                              <span v-if="!isMarketOpen && showExtColumn && activeChartExtQuote?.price != null"
-                                class="stock-ext-inline-pill" :class="activeChartExtQuote.session">
-                                <span class="ext-tag-name">
-                                  {{ activeChartExtQuote.session === 'pre' ? '🌅 盘前' : activeChartExtQuote.session ===
-                                  'post' ? '🌇 盘后' : '🌙 隔夜' }}
-                                </span>
-                                <span class="ext-price-val">{{ num(activeChartExtQuote.price) }}</span>
-                                <span class="ext-pct-val" :class="tone(activeChartExtQuote.changePercent)">{{
-                                  pct(activeChartExtQuote.changePercent) }}</span>
-                              </span>
-                            </div>
-                          </div>
+                          <h2 class="chart-header-title">
+                            <span class="chart-symbol-text">{{symbol}}</span>
+                            <span v-if="chartDelayStatus === 'delayed'" class="tv-delay-badge"
+                              title="行情延迟 15 分钟 (Delayed) · 来自公开市场备用源">D</span>
+                            <span class="muted chart-company-name">{{chart?.name}}</span>
+                            <button v-if="isChartHyperliquidCapable" type="button"
+                              class="chart-venue-switch-btn font-mono"
+                              :class="{ 'is-onchain': chart?.venue === 'hyperliquid' || (chartVenue === 'hyperliquid' && !chart?.venueFallback) }"
+                              @click="toggleChartVenue"
+                              :title="(chart?.venue === 'hyperliquid' || (chartVenue === 'hyperliquid' && !chart?.venueFallback)) ? '当前为 Hyperliquid 24/7 连续链上合约 K 线（无美股跳空），点击切回传统正股' : '点击切换至 Hyperliquid 24/7 链上合约 K 线（无休市跳空缺口）'">{{
+                              (chart?.venue === 'hyperliquid' || (chartVenue === 'hyperliquid' && !chart?.venueFallback)) ? ('⛓ 24/7 链上合约' +
+                              ((chart?.perpCoin || chartPerpCoin) ? ' · ' + (chart?.perpCoin || chartPerpCoin) : ''))
+                              : '切换链上 24/7 合约' }}</button>
+                          </h2>
                           <div class="controls chart-controls-group">
                             <div class="chart-actions-row">
                               <button class="chart-watch-btn" @click="addWatch(symbol)">{{ watchlist.includes(symbol) ? '✓ 已在自选' : '+ 加入自选' }}</button>
@@ -1439,18 +1420,25 @@
                                 </button>
                               </div>
                             </div>
-                            <div class="kline-palette-quick-selector desktop-only" title="K 线走势配色方案">
-                              <button v-for="item in klineSchemeOptions" :key="item.id" class="kline-palette-chip"
-                                :class="{ active: klineScheme === item.id }" :title="item.title"
-                                @click="setKlineScheme(item.id)">
-                                <span class="chip-dot" :style="{ backgroundColor: item.up }"></span>
-                                <span class="chip-dot" :style="{ backgroundColor: item.down }"></span>
-                                <span class="chip-name">{{ item.shortName }}</span>
-                              </button>
-                              <button class="btn-settings-icon" @click="openPreferencesModal"
-                                title="K 线图表与偏好设置">⚙️</button>
-                            </div>
                           </div>
+                        </div>
+
+                        <div v-if="chart" class="stock-price chart-subprice-row">
+                          <span class="stock-reg-quote">
+                            <span class="stock-price-val">{{num(chart.price)}}</span>
+                            <small>{{chart.currency}}</small>
+                            <span :class="tone(chart.changePercent)">{{pct(chart.changePercent)}}</span>
+                          </span>
+                          <span v-if="!isMarketOpen && showExtColumn && activeChartExtQuote?.price != null"
+                            class="stock-ext-inline-pill" :class="activeChartExtQuote.session">
+                            <span class="ext-tag-name">
+                              {{ activeChartExtQuote.session === 'pre' ? '🌅 盘前' : activeChartExtQuote.session ===
+                              'post' ? '🌇 盘后' : '🌙 隔夜' }}
+                            </span>
+                            <span class="ext-price-val">{{ num(activeChartExtQuote.price) }}</span>
+                            <span class="ext-pct-val" :class="tone(activeChartExtQuote.changePercent)">{{
+                              pct(activeChartExtQuote.changePercent) }}</span>
+                          </span>
                         </div>
 
                         <!-- Mobile Timeframe Range & Interval Pill Tabs -->
@@ -1540,7 +1528,7 @@
                             <button type="button" class="chart-legend-item chart-whale-switch-btn"
                               :class="{ 'is-active': chartWhaleOverlayEnabled, 'is-off': !chartWhaleOverlayEnabled }"
                               @click="toggleChartWhaleOverlay()"
-                              :title="'巨鲸时空持仓标注 · ' + (chartWhaleOverlayEnabled ? '已开启，联动 4小时/1个月 与右侧持仓洞察面板' : '点击开启（自动切换 4小时 · 1个月 并加载加密/TradFi大户持仓）')"
+                              :title="'巨鲸时空持仓标注 · ' + (chartWhaleOverlayEnabled ? '已开启，联动 4小时/1个月 · 24/7 链上合约 K 线与右侧持仓洞察面板' : '点击开启（自动平滑切换 24/7 链上合约 · 4小时 · 1个月 并加载大户持仓）')"
                               aria-label="切换全屏巨鲸持仓点位" :aria-pressed="chartWhaleOverlayEnabled">
                               <span class="chart-whale-btn-icon" aria-hidden="true">🐋</span>
                               <span class="ma-switch-label">巨鲸点位</span>
@@ -1553,8 +1541,8 @@
                             @click="loadChart">重试</button></div>
                         <div class="chart-workspace-body"
                           :class="{ 'has-whale-dock': chartWhaleOverlayEnabled && chartWhaleDockOpen, 'whale-mode-on': chartWhaleOverlayEnabled }">
-                          <div class="chart-viewport" style="position: relative; min-height: 480px;">
-                            <div v-if="states.chart.loading || !chart" class="chart-skeleton" style="opacity: 1;"
+                          <div class="chart-viewport" :class="{ 'is-chart-transitioning': states.chart.loading && Boolean(chart) }" style="position: relative; min-height: 480px;">
+                            <div v-if="states.chart.loading && !chart" class="chart-skeleton" style="opacity: 1;"
                               aria-hidden="true">
                               <div class="skeleton-y">
                                 <span class="sk sk-small" style="width:24px"></span>
@@ -1593,11 +1581,12 @@
                                 <span class="sk sk-small" style="width:24px"></span>
                               </div>
                             </div>
-                            <div v-show="chart&&!states.chart.loading" id="price-chart" class="price-chart" role="img"
+                            <div v-if="states.chart.loading && chart" class="chart-transition-bar" aria-hidden="true"></div>
+                            <div v-show="chart" id="price-chart" class="price-chart" role="img"
                               :aria-label="symbol+'价格与成交量图'"></div>
 
                             <!-- TradingView 风格左侧垂直绘图工具栏 -->
-                            <div v-if="chart && !states.chart.loading" class="tv-left-toolbar" role="toolbar"
+                            <div v-if="chart" class="tv-left-toolbar" role="toolbar"
                               aria-label="TradingView 图表工具">
                               <button type="button" class="tv-tool-btn"
                                 :class="{ active: isRulerActive || rulerMeasurement }" @click="toggleRulerTool"
@@ -1613,7 +1602,7 @@
 
                             <!-- TradingView 风格测距尺互动图层 (SVG 矩形 + 对角/方向连线 + 统计卡片) -->
                             <div
-                              v-if="chart && !states.chart.loading && (isRulerActive || isRulerDrawing || rulerMeasurement)"
+                              v-if="chart && (isRulerActive || isRulerDrawing || rulerMeasurement)"
                               class="chart-ruler-layer"
                               :class="{ 'is-measuring': isRulerDrawing, 'is-active': isRulerActive, 'has-measurement': !!rulerMeasurement }"
                               @pointerdown="onRulerPointerDown" @pointermove="onRulerPointerMove"
