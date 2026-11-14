@@ -10,7 +10,7 @@
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/styles.css?v=2.12.0">
+<link rel="stylesheet" href="/styles.css?v=2.14.1">
 <link rel="stylesheet" href="/mobile-layout.css?v=2.9.0">
 <link rel="stylesheet" href="/color-palettes.css?v=2.9.0">
 <style>
@@ -25,7 +25,7 @@
   display: none !important;
 }
 </style>
-<script defer src="/vendor/vue.js"></script><script defer src="/vendor/echarts.js"></script><script defer src="/vendor/lightweight-charts.standalone.js"></script><script type="module" src="/app.js?v=2.12.0"></script>
+<script defer src="/vendor/vue.js"></script><script defer src="/vendor/echarts.js"></script><script defer src="/vendor/lightweight-charts.standalone.js"></script><script type="module" src="/app.js?v=2.14.1"></script>
 </head><body><div id="app" v-cloak>
 <aside class="nav-rail desktop-only" aria-label="工作台主导航">
   <div class="rail-top">
@@ -1610,6 +1610,29 @@
               <span class="cw-marker-pulse"></span>
               <span class="cw-pin-core"></span>
             </button>
+            <button
+              v-if="m.showCallout !== false"
+              type="button"
+              class="cw-pin-callout font-mono"
+              :class="[
+                m.isLong ? 'is-long' : 'is-short',
+                {
+                  'is-tag-left': m.isTagLeft,
+                  'is-active': (activeChartWhaleHud && activeChartWhaleHud.whale && activeChartWhaleHud.whale.posKey === m.posKey) || selectedChartWhaleKey === m.posKey,
+                  'is-highlighted': hoveredChartWhaleKey === m.posKey
+                }
+              ]"
+              :style="{ top: (m.calloutY ?? m.pinY ?? m.y) + 'px' }"
+              :title="m.tooltip"
+              @mouseenter="onMainChartWhaleMarkerHover(m)"
+              @mouseleave="onMainChartWhaleMarkerLeave"
+              @click.stop="onMainChartWhaleMarkerClick(m)"
+            >
+              <span class="cw-callout-dir">{{ m.isLong ? '多' : '空' }}</span>
+              <strong class="cw-callout-px">${{ formatCryptoPrice(m.price) }}</strong>
+              <span class="cw-callout-val">${{ formatWhaleUsd(m.whale.positionValue) }}</span>
+              <span v-if="m.holdShort" class="cw-callout-hold">{{ m.holdShort }}</span>
+            </button>
           </div>
         </div>
 
@@ -1638,6 +1661,7 @@
             <div class="cw-hud-cell">
               <span class="cw-hud-lbl">开仓均价</span>
               <strong class="cw-hud-val">${{ formatCryptoPrice(activeChartWhaleHud.whale.entryPx) }}</strong>
+              <span v-if="activeChartWhaleHud.whale.isPriceScaled" class="cw-hud-scaled-note">原 {{ activeChartWhaleHud.whale.origCoin }} ${{ formatCryptoPrice(activeChartWhaleHud.whale.origEntryPx) }}</span>
             </div>
             <div class="cw-hud-cell">
               <span class="cw-hud-lbl">当前现价</span>
@@ -1666,7 +1690,7 @@
                 {{ ((activeChartWhaleHud.whale.unrealizedPnl || 0) >= 0 ? '+' : '-') + '$' + formatWhaleUsd(Math.abs(activeChartWhaleHud.whale.unrealizedPnl || 0)) }}
               </strong>
             </span>
-            <button type="button" class="cw-hud-close-btn" @click.stop="activeChartWhaleHud = null" title="关闭弹窗">✕</button>
+            <button type="button" class="cw-hud-close-btn" @click.stop="resetChartWhaleIsolation()" title="关闭弹窗">✕</button>
           </div>
         </div>
 
@@ -1769,43 +1793,48 @@
                     <span class="cw-card-sub font-mono">{{ p.tag }} · {{ p.shortAddress }}</span>
                   </div>
                 </div>
-                <span class="cw-card-dir font-mono" :class="p.side === 'LONG' ? 'is-long' : 'is-short'">
-                  {{ p.sideLabel }} {{ p.leverage }}
-                </span>
+                <div class="cw-card-badges">
+                  <span v-if="selectedChartWhaleKey === p.posKey" class="cw-card-selected-tag font-mono">已选中</span>
+                  <span class="cw-card-dir font-mono" :class="p.side === 'LONG' ? 'is-long' : 'is-short'">
+                    {{ p.sideLabel }} {{ p.leverage }}
+                  </span>
+                </div>
               </div>
 
-              <!-- 清晰主视区：精确开仓点位 & 开仓时间 -->
+              <!-- 清晰主视区：精确开仓点位 & 波段持仓周期 -->
               <div class="cw-card-anchor-row font-mono">
                 <div class="cw-card-metric-main">
                   <span class="cw-card-lbl">开仓均价</span>
-                  <strong class="cw-card-px">${{ formatCryptoPrice(p.entryPx) }}</strong>
-                  <span
-                    v-if="p.favDeltaPct !== null"
-                    class="cw-card-delta"
-                    :class="p.favDeltaPct >= 0 ? 'text-pos' : 'text-neg'"
-                  >{{ p.favDeltaPct >= 0 ? '+' : '' }}{{ p.favDeltaPct.toFixed(2) }}%</span>
+                  <div class="cw-card-px-line">
+                    <strong class="cw-card-px">${{ formatCryptoPrice(p.entryPx) }}</strong>
+                    <span
+                      v-if="p.favDeltaPct !== null"
+                      class="cw-card-delta"
+                      :class="p.favDeltaPct >= 0 ? 'text-pos' : 'text-neg'"
+                    >{{ p.favDeltaPct >= 0 ? '+' : '' }}{{ p.favDeltaPct.toFixed(2) }}%</span>
+                  </div>
+                  <span v-if="p.isPriceScaled" class="cw-card-scaled-note">原 {{ p.origCoin }} ${{ formatCryptoPrice(p.origEntryPx) }}</span>
                 </div>
                 <div class="cw-card-metric-main is-right">
-                  <span class="cw-card-lbl">开仓时间 · {{ formatWhaleDuration(p.entryTime) }}</span>
+                  <span class="cw-card-lbl">波段持仓 · {{ formatWhaleDuration(p.entryTime) }}</span>
                   <strong class="cw-card-time" :title="formatWhaleFullTime(p.entryTime)">{{ formatWhaleTime(p.entryTime) }}</strong>
                 </div>
               </div>
 
-              <!-- 次要量化指标：名义规模 / 盈亏 / 强平安全垫 -->
+              <!-- 次要量化指标：名义规模 / 盈亏 / 强平点位（简洁无截断） -->
               <div class="cw-card-stats-row font-mono">
                 <div class="cw-card-stat">
                   <span class="cw-card-lbl">持仓规模</span>
                   <strong>${{ formatWhaleUsd(p.positionValue) }}</strong>
                 </div>
                 <div class="cw-card-stat">
-                  <span class="cw-card-lbl">未实现盈亏</span>
+                  <span class="cw-card-lbl">浮动盈亏</span>
                   <strong :class="p.unrealizedPnl >= 0 ? 'text-pos' : 'text-neg'">
                     {{ (p.unrealizedPnl >= 0 ? '+' : '-') + '$' + formatWhaleUsd(Math.abs(p.unrealizedPnl || 0)) }}
-                    <small v-if="p.returnOnEquity">({{ (p.returnOnEquity >= 0 ? '+' : '') + (p.returnOnEquity * 100).toFixed(1) }}%)</small>
                   </strong>
                 </div>
                 <div class="cw-card-stat is-right">
-                  <span class="cw-card-lbl">强平价{{ p.liqBufferPct !== null ? (' · 距' + p.liqBufferPct.toFixed(1) + '%') : '' }}</span>
+                  <span class="cw-card-lbl">预估强平</span>
                   <strong class="text-warning">{{ p.liquidationPx ? ('$' + formatCryptoPrice(p.liquidationPx)) : '--' }}</strong>
                 </div>
               </div>
@@ -3249,6 +3278,29 @@
                                 >
                                   <span class="cw-marker-pulse"></span>
                                   <span class="cw-pin-core"></span>
+                                </button>
+                                <button
+                                  v-if="m.showCallout !== false"
+                                  type="button"
+                                  class="cw-pin-callout font-mono"
+                                  :class="[
+                                    m.isLong ? 'is-long' : 'is-short',
+                                    {
+                                      'is-tag-left': m.isTagLeft,
+                                      'is-active': activeWhaleHud && activeWhaleHud.whale && activeWhaleHud.whale.address === m.whale.address && activeWhaleHud.whale.side === m.whale.side,
+                                      'is-highlighted': highlightedWhaleAddr === m.whale.address
+                                    }
+                                  ]"
+                                  :style="{ top: (m.calloutY ?? m.pinY ?? m.y) + 'px' }"
+                                  :title="m.tooltip || (m.whale.name + ' · ' + (m.isLong ? '做多' : '做空') + ' ' + (m.whale.leverage || '5x') + ' @ $' + formatCryptoPrice(m.price))"
+                                  @mouseenter="onWhaleMarkerHover(m, r)"
+                                  @mouseleave="onWhaleMarkerLeave(m)"
+                                  @click.stop="onWhaleMarkerClick(m, r)"
+                                >
+                                  <span class="cw-callout-dir">{{ m.isLong ? '多' : '空' }}</span>
+                                  <strong class="cw-callout-px">${{ formatCryptoPrice(m.price) }}</strong>
+                                  <span class="cw-callout-val">${{ formatWhaleUsd(m.whale.positionValue) }}</span>
+                                  <span v-if="m.holdShort" class="cw-callout-hold">{{ m.holdShort }}</span>
                                 </button>
                               </div>
                             </div>

@@ -3584,5 +3584,177 @@ test('#crypto Mini K-Line Drawer keeps inline preview and jumps directly to #cha
   assert.deepEqual(ui.errors, []);
 });
 
+test('#chart Whale Index-to-ETF Normalization: scales SP500->SPY prices onto candles, excludes stale sample mocks, and syncs dot click -> HUD + selected Dock card', async t => {
+  const baseSec = 1793800000;
+  const spyBars = [
+    { time: baseSec, open: 768, high: 775, low: 765, close: 770, volume: 1200000 },
+    { time: baseSec + 14400, open: 770, high: 772, low: 760, close: 764, volume: 1400000 },
+    { time: baseSec + 28800, open: 764, high: 766, low: 745, close: 750, volume: 2100000 },
+    { time: baseSec + 43200, open: 750, high: 758, low: 748, close: 754.37, volume: 1600000 }
+  ];
+
+  const liveStocksPayload = {
+    ok: true,
+    category: 'stocks',
+    isLive: true,
+    isSample: false,
+    source: 'hyperliquid-xyz-api',
+    fetchedAt: new Date().toISOString(),
+    whales: [
+      {
+        address: '0x7fda1111111111111111111111111111111117d1',
+        shortAddress: '0x7fda...17d1',
+        name: 'BobbyBigSize',
+        tag: 'HIP-3 TradFi 榜单巨鲸',
+        avatar: '🐋',
+        positions: [
+          {
+            coin: 'SP500',
+            chartSymbol: 'SPY',
+            side: 'LONG',
+            isLong: true,
+            size: 2594,
+            entryPx: 7626.77,
+            markPx: 7531.7,
+            positionValue: 19740000,
+            unrealizedPnl: -247900,
+            returnOnEquity: -0.125,
+            leverageLabel: '30x 全仓',
+            liquidationPx: 4293.07
+          }
+        ]
+      },
+      {
+        address: '0xfc6611111111111111111111111111111111ca06',
+        shortAddress: '0xfc66...ca06',
+        name: 'HL TradFi 巨鲸 0xfc66...ca06',
+        tag: 'HIP-3 TradFi 活跃巨鲸',
+        avatar: '🔱',
+        positions: [
+          {
+            coin: 'SP500',
+            chartSymbol: 'SPY',
+            side: 'SHORT',
+            isLong: false,
+            size: 1236,
+            entryPx: 7547.56,
+            markPx: 7531.7,
+            positionValue: 9340000,
+            unrealizedPnl: 19100,
+            returnOnEquity: 0.032,
+            leverageLabel: '30x 全仓',
+            liquidationPx: 24773.51
+          }
+        ]
+      }
+    ]
+  };
+
+  const baseCryptoFixture = fixture('/api/crypto/whales?category=crypto');
+  const cryptoPayloadWithSampleStocks = {
+    ...baseCryptoFixture,
+    stockWhales: {
+      isLive: false,
+      isSample: true,
+      whales: [
+        {
+          address: '0x389c111111111111111111111111111111119297',
+          shortAddress: '0x389c...9297',
+          name: '美股宽基指数链上套利机构',
+          tag: '大盘指数做市商',
+          avatar: '🏛️',
+          positions: [
+            { coin: 'SPY', chartSymbol: 'SPY', side: 'LONG', isLong: true, entryPx: 576.2, markPx: 579.8, positionValue: 28900000, unrealizedPnl: 179400, leverageLabel: '20x 全仓', liquidationPx: 552.0 }
+          ]
+        }
+      ]
+    }
+  };
+
+  const ui = await mount(t, async url => {
+    const u = new URL(url, 'http://localhost');
+    if (u.pathname === '/api/market/chart') {
+      return { ok: true, json: async () => ({ symbol: 'SPY', range: u.searchParams.get('range'), interval: u.searchParams.get('interval'), currency: 'USD', source: 'Test', delay: '实时', bars: spyBars }) };
+    }
+    if (u.pathname === '/api/crypto/whales') {
+      return {
+        ok: true,
+        json: async () => (u.searchParams.get('category') === 'stocks' ? liveStocksPayload : cryptoPayloadWithSampleStocks)
+      };
+    }
+    return { ok: true, json: async () => fixture(url) };
+  }, null, w => {
+    attachFullChartLwStub(w);
+  });
+
+  const chartNavBtn = [...ui.w.document.querySelectorAll('.nav-item')].find(el => el.dataset.id === 'chart');
+  chartNavBtn.click();
+  await tick();
+  await tick();
+
+  const toggleBtn = ui.w.document.querySelector('.chart-whale-switch-btn');
+  toggleBtn.click();
+  await tick();
+  await new Promise(resolve => setTimeout(resolve, 60));
+  await tick();
+
+  // 1. Stale $576.20 sample mock must NOT pollute live SPY Dock when live stocks pool is loaded
+  const cards = [...ui.w.document.querySelectorAll('.chart-whale-card')];
+  assert.equal(cards.length, 2, `Should show only the 2 live SP500->SPY whales (got ${cards.length})`);
+  assert.ok(!cards.some(c => /美股宽基指数链上套利机构/.test(c.textContent)), 'Excludes stale static sample mock when live pool is active');
+  const bobbyCard = cards.find(c => /BobbyBigSize/.test(c.textContent));
+  assert.ok(bobbyCard, 'Live BobbyBigSize card renders');
+  assert.match(bobbyCard.textContent, /76[234]\.\d{2}/, 'Dock card normalizes SP500 7626.77 onto ~763.89 SPY scale');
+  assert.match(bobbyCard.textContent, /原 SP500 \$7,626\.77/, 'Dock card preserves original SP500 index reference note');
+
+  // 2. Both green LONG and red SHORT pinpoint dots + direct on-chart callout pills must render inside chart Y bounds
+  const longDot = ui.w.document.querySelector('.chart-whale-markers-layer .cw-bybit-pin-dot.is-long');
+  const shortDot = ui.w.document.querySelector('.chart-whale-markers-layer .cw-bybit-pin-dot.is-short');
+  assert.ok(longDot, 'Renders green white-bordered LONG pinpoint dot on candle');
+  assert.ok(shortDot, 'Renders red white-bordered SHORT pinpoint dot on candle');
+  const longTop = parseFloat(longDot.style.top);
+  const shortTop = parseFloat(shortDot.style.top);
+  assert.ok(longTop > 20 && longTop < 580, `LONG dot Y must sit inside chart viewport (got ${longTop}px)`);
+  assert.ok(shortTop > 20 && shortTop < 580, `SHORT dot Y must sit inside chart viewport (got ${shortTop}px)`);
+  const calloutPills = [...ui.w.document.querySelectorAll('.chart-whale-markers-layer .cw-pin-callout')];
+  assert.equal(calloutPills.length, 2, 'Renders direct on-chart position callout pills next to each dot');
+  assert.ok(calloutPills.some(p => /多.*76[234]\.\d{2}.*19\.7/.test(p.textContent)), 'LONG on-chart callout pill shows direction, entry price, and notional directly on K-line');
+  assert.ok(calloutPills.some(p => /空.*75[456]\.\d{2}.*9\.3/.test(p.textContent)), 'SHORT on-chart callout pill shows direction, entry price, and notional directly on K-line');
+
+  // 3. Clicking LONG green dot opens visible HUD popover AND marks right Dock card selected with "已选中" tag
+  longDot.click();
+  await tick();
+  const hudLong = ui.w.document.querySelector('.chart-whale-hud-popover');
+  assert.ok(hudLong, 'Clicking green pinpoint dot opens HUD popover');
+  const hudLongTop = parseFloat(hudLong.style.top);
+  assert.ok(hudLongTop >= 14 && hudLongTop <= 596, `HUD popover top must stay visible inside viewport (got ${hudLongTop}px)`);
+  assert.match(hudLong.textContent, /BobbyBigSize/, 'HUD displays clicked LONG whale name');
+  assert.match(hudLong.textContent, /原 SP500 \$7,626\.77/, 'HUD preserves original SP500 index entry note');
+  assert.ok(bobbyCard.classList.contains('is-selected'), 'Right Dock card highlights .is-selected on dot click');
+  assert.match(bobbyCard.textContent, /已选中/, 'Right Dock card renders explicit 已选中 badge');
+
+  // 3b. Dragging/panning the K-line canvas must NOT dismiss the open HUD popover
+  const priceChartEl = ui.w.document.getElementById('price-chart');
+  priceChartEl.dispatchEvent(new ui.w.MouseEvent('pointerdown', { clientX: 300, clientY: 260, bubbles: true }));
+  priceChartEl.dispatchEvent(new ui.w.MouseEvent('pointerup', { clientX: 340, clientY: 220, bubbles: true }));
+  await tick();
+  assert.ok(ui.w.document.querySelector('.chart-whale-hud-popover'), 'Dragging/panning the K-line canvas keeps the HUD popover visible');
+
+  // 4. Clicking outside closes HUD; clicking SHORT red dot switches HUD & Dock selection cleanly
+  ui.w.document.dispatchEvent(new ui.w.MouseEvent('pointerdown', { bubbles: true }));
+  await tick();
+  assert.equal(ui.w.document.querySelector('.chart-whale-hud-popover'), null, 'Outside pointerdown dismisses HUD');
+
+  shortDot.click();
+  await tick();
+  const hudShort = ui.w.document.querySelector('.chart-whale-hud-popover');
+  assert.ok(hudShort && /0xfc66\.\.\.ca06/.test(hudShort.textContent), 'Clicking red pinpoint dot opens SHORT whale HUD');
+  const shortCard = [...ui.w.document.querySelectorAll('.chart-whale-card')].find(c => /0xfc66\.\.\.ca06/.test(c.textContent));
+  assert.ok(shortCard.classList.contains('is-selected'), 'Right Dock switches .is-selected highlight to SHORT card');
+  assert.match(shortCard.textContent, /已选中/, 'SHORT card shows 已选中 badge');
+
+  assert.deepEqual(ui.errors, []);
+});
+
 
 

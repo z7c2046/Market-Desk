@@ -25,6 +25,7 @@ export function createPriceMotionController(chart, candleSeries, options = {}) {
   const zoomGain = options.zoomGain ?? 0.0006;
   const enableAutoSmooth = options.enableAutoSmooth ?? false;
   const onPriceModeChange = options.onPriceModeChange || null;
+  const onPriceChange = options.onPriceChange || null;
 
   let epoch = 0;
   let disposed = false;
@@ -113,6 +114,7 @@ export function createPriceMotionController(chart, candleSeries, options = {}) {
           from,
           to
         });
+        onPriceChange?.();
       } catch (_) {}
     }
   }

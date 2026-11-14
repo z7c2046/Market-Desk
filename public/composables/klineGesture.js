@@ -89,7 +89,8 @@ export function bindKlineGestures(element, chart, series, options = {}) {
     rate: 21.5,
     axisSensitivity: options.axisSensitivity ?? 0.0055,
     zoomGain: options.wheelSensitivity ? options.wheelSensitivity * 0.35 : 0.0006,
-    onPriceModeChange: () => emitState()
+    onPriceModeChange: () => emitState(),
+    onPriceChange: () => options.onViewportChange?.()
   });
 
   if (series) {
