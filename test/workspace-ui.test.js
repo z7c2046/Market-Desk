@@ -3938,6 +3938,8 @@ test('#chart Docked K-line Header: global system topbar scrolls upward away whil
   const css = await fs.readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
   assert.match(css, /\.workspace-content\s*\{[^}]*scrollbar-gutter:\s*stable;[^}]*padding:\s*12px 10px 28px 10px;/);
   assert.match(css, /\.topbar\s*\{[^}]*padding:\s*0 18px 0 10px !important;/);
+  assert.match(css, /\.workspace\.is-chart-page \.workspace-content\s*\{[^}]*padding-top:\s*0;/);
+  assert.match(css, /\.workspace\.is-chart-page \.page-container\s*\{[^}]*padding-top:\s*68px;/);
   assert.match(css, /\.workspace\.is-chart-page \.chart-panel\s*\{[^}]*overflow:\s*clip;/);
   assert.match(css, /\.workspace\.is-chart-page \.chart-panel > \.panel-heading\s*\{[^}]*position:\s*sticky;[^}]*top:\s*0;/);
 
