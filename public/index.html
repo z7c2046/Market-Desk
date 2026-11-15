@@ -1665,7 +1665,11 @@
                               <!-- 待测量提示浮条 (当测距尺激活但尚未绘制时显示) -->
                               <div v-if="isRulerActive && !isRulerDrawing && !rulerMeasurement"
                                 class="ruler-hint-pill font-mono">
-                                <span>📐 在图表上点击并拖动以测量涨跌幅 (按 Esc 退出)</span>
+                                <span>📐 在图表上点击起点，移动鼠标后再次点击完成测距 (按 Esc 退出)</span>
+                              </div>
+                              <div v-else-if="isRulerActive && isRulerDrawing"
+                                class="ruler-hint-pill font-mono">
+                                <span>📐 移动鼠标选择终点，点击以固定测距结果 (按 Esc 取消)</span>
                               </div>
                             </div>
 

@@ -2135,7 +2135,7 @@ test('K-Line TradingView Ruler Tool & 15m Default Timeframe', async t => {
   tvRulerBtn.click();
   await tick();
   assert.ok(ui.w.document.querySelector('.chart-ruler-layer'), 'Ruler layer active after click');
-  assert.match(ui.w.document.querySelector('.ruler-hint-pill').textContent, /在图表上点击并拖动以测量/);
+  assert.match(ui.w.document.querySelector('.ruler-hint-pill').textContent, /在图表上点击起点/);
 
   // 5. Simulate measurement drag
   const rulerLayer = ui.w.document.querySelector('.chart-ruler-layer');
@@ -2158,6 +2158,38 @@ test('K-Line TradingView Ruler Tool & 15m Default Timeframe', async t => {
   closeBtn.click();
   await tick();
   assert.equal(ui.w.document.querySelector('.chart-ruler-layer'), null, 'Ruler layer cleared after close button click');
+
+  // 8. Test Two-Click Ruler Measurement (点击起点 -> 移动鼠标跟随 -> 点击终点锁定)
+  tvRulerBtn.click();
+  await tick();
+  const rulerLayer2 = ui.w.document.querySelector('.chart-ruler-layer');
+  assert.ok(rulerLayer2, 'Ruler layer active for two-click test');
+
+  // Click 1: Click start point (pointerdown + pointerup at same spot)
+  rulerLayer2.dispatchEvent(new ui.w.PointerEvent('pointerdown', { clientX: 120, clientY: 220, bubbles: true }));
+  await tick();
+  rulerLayer2.dispatchEvent(new ui.w.PointerEvent('pointerup', { clientX: 120, clientY: 220, bubbles: true }));
+  await tick();
+  assert.match(ui.w.document.querySelector('.ruler-hint-pill').textContent, /移动鼠标选择终点/);
+  assert.ok(rulerLayer2.classList.contains('is-measuring'), 'Ruler is in active tracking phase after first click');
+
+  // Mouse move: dashed box and tooltip card follow cursor
+  rulerLayer2.dispatchEvent(new ui.w.PointerEvent('pointermove', { clientX: 280, clientY: 140, bubbles: true }));
+  await tick();
+  assert.ok(ui.w.document.querySelector('.chart-ruler-svg rect'), 'Ruler rect updates with mouse cursor');
+  assert.ok(ui.w.document.querySelector('.ruler-tooltip-card'), 'Ruler card dynamically displays live diff while moving');
+
+  // Click 2: Click end point (pointerdown) -> finishes and locks measurement
+  rulerLayer2.dispatchEvent(new ui.w.PointerEvent('pointerdown', { clientX: 280, clientY: 140, bubbles: true }));
+  await tick();
+  assert.equal(ui.w.document.querySelector('.ruler-hint-pill'), null, 'Hint pill hidden after measurement is locked');
+  assert.ok(ui.w.document.querySelector('.ruler-tooltip-card'), 'Measurement card locked on chart');
+  assert.match(ui.w.document.querySelector('.ruler-tooltip-card').textContent, /根 K线/);
+
+  // Esc clears locked measurement
+  ui.w.dispatchEvent(new ui.w.KeyboardEvent('keydown', { key: 'Escape' }));
+  await tick();
+  assert.equal(ui.w.document.querySelector('.chart-ruler-layer'), null, 'Esc clears two-click measurement');
 
   assert.deepEqual(ui.errors, []);
 });

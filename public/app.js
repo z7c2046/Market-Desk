@@ -900,13 +900,16 @@ createApp({
       };
     });
 
+    let rulerPointerDownPos = null;
+
     function toggleRulerTool() {
       if (klineGestureCtrl && typeof klineGestureCtrl.cancelMotion === 'function') {
         klineGestureCtrl.cancelMotion('ruler-toggled');
       }
-      if (isRulerActive.value) {
+      if (isRulerActive.value || isRulerDrawing.value || rulerMeasurement.value) {
         clearRuler();
       } else {
+        clearRuler();
         isRulerActive.value = true;
         const hostEl = lwPriceChart?._hostEl || (typeof document !== 'undefined' ? document.getElementById('price-chart') : null);
         if (hostEl) hostEl.dataset.rulerMode = 'active';
@@ -919,6 +922,7 @@ createApp({
       rulerStartPoint.value = null;
       rulerEndPoint.value = null;
       rulerMeasurement.value = null;
+      rulerPointerDownPos = null;
       const hostEl = lwPriceChart?._hostEl || (typeof document !== 'undefined' ? document.getElementById('price-chart') : null);
       if (hostEl) delete hostEl.dataset.rulerMode;
     }
@@ -962,17 +966,37 @@ createApp({
       const pt = getChartPointerInfo(e);
       if (!pt) return;
 
-      if (e.currentTarget && typeof e.currentTarget.setPointerCapture === 'function') {
-        try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) { }
-      }
-
+      // 如果已有固定测量结果，点击图表空白处重新开始测量
       if (rulerMeasurement.value) {
         rulerMeasurement.value = null;
+        rulerStartPoint.value = null;
+        rulerEndPoint.value = null;
+        isRulerDrawing.value = false;
+        isRulerActive.value = true;
       }
 
-      rulerStartPoint.value = pt;
-      rulerEndPoint.value = pt;
-      isRulerDrawing.value = true;
+      // 阶段一：尚未确定起点，此次点击为设置第一落点（无需按住拖拽，点击后虚线框随鼠标移动）
+      if (!rulerStartPoint.value || !isRulerDrawing.value) {
+        rulerStartPoint.value = pt;
+        rulerEndPoint.value = pt;
+        isRulerDrawing.value = true;
+        rulerPointerDownPos = { x: pt.x, y: pt.y, time: Date.now() };
+      } else {
+        // 阶段二：已确定起点并在跟随鼠标移动，此次点击为设置第二落点，完成并锁定测距结果
+        const p1 = rulerStartPoint.value;
+        const dist = Math.hypot(pt.x - p1.x, pt.y - p1.y);
+        if (dist >= 4) {
+          rulerEndPoint.value = pt;
+          if (rulerCard.value) {
+            rulerMeasurement.value = { ...rulerCard.value };
+          }
+          isRulerDrawing.value = false;
+          isRulerActive.value = false;
+          rulerPointerDownPos = null;
+          const hostEl = lwPriceChart?._hostEl || (typeof document !== 'undefined' ? document.getElementById('price-chart') : null);
+          if (hostEl) delete hostEl.dataset.rulerMode;
+        }
+      }
     }
 
     function onRulerPointerMove(e) {
@@ -983,21 +1007,20 @@ createApp({
     }
 
     function onRulerPointerUp(e) {
-      if (!isRulerDrawing.value) return;
-      isRulerDrawing.value = false;
+      if (!isRulerDrawing.value || !rulerStartPoint.value || !rulerPointerDownPos) return;
+      const pt = getChartPointerInfo(e);
+      if (!pt) return;
 
-      if (e.currentTarget && typeof e.currentTarget.releasePointerCapture === 'function') {
-        try { e.currentTarget.releasePointerCapture(e.pointerId); } catch (_) { }
-      }
-
-      const p1 = rulerStartPoint.value;
-      const p2 = rulerEndPoint.value;
-      if (!p1 || !p2) return;
-
-      const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
-      if (dist >= 4 && rulerCard.value) {
-        rulerMeasurement.value = { ...rulerCard.value };
+      // 兼顾拖拽习惯：若用户按住鼠标拖拽超过 15px 然后松开，同样完成测距锁定
+      const dragDist = Math.hypot(pt.x - rulerPointerDownPos.x, pt.y - rulerPointerDownPos.y);
+      if (dragDist >= 15) {
+        rulerEndPoint.value = pt;
+        if (rulerCard.value) {
+          rulerMeasurement.value = { ...rulerCard.value };
+        }
+        isRulerDrawing.value = false;
         isRulerActive.value = false;
+        rulerPointerDownPos = null;
         const hostEl = lwPriceChart?._hostEl || (typeof document !== 'undefined' ? document.getElementById('price-chart') : null);
         if (hostEl) delete hostEl.dataset.rulerMode;
       }
@@ -5063,25 +5086,23 @@ createApp({
         }
       }
 
-      // Fallback supplement from on-chain stock radar items only when live wallet pools have no match for this ticker.
-      if (list.length === 0) {
-        for (const item of (onchainStocksData.value?.items || [])) {
-          if (!isSameWhaleAsset(item.symbol, targetKey) && !isSameWhaleAsset(item.chartSymbol, targetKey)) continue;
-          const wps = item?.raw?.whalePositions || item?.whalePositions || [];
-          for (let i = 0; i < wps.length; i++) {
-            const wp = wps[i];
-            const norm = buildMainChartWhaleItem({
-              name: wp.name,
-              address: wp.address,
-              shortAddress: wp.shortAddress,
-              avatar: wp.avatar,
-              tag: wp.tag,
-              isCurated: wp.isCurated
-            }, wp, targetSym, spotPx || item.price, list.length);
-            if (!seenKeys.has(norm.posKey)) {
-              seenKeys.add(norm.posKey);
-              list.push(norm);
-            }
+      // 补充链上美股资金流向雷达中的核心机构持仓（保证 #chart 与 #crypto 抽屉展示的持仓完全对齐一致）
+      for (const item of (onchainStocksData.value?.items || [])) {
+        if (!isSameWhaleAsset(item.symbol, targetKey) && !isSameWhaleAsset(item.chartSymbol, targetKey)) continue;
+        const wps = item?.raw?.whalePositions || item?.whalePositions || [];
+        for (let i = 0; i < wps.length; i++) {
+          const wp = wps[i];
+          const norm = buildMainChartWhaleItem({
+            name: wp.name,
+            address: wp.address,
+            shortAddress: wp.shortAddress,
+            avatar: wp.avatar,
+            tag: wp.tag,
+            isCurated: wp.isCurated
+          }, wp, targetSym, spotPx || item.price, list.length);
+          if (!seenKeys.has(norm.posKey)) {
+            seenKeys.add(norm.posKey);
+            list.push(norm);
           }
         }
       }
