@@ -20433,7 +20433,7 @@ html.dark .cw-drawer-table thead th {
 
 .cw-flow-row {
   cursor: pointer;
-  scroll-margin-top: 0;
+  scroll-margin-top: 56px;
   border-bottom: 1px solid var(--border-subtle);
   transition: background-color 0.12s ease;
 }
