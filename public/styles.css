@@ -15464,12 +15464,14 @@ th.num,
   }
 
   .workspace {
+    position: relative;
     flex: 1;
     display: flex;
     flex-direction: column;
     min-width: 0;
     min-height: 0;
     height: 100vh;
+    padding: 0;
     overflow: hidden;
   }
 
@@ -15506,7 +15508,7 @@ th.num,
     display: flex;
     min-height: 0;
     overflow: hidden;
-    height: calc(100vh - 56px);
+    height: 100vh;
   }
 
   .workspace-main-wrapper {
@@ -15569,15 +15571,47 @@ th.num,
 }
 
 @media (min-width: 768px) {
+  .workspace:not(.is-chart-page) .topbar {
+    position: absolute;
+    top: calc(20px * (1 - var(--topbar-dock-progress, 0)));
+    left: calc(20px * (1 - var(--topbar-dock-progress, 0)));
+    right: calc(20px * (1 - var(--topbar-dock-progress, 0)));
+    z-index: 50;
+    transition:
+      top 0.12s cubic-bezier(0.22, 1, 0.36, 1),
+      left 0.12s cubic-bezier(0.22, 1, 0.36, 1),
+      right 0.12s cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 0.2s ease,
+      background 0.2s var(--ease),
+      border-color 0.2s var(--ease);
+    will-change: top, left, right;
+  }
+
+  .workspace:not(.is-chart-page).is-topbar-docked .topbar {
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
+  }
+
+  :root.dark .workspace:not(.is-chart-page).is-topbar-docked .topbar {
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.36);
+  }
+
+  .workspace:not(.is-chart-page) .page-container {
+    padding: 76px 20px 20px 20px;
+  }
+
+  .workspace:not(.is-chart-page) .right-watchlist-sidebar:not(.is-collapsed) {
+    padding-top: calc(92px - 20px * var(--topbar-dock-progress, 0));
+  }
+
   .workspace.is-chart-page {
     position: relative;
   }
 
   .workspace.is-chart-page .topbar {
     position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
+    top: 20px;
+    left: 20px;
+    right: 20px;
     z-index: 50;
     transform: translate3d(0, var(--chart-topbar-offset, 0px), 0);
     will-change: transform;
@@ -15598,14 +15632,18 @@ th.num,
 
   .workspace.is-chart-page .page-container {
     padding-top: 68px;
+    padding-left: 20px;
+    padding-right: 20px;
+    padding-bottom: 20px;
   }
 
   .workspace.is-chart-page .right-watchlist-sidebar:not(.is-collapsed) {
-    padding-top: calc(72px + var(--chart-topbar-offset, 0px));
+    padding-top: calc(92px + var(--chart-topbar-offset, 0px));
   }
 
   .workspace.is-chart-page .chart-panel {
     overflow: clip;
+    margin-top: 20px;
   }
 
   .workspace.is-chart-page .chart-panel > .panel-heading {
