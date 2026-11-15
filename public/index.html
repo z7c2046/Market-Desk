@@ -1365,7 +1365,8 @@
 
                     <template v-if="page==='chart'">
                       <section class="panel chart-panel">
-                        <div class="panel-heading">
+                        <div class="chart-sticky-toolbar">
+                          <div class="panel-heading">
                           <h2 class="chart-header-title">
                             <span class="chart-symbol-text">{{symbol}}</span>
                             <span v-if="chartDelayStatus === 'delayed'" class="tv-delay-badge"
@@ -1527,6 +1528,7 @@
                                 chartWhalePositions.length }}</span>
                             </button>
                           </div>
+                        </div>
                         </div>
                         <div v-if="states.chart.error" class="error-box">{{states.chart.error}} <button
                             @click="loadChart">重试</button></div>
