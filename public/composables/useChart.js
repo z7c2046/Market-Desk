@@ -143,6 +143,7 @@ export function useChart(chartHostRef) {
     chart.value = LightweightCharts.createChart(host, {
       autoSize: true,
       layout: {
+        attributionLogo: false,
         background:  t.bg,
         textColor:   t.text,
         fontFamily:  "Inter, -apple-system, BlinkMacSystemFont, sans-serif",
