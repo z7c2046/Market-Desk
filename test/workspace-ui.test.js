@@ -4240,4 +4240,49 @@ test('#crypto & #chart Whale Open Time: omits synthetic Date.now()-3h*N open tim
   assert.deepEqual(ui.errors, []);
 });
 
+test('#crypto Sankey asset click docks focused flow row flush below topbar (block: start)', async t => {
+  const scrollCalls = [];
+  const ui = await mount(t, async url => ({ ok: true, json: async () => fixture(url) }), null, w => {
+    w.Element.prototype.scrollIntoView = function (opts) {
+      scrollCalls.push({
+        tag: this.tagName,
+        symbol: this.getAttribute?.('data-symbol') || '',
+        className: this.className || '',
+        opts
+      });
+    };
+  });
+
+  await ui.click('加密货币');
+  await tick();
+  await new Promise(resolve => setTimeout(resolve, 60));
+  await tick();
+
+  const catBtns = ui.w.document.querySelectorAll('.whale-cat-btn');
+  assert.ok(catBtns.length >= 2, 'Category switcher buttons exist');
+  catBtns[0].click();
+  await tick();
+  await new Promise(resolve => setTimeout(resolve, 40));
+  await tick();
+
+  const btcAssetNode = ui.w.document.querySelector('.cw-sk-asset-node[data-asset="BTC"]');
+  assert.ok(btcAssetNode, 'BTC asset node renders in Sankey');
+  btcAssetNode.dispatchEvent(new ui.w.MouseEvent('click', { bubbles: true }));
+  await tick();
+  await new Promise(resolve => setTimeout(resolve, 100));
+  await tick();
+
+  assert.ok(ui.w.document.querySelector('.cw-drawer-tr'), 'Clicking Sankey asset auto-expands target flow drawer');
+  const btcScroll = scrollCalls.find(c => c.symbol === 'BTC');
+  assert.ok(btcScroll, 'Scrolling targets clicked cw-flow-row[data-symbol="BTC"]');
+  assert.equal(btcScroll.opts?.behavior, 'smooth', 'Scrolling animates smoothly');
+  assert.equal(btcScroll.opts?.block, 'start', 'Target flow row scrolls flush to top under topbar with block: start');
+
+  const stylesCss = await fs.readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
+  assert.match(stylesCss, /\.cw-flow-row\s*\{[^}]*scroll-margin-top:\s*0;/, 'Desktop .cw-flow-row aligns flush to topbar');
+  assert.match(stylesCss, /@media\s*\(max-width:\s*767px\)[\s\S]*?\.cw-flow-row[\s\S]*?scroll-margin-top:\s*50px;/, 'Mobile .cw-flow-row clears sticky 50px topbar');
+
+  assert.deepEqual(ui.errors, []);
+});
+
 
