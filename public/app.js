@@ -5234,36 +5234,8 @@ createApp({
     }
 
     function updateMainChartWhaleTimeGuide() {
-      if (!chartWhaleOverlayEnabled.value || !selectedChartWhaleKey.value || page.value !== 'chart') {
-        chartWhaleTimeGuide.value = null;
-        return;
-      }
-      const entry = lwMainWhaleMarkersMap.get(selectedChartWhaleKey.value);
-      if (!entry || !entry.time) {
-        chartWhaleTimeGuide.value = null;
-        return;
-      }
-      const label = (entry.whale.hasRealEntryTime && entry.whale.entryTime)
-        ? `${formatWhaleTime(entry.whale.entryTime)} · ${formatWhaleDuration(entry.whale.entryTime)}`
-        : `开仓均价 $${formatCryptoPrice(entry.whale.entryPx)}`;
-      if (!lwPriceChart || typeof lwPriceChart.timeScale !== 'function') {
-        chartWhaleTimeGuide.value = { x: 220, label, color: entry.color, isLong: entry.isLong, visible: true };
-        return;
-      }
-      const hostEl = lwPriceChart._hostEl || document.getElementById('price-chart');
-      const W = hostEl?.clientWidth || 800;
-      const cx = lwPriceChart.timeScale().timeToCoordinate(entry.time);
-      if (typeof cx !== 'number' || !Number.isFinite(cx) || cx < 8 || cx > W - 64) {
-        chartWhaleTimeGuide.value = null;
-        return;
-      }
-      chartWhaleTimeGuide.value = {
-        x: Math.round(cx),
-        label,
-        color: entry.color,
-        isLong: entry.isLong,
-        visible: true
-      };
+      // 用户需求：不显示贯穿 K 线的巨鲸开仓时间垂直虚线与底部时间轴标尺，保持 K 线干净
+      chartWhaleTimeGuide.value = null;
     }
 
     function getMainChartWhaleMarkerCoordinates(whale) {
@@ -5657,8 +5629,8 @@ createApp({
       pendingChartFocusWhaleKey.value = targetFocusKey;
       hoveredChartWhaleKey.value = '';
       activeChartWhaleHud.value = null;
-      chartRange.value = '1mo';
-      chartInterval.value = '4h';
+      chartRange.value = '1d';
+      chartInterval.value = '15m';
       ensureChartWhalePoolsLoaded().then(() => {
         if (page.value === 'chart' && chartWhaleOverlayEnabled.value && pendingChartFocusWhaleKey.value) {
           nextTick(() => syncMainChartWhaleVisuals());

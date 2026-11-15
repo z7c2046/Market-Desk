@@ -23453,16 +23453,17 @@ html.dark .cw-custom-item {
   }
 }
 
-/* 选中巨鲸开仓时间垂直虚线标尺 */
+/* 选中巨鲸开仓时间垂直虚线标尺（已按用户需求关闭显示，保持 K 线干净无遮挡） */
 .chart-whale-time-guide {
+  display: none !important;
   position: absolute;
   top: 0;
   bottom: 28px;
   width: 1px;
-  border-left: 1px dashed var(--guide-color, #38bdf8);
+  border-left: none !important;
   pointer-events: none;
   z-index: 4;
-  opacity: 0.86;
+  opacity: 0;
 }
 
 .chart-whale-time-pill {

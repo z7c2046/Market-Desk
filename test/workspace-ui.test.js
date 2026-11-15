@@ -3470,7 +3470,7 @@ test('#chart Whale Workspace: auto-applies 4h/1mo preset, bridges TradFi & Crypt
   await tick();
   assert.equal(ui.w.document.querySelector('.chart-whale-hud-popover'), null, 'Hovering dock card must NOT auto-open HUD popover');
 
-  // Clicking a card focuses that institution: draws individual 开仓均价 + 预估强平 WHILE preserving 多头均价 & 空头均价, renders Time Guide, dims other markers, opens HUD
+  // Clicking a card focuses that institution: draws individual 开仓均价 + 预估强平 WHILE preserving 多头均价 & 空头均价, dims other markers, opens HUD (omits vertical guide line)
   longSpyCard.click();
   await tick();
   assert.ok(longSpyCard.classList.contains('is-selected'), 'Clicked dock card shows selected ring');
@@ -3480,7 +3480,7 @@ test('#chart Whale Workspace: auto-applies 4h/1mo preset, bridges TradFi & Crypt
   assert.ok(isolatedLines.some(pl => pl.title.includes('多头均价')), 'Focused mode keeps aggregate LONG avg PriceLine visible');
   assert.ok(isolatedLines.some(pl => pl.title.includes('空头均价')), 'Focused mode keeps aggregate SHORT avg PriceLine visible');
   assert.match(dock.textContent, /机构均价/, 'Dock telemetry displays selected institution entry avg price');
-  assert.ok(ui.w.document.querySelector('.chart-whale-time-guide .chart-whale-time-pill'), 'Renders vertical entry-time guide & duration pill');
+  assert.equal(ui.w.document.querySelector('.chart-whale-time-guide'), null, 'Vertical entry-time guide line is omitted for clean K-line view');
   assert.ok(ui.w.document.querySelector('.chart-whale-markers-layer .cw-bybit-marker-group.is-dimmed'), 'Non-selected markers dim smoothly');
   const hud = ui.w.document.querySelector('.chart-whale-hud-popover');
   assert.ok(hud && /582\.50/.test(hud.textContent), 'Clicking dock card opens HUD popover');
@@ -3515,7 +3515,7 @@ test('#chart Whale Workspace: auto-applies 4h/1mo preset, bridges TradFi & Crypt
   assert.deepEqual(ui.errors, []);
 });
 
-test('#crypto Mini K-Line Drawer keeps inline preview and jumps directly to #chart (4h/1mo) for both TradFi & Crypto whales', async t => {
+test('#crypto Mini K-Line Drawer keeps inline preview and jumps directly to #chart (15m/1d) for both TradFi & Crypto whales', async t => {
   const chartRequests = [];
   const baseSec = 1793800000;
   let lwSpy = null;
@@ -3586,7 +3586,7 @@ test('#crypto Mini K-Line Drawer keeps inline preview and jumps directly to #cha
   const instJumpBtn = ui.w.document.querySelector('.cw-drawer-tr .stock-whale-row .cw-wp-kline-btn');
   assert.ok(instJumpBtn, 'Institution row right-side K-line jump button renders inside expanded table');
 
-  // 2. Click "⤢ 大屏分析" -> navigates directly to #chart with BTC-USD + 4h/1mo + Crypto whales
+  // 2. Click "⤢ 大屏分析" -> navigates directly to #chart with BTC-USD + 15m/1d + Crypto whales
   jumpBtn.click();
   await tick();
   await new Promise(resolve => setTimeout(resolve, 60));
@@ -3594,8 +3594,8 @@ test('#crypto Mini K-Line Drawer keeps inline preview and jumps directly to #cha
 
   const lastCryptoChartReq = chartRequests.findLast(r => r.symbol === 'BTC-USD');
   assert.ok(lastCryptoChartReq, 'Jumping from BTC mini drawer loads BTC-USD on #chart');
-  assert.equal(lastCryptoChartReq.range, '1mo', 'Jumped chart uses 1mo range preset');
-  assert.equal(lastCryptoChartReq.interval, '4h', 'Jumped chart uses 4h interval preset');
+  assert.equal(lastCryptoChartReq.range, '1d', 'Jumped chart uses 1d range preset');
+  assert.equal(lastCryptoChartReq.interval, '15m', 'Jumped chart uses 15m interval preset');
   assert.ok(ui.w.document.querySelector('aside.chart-whale-dock'), '#chart Dock opens automatically after jump');
   const btcCards = [...ui.w.document.querySelectorAll('.chart-whale-card')];
   assert.ok(btcCards.length >= 2, `Crypto whale positions for BTC-USD render on #chart Dock (got ${btcCards.length})`);
@@ -3603,7 +3603,7 @@ test('#crypto Mini K-Line Drawer keeps inline preview and jumps directly to #cha
   assert.ok(btcMarkers.length >= 2, `Crypto whale compound markers render on #chart (got ${btcMarkers.length}, cards=${btcCards.length}, loading=${!!ui.w.document.querySelector('.chart-skeleton')}, host=${!!ui.w.document.querySelector('#price-chart')})`);
   assert.ok(lwSpy.getLastPriceFormat() !== null, 'Price axis format updates dynamically');
 
-  // 3. Go back to #crypto -> TradFi -> expand NVDA institution table -> click specific institution's "⤢ 大屏K线" -> loads NVDA 4h/1mo focused on that institution + shows 机构均价/多头均价/空头均价
+  // 3. Go back to #crypto -> TradFi -> expand NVDA institution table -> click specific institution's "⤢ 大屏K线" -> loads NVDA 15m/1d focused on that institution + shows 机构均价/多头均价/空头均价
   cryptoNavBtn.click();
   await tick();
   const catBtns = ui.w.document.querySelectorAll('.whale-cat-btn');
@@ -3621,6 +3621,7 @@ test('#crypto Mini K-Line Drawer keeps inline preview and jumps directly to #cha
 
   const nvdaInstRow = ui.w.document.querySelector('.cw-drawer-tr .stock-whale-row');
   assert.ok(nvdaInstRow, 'Expanded TradFi NVDA drawer shows institution position rows');
+  assert.equal(chartRequests.some(r => r.symbol === 'NVDA'), false, 'Expanding NVDA row in #crypto does not fetch inline chart bars');
   const expectedInstAddr = nvdaInstRow.getAttribute('data-address');
   const tradfiJumpBtn = nvdaInstRow.querySelector('.cw-wp-kline-btn');
   assert.ok(tradfiJumpBtn, 'Jump button exists on right side of NVDA institution row');
@@ -3629,13 +3630,11 @@ test('#crypto Mini K-Line Drawer keeps inline preview and jumps directly to #cha
   await new Promise(resolve => setTimeout(resolve, 60));
   await tick();
 
-  assert.equal(chartRequests.some(r => r.symbol === 'NVDA' && r.interval === '15m'), false, 'Expanding NVDA row in #crypto no longer fetches 15m inline drawer bars');
-
   assert.equal(lastCryptoChartReq.venue, 'hyperliquid', 'Crypto BTC jump uses Hyperliquid 24/7 candles');
   assert.equal(lastCryptoChartReq.coin, 'BTC', 'Crypto BTC jump uses BTC perp coin');
 
   const lastNvdaReq = chartRequests.findLast(r => r.symbol === 'NVDA');
-  assert.ok(lastNvdaReq && lastNvdaReq.range === '1mo' && lastNvdaReq.interval === '4h', 'TradFi NVDA jumps to #chart with 4h/1mo preset');
+  assert.ok(lastNvdaReq && lastNvdaReq.range === '1d' && lastNvdaReq.interval === '15m', 'TradFi NVDA jumps to #chart with 15m/1d preset');
   assert.equal(lastNvdaReq.venue, 'hyperliquid', 'TradFi NVDA jump to #chart switches to Hyperliquid 24/7 perp K-line');
   assert.equal(lastNvdaReq.coin, 'xyz:NVDA', 'TradFi NVDA jump passes xyz:NVDA HIP-3 contract coin');
   assert.ok(ui.w.document.querySelectorAll('.chart-whale-card').length >= 1, 'NVDA whale cards render on #chart Dock');
