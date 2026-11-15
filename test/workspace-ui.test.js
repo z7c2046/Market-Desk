@@ -2193,6 +2193,7 @@ test('K-Line Lightweight Charts stub path: mounts LightweightCharts instance and
     })
   };
 
+  let createdOpts = null;
   const ui = await mount(t, async url => ({ ok: true, json: async () => fixture(url) }), null, w => {
     w.LightweightCharts = {
       ColorType: { Solid: 'solid' },
@@ -2200,7 +2201,8 @@ test('K-Line Lightweight Charts stub path: mounts LightweightCharts instance and
       CandlestickSeries: 'Candlestick',
       HistogramSeries: 'Histogram',
       LineSeries: 'Line',
-      createChart: (el) => {
+      createChart: (el, opts) => {
+        createdOpts = opts;
         stubChart._hostEl = el;
         createdChart = stubChart;
         return stubChart;
@@ -2214,6 +2216,7 @@ test('K-Line Lightweight Charts stub path: mounts LightweightCharts instance and
   await tick();
 
   assert.ok(createdChart, 'LightweightCharts createChart was called');
+  assert.equal(createdOpts?.layout?.attributionLogo, false, 'TradingView attribution logo is disabled on chart');
   assert.ok(ui.w.document.getElementById('price-chart'), 'Price chart container exists');
   assert.ok(ui.w.klineGestureCtrl, 'klineGestureCtrl was assigned on window');
   assert.deepEqual(ui.errors, []);
