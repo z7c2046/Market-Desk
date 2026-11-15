@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {
   isPhone,
   isCompact,
+  MOBILE_PRIMARY_TABS,
+  MOBILE_MORE_PAGE_IDS,
   getRecentSymbols,
   addRecentSymbol,
   clearRecentSymbols,
@@ -96,4 +98,15 @@ test('Mobile Workspace: View state cache stores and restores entry state', () =>
 
   clearViewState('watchlist');
   assert.equal(getViewState('watchlist'), null);
+});
+
+test('Mobile Workspace: MOBILE_PRIMARY_TABS elevates chart (K线) and crypto (加密) to slots 1 & 2 with priority weight', () => {
+  assert.equal(MOBILE_PRIMARY_TABS.length, 5);
+  assert.deepEqual(
+    MOBILE_PRIMARY_TABS.map(t => t.id),
+    ['chart', 'crypto', 'overview', 'watchlist', 'more']
+  );
+  assert.equal(MOBILE_PRIMARY_TABS[0].priority, true);
+  assert.equal(MOBILE_PRIMARY_TABS[1].priority, true);
+  assert.ok(MOBILE_MORE_PAGE_IDS.includes('news'));
 });

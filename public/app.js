@@ -14,6 +14,8 @@ import {
 import {
   isPhone,
   isCompact,
+  MOBILE_PRIMARY_TABS,
+  MOBILE_MORE_PAGE_IDS,
   getRecentSymbols,
   addRecentSymbol,
   clearRecentSymbols,
@@ -718,16 +720,10 @@ createApp({
     const mobileViewMode = ref('cards'); // 'cards' (纵向报价列表) or 'table' (完整表格)
     const mobileEarningsDay = ref('mon');
 
-    const mobileNav = [
-      { id: 'overview', label: '市场', icon: '◫' },
-      { id: 'watchlist', label: '自选', icon: '★' },
-      { id: 'chart', label: '个股', icon: '⌁' },
-      { id: 'news', label: '资讯', icon: '📰' },
-      { id: 'more', label: '更多', icon: '☰' }
-    ];
+    const mobileNav = MOBILE_PRIMARY_TABS;
 
     const isMoreActive = computed(() => {
-      return ['crypto', 'flows', 'options', 'sources'].includes(page.value) || activeMobileOverlay.value === 'more';
+      return MOBILE_MORE_PAGE_IDS.includes(page.value) || activeMobileOverlay.value === 'more';
     });
 
     const RANGE_OPTIONS = [
@@ -1095,7 +1091,7 @@ createApp({
       if (klineGestureCtrl) {
         if (klineGestureCtrl.cancelMotion) klineGestureCtrl.cancelMotion('toggleChartExpanded');
         if (klineGestureCtrl.setInputPolicy) {
-          klineGestureCtrl.setInputPolicy(isChartExpanded.value ? 'expanded' : (isPhoneLayout.value ? 'reading' : 'desktop'));
+          klineGestureCtrl.setInputPolicy(isChartExpanded.value ? 'expanded' : 'desktop');
         }
       }
       nextTick(() => {
@@ -1238,7 +1234,7 @@ createApp({
       if (klineGestureCtrl) {
         if (klineGestureCtrl.invalidateGeometry) klineGestureCtrl.invalidateGeometry('resizeLayout');
         if (klineGestureCtrl.setInputPolicy) {
-          klineGestureCtrl.setInputPolicy(isChartExpanded.value ? 'expanded' : (isPhoneLayout.value ? 'reading' : 'desktop'));
+          klineGestureCtrl.setInputPolicy(isChartExpanded.value ? 'expanded' : 'desktop');
         }
       }
     }
@@ -7683,7 +7679,12 @@ createApp({
         return { isChart: false, title: '美股全景', subtitle: '' };
       }
       if (page.value === 'crypto') {
-        return { isChart: false, title: '主流加密', subtitle: '' };
+        return {
+          isChart: false,
+          isCrypto: true,
+          title: whaleCategory.value === 'stocks' ? '链上美股巨鲸' : '加密与链上巨鲸',
+          subtitle: '24/7 Hyperliquid'
+        };
       }
       if (page.value === 'news') {
         return { isChart: false, title: 'AI 财经智讯', subtitle: '' };
@@ -10136,7 +10137,7 @@ createApp({
 
           const gestures = bindKlineGestures(el, chartInstance, candleSeries, {
             isRulerActive: () => isRulerActive.value || isRulerDrawing.value,
-            inputPolicy: isChartExpanded.value ? 'expanded' : (isPhoneLayout.value ? 'reading' : 'desktop'),
+            inputPolicy: isChartExpanded.value ? 'expanded' : 'desktop',
             getLatestLogicalIndex: () => (chart.value?.bars?.length || 1) - 1,
             getFirstLogicalIndex: () => 0,
             initialBars: Math.min(bars.length, 120),

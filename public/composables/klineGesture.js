@@ -32,6 +32,8 @@ export function bindKlineGestures(element, chart, series, options = {}) {
 
   let currentPolicy = options.inputPolicy || 'desktop';
   let active = null;
+  const touchPointers = new Map();
+  let pinchState = null;
   let dead = false;
 
   function area() {
@@ -57,10 +59,23 @@ export function bindKlineGestures(element, chart, series, options = {}) {
     return { x: e.clientX - rect.left, y: e.clientY - rect.top };
   }
 
-  function hitZone(x, y) {
-    const { w, h } = area();
-    if (x >= w) return 'price-axis';
-    if (y >= h) return 'time-axis';
+  function hitZone(x, y, pointerType) {
+    const { rect, w, h } = area();
+    // 触摸模式下为较窄的底部时间轴和右侧价格轴留出更友好的手指命中余量
+    let axisX = w;
+    let axisY = h;
+    if (pointerType === 'touch') {
+      if (rect.width >= 160 && w > 120) {
+        const rightGap = Math.max(0, rect.width - w);
+        axisX = Math.max(1, w - Math.max(0, 56 - rightGap));
+      }
+      if (rect.height >= 140 && h > 100) {
+        const bottomGap = Math.max(0, rect.height - h);
+        axisY = Math.max(1, h - Math.max(0, 40 - bottomGap));
+      }
+    }
+    if (x >= axisX) return 'price-axis';
+    if (y >= axisY) return 'time-axis';
     return 'plot';
   }
 
@@ -309,7 +324,8 @@ export function bindKlineGestures(element, chart, series, options = {}) {
 
   function onPointerDown(e) {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
-    if (active || dead) return;
+    if (dead) return;
+    if (e.pointerType !== 'touch' && (active || pinchState)) return;
     if (e.shiftKey || element.dataset.rulerMode === 'active' || (typeof options.isRulerActive === 'function' && options.isRulerActive())) {
       cancelMotion('ruler-active');
       return;
@@ -322,11 +338,43 @@ export function bindKlineGestures(element, chart, series, options = {}) {
     cancelMotion('pointerdown');
     const { x, y } = local(e);
     const { w, h } = area();
+
+    if (e.pointerType === 'touch') {
+      touchPointers.set(e.pointerId, { x, y });
+      if (touchPointers.size >= 2) {
+        const startTime = chart.timeScale().getVisibleLogicalRange();
+        if (!finiteRange(startTime)) return;
+        const pts = Array.from(touchPointers.values());
+        const p1 = pts[0];
+        const p2 = pts[1];
+        const startDist = Math.max(Math.hypot(p2.x - p1.x, p2.y - p1.y), 12);
+        const startMidX = (p1.x + p2.x) / 2;
+        active = null;
+        priceMotion.endDrag();
+        pinchState = {
+          startDist,
+          startMidX,
+          startTime: { from: startTime.from, to: startTime.to },
+          plotWidth: w,
+          anchorFraction: clamp(startMidX / Math.max(w, 1), 0, 1)
+        };
+        if (typeof element.setPointerCapture === 'function') {
+          try {
+            element.setPointerCapture(e.pointerId);
+          } catch (_) {}
+        }
+        viewportMotion.setPhase('axis-drag');
+        e.preventDefault();
+        return;
+      }
+      if (active || pinchState) return;
+    }
+
     const time = chart.timeScale().getVisibleLogicalRange();
     const price = priceMotion.getCurrentPriceRange(h);
     if (!finiteRange(time)) return;
 
-    const zone = hitZone(x, y);
+    const zone = hitZone(x, y, e.pointerType);
     const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
 
     let startAnchorPrice = null;
@@ -364,6 +412,7 @@ export function bindKlineGestures(element, chart, series, options = {}) {
       samples: [{ t: now, x, y }],
       plotWidth: w,
       plotHeight: h,
+      startTime: { from: time.from, to: time.to },
       startPrice: price,
       startAnchorPrice,
       pricePerPx,
@@ -384,6 +433,32 @@ export function bindKlineGestures(element, chart, series, options = {}) {
     const policy = getInputPolicy();
     if (policy === 'reading' && e.pointerType === 'touch') {
       return;
+    }
+    if (e.pointerType === 'touch' && touchPointers.has(e.pointerId)) {
+      const pt = local(e);
+      touchPointers.set(e.pointerId, pt);
+      if (pinchState && touchPointers.size >= 2) {
+        const pts = Array.from(touchPointers.values());
+        const p1 = pts[0];
+        const p2 = pts[1];
+        const dist = Math.max(Math.hypot(p2.x - p1.x, p2.y - p1.y), 12);
+        const midX = (p1.x + p2.x) / 2;
+        const factor = clamp(pinchState.startDist / dist, 0.15, 6);
+        const zoomed = scaleTimeFrom(pinchState.startTime, factor, pinchState.anchorFraction, false);
+        const midDx = midX - pinchState.startMidX;
+        const span = Math.max(zoomed.to - zoomed.from, minBars);
+        const panBars = (-midDx / Math.max(pinchState.plotWidth, 1)) * span;
+        const next = {
+          from: zoomed.from + panBars,
+          to: zoomed.to + panBars
+        };
+        if (finiteRange(next)) {
+          chart.timeScale().setVisibleLogicalRange(next);
+          viewportMotion.seedFromRange(next);
+        }
+        e.preventDefault();
+        return;
+      }
     }
     if (!active || active.pointerId !== e.pointerId) {
       return;
@@ -415,7 +490,13 @@ export function bindKlineGestures(element, chart, series, options = {}) {
         priceMotion.panPrice(totalDy, active.startPrice, active.plotHeight, active.pricePerPx);
       }
     } else if (active.zone === 'time-axis') {
-      viewportMotion.queuePanPx(stepDx, active.plotWidth);
+      const factor = clamp(Math.exp(-totalDx * 0.0055), 0.15, 6);
+      const anchorFraction = clamp(active.startX / Math.max(active.plotWidth, 1), 0, 1);
+      const next = scaleTimeFrom(active.startTime, factor, anchorFraction, false);
+      if (finiteRange(next)) {
+        chart.timeScale().setVisibleLogicalRange(next);
+        viewportMotion.seedFromRange(next);
+      }
     } else if (active.zone === 'price-axis') {
       priceMotion.dragScalePrice(totalDy, active.startPrice, active.startAnchorPrice, active.plotHeight);
     }
@@ -424,6 +505,21 @@ export function bindKlineGestures(element, chart, series, options = {}) {
   }
 
   function end(e) {
+    if (e.pointerType === 'touch') {
+      touchPointers.delete(e.pointerId);
+      if (pinchState) {
+        if (typeof element.releasePointerCapture === 'function') {
+          try {
+            element.releasePointerCapture(e.pointerId);
+          } catch (_) {}
+        }
+        if (touchPointers.size < 2) {
+          pinchState = null;
+          viewportMotion.setPhase('idle');
+        }
+        return;
+      }
+    }
     if (!active || active.pointerId !== e.pointerId) return;
 
     if (typeof element.hasPointerCapture === 'function' && element.hasPointerCapture(e.pointerId)) {
@@ -437,11 +533,11 @@ export function bindKlineGestures(element, chart, series, options = {}) {
     const wasActive = active;
     active = null;
 
-    // 仅在真实鼠标有效拖拽释放且未超时时启动水平惯性
+    // 在鼠标或触摸有效拖拽释放且未超时时启动水平惯性
     const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
     if (
       wasActive.moved &&
-      wasActive.pointerType === 'mouse' &&
+      (wasActive.pointerType === 'mouse' || wasActive.pointerType === 'touch') &&
       wasActive.zone === 'plot' &&
       now - wasActive.lastTime <= 120 &&
       wasActive.samples.length >= 2

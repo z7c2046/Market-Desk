@@ -178,7 +178,7 @@ async function mount(t, fetchImpl, initStorage = null, configureWindow = null) {
     .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/earnings-calendar-model\.js';/, 'const { AI_SECTOR_FILTERS, CORPORATE_LOGOS, getEarningsCalendarDate, getEarningsWeeks, MACRO_CALENDAR_ITEMS, filterEarningsByDay, parseMetricNumber, getMetricSurprise, getMetricYoy } = window;')
     .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/inflection-signals\.js';/, 'const { computeInflectionSignals, formatSignalMarkers, dema } = window;')
     .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/theme-model\.js';/, 'const { VALID_PALETTES, VALID_THEMES, DEFAULT_PALETTE, DEFAULT_THEME, normalizePalette, normalizeTheme, applyThemeToDOM, readChartTokens } = window;')
-    .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/mobile-workspace\.js';/, 'const { isPhone, isCompact, getRecentSymbols, addRecentSymbol, clearRecentSymbols, createHistoryState, captureViewState, getViewState, clearViewState, lockBodyScroll, unlockBodyScroll } = window;')
+    .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/mobile-workspace\.js';/, 'const { isPhone, isCompact, MOBILE_PRIMARY_TABS, MOBILE_MORE_PAGE_IDS, getRecentSymbols, addRecentSymbol, clearRecentSymbols, createHistoryState, captureViewState, getViewState, clearViewState, lockBodyScroll, unlockBodyScroll } = window;')
     .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/mobile-quote-view\.js';/, 'const { toMobileQuoteView, formatSessionLabel } = window;');
   if (configureWindow) configureWindow(w);
   w.eval(appSrc);
@@ -1581,7 +1581,7 @@ test('UI Palette selection: defaults to terminal, switches to cobalt in preferen
   assert.deepEqual(ui.errors, []);
 });
 
-test('Mobile Workspace Redesign: 5 bottom tabs, dedicated search overlay, more functions sheet, and vertical card list', async t => {
+test('Mobile Workspace Redesign: 5 bottom tabs (K线 & 加密 elevated to front), priority spotlight, more functions sheet, and vertical card list', async t => {
   const ui = await mount(t, async url => ({ ok: true, json: async () => fixture(url) }));
 
   // 0. Desktop Guard: on desktop viewports, mobile overlay root is not rendered
@@ -1592,26 +1592,46 @@ test('Mobile Workspace Redesign: 5 bottom tabs, dedicated search overlay, more f
   ui.w.dispatchEvent(new ui.w.Event('resize'));
   await tick();
 
-  // 2. Verify 5 bottom tabs: 市场 / 自选 / 个股 / 资讯 / 更多
+  // 2. Verify iOS Priority Spotlight on Overview
+  const spotlight = ui.w.document.querySelector('.mobile-priority-spotlight');
+  assert.ok(spotlight, 'Mobile priority spotlight deck is rendered on Overview');
+  assert.ok(spotlight.querySelector('.is-chart-spotlight'), 'Chart spotlight card is rendered');
+  assert.ok(spotlight.querySelector('.is-crypto-spotlight'), 'Crypto spotlight card is rendered');
+
+  // 3. Verify 5 bottom tabs with K线 and 加密 prioritized in Slots 1 & 2
   const mobileTabs = [...ui.w.document.querySelectorAll('.mobile-tab-item')];
   assert.equal(mobileTabs.length, 5, 'Should have exactly 5 bottom tabs');
-  assert.match(mobileTabs[0].textContent, /市场/);
-  assert.match(mobileTabs[1].textContent, /自选/);
-  assert.match(mobileTabs[2].textContent, /个股/);
-  assert.match(mobileTabs[3].textContent, /资讯/);
+  assert.match(mobileTabs[0].textContent, /K线/);
+  assert.match(mobileTabs[1].textContent, /加密/);
+  assert.match(mobileTabs[2].textContent, /市场/);
+  assert.match(mobileTabs[3].textContent, /自选/);
   assert.match(mobileTabs[4].textContent, /更多/);
+  assert.ok(mobileTabs[0].classList.contains('is-priority'), 'K线 tab has priority visual class');
+  assert.ok(mobileTabs[1].classList.contains('is-priority'), '加密 tab has priority visual class');
 
-  // 3. Click "自选" tab
+  // 4. Click "加密" tab (Slot 2) -> navigates directly to #crypto
   mobileTabs[1].click();
+  await tick();
+  assert.ok(ui.w.document.querySelector('.cw-workspace'), 'Crypto whale workbench is rendered via 1-tap bottom tab');
+
+  // 5. Click "K线" tab (Slot 1) -> navigates directly to #chart with whale switch accessible
+  mobileTabs[0].click();
+  await tick();
+  assert.ok(ui.w.document.querySelector('.chart-panel'), 'Chart panel is rendered via 1-tap bottom tab');
+  assert.ok(ui.w.document.querySelector('.chart-whale-switch-btn'), 'Whale overlay switch button is accessible on mobile chart');
+
+  // 6. Click "自选" tab (Slot 4)
+  mobileTabs[3].click();
   await tick();
   assert.equal(ui.w.document.querySelector('.mobile-watchlist-container') !== null, true, 'Mobile vertical stock list is rendered');
   assert.ok(ui.w.document.querySelector('.mobile-quote-card'), 'Mobile quote cards are rendered in mobile watchlist');
 
-  // 4. Click "更多" tab -> opens more functions sheet
+  // 7. Click "更多" tab (Slot 5) -> opens more functions sheet
   mobileTabs[4].click();
   await tick();
   assert.ok(ui.w.document.querySelector('.mobile-bottom-sheet.is-active'), 'More sheet is active');
   assert.match(ui.w.document.querySelector('.mobile-bottom-sheet.is-active').textContent, /加密行情/);
+  assert.match(ui.w.document.querySelector('.mobile-bottom-sheet.is-active').textContent, /财经资讯/);
   assert.match(ui.w.document.querySelector('.mobile-bottom-sheet.is-active').textContent, /期权持仓/);
 
   // Close more sheet

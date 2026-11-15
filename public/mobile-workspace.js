@@ -8,6 +8,22 @@ export const RECENT_SYMBOLS_KEY = 'market-desk-recent-symbols';
 export const MAX_RECENT_SYMBOLS = 10;
 
 /**
+ * Canonical iOS Mobile Primary Tab Bar (K线 & 加密 elevated to Slots 1 & 2)
+ */
+export const MOBILE_PRIMARY_TABS = [
+  { id: 'chart', label: 'K线', subLabel: '个股', icon: '⌁', priority: true },
+  { id: 'crypto', label: '加密', subLabel: '巨鲸', icon: '₿', priority: true },
+  { id: 'overview', label: '市场', icon: '◫' },
+  { id: 'watchlist', label: '自选', icon: '★' },
+  { id: 'more', label: '更多', icon: '☰' }
+];
+
+/**
+ * Secondary modules & tools accessible from the "More" sheet
+ */
+export const MOBILE_MORE_PAGE_IDS = ['news', 'flows', 'options', 'sources'];
+
+/**
  * Check if the layout is phone (<768px)
  */
 export function isPhone(width = typeof window !== 'undefined' ? window.innerWidth : 1200) {

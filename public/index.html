@@ -17,8 +17,8 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Hanken+Grotesk:wght@400;500;600;700&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css?v=2.14.1">
-  <link rel="stylesheet" href="/mobile-layout.css?v=2.9.0">
+  <link rel="stylesheet" href="/styles.css?v=2.15.0">
+  <link rel="stylesheet" href="/mobile-layout.css?v=2.15.0">
   <link rel="stylesheet" href="/color-palettes.css?v=2.9.0">
   <style>
     /* Prevent Flash of Uncompiled Content (FOUC) and raw modal popups before Vue finishes mounting */
@@ -35,7 +35,7 @@
   <script defer src="/vendor/vue.js"></script>
   <script defer src="/vendor/echarts.js"></script>
   <script defer src="/vendor/lightweight-charts.standalone.js"></script>
-  <script type="module" src="/app.js?v=2.14.1"></script>
+  <script type="module" src="/app.js?v=2.15.0"></script>
 </head>
 
 <body>
@@ -84,6 +84,26 @@
       </div>
 
       <div class="sidebar-scrollable-content">
+        <div class="sidebar-priority-deck">
+          <button type="button" class="sidebar-priority-card is-chart" :class="{ active: page === 'chart' }"
+            @click="navigate('chart')">
+            <div class="spc-top">
+              <span class="spc-icon">⌁</span>
+              <span class="spc-badge">TOP 1</span>
+            </div>
+            <div class="spc-title">个股 K 线</div>
+            <div class="spc-sub">{{ symbol || 'NVDA' }} · 巨鲸点位</div>
+          </button>
+          <button type="button" class="sidebar-priority-card is-crypto" :class="{ active: page === 'crypto' }"
+            @click="navigate('crypto')">
+            <div class="spc-top">
+              <span class="spc-icon">₿</span>
+              <span class="spc-badge">TOP 2</span>
+            </div>
+            <div class="spc-title">加密货币</div>
+            <div class="spc-sub">24/7 链上巨鲸流向</div>
+          </button>
+        </div>
         <button class="sidebar-primary-action" @click="navigate(page==='watchlist'?'overview':'watchlist')">
           <span>{{ page==='watchlist' ? '查看市场全景' : '查看行情看板' }}</span>
           <span class="action-arrow">➔</span>
@@ -532,6 +552,12 @@
               </span>
             </div>
           </template>
+          <template v-else-if="mobileTitleInfo.isCrypto">
+            <div class="mobile-page-title is-crypto-title">
+              <span class="m-title">{{ mobileTitleInfo.title }}</span>
+              <span class="m-live-pill">24/7 实时</span>
+            </div>
+          </template>
           <template v-else>
             <div class="mobile-page-title">
               <span class="m-title">{{ mobileTitleInfo.title }}</span>
@@ -652,6 +678,41 @@
                         </div>
                       </div>
                       <template v-if="overview">
+                        <!-- iOS Mobile Priority Spotlight: Elevate K-Line (#chart) & Crypto Whale (#crypto) -->
+                        <div class="mobile-priority-spotlight mobile-only" role="region" aria-label="核心看盘快捷入口">
+                          <button type="button" class="mps-card is-chart-spotlight" @click="navigate('chart')">
+                            <div class="mps-card-head">
+                              <span class="mps-badge is-chart">📈 K线 · 巨鲸点位</span>
+                              <span class="mps-arrow">➔</span>
+                            </div>
+                            <div class="mps-card-main">
+                              <strong class="mps-symbol font-mono">{{ symbol || 'NVDA' }}</strong>
+                              <span v-if="quoteStore[symbol]?.regular?.price != null" class="mps-price font-mono">${{ num(quoteStore[symbol].regular.price) }}</span>
+                              <span v-if="quoteStore[symbol]?.regular?.changePercent != null" class="mps-pct font-mono"
+                                :class="quoteStore[symbol].regular.changePercent >= 0 ? 'up' : 'down'">
+                                {{ pct(quoteStore[symbol].regular.changePercent) }}
+                              </span>
+                            </div>
+                            <div class="mps-card-foot">
+                              <span>24/7 链上K线 · 测距尺 · 巨鲸开仓标注</span>
+                            </div>
+                          </button>
+
+                          <button type="button" class="mps-card is-crypto-spotlight" @click="navigate('crypto')">
+                            <div class="mps-card-head">
+                              <span class="mps-badge is-crypto">₿ 加密 · 链上巨鲸</span>
+                              <span class="mps-arrow">➔</span>
+                            </div>
+                            <div class="mps-card-main">
+                              <strong class="mps-symbol font-mono">${{ formatWhaleUsd(sankeyKpiSummary.totalOI) }}</strong>
+                              <span class="mps-ls-pill font-mono">多 {{ sankeyKpiSummary.longPct }}% / 空 {{ sankeyKpiSummary.shortPct }}%</span>
+                            </div>
+                            <div class="mps-card-foot">
+                              <span>Hyperliquid 巨鲸桑基流向 · 7×24h 持仓</span>
+                            </div>
+                          </button>
+                        </div>
+
                         <!-- Overview Header Strip -->
                         <div class="overview-header-bar">
                           <div class="overview-title-group">
@@ -6757,11 +6818,12 @@
       </div><!-- /.workspace-body -->
     </div><!-- /.workspace -->
     <nav class="mobile-tab-bar mobile-only" aria-label="底部主导航">
-      <button v-for="item in mobileNav" :key="item.id"
-        :class="['mobile-tab-item', { active: item.id === 'more' ? isMoreActive : page === item.id }]"
+      <button v-for="item in mobileNav" :key="item.id" :data-tab-id="item.id"
+        :class="['mobile-tab-item', { active: item.id === 'more' ? isMoreActive : page === item.id, 'is-priority': item.priority }]"
         :aria-current="page === item.id ? 'page' : undefined" @click="navigate(item.id)">
         <span class="mobile-tab-icon">{{ item.icon }}</span>
         <span class="mobile-tab-label">{{ item.label }}</span>
+        <span v-if="item.subLabel" class="sr-only">{{ item.subLabel }}</span>
       </button>
     </nav>
 
@@ -6805,9 +6867,17 @@
         </div>
         <div class="sheet-body">
           <div class="mobile-more-grid">
-            <button class="mobile-more-card" @click="navigate('crypto')">
+            <button class="mobile-more-card is-priority-card" @click="navigate('chart')">
+              <span class="mobile-more-icon">⌁</span>
+              <span class="mobile-more-title">个股K线</span>
+            </button>
+            <button class="mobile-more-card is-priority-card" @click="navigate('crypto')">
               <span class="mobile-more-icon">₿</span>
               <span class="mobile-more-title">加密行情</span>
+            </button>
+            <button class="mobile-more-card" @click="navigate('news')">
+              <span class="mobile-more-icon">📰</span>
+              <span class="mobile-more-title">财经资讯</span>
             </button>
             <button class="mobile-more-card" @click="navigate('flows')">
               <span class="mobile-more-icon">⇄</span>
