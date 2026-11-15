@@ -15658,22 +15658,25 @@ th.num,
     margin-top: 20px;
   }
 
-  .workspace.is-chart-page .chart-panel > .panel-heading {
+  .workspace.is-chart-page .chart-sticky-toolbar {
     position: sticky;
     top: 0;
     z-index: 40;
-    padding: 6px 14px;
-    min-height: 42px;
     background: var(--surface-card, var(--surface));
     border-bottom: 1px solid var(--border-subtle);
     transition: box-shadow 0.16s ease;
   }
 
-  .workspace.is-chart-page.is-chart-header-docked .chart-panel > .panel-heading {
+  .workspace.is-chart-page .chart-sticky-toolbar .panel-heading {
+    padding: 7px 14px 4px;
+    min-height: 42px;
+  }
+
+  .workspace.is-chart-page.is-chart-header-docked .chart-sticky-toolbar {
     box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
   }
 
-  :root.dark .workspace.is-chart-page.is-chart-header-docked .chart-panel > .panel-heading {
+  :root.dark .workspace.is-chart-page.is-chart-header-docked .chart-sticky-toolbar {
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.36);
   }
 }
