@@ -15493,6 +15493,11 @@ th.num,
   .desktop-only {
     display: none !important;
   }
+
+  .cw-flow-row,
+  .cw-drawer-tr {
+    scroll-margin-top: 50px;
+  }
 }
 
 @media (min-width: 768px) {
