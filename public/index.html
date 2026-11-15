@@ -480,8 +480,8 @@
       </div>
     </aside>
     <div class="workspace"
-      :class="{ 'is-chart-page': isChartDesktop, 'is-chart-topbar-hidden': isChartTopbarHidden, 'is-chart-header-docked': isChartHeaderDocked }"
-      :style="isChartDesktop ? { '--chart-topbar-offset': `${-chartTopbarScrollOffset}px` } : null"
+      :class="{ 'is-chart-page': isChartDesktop, 'is-chart-topbar-hidden': isChartTopbarHidden, 'is-chart-header-docked': isChartHeaderDocked, 'is-topbar-docked': !isChartDesktop && !isMobile && isTopbarDocked }"
+      :style="isChartDesktop ? { '--chart-topbar-offset': `${-chartTopbarScrollOffset}px` } : (!isMobile ? { '--topbar-dock-progress': topbarDockProgress.toFixed(4) } : null)"
       :inert="isMobile&&showSettings">
       <header class="topbar" :aria-hidden="isChartTopbarHidden ? 'true' : null">
         <div class="topbar-left-wrapper">
