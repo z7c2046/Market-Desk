@@ -3908,7 +3908,7 @@ test('Theme auto-follow: tracks OS prefers-color-scheme changes live, supports e
   assert.deepEqual(ui.errors, []);
 });
 
-test('#chart Docked K-line Header: global system topbar scrolls upward away while K-line panel-heading docks cleanly at top', async t => {
+test('#chart Docked K-line Header: global system topbar scrolls upward away while full 3-row chart sticky toolbar docks cleanly at top', async t => {
   const requestedCharts = [];
   const ui = await mount(t, async url => {
     const u = new URL(url, 'http://localhost');
@@ -3927,8 +3927,9 @@ test('#chart Docked K-line Header: global system topbar scrolls upward away whil
   const workspace = ui.w.document.querySelector('.workspace');
   const topbar = ui.w.document.querySelector('.topbar');
   const scrollEl = ui.w.document.querySelector('.workspace-content');
-  const chartHeading = ui.w.document.querySelector('.chart-panel > .panel-heading');
-  assert.ok(workspace && topbar && scrollEl && chartHeading, 'Workspace, topbar, scroll container, and K-line header exist');
+  const stickyToolbar = ui.w.document.querySelector('.chart-panel > .chart-sticky-toolbar');
+  const chartHeading = stickyToolbar?.querySelector('.panel-heading');
+  assert.ok(workspace && topbar && scrollEl && stickyToolbar && chartHeading, 'Workspace, topbar, scroll container, sticky chart toolbar, and K-line header exist');
 
   // 1. Overlapping condensed sticky bar inside .topbar is removed completely
   assert.equal(ui.w.document.querySelector('.topbar-chart-sticky-bar'), null, 'Condensed overlap bar inside .topbar no longer exists');
@@ -3940,19 +3941,19 @@ test('#chart Docked K-line Header: global system topbar scrolls upward away whil
   assert.equal(workspace.classList.contains('is-chart-header-docked'), false);
   assert.equal(topbar.getAttribute('aria-hidden'), null);
 
-  // 3. Scroll down -> global .topbar scrolls upward away and K-line .panel-heading docks cleanly with live controls
+  // 3. Scroll down -> global .topbar scrolls upward away and full 3-row .chart-sticky-toolbar (title/timeframe + quote/palette + MA/inflection/whale legend) docks at top
   scrollEl.scrollTop = 140;
   scrollEl.dispatchEvent(new ui.w.Event('scroll'));
   await tick();
 
   assert.equal(workspace.style.getPropertyValue('--chart-topbar-offset'), '-58px', 'Global topbar translates upward off screen');
   assert.ok(workspace.classList.contains('is-chart-topbar-hidden'), 'Global topbar hidden after scrolling past its height');
-  assert.ok(workspace.classList.contains('is-chart-header-docked'), 'K-line header docks at top of viewport');
+  assert.ok(workspace.classList.contains('is-chart-header-docked'), 'Sticky chart toolbar docks at top of viewport');
   assert.equal(topbar.getAttribute('aria-hidden'), 'true', 'Scrolled-away global topbar marked aria-hidden');
   assert.equal(chartHeading.querySelector('.chart-symbol-text').textContent.trim(), 'SPY');
-  assert.equal(chartHeading.querySelector('.kline-palette-quick-selector'), null, 'Color palette quick selector removed from compact sticky K-line header');
-  assert.equal(chartHeading.querySelector('.stock-price'), null, 'Quote price row moved out of sticky header so only compact strip docks');
-  assert.ok(ui.w.document.querySelector('.chart-panel > .chart-subprice-row'), 'Quote price row remains visible below compact header before scrolling');
+  assert.ok(stickyToolbar.querySelector('.chart-subprice-row .kline-palette-quick-selector'), 'Color palette quick selector sits inside sticky toolbar above indicator switches');
+  assert.ok(stickyToolbar.querySelector('.kline-legend-bar .ma-switch-btn'), 'MA/indicator switches remain docked inside sticky chart toolbar');
+  assert.ok(stickyToolbar.querySelector('.kline-legend-bar .chart-whale-switch-btn'), 'Whale overlay switch remains docked inside sticky chart toolbar');
 
   // 4. Switch K-line interval (4小时) & date range (3月) directly from docked K-line .panel-heading
   const docked4hBtn = [...chartHeading.querySelectorAll('.chart-interval-tools button')].find(b => b.textContent.trim() === '4小时');
@@ -3986,7 +3987,7 @@ test('#chart Docked K-line Header: global system topbar scrolls upward away whil
   assert.match(css, /\.workspace\.is-chart-page \.workspace-content\s*\{[^}]*padding-top:\s*0;/);
   assert.match(css, /\.workspace\.is-chart-page \.page-container\s*\{[^}]*padding-top:\s*68px;/);
   assert.match(css, /\.workspace\.is-chart-page \.chart-panel\s*\{[^}]*overflow:\s*clip;/);
-  assert.match(css, /\.workspace\.is-chart-page \.chart-panel > \.panel-heading\s*\{[^}]*position:\s*sticky;[^}]*top:\s*0;/);
+  assert.match(css, /\.workspace\.is-chart-page \.chart-sticky-toolbar\s*\{[^}]*position:\s*sticky;[^}]*top:\s*0;/);
 
   // 5. Verbose footnotes & dense sub-labels removed from chart/crypto/topbar and consolidated into #sources (说明)
   assert.equal(ui.w.document.querySelector('.chart-panel .panel-note'), null, 'Redundant K-line footnote removed from #chart');
