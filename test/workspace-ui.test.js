@@ -582,8 +582,17 @@ test('K-line color schemes: defaults to classic (图一), switches to neon (图�
   assert.ok(chartCfg.xAxis[0].splitLine.lineStyle.color.includes('255'), 'Dark mode grid is subtle light grey');
   assert.equal(chartCfg.series[6].data[0].itemStyle.color, 'rgba(16, 185, 129, 0.65)', 'Dark volume color is classic green with 0.65 alpha');
 
-  // Quick palette bar is removed from #chart header to keep sticky header compact; schemes live in Preferences Modal
-  assert.equal(ui.w.document.querySelector('.kline-palette-quick-selector'), null, 'Quick palette selector is removed from compact chart header');
+  // Quick palette bar is present inside .chart-subprice-row above indicator switches and switches color scheme directly
+  const quickPalette = ui.w.document.querySelector('.chart-subprice-row .kline-palette-quick-selector');
+  assert.ok(quickPalette, 'Quick palette selector is rendered inside .chart-subprice-row');
+  const neonChip = [...quickPalette.querySelectorAll('.kline-palette-chip')].find(b => b.textContent.includes('亮绿玫粉'));
+  assert.ok(neonChip, 'Neon quick palette chip exists');
+  neonChip.click();
+  await tick();
+  assert.equal(ui.configs.get('price-chart').series[0].itemStyle.color, '#7CE138', 'Quick palette chip switches K-line up color immediately');
+  const classicChip = [...quickPalette.querySelectorAll('.kline-palette-chip')].find(b => b.textContent.includes('经典绿红'));
+  classicChip.click();
+  await tick();
 
   // 3. Open Preferences Modal and verify neon / cyberpunk / classic / deepbluepurple scheme switching
   const settingsBtn = ui.w.document.querySelector('.settings-modal-btn');
