@@ -4296,7 +4296,7 @@ createApp({
       focusedFlowSymbol.value = finalSymbol;
       disposeWhaleDrawerChart();
 
-      // 6. 滚动居中并触发聚焦高亮（平滑对齐抽屉与标的行）
+      // 6. 滚动顶格对齐头部栏下方并触发聚焦高亮（平滑对齐抽屉与标的行）
       nextTick(() => {
         setTimeout(() => {
           const rowEl = document.querySelector(`.cw-flow-row[data-symbol="${finalSymbol}"]`)
@@ -4304,7 +4304,7 @@ createApp({
             || document.querySelector('.cw-drawer-tr')
             || document.querySelector('.cw-flow-panel');
           if (rowEl && typeof rowEl.scrollIntoView === 'function') {
-            rowEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            rowEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
           }
           setTimeout(() => {
             if (focusedFlowSymbol.value === finalSymbol) focusedFlowSymbol.value = '';
