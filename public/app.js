@@ -785,7 +785,7 @@ createApp({
       chartTopbarScrollOffset.value = offset;
       isChartTopbarHidden.value = offset >= topbarLimit;
 
-      const headingEl = document.querySelector('.chart-panel > .panel-heading');
+      const headingEl = document.querySelector('.chart-panel .chart-sticky-toolbar') || document.querySelector('.chart-panel .panel-heading');
       if (headingEl) {
         const hRect = headingEl.getBoundingClientRect();
         if (hRect.height > 0) {
