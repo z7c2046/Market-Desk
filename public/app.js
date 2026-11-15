@@ -753,19 +753,34 @@ createApp({
     const chartTopbarScrollOffset = ref(0);
     const isChartTopbarHidden = ref(false);
     const isChartHeaderDocked = ref(false);
+    const topbarDockProgress = ref(0);
+    const isTopbarDocked = ref(false);
     let workspaceScrollEl = null;
 
     function updateChartTopbarScroll() {
+      const contentEl = document.querySelector('.workspace-content');
+      const scrollTop = Math.max(contentEl?.scrollTop || 0, window.scrollY || 0, 0);
+      if (isMobile.value) {
+        chartTopbarScrollOffset.value = 0;
+        isChartTopbarHidden.value = false;
+        isChartHeaderDocked.value = false;
+        topbarDockProgress.value = 0;
+        isTopbarDocked.value = false;
+        return;
+      }
       if (!isChartDesktop.value) {
         chartTopbarScrollOffset.value = 0;
         isChartTopbarHidden.value = false;
         isChartHeaderDocked.value = false;
+        const progress = Math.min(1, Math.max(0, scrollTop / 32));
+        topbarDockProgress.value = progress;
+        isTopbarDocked.value = progress >= 0.99;
         return;
       }
-      const contentEl = document.querySelector('.workspace-content');
-      const scrollTop = Math.max(contentEl?.scrollTop || 0, window.scrollY || 0, 0);
+      topbarDockProgress.value = 0;
+      isTopbarDocked.value = false;
       const topbarEl = document.querySelector('.topbar');
-      const topbarLimit = (topbarEl?.offsetHeight || 56) + 2;
+      const topbarLimit = (topbarEl?.offsetTop || 0) + (topbarEl?.offsetHeight || 56) + 2;
       const offset = Math.min(scrollTop, topbarLimit);
       chartTopbarScrollOffset.value = offset;
       isChartTopbarHidden.value = offset >= topbarLimit;
@@ -794,6 +809,8 @@ createApp({
       chartTopbarScrollOffset.value = 0;
       isChartTopbarHidden.value = false;
       isChartHeaderDocked.value = false;
+      topbarDockProgress.value = 0;
+      isTopbarDocked.value = false;
     }
 
     // ==========================================
@@ -10889,7 +10906,7 @@ createApp({
     watch([page, newsSubView, aiSearchAutoRefresh], scheduleAiSearchRefresh);
 
     return {
-      nav, mobileNav, isDark, themePreference, isChartDesktop, chartTopbarScrollOffset, isChartTopbarHidden, isChartHeaderDocked, scrollWorkspaceToTop, isMobile, isWide, showSettings, toggleTheme, setThemeMode, openSettings, closeSettings, navigate, handleDrawerKey,
+      nav, mobileNav, isDark, themePreference, isChartDesktop, chartTopbarScrollOffset, isChartTopbarHidden, isChartHeaderDocked, topbarDockProgress, isTopbarDocked, scrollWorkspaceToTop, isMobile, isWide, showSettings, toggleTheme, setThemeMode, openSettings, closeSettings, navigate, handleDrawerKey,
       uiPalette, uiPaletteOptions, setUiPalette,
       isCompactLayout, isPhoneLayout, activeMobileOverlay, openMobileOverlay, closeMobileOverlay,
       mobileSearchQuery, recentSymbolsList, executeMobileSearch, sourceNavigationPage,
