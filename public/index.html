@@ -1416,21 +1416,34 @@
                         </div>
 
                         <div v-if="chart" class="stock-price chart-subprice-row">
-                          <span class="stock-reg-quote">
-                            <span class="stock-price-val">{{num(chart.price)}}</span>
-                            <small>{{chart.currency}}</small>
-                            <span :class="tone(chart.changePercent)">{{pct(chart.changePercent)}}</span>
-                          </span>
-                          <span v-if="!isMarketOpen && showExtColumn && activeChartExtQuote?.price != null"
-                            class="stock-ext-inline-pill" :class="activeChartExtQuote.session">
-                            <span class="ext-tag-name">
-                              {{ activeChartExtQuote.session === 'pre' ? '🌅 盘前' : activeChartExtQuote.session ===
-                              'post' ? '🌇 盘后' : '🌙 隔夜' }}
+                          <div class="chart-subprice-left">
+                            <span class="stock-reg-quote">
+                              <span class="stock-price-val">{{num(chart.price)}}</span>
+                              <small>{{chart.currency}}</small>
+                              <span :class="tone(chart.changePercent)">{{pct(chart.changePercent)}}</span>
                             </span>
-                            <span class="ext-price-val">{{ num(activeChartExtQuote.price) }}</span>
-                            <span class="ext-pct-val" :class="tone(activeChartExtQuote.changePercent)">{{
-                              pct(activeChartExtQuote.changePercent) }}</span>
-                          </span>
+                            <span v-if="!isMarketOpen && showExtColumn && activeChartExtQuote?.price != null"
+                              class="stock-ext-inline-pill" :class="activeChartExtQuote.session">
+                              <span class="ext-tag-name">
+                                {{ activeChartExtQuote.session === 'pre' ? '🌅 盘前' : activeChartExtQuote.session ===
+                                'post' ? '🌇 盘后' : '🌙 隔夜' }}
+                              </span>
+                              <span class="ext-price-val">{{ num(activeChartExtQuote.price) }}</span>
+                              <span class="ext-pct-val" :class="tone(activeChartExtQuote.changePercent)">{{
+                                pct(activeChartExtQuote.changePercent) }}</span>
+                            </span>
+                          </div>
+                          <div class="kline-palette-quick-selector desktop-only" title="K 线走势配色方案">
+                            <button v-for="item in klineSchemeOptions" :key="item.id" type="button"
+                              class="kline-palette-chip" :class="{ active: klineScheme === item.id }" :title="item.title"
+                              @click="setKlineScheme(item.id)">
+                              <span class="chip-dot" :style="{ backgroundColor: item.up }"></span>
+                              <span class="chip-dot" :style="{ backgroundColor: item.down }"></span>
+                              <span class="chip-name">{{ item.shortName }}</span>
+                            </button>
+                            <button type="button" class="btn-settings-icon" @click="openPreferencesModal"
+                              title="K 线图表与偏好设置">⚙️</button>
+                          </div>
                         </div>
 
                         <!-- Mobile Timeframe Range & Interval Pill Tabs -->
