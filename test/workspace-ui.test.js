@@ -4279,8 +4279,57 @@ test('#crypto Sankey asset click docks focused flow row flush below topbar (bloc
   assert.equal(btcScroll.opts?.block, 'start', 'Target flow row scrolls flush to top under topbar with block: start');
 
   const stylesCss = await fs.readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
-  assert.match(stylesCss, /\.cw-flow-row\s*\{[^}]*scroll-margin-top:\s*0;/, 'Desktop .cw-flow-row aligns flush to topbar');
+  assert.match(stylesCss, /\.cw-flow-row\s*\{[^}]*scroll-margin-top:\s*56px;/, 'Desktop .cw-flow-row clears 56px docked topbar');
   assert.match(stylesCss, /@media\s*\(max-width:\s*767px\)[\s\S]*?\.cw-flow-row[\s\S]*?scroll-margin-top:\s*50px;/, 'Mobile .cw-flow-row clears sticky 50px topbar');
+
+  assert.deepEqual(ui.errors, []);
+});
+
+test('Desktop topbar: aligns #chart inset spacing at rest and smoothly expands/docks non-chart topbar on scroll', async t => {
+  const ui = await mount(t, async url => ({ ok: true, json: async () => fixture(url) }));
+
+  // 1. Default landing (#overview / non-chart): rests with full outer spacing (--topbar-dock-progress: 0)
+  const workspace = ui.w.document.querySelector('.workspace');
+  const scrollEl = ui.w.document.querySelector('.workspace-content');
+  assert.ok(workspace && scrollEl, 'Workspace and scroll container exist');
+  assert.equal(workspace.classList.contains('is-chart-page'), false);
+  assert.equal(workspace.style.getPropertyValue('--topbar-dock-progress'), '0.0000');
+  assert.equal(workspace.classList.contains('is-topbar-docked'), false);
+
+  // 2. Navigate to #crypto and scroll partially (16px -> 50% expanded) then fully docked (>= 32px -> 100%)
+  await ui.click('加密货币');
+  await tick();
+
+  scrollEl.scrollTop = 16;
+  scrollEl.dispatchEvent(new ui.w.Event('scroll'));
+  await tick();
+  assert.equal(workspace.style.getPropertyValue('--topbar-dock-progress'), '0.5000', 'Topbar smoothly interpolates toward docked state');
+  assert.equal(workspace.classList.contains('is-topbar-docked'), false);
+
+  scrollEl.scrollTop = 64;
+  scrollEl.dispatchEvent(new ui.w.Event('scroll'));
+  await tick();
+  assert.equal(workspace.style.getPropertyValue('--topbar-dock-progress'), '1.0000', 'Topbar expands to full-bleed docked state at scrollTop >= 32');
+  assert.ok(workspace.classList.contains('is-topbar-docked'), 'Workspace receives is-topbar-docked class when docked');
+
+  // 3. Scroll back up toward rest -> smoothly shrinks/restores original outer spacing
+  scrollEl.scrollTop = 0;
+  scrollEl.dispatchEvent(new ui.w.Event('scroll'));
+  await tick();
+  assert.equal(workspace.style.getPropertyValue('--topbar-dock-progress'), '0.0000', 'Topbar restores initial inset margins at scrollTop 0');
+  assert.equal(workspace.classList.contains('is-topbar-docked'), false);
+
+  // 4. Switch to #chart -> non-chart dock progress clears and #chart keeps chart-specific scroll mode
+  await ui.click('个股');
+  await tick();
+  assert.ok(workspace.classList.contains('is-chart-page'));
+  assert.equal(workspace.style.getPropertyValue('--topbar-dock-progress'), '');
+  assert.equal(workspace.classList.contains('is-topbar-docked'), false);
+
+  // 5. CSS rules align #chart initial topbar (20px) and drive non-chart interpolation + flush dock
+  const css = await fs.readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
+  assert.match(css, /\.workspace:not\(\.is-chart-page\)\s+\.topbar\s*\{[^}]*top:\s*calc\(20px \* \(1 - var\(--topbar-dock-progress,\s*0\)\)\);[^}]*left:\s*calc\(20px \* \(1 - var\(--topbar-dock-progress,\s*0\)\)\);[^}]*right:\s*calc\(20px \* \(1 - var\(--topbar-dock-progress,\s*0\)\)\);/);
+  assert.match(css, /\.workspace\.is-chart-page\s+\.topbar\s*\{[^}]*top:\s*20px;[^}]*left:\s*20px;[^}]*right:\s*20px;/);
 
   assert.deepEqual(ui.errors, []);
 });
