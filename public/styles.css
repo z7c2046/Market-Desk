@@ -2796,18 +2796,30 @@ main {
   margin-bottom: 12px;
 }
 
-.chart-panel > .panel-heading {
-  padding: 7px 14px;
-  min-height: 44px;
+.chart-panel .panel-heading {
+  padding: 7px 14px 4px;
+  min-height: 42px;
   gap: 10px;
 }
 
-.chart-panel > .panel-heading .tiny-btn {
+.chart-panel .panel-heading .tiny-btn {
   padding: 4px 9px;
 }
 
 .chart-subprice-row {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
   padding: 4px 14px 4px;
+}
+
+.chart-subprice-left {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 /* Crypto-style K-Line Chart Legend Bar matching ECharts legend */
