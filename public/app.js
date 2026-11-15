@@ -10010,6 +10010,7 @@ createApp({
           const chartInstance = LW.createChart(el, {
             autoSize: true,
             layout: {
+              attributionLogo: false,
               background: { type: LW.ColorType.Solid, color: chartBg },
               textColor: textThemeColor,
               fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, PingFang SC, sans-serif',
