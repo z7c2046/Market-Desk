@@ -1493,6 +1493,14 @@
                               <span class="ext-pct-val" :class="tone(activeChartExtQuote.changePercent)">{{
                                 pct(activeChartExtQuote.changePercent) }}</span>
                             </span>
+                            <span v-if="chartEtfEquivalentRef" class="chart-etf-ref-pill font-mono"
+                              :title="chartEtfEquivalentRef.title">{{ chartEtfEquivalentRef.label }}</span>
+                            <span v-if="chart?.venue === 'hyperliquid' && chart?.fundingAnnualPct != null"
+                              class="chart-funding-pill font-mono"
+                              :class="chart.fundingAnnualPct > 15 ? 'is-crowded-long' : (chart.fundingAnnualPct < -15 ? 'is-crowded-short' : '')"
+                              :title="'永续合约年化资金费率: ' + (chart.fundingAnnualPct >= 0 ? '+' : '') + chart.fundingAnnualPct + '%'">
+                              费率 {{ (chart.fundingAnnualPct >= 0 ? '+' : '') + chart.fundingAnnualPct.toFixed(1) }}%
+                            </span>
                           </div>
                           <div class="kline-palette-quick-selector desktop-only" title="K 线走势配色方案">
                             <button v-for="item in klineSchemeOptions" :key="item.id" type="button"
@@ -1579,6 +1587,26 @@
                                 <span style="color:#fb923c;font-weight:600;font-size:11px;">DEMA30 慢线</span>
                               </span>
                             </template>
+                            <button type="button" class="chart-legend-item vwap-switch-btn"
+                              :class="{ 'is-active': showChartVwap, 'is-off': !showChartVwap }"
+                              @click="toggleChartVwap"
+                              :title="'日内锚定 VWAP 与昨高/昨低 (PDH/PDL) · 快捷键 V · ' + (showChartVwap ? '已开启' : '已关闭')"
+                              aria-label="切换 VWAP 与昨高低参考线" :aria-pressed="showChartVwap">
+                              <svg class="ma-switch-icon" width="22" height="12" viewBox="0 0 22 12" fill="none"
+                                aria-hidden="true">
+                                <line x1="1" y1="6" x2="21" y2="6" stroke="currentColor" stroke-width="2"
+                                  stroke-dasharray="3 2" stroke-linecap="round" />
+                              </svg>
+                              <span class="ma-switch-label">VWAP</span>
+                            </button>
+                            <button v-if="isChartOptionsCapable" type="button"
+                              class="chart-legend-item options-wall-switch-btn"
+                              :class="{ 'is-active': showChartOptionsWall, 'is-off': !showChartOptionsWall }"
+                              @click="toggleChartOptionsWall"
+                              :title="'在 K 线上投射 Cboe Call Wall / Put Wall 阻力支撑位 · 快捷键 O · ' + (showChartOptionsWall ? '已开启' : '已关闭')"
+                              aria-label="切换期权墙水平参考线" :aria-pressed="showChartOptionsWall">
+                              <span class="ma-switch-label">期权墙</span>
+                            </button>
                             <button type="button" class="chart-legend-item inflection-switch-btn"
                               :class="{ 'is-active': showInflectionSignals, 'is-off': !showInflectionSignals }"
                               @click="toggleInflectionSignals"
