@@ -11005,6 +11005,10 @@ createApp({
     }
 
     function handleGlobalKeyDown(e) {
+      if (e.key === 'Escape' && (isRulerActive.value || isRulerDrawing.value || rulerMeasurement.value)) {
+        clearRuler();
+        return;
+      }
       if (e.key === 'Escape' && (activeChartWhaleHud.value || selectedChartWhaleKey.value || activeWhaleHud.value)) {
         resetChartWhaleIsolation();
         activeWhaleHud.value = null;
@@ -11019,7 +11023,16 @@ createApp({
         showPreferencesModal.value = false;
         return;
       }
-      if ((e.key === '/' || ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k')) && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') {
+      const activeEl = document.activeElement;
+      const isTyping = Boolean(
+        activeEl && (
+          activeEl.tagName === 'INPUT'
+          || activeEl.tagName === 'TEXTAREA'
+          || activeEl.tagName === 'SELECT'
+          || activeEl.isContentEditable
+        )
+      );
+      if ((e.key === '/' || ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k')) && !isTyping) {
         e.preventDefault();
         if (isChartDesktop.value && chartTopbarScrollOffset.value > 0) {
           const contentEl = document.querySelector('.workspace-content');
@@ -11033,6 +11046,41 @@ createApp({
           input?.focus();
           input?.select();
         });
+        return;
+      }
+
+      if (isTyping || e.metaKey || e.ctrlKey || e.altKey || showPreferencesModal.value || showCustomWalletManager.value) {
+        return;
+      }
+
+      if (page.value === 'chart') {
+        const k = e.key.toLowerCase();
+        if (k === '1') { e.preventDefault(); setChartInterval('15m'); return; }
+        if (k === '2') { e.preventDefault(); setChartInterval('1h'); return; }
+        if (k === '3') { e.preventDefault(); setChartInterval('4h'); return; }
+        if (k === '4') { e.preventDefault(); setChartInterval('1d'); return; }
+        if (k === 'w') { e.preventDefault(); toggleChartWhaleOverlay(); return; }
+        if (k === 'e') { e.preventDefault(); toggleInflectionSignals(); return; }
+        if (k === 'v') { e.preventDefault(); toggleChartVwap(); return; }
+        if (k === 'o' && isChartOptionsCapable.value) { e.preventDefault(); toggleChartOptionsWall(); return; }
+        if (k === 'm') { e.preventDefault(); toggleRulerTool(); return; }
+        if (k === 'r' || e.key === ' ') {
+          if (activeEl?.tagName === 'BUTTON') return;
+          e.preventDefault();
+          resetPriceChartZoom();
+          return;
+        }
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || k === 'j' || k === 'k') {
+          const list = Array.isArray(watchlist.value) ? watchlist.value : [];
+          if (list.length > 1) {
+            e.preventDefault();
+            const curIdx = list.indexOf(symbol.value);
+            const delta = (e.key === 'ArrowDown' || k === 'j') ? 1 : -1;
+            const nextIdx = curIdx < 0 ? 0 : (curIdx + delta + list.length) % list.length;
+            selectSymbol(list[nextIdx], { source: 'chart', venue: chartVenue.value });
+          }
+          return;
+        }
       }
     }
 
@@ -11201,6 +11249,13 @@ createApp({
     watch([page, symbol, isMobile], () => {
       nextTick(updateChartTopbarScroll);
     });
+    watch([page, symbol, showChartOptionsWall], () => {
+      if (page.value === 'chart' && showChartOptionsWall.value && isChartOptionsCapable.value) {
+        loadChartOptionsWallForSymbol(symbol.value);
+      } else if (!showChartOptionsWall.value) {
+        clearChartPriceLines(lwCandleSeries, lwOptionsWallLines);
+      }
+    });
     watch([page, newsSubView, aiSearchAutoRefresh], scheduleAiSearchRefresh);
 
     return {
@@ -11219,6 +11274,7 @@ createApp({
       klineScheme, klineGridStyle, showPreferencesModal, openPreferencesModal, closePreferencesModal, setKlineScheme, setKlineGrid, klineSchemeOptions, activeKlineScheme, KLINE_SCHEMES,
       heatmapScheme, activeHeatmapScheme, heatmapSchemeOptions, setHeatmapScheme, heatmapGradientStyle, HEATMAP_SCHEMES,
       klineMaVisibility, MA_CONFIGS, toggleMa, setAllMaVisibility, showInflectionSignals, toggleInflectionSignals,
+      showChartVwap, toggleChartVwap, showChartOptionsWall, toggleChartOptionsWall, chartOptionsWallData, chartOptionsWallLoading, isChartOptionsCapable, chartEtfEquivalentRef,
       defaultPage, defaultPageOptions, setDefaultPage,
       page, currentNav, onPageEntered,
       overview, chart, options, news, states, searchInput, symbol, chartRange, chartInterval, INTERVAL_OPTIONS, RANGE_OPTIONS, setChartInterval, formatIntervalLabel,
