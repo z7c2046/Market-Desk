@@ -1496,6 +1496,40 @@ export class CryptoWhaleService {
           fills: fillsByAddr.get(w.address) || []
         }));
 
+        // 根据近期真实链上成交记录为每笔持仓标注增/减仓动向 (recentAction: 'add' | 'reduce')
+        for (const entry of fulfilledEntries) {
+          const whale = entry.whale;
+          const fills = Array.isArray(entry.fills) ? entry.fills : [];
+          if (!whale?.positions?.length || !fills.length) continue;
+          const deltaMap = new Map();
+          for (const f of fills) {
+            const rawCoin = String(f?.coin || '').trim();
+            if (!rawCoin) continue;
+            const normCoin = isStocks ? stripDeployerPrefix(rawCoin).toUpperCase() : rawCoin.toUpperCase();
+            if (!normCoin) continue;
+            const dirInfo = this.normalizeFillDirection(f?.dir, f?.side);
+            const sz = Math.abs(Number.parseFloat(f?.sz || 0));
+            const px = Math.abs(Number.parseFloat(f?.px || 0));
+            const ntl = sz * px;
+            if (!(ntl > 0)) continue;
+            const key = `${normCoin}:${dirInfo.isLong ? 'LONG' : 'SHORT'}`;
+            const cur = deltaMap.get(key) || { addNtl: 0, reduceNtl: 0 };
+            if (dirInfo.isIncrease) cur.addNtl += ntl;
+            else cur.reduceNtl += ntl;
+            deltaMap.set(key, cur);
+          }
+          for (const p of whale.positions) {
+            const key = `${String(p.coin || '').toUpperCase()}:${p.side}`;
+            const d = deltaMap.get(key);
+            if (!d) continue;
+            const net = d.addNtl - d.reduceNtl;
+            if (Math.abs(net) >= 1000) {
+              p.recentAction = net >= 0 ? 'add' : 'reduce';
+              p.recentDeltaNotional = Number(net.toFixed(2));
+            }
+          }
+        }
+
         const aggregate = this.computeAggregateMetrics(selectedWhales);
         const fetchCompletedAt = Date.now();
         const activityLogs = this.buildActivityLogsFromFills(fulfilledEntries, {
@@ -1503,9 +1537,18 @@ export class CryptoWhaleService {
           market
         });
         const assetVolumes = {};
+        const assetFundings = {};
         for (const [coin, info] of Object.entries(assetPrices)) {
+          const upper = String(coin).toUpperCase();
           const dayVol = Number(info?.dayVol) || 0;
-          if (dayVol > 0) assetVolumes[String(coin).toUpperCase()] = dayVol;
+          if (dayVol > 0) assetVolumes[upper] = dayVol;
+          const funding = Number(info?.funding);
+          if (Number.isFinite(funding)) {
+            assetFundings[upper] = {
+              rate: funding,
+              annualPct: Number((funding * 24 * 365 * 100).toFixed(1))
+            };
+          }
         }
 
         let stockWhales;
@@ -1534,6 +1577,7 @@ export class CryptoWhaleService {
           whales: selectedWhales,
           activityLogs,
           assetVolumes,
+          assetFundings,
           ...(isStocks ? {} : { stockWhales })
         };
 
@@ -1548,7 +1592,8 @@ export class CryptoWhaleService {
             aggregate,
             whales: selectedWhales,
             activityLogs,
-            assetVolumes
+            assetVolumes,
+            assetFundings
           };
         }
 
