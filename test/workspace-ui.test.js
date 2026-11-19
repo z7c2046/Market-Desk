@@ -4398,4 +4398,231 @@ test('Desktop topbar: aligns #chart inset spacing at rest and smoothly expands/d
   assert.deepEqual(ui.errors, []);
 });
 
+test('Trader workflow upgrades: VWAP + PDH/PDL, Options Wall on K-line, live tick update, keyboard shortcuts, and whale liq distance/delta/funding', async t => {
+  const priceLines = [];
+  const candleUpdates = [];
+  const chartReqs = [];
+  let optionsWallFetched = false;
+  let esInstance = null;
+
+  const stubSeries = (kind) => ({
+    _kind: kind,
+    setData() {},
+    update(bar) { if (kind === 'Candlestick') candleUpdates.push(bar); },
+    applyOptions() {},
+    setMarkers() {},
+    createPriceLine(opts) {
+      const line = { ...opts };
+      priceLines.push(line);
+      return line;
+    },
+    removePriceLine(line) {
+      const idx = priceLines.indexOf(line);
+      if (idx >= 0) priceLines.splice(idx, 1);
+    },
+    priceToCoordinate: (p) => (800 - p),
+    coordinateToPrice: (y) => (800 - y),
+    priceScale: () => ({ setAutoScale() {}, applyOptions() {} })
+  });
+
+  const stubChart = {
+    applyOptions() {},
+    resize() {},
+    remove() {},
+    subscribeCrosshairMove() {},
+    timeScale: () => ({
+      subscribeVisibleLogicalRangeChange() {},
+      setVisibleLogicalRange() {},
+      setVisibleRange() {},
+      getVisibleLogicalRange: () => ({ from: 10, to: 40 }),
+      fitContent() {},
+      timeToCoordinate: () => 100
+    }),
+    priceScale: () => ({ setAutoScale() {}, applyOptions() {} }),
+    addSeries: (kind) => stubSeries(kind)
+  };
+
+  const baseNow = Math.floor(Date.parse('2026-11-13T16:00:00Z') / 1000);
+  const twoDayBars = [
+    { time: baseNow - 86400 - 1800, open: 500, high: 510, low: 495, close: 505, volume: 100000 },
+    { time: baseNow - 86400, open: 505, high: 512, low: 498, close: 508, volume: 120000 },
+    { time: baseNow - 900, open: 508, high: 515, low: 506, close: 512, volume: 90000 },
+    { time: baseNow, open: 512, high: 516, low: 510, close: 514, volume: 110000 }
+  ];
+
+  const ui = await mount(t, async url => {
+    const u = new URL(url, 'http://localhost');
+    if (u.pathname.endsWith('/api/market/chart')) {
+      chartReqs.push({
+        symbol: u.searchParams.get('symbol'),
+        interval: u.searchParams.get('interval'),
+        range: u.searchParams.get('range')
+      });
+      return {
+        ok: true,
+        json: async () => ({
+          symbol: u.searchParams.get('symbol') || 'SPY',
+          name: 'SPDR S&P 500 ETF',
+          currency: 'USD',
+          price: 514,
+          previousClose: 508,
+          changePercent: 1.18,
+          interval: u.searchParams.get('interval') || '1d',
+          range: u.searchParams.get('range') || '3mo',
+          venue: 'yahoo',
+          bars: twoDayBars.map(b => ({ ...b }))
+        })
+      };
+    }
+    if (u.pathname.endsWith('/api/options')) {
+      optionsWallFetched = true;
+      return {
+        ok: true,
+        json: async () => ({
+          symbol: 'SPY',
+          spot: 514,
+          expiration: '2026-11-20',
+          expirations: ['2026-11-20'],
+          callWall: [525],
+          putWall: [500],
+          rows: []
+        })
+      };
+    }
+    if (u.pathname.endsWith('/api/watchlist/quotes')) {
+      return {
+        ok: true,
+        json: async () => ({
+          quotes: {
+            SPY: { symbol: 'SPY', price: 516.5, regular: { price: 516.5, changePercent: 1.67 } }
+          }
+        })
+      };
+    }
+    if (u.pathname.endsWith('/api/crypto/whales')) {
+      const isStocks = u.searchParams.get('category') === 'stocks';
+      return {
+        ok: true,
+        json: async () => ({
+          ok: true,
+          category: isStocks ? 'stocks' : 'crypto',
+          isLive: true,
+          isSample: false,
+          source: isStocks ? 'hyperliquid-xyz-api' : 'hyperliquid-api',
+          assetFundings: { BTC: { rate: 0.000025, annualPct: 21.9 } },
+          aggregate: { totalTrackedWhales: 1, totalEquity: 5000000, totalOI: 6600000, totalLongNotional: 6600000, totalShortNotional: 0, longRatio: 100, shortRatio: 0, totalUnrealizedPnl: 100000, topCoins: [] },
+          whales: [{
+            address: '0x1111111111111111111111111111111111111111',
+            name: 'HL 巨鲸',
+            accountValue: 5000000,
+            totalNotional: 6600000,
+            longNotional: 6600000,
+            shortNotional: 0,
+            positions: [{
+              coin: 'BTC',
+              chartSymbol: 'BTC-USD',
+              side: 'LONG',
+              isLong: true,
+              size: 100,
+              entryPx: 65000,
+              markPx: 66000,
+              positionValue: 6600000,
+              unrealizedPnl: 100000,
+              leverageLabel: '20x 全仓',
+              liquidationPx: 63500,
+              liqDistancePct: 3.8,
+              recentAction: 'add',
+              recentDeltaNotional: 500000,
+              fundingAnnualPct: 21.9
+            }]
+          }],
+          activityLogs: []
+        })
+      };
+    }
+    return { ok: true, json: async () => fixture(url) };
+  }, { 'market-desk-default-page': 'chart' }, w => {
+    w.EventSource = class { constructor(url) { if (String(url).includes('/api/watchlist/stream')) esInstance = this; } close() { } };
+    w.LightweightCharts = {
+      ColorType: { Solid: 'solid' },
+      CrosshairMode: { Normal: 1 },
+      CandlestickSeries: 'Candlestick',
+      HistogramSeries: 'Histogram',
+      LineSeries: 'Line',
+      createChart: () => stubChart
+    };
+  });
+
+  await tick();
+  await tick();
+
+  // 1. Live SSE quote arriving while chart is mounted updates last candle via lwCandleSeries.update()
+  assert.ok(esInstance && typeof esInstance.onmessage === 'function', 'SSE stream attached');
+  esInstance.onmessage({
+    data: JSON.stringify({
+      type: 'quotes',
+      data: [{ symbol: 'SPY', session: 'regular', price: 517.25, changePercent: 1.82 }]
+    })
+  });
+  await tick();
+  assert.ok(candleUpdates.some(c => c.close === 517.25), 'SSE live quote updates active chart last candle');
+
+  // 2. Press 'v' hotkey -> toggles VWAP + PDH/PDL reference lines on chart
+  ui.w.dispatchEvent(new ui.w.KeyboardEvent('keydown', { key: 'v', bubbles: true }));
+  await tick();
+  assert.ok(ui.w.document.querySelector('.vwap-switch-btn.is-active'), 'V hotkey activates VWAP toggle');
+  assert.ok(priceLines.some(l => l.title === 'PDH 昨高') && priceLines.some(l => l.title === 'PDL 昨低'), 'VWAP mode projects PDH/PDL price lines');
+
+  // 3. Press 'o' hotkey -> loads Cboe options wall and projects Call Wall & Put Wall onto K-line
+  ui.w.dispatchEvent(new ui.w.KeyboardEvent('keydown', { key: 'o', bubbles: true }));
+  await tick();
+  await new Promise(resolve => setTimeout(resolve, 40));
+  await tick();
+  assert.ok(optionsWallFetched, 'O hotkey fetches /api/options for active chart symbol');
+  assert.ok(priceLines.some(l => l.title === 'Call Wall' && l.price === 525), 'Call Wall line projected onto K-line');
+  assert.ok(priceLines.some(l => l.title === 'Put Wall' && l.price === 500), 'Put Wall line projected onto K-line');
+
+  // 4. Press '1' hotkey -> switches K-line interval to 15m; 'ArrowDown' -> cycles to next watchlist symbol
+  ui.w.dispatchEvent(new ui.w.KeyboardEvent('keydown', { key: '1', bubbles: true }));
+  await tick();
+  assert.ok(chartReqs.some(r => r.interval === '15m'), '1 hotkey switches chart interval to 15m');
+
+  const beforeSym = ui.w.document.querySelector('.chart-symbol-text')?.textContent.trim();
+  ui.w.dispatchEvent(new ui.w.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+  await tick();
+  const afterSym = ui.w.document.querySelector('.chart-symbol-text')?.textContent.trim();
+  assert.notEqual(afterSym, beforeSym, 'ArrowDown hotkey steps to next watchlist symbol on #chart');
+
+  // 5. Switch to #crypto -> select Crypto tab, expand BTC via Sankey, verify funding pill, position delta tag (▲加), and danger liquidation distance (3.8%)
+  await ui.click('加密货币');
+  await tick();
+  await new Promise(resolve => setTimeout(resolve, 60));
+  await tick();
+
+  const catBtns = ui.w.document.querySelectorAll('.whale-cat-btn');
+  if (catBtns.length > 0) {
+    catBtns[0].click();
+    await tick();
+    await new Promise(resolve => setTimeout(resolve, 50));
+    await tick();
+  }
+
+  const btcAssetNode = ui.w.document.querySelector('.cw-sk-asset-node[data-asset="BTC"]');
+  assert.ok(btcAssetNode, 'BTC asset node renders in Sankey');
+  btcAssetNode.dispatchEvent(new ui.w.MouseEvent('click', { bubbles: true }));
+  await tick();
+  await new Promise(resolve => setTimeout(resolve, 80));
+  await tick();
+
+  const fundingMini = ui.w.document.querySelector('.cw-flow-row[data-symbol="BTC"] .cw-funding-mini');
+  assert.ok(fundingMini && fundingMini.textContent.includes('+22%'), 'Crypto matrix row displays compact funding rate pill');
+
+  const deltaTag = ui.w.document.querySelector('.cw-drawer-table .cw-delta-tag.is-add');
+  const liqDanger = ui.w.document.querySelector('.cw-drawer-table .cw-liq-dist.is-danger');
+  assert.ok(deltaTag && deltaTag.textContent.includes('▲加'), 'Drawer displays recent add/reduce position delta tag');
+  assert.ok(liqDanger && liqDanger.textContent.includes('3.8%'), 'Drawer displays danger liquidation distance % (<=5%)');
+
+  assert.deepEqual(ui.errors, []);
+});
+
 
