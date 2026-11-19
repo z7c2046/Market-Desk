@@ -167,3 +167,30 @@ test('TradFi venue=hyperliquid routes directly to HIP-3 xyz:* 24/7 perpetual can
   await assert.rejects(() => ws.chart({ symbol: 'NVDA', venue: 'hyperliquid', coin: '../bad' }), { status: 400 });
 });
 
+test('Hyperliquid 15m chart anchors changePercent to 24h prevDayPx from metaAndAssetCtxs and includes funding rate', async () => {
+  const mockFetch = async (url, init = {}) => {
+    const u = String(url);
+    const body = init.body ? JSON.parse(init.body) : null;
+    if (u.includes('hyperliquid.xyz/info') && body?.type === 'metaAndAssetCtxs') {
+      return Response.json([
+        { universe: [{ name: 'BTC' }] },
+        [{ prevDayPx: '60000', markPx: '63000', funding: '0.0000125', openInterest: '1000', dayNtlVlm: '1000000' }]
+      ]);
+    }
+    if (u.includes('hyperliquid.xyz/info') && body?.type === 'candleSnapshot') {
+      return Response.json([
+        { t: 1794383100000, o: '62950', h: '63020', l: '62900', c: '62990', v: '120' },
+        { t: 1794384000000, o: '62990', h: '63050', l: '62980', c: '63000', v: '140' }
+      ]);
+    }
+    return new Response('{}', { status: 404 });
+  };
+  const { createMarketWorkspace } = await import('../src/market-workspace.js');
+  const ws = createMarketWorkspace({ fetchImpl: mockFetch });
+  const res = await ws.chart({ symbol: 'BTC-USD', range: '1d', interval: '15m', venue: 'hyperliquid' });
+  assert.equal(res.previousClose, 60000, 'Uses 24h prevDayPx instead of previous 15m candle close');
+  assert.equal(res.changePercent, 5, '24h changePercent is +5.00% rather than tiny 15m delta');
+  assert.equal(res.fundingRate, 0.0000125);
+  assert.equal(res.fundingAnnualPct, 11);
+});
+
