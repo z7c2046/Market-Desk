@@ -9379,6 +9379,11 @@ createApp({
             }
           }
           quoteStore.value = { ...quoteStore.value, ...data.quotes };
+          const curChartQuote = data.quotes[symbol.value];
+          if (curChartQuote) {
+            const livePx = curChartQuote.regular?.price ?? curChartQuote.price;
+            if (livePx != null) applyLiveQuoteToMainChart(symbol.value, livePx);
+          }
         }
         if (data.provider) providerInfo.value = data.provider;
         if (data.session) serverSession.value = data.session;
@@ -9432,6 +9437,9 @@ createApp({
                   updatedAny = true;
                   if (oldPrice !== null && item.price !== null && oldPrice !== item.price) {
                     flashCell(item.symbol, item.session === 'regular' ? 'regular' : 'ext', item.price > oldPrice ? 'up' : 'down');
+                  }
+                  if (item.session === 'regular' && item.symbol === symbol.value && item.price != null) {
+                    applyLiveQuoteToMainChart(item.symbol, item.price);
                   }
                 }
               }
