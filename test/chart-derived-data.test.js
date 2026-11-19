@@ -101,3 +101,31 @@ test('chartDerivedData: formatReadoutHtml memoization and stable date formatting
   assert.strictEqual(html1, html2);
 });
 
+test('chartDerivedData: computes session-anchored VWAP, PDH/PDL, and latest inflection stopPrice', () => {
+  const day1Bar1 = { time: Math.floor(Date.parse('2026-11-12T15:00:00Z') / 1000), open: 100, high: 110, low: 95, close: 105, volume: 1000 };
+  const day1Bar2 = { time: Math.floor(Date.parse('2026-11-12T16:00:00Z') / 1000), open: 105, high: 112, low: 98, close: 110, volume: 2000 };
+  const day2Bar1 = { time: Math.floor(Date.parse('2026-11-13T15:00:00Z') / 1000), open: 120, high: 123, low: 117, close: 120, volume: 500 };
+
+  const cache = createChartDerivedData({
+    computeSignals: () => [
+      { time: day1Bar2.time, side: 'EB', price: 110 },
+      { time: day2Bar1.time, side: 'B', price: 120, stopPrice: 114.5 }
+    ],
+    formatMarkers: (sigs) => sigs,
+    dema: (vals) => vals
+  });
+
+  const snap = cache.getSnapshot(
+    { symbol: 'SPY', interval: '15m', range: '1d', dataRevision: 1, showSignals: true },
+    [day1Bar1, day1Bar2, day2Bar1]
+  );
+
+  assert.equal(snap.vwapLineData.length, 3);
+  assert.equal(snap.vwapLineData[2].value, 120, 'Intraday VWAP resets at start of new NY trading day');
+  assert.deepEqual(snap.prevDayHighLow, { date: '2026-11-12', pdh: 112, pdl: 95 });
+  assert.equal(snap.latestStopSignal?.stopPrice, 114.5);
+
+  const html = cache.formatReadoutHtml(day2Bar1, snap, { showSignals: true });
+  assert.ok(html.includes('止损 114.50'), 'Readout badge displays structural stopPrice when present');
+});
+
