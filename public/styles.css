@@ -3068,6 +3068,135 @@ main {
   flex-shrink: 0;
 }
 
+.vwap-switch-btn,
+.options-wall-switch-btn {
+  padding: 2px 7px;
+  border-radius: 4px;
+  transition: all 0.18s ease;
+  border: 1px solid transparent;
+  margin-left: 2px;
+  cursor: pointer;
+  background: transparent;
+}
+
+.vwap-switch-btn {
+  color: #f59e0b !important;
+}
+
+.vwap-switch-btn.is-active {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.4);
+  color: #f59e0b !important;
+}
+
+.vwap-switch-btn.is-active .ma-switch-label {
+  color: #f59e0b;
+  font-weight: 600;
+}
+
+.options-wall-switch-btn {
+  color: #10b981 !important;
+}
+
+.options-wall-switch-btn.is-active {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.4);
+  color: #10b981 !important;
+}
+
+.options-wall-switch-btn.is-active .ma-switch-label {
+  color: #10b981;
+  font-weight: 600;
+}
+
+.vwap-switch-btn.is-off,
+.options-wall-switch-btn.is-off {
+  opacity: 0.38 !important;
+  filter: grayscale(1) !important;
+  color: var(--text-muted, #64748b) !important;
+}
+
+.chart-etf-ref-pill,
+.chart-funding-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.45;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+}
+
+.chart-funding-pill.is-crowded-long {
+  color: #f59e0b;
+  border-color: rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.chart-funding-pill.is-crowded-short {
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.35);
+  background: rgba(56, 189, 248, 0.08);
+}
+
+.cw-liq-dist {
+  margin-left: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  opacity: 0.82;
+}
+
+.cw-liq-dist.is-danger {
+  color: #f43f5e !important;
+  opacity: 1;
+}
+
+.cw-delta-tag {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 4px;
+  padding: 0 4px;
+  border-radius: 3px;
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 1.4;
+  vertical-align: middle;
+}
+
+.cw-delta-tag.is-add {
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.14);
+}
+
+.cw-delta-tag.is-reduce {
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.14);
+}
+
+.cw-funding-mini {
+  margin-left: 4px;
+  padding: 0 4px;
+  border-radius: 3px;
+  font-size: 9.5px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-subtle);
+}
+
+.cw-funding-mini.is-crowded-long {
+  color: #f59e0b;
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
+.cw-funding-mini.is-crowded-short {
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.3);
+}
+
 /* #chart Whale Mode Toggle Button */
 .chart-legend-item.chart-whale-switch-btn {
   padding: 2px 8px !important;
