@@ -454,6 +454,13 @@ export class CryptoWhaleService {
         : Math.max(0, ((liquidationPx - markPx) / markPx) * 100);
     }
 
+    const fundingRate = priceInfo?.funding != null && Number.isFinite(priceInfo.funding)
+      ? Number(priceInfo.funding)
+      : null;
+    const fundingAnnualPct = fundingRate != null
+      ? Number((fundingRate * 24 * 365 * 100).toFixed(1))
+      : null;
+
     return {
       coin,
       chartSymbol: resolveWhaleChartSymbol(coin, isStock),
@@ -471,6 +478,8 @@ export class CryptoWhaleService {
       leverageLabel: `${leverageVal}x ${leverageType}`,
       liquidationPx,
       liqDistancePct: liqDistancePct != null ? Number(liqDistancePct.toFixed(1)) : null,
+      fundingRate,
+      fundingAnnualPct,
       marginUsed: parseFloat(p.marginUsed || 0),
       entryTime
     };
