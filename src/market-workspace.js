@@ -204,6 +204,54 @@ export function createMarketWorkspace({ fetchImpl = fetch, now = () => new Date(
     return normalizeHyperliquidCoin(`xyz:${symbol}`);
   }
 
+  async function fetchHyperliquidAssetCtx(coin) {
+    const colonIdx = coin.indexOf(':');
+    const dex = colonIdx > 0 ? coin.slice(0, colonIdx).toLowerCase() : '';
+    const cleanTarget = (colonIdx > 0 ? coin.slice(colonIdx + 1) : coin).toUpperCase();
+    try {
+      const ctxMap = await cache.get(`hl-ctx:${dex || 'perp'}`, 60000, async () => {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 5000);
+        try {
+          const body = { type: 'metaAndAssetCtxs' };
+          if (dex) body.dex = dex;
+          const res = await fetchImpl('https://api.hyperliquid.xyz/info', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+            signal: controller.signal
+          });
+          if (!res.ok) return {};
+          const raw = await res.json();
+          const universe = Array.isArray(raw?.[0]?.universe) ? raw[0].universe : [];
+          const ctxs = Array.isArray(raw?.[1]) ? raw[1] : [];
+          const out = {};
+          universe.forEach((u, idx) => {
+            const rawName = String(u?.name || '').trim();
+            if (!rawName) return;
+            const stripped = rawName.includes(':') ? rawName.split(':').slice(1).join(':') : rawName;
+            const c = ctxs[idx] || {};
+            const entry = {
+              prevDayPx: Number.parseFloat(c.prevDayPx),
+              markPx: Number.parseFloat(c.markPx),
+              funding: Number.parseFloat(c.funding),
+              openInterest: Number.parseFloat(c.openInterest),
+              dayNtlVlm: Number.parseFloat(c.dayNtlVlm)
+            };
+            out[rawName.toUpperCase()] = entry;
+            out[stripped.toUpperCase()] = entry;
+          });
+          return out;
+        } finally {
+          clearTimeout(timer);
+        }
+      });
+      return ctxMap?.[coin.toUpperCase()] || ctxMap?.[cleanTarget] || null;
+    } catch {
+      return null;
+    }
+  }
+
   async function fetchHyperliquidCandles(symbol, range, interval, explicitCoin = '') {
     const coin = resolveHyperliquidCoin(symbol, explicitCoin);
     const rangeMsMap = {
@@ -220,12 +268,15 @@ export function createMarketWorkspace({ fetchImpl = fetch, now = () => new Date(
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 10000);
       try {
-        const res = await fetchImpl('https://api.hyperliquid.xyz/info', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: 'candleSnapshot', req: { coin, interval, startTime, endTime } }),
-          signal: controller.signal
-        });
+        const [res, assetCtx] = await Promise.all([
+          fetchImpl('https://api.hyperliquid.xyz/info', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'candleSnapshot', req: { coin, interval, startTime, endTime } }),
+            signal: controller.signal
+          }),
+          fetchHyperliquidAssetCtx(coin)
+        ]);
         if (!res.ok) throw new Error(`Hyperliquid candleSnapshot HTTP ${res.status}`);
         const raw = await res.json();
         if (!Array.isArray(raw) || raw.length === 0) throw new Error('Hyperliquid 无可用 K 线数据');
@@ -243,8 +294,22 @@ export function createMarketWorkspace({ fetchImpl = fetch, now = () => new Date(
         if (!bars.length) throw new Error('Hyperliquid K 线解析为空');
         const last = bars[bars.length - 1];
         const prev = bars.length >= 2 ? bars[bars.length - 2] : null;
-        const baseClose = prev?.close || last.open || last.close;
+        let baseClose = null;
+        if (assetCtx && Number.isFinite(assetCtx.prevDayPx) && assetCtx.prevDayPx > 0) {
+          baseClose = assetCtx.prevDayPx;
+        } else if (interval !== '1d' && bars.length > 2) {
+          const target24h = last.time - 86400;
+          const bar24h = bars.find(b => b.time >= target24h);
+          if (bar24h && bar24h.time < last.time) {
+            baseClose = bar24h.open || bar24h.close;
+          }
+        }
+        if (!(baseClose > 0)) {
+          baseClose = prev?.close || last.open || last.close;
+        }
         const changePercent = baseClose ? Number(((last.close / baseClose - 1) * 100).toFixed(2)) : 0;
+        const fundingRate = assetCtx && Number.isFinite(assetCtx.funding) ? assetCtx.funding : null;
+        const fundingAnnualPct = fundingRate != null ? Number((fundingRate * 24 * 365 * 100).toFixed(1)) : null;
         const isHip3 = coin.includes(':');
         return {
           symbol,
@@ -255,6 +320,8 @@ export function createMarketWorkspace({ fetchImpl = fetch, now = () => new Date(
           price: last.close,
           previousClose: baseClose,
           changePercent,
+          fundingRate,
+          fundingAnnualPct,
           bars,
           range,
           interval,
