@@ -4795,6 +4795,7 @@ createApp({
         }
       }
 
+      const fundingMap = cryptoWhaleData.value?.assetFundings || {};
       const baseList = cryptoList.value.map((c, idx) => {
         const code = (c.code || c.symbol.replace('-USD', '')).toUpperCase();
         const defItem = DEFAULT_CRYPTOS.find(d => d.code === code);
@@ -4806,6 +4807,7 @@ createApp({
         const totalPos = longNtl + shortNtl;
         const buyRatio = totalPos > 0 ? Math.round((longNtl / totalPos) * 1000) / 10 : 50;
         const netFlow = wm ? (longNtl - shortNtl) : (volNum * (chg / 100) * 0.35);
+        const fundingInfo = fundingMap[code] || null;
         return {
           symbol: code,
           name: code,
@@ -4817,6 +4819,7 @@ createApp({
           buyRatio,
           sellRatio: Number((100 - buyRatio).toFixed(1)),
           openInterest: totalPos > 0 ? totalPos : volNum * 0.04,
+          fundingAnnualPct: fundingInfo?.annualPct ?? null,
           premiumPct: null,
           bars: c.bars || [],
           isCrypto: true
@@ -4860,12 +4863,17 @@ createApp({
           : (onchainStocksData.value?.top10 || []))
         : cryptoFlowRows.value;
 
+      const stockFundings = (stockWhaleData.value || cryptoWhaleData.value?.stockWhales)?.assetFundings || {};
       const rawList = isStocks
         ? sourceCandidates.map(s => {
           const price = Number(s.price) || 0;
           const tradFiClose = Number(s.tradFiClose) || 0;
           const priceDiff = s.priceDiff != null ? Number(s.priceDiff) : ((price > 0 && tradFiClose > 0) ? Number((price - tradFiClose).toFixed(2)) : 0);
           const premiumPct = s.premiumPct != null ? Number(s.premiumPct) : ((price > 0 && tradFiClose > 0) ? Number((((price - tradFiClose) / tradFiClose) * 100).toFixed(2)) : 0);
+          const symUp = String(s.symbol || '').toUpperCase();
+          const fundingInfo = stockFundings[symUp]
+            || (symUp === 'SPY' ? stockFundings.SP500 : null)
+            || (symUp === 'QQQ' ? stockFundings.XYZ100 : null);
           return {
             symbol: s.symbol,
             name: s.name,
@@ -4880,6 +4888,7 @@ createApp({
             buyRatio: s.buyRatio,
             sellRatio: s.sellRatio,
             openInterest: s.openInterest,
+            fundingAnnualPct: fundingInfo?.annualPct ?? null,
             _priceDir: s._priceDir,
             raw: s,
             isCrypto: false
@@ -5086,6 +5095,9 @@ createApp({
           const rawRealTime = pos.entryTime || pos.openedAt || pos.time || pos.timestamp || null;
           const hasRealEntryTime = Boolean(pos.hasRealEntryTime !== false && rawRealTime);
           const entryTime = hasRealEntryTime ? rawRealTime : null;
+          const liqBufferPct = pos.liqDistancePct != null && Number.isFinite(Number(pos.liqDistancePct))
+            ? Number(Number(pos.liqDistancePct).toFixed(1))
+            : ((liq && liq > 0 && markPx > 0) ? Number((Math.abs((markPx - liq) / markPx) * 100).toFixed(1)) : null);
 
           list.push({
             name: w.name,
@@ -5109,6 +5121,11 @@ createApp({
             unrealizedPnl: pnl,
             returnOnEquity: roe,
             liquidationPx: liq,
+            liqBufferPct,
+            isLiqDanger: liqBufferPct != null && liqBufferPct <= 5,
+            recentAction: pos.recentAction || null,
+            recentDeltaNotional: Number(pos.recentDeltaNotional || 0),
+            fundingAnnualPct: pos.fundingAnnualPct ?? null,
             entryTime,
             hasRealEntryTime,
             isCurated: Boolean(w.isCurated)
@@ -5259,9 +5276,9 @@ createApp({
       const favDeltaPct = (entryPx > 0 && markPx > 0)
         ? ((isLong ? (markPx - entryPx) : (entryPx - markPx)) / entryPx) * 100
         : null;
-      const liqBufferPct = (liq && liq > 0 && markPx > 0)
-        ? Math.abs((markPx - liq) / markPx) * 100
-        : null;
+      const liqBufferPct = pos.liqDistancePct != null && Number.isFinite(Number(pos.liqDistancePct))
+        ? Number(Number(pos.liqDistancePct).toFixed(1))
+        : ((liq && liq > 0 && markPx > 0) ? Number((Math.abs((markPx - liq) / markPx) * 100).toFixed(1)) : null);
 
       return {
         posKey,
@@ -5290,6 +5307,10 @@ createApp({
         hasRealEntryTime,
         favDeltaPct,
         liqBufferPct,
+        isLiqDanger: liqBufferPct != null && liqBufferPct <= 5,
+        recentAction: pos.recentAction || null,
+        recentDeltaNotional: Number(pos.recentDeltaNotional || 0),
+        fundingAnnualPct: pos.fundingAnnualPct ?? null,
         isCurated: Boolean(w.isCurated)
       };
     }
