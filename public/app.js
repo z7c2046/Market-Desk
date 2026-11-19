@@ -10407,13 +10407,23 @@ createApp({
             crosshairMarkerVisible: false,
             visible: !!showInflectionSignals.value
           });
+          const vwapSeries = chartInstance.addSeries(LW.LineSeries, {
+            color: '#f59e0b',
+            lineWidth: 1.75,
+            lineStyle: 0,
+            priceLineVisible: false,
+            lastValueVisible: true,
+            crosshairMarkerVisible: false,
+            visible: !!showChartVwap.value
+          });
 
           chartInstance.subscribeCrosshairMove(param => {
             updateReadoutFromCrosshair(param, candleSeries, maSeriesMap, chart.value?.bars || bars);
           });
 
-          chartInstance.timeScale().subscribeVisibleLogicalRangeChange(() => {
+          chartInstance.timeScale().subscribeVisibleLogicalRangeChange((logicalRange) => {
             scheduleMainChartOverlaySync();
+            maybeAutoBackfillChartHistory(logicalRange);
           });
 
           const gestures = bindKlineGestures(el, chartInstance, candleSeries, {
@@ -10449,6 +10459,7 @@ createApp({
           lwMaSeriesMap = maSeriesMap;
           lwDemaFastSeries = demaFastSeries;
           lwDemaSlowSeries = demaSlowSeries;
+          lwVwapSeries = vwapSeries;
           klineGestureCtrl = gestures;
           window.lwPriceChart = chartInstance;
           window.klineGestureCtrl = gestures;
@@ -10542,7 +10553,15 @@ createApp({
         }
 
         if (isNewSymbolOrRange) {
-          if (klineGestureCtrl) {
+          const backfillWin = pendingBackfillTimeWindow;
+          pendingBackfillTimeWindow = null;
+          if (backfillWin && backfillWin.symbol === d.symbol && backfillWin.interval === d.interval && lwPriceChart?.timeScale) {
+            try {
+              lwPriceChart.timeScale().setVisibleRange({ from: backfillWin.fromTime, to: backfillWin.toTime });
+            } catch (_) {
+              if (klineGestureCtrl) klineGestureCtrl.reset();
+            }
+          } else if (klineGestureCtrl) {
             klineGestureCtrl.reset();
           }
           clearRuler();
@@ -10553,6 +10572,8 @@ createApp({
           updateRulerCoordinates();
         }
         updateReadoutFromCrosshair(null, lwCandleSeries, lwMaSeriesMap, bars);
+        syncChartVwapAndPdhPdl();
+        syncChartOptionsWallLines();
         syncMainChartWhaleVisuals();
         if (charts.has('price-chart')) {
           const entry = charts.get('price-chart');
