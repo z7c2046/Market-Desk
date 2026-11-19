@@ -418,10 +418,254 @@ createApp({
     }
 
     const showInflectionSignals = ref(readStorage('market-desk-inflection-signals', false));
+    const showChartVwap = ref(readStorage('market-desk-chart-vwap', false));
+    const showChartOptionsWall = ref(readStorage('market-desk-chart-options-wall', false));
+    const chartOptionsWallData = ref(null);
+    const chartOptionsWallLoading = ref(false);
+    const chartOptionsWallCache = new Map();
     let lwMarkersPlugin = null;
     let lwDemaFastSeries = null;
     let lwDemaSlowSeries = null;
+    let lwVwapSeries = null;
+    let lwPdhPdlPriceLines = [];
+    let lwInflectionStopLines = [];
+    let lwOptionsWallLines = [];
     let savedMaVisibility = null;
+    let pendingBackfillTimeWindow = null;
+    let lastAutoBackfillAt = 0;
+
+    function toggleChartVwap() {
+      showChartVwap.value = !showChartVwap.value;
+      persist('market-desk-chart-vwap', showChartVwap.value);
+      syncChartVwapAndPdhPdl();
+    }
+
+    function syncChartVwapAndPdhPdl() {
+      clearChartPriceLines(lwCandleSeries, lwPdhPdlPriceLines);
+      const bars = chart.value?.bars;
+      if (!bars || !bars.length || !showChartVwap.value) {
+        if (lwVwapSeries) lwVwapSeries.applyOptions({ visible: false });
+        return;
+      }
+      const snapshot = chartDerivedCache.getSnapshot(
+        {
+          symbol: chart.value?.symbol || '',
+          interval: chart.value?.interval || '',
+          range: chart.value?.range || '',
+          dataRevision: chartDataRevision.value,
+          showSignals: !!showInflectionSignals.value
+        },
+        bars,
+        { computeSignals: computeInflectionSignals, formatMarkers: formatSignalMarkers, dema }
+      );
+      if (lwVwapSeries) {
+        lwVwapSeries.applyOptions({ visible: true });
+        lwVwapSeries.setData(snapshot.vwapLineData || []);
+      }
+      if (lwCandleSeries && typeof lwCandleSeries.createPriceLine === 'function' && snapshot.prevDayHighLow) {
+        const { pdh, pdl } = snapshot.prevDayHighLow;
+        if (pdh > 0) {
+          lwPdhPdlPriceLines.push(lwCandleSeries.createPriceLine({
+            price: pdh,
+            color: 'rgba(148, 163, 184, 0.72)',
+            lineWidth: 1,
+            lineStyle: 2,
+            axisLabelVisible: true,
+            title: 'PDH 昨高'
+          }));
+        }
+        if (pdl > 0) {
+          lwPdhPdlPriceLines.push(lwCandleSeries.createPriceLine({
+            price: pdl,
+            color: 'rgba(148, 163, 184, 0.72)',
+            lineWidth: 1,
+            lineStyle: 2,
+            axisLabelVisible: true,
+            title: 'PDL 昨低'
+          }));
+        }
+      }
+    }
+
+    function syncInflectionStopLine(snapshot) {
+      clearChartPriceLines(lwCandleSeries, lwInflectionStopLines);
+      if (!showInflectionSignals.value || !lwCandleSeries || typeof lwCandleSeries.createPriceLine !== 'function') return;
+      const sig = snapshot?.latestStopSignal;
+      if (!sig || !(Number(sig.stopPrice) > 0)) return;
+      const isBuy = sig.side === 'B';
+      lwInflectionStopLines.push(lwCandleSeries.createPriceLine({
+        price: Number(sig.stopPrice),
+        color: isBuy ? 'rgba(16, 185, 129, 0.85)' : 'rgba(244, 63, 94, 0.85)',
+        lineWidth: 1,
+        lineStyle: 3,
+        axisLabelVisible: true,
+        title: `${sig.side} 结构止损`
+      }));
+    }
+
+    const isChartOptionsCapable = computed(() => {
+      const sym = String(symbol.value || '').trim().toUpperCase();
+      if (!sym || /-USD$/i.test(sym) || /^(\^|GC=|SI=|CL=|BZ=|NG=|HG=|PL=|PA=|DX-Y)/i.test(sym)) return false;
+      return Boolean(toOptionSymbol(sym));
+    });
+
+    async function loadChartOptionsWallForSymbol(targetSym) {
+      const optSym = toOptionSymbol(String(targetSym || '').trim().toUpperCase());
+      if (!optSym) {
+        chartOptionsWallData.value = null;
+        syncChartOptionsWallLines();
+        return null;
+      }
+      const cached = chartOptionsWallCache.get(optSym);
+      if (cached && (Date.now() - cached.fetchedAt) < 15 * 60 * 1000) {
+        chartOptionsWallData.value = cached.data;
+        syncChartOptionsWallLines();
+        return cached.data;
+      }
+      chartOptionsWallLoading.value = true;
+      try {
+        const res = await fetch('/api/options?' + new URLSearchParams({ symbol: optSym }));
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        chartOptionsWallCache.set(optSym, { fetchedAt: Date.now(), data });
+        if (toOptionSymbol(symbol.value) === optSym) {
+          chartOptionsWallData.value = data;
+          syncChartOptionsWallLines();
+        }
+        return data;
+      } catch {
+        if (toOptionSymbol(symbol.value) === optSym) {
+          chartOptionsWallData.value = null;
+          syncChartOptionsWallLines();
+        }
+        return null;
+      } finally {
+        chartOptionsWallLoading.value = false;
+      }
+    }
+
+    function syncChartOptionsWallLines() {
+      clearChartPriceLines(lwCandleSeries, lwOptionsWallLines);
+      if (page.value !== 'chart' || !showChartOptionsWall.value || !lwCandleSeries || typeof lwCandleSeries.createPriceLine !== 'function') return;
+      const opt = chartOptionsWallData.value;
+      if (!opt || toOptionSymbol(symbol.value) !== opt.symbol) return;
+
+      const optSpot = Number(opt.spot || 0);
+      const chartSpot = Number(chart.value?.price || 0);
+      const scaleFactor = (optSpot > 0 && chartSpot > 0 && chart.value?.venue === 'hyperliquid' && (chartSpot / optSpot) > 2)
+        ? (chartSpot / optSpot)
+        : 1;
+
+      const callWalls = Array.isArray(opt.callWall) ? opt.callWall.slice(0, 1) : [];
+      const putWalls = Array.isArray(opt.putWall) ? opt.putWall.slice(0, 1) : [];
+      for (const strike of callWalls) {
+        const raw = Number(strike);
+        if (!(raw > 0)) continue;
+        const px = Number((raw * scaleFactor).toFixed(2));
+        lwOptionsWallLines.push(lwCandleSeries.createPriceLine({
+          price: px,
+          color: '#10b981',
+          lineWidth: 1,
+          lineStyle: 2,
+          axisLabelVisible: true,
+          title: scaleFactor > 1 ? `Call Wall ($${raw})` : `Call Wall`
+        }));
+      }
+      for (const strike of putWalls) {
+        const raw = Number(strike);
+        if (!(raw > 0)) continue;
+        const px = Number((raw * scaleFactor).toFixed(2));
+        lwOptionsWallLines.push(lwCandleSeries.createPriceLine({
+          price: px,
+          color: '#f43f5e',
+          lineWidth: 1,
+          lineStyle: 2,
+          axisLabelVisible: true,
+          title: scaleFactor > 1 ? `Put Wall ($${raw})` : `Put Wall`
+        }));
+      }
+    }
+
+    function toggleChartOptionsWall() {
+      showChartOptionsWall.value = !showChartOptionsWall.value;
+      persist('market-desk-chart-options-wall', showChartOptionsWall.value);
+      if (showChartOptionsWall.value) {
+        if (isChartOptionsCapable.value) {
+          loadChartOptionsWallForSymbol(symbol.value);
+        }
+      } else {
+        clearChartPriceLines(lwCandleSeries, lwOptionsWallLines);
+      }
+    }
+
+    const chartEtfEquivalentRef = computed(() => {
+      if (page.value !== 'chart' || !chart.value || chart.value.venue !== 'hyperliquid') return null;
+      const sym = String(symbol.value || '').trim().toUpperCase();
+      const perp = String(chart.value.perpCoin || '').toLowerCase();
+      const px = Number(chart.value.price || 0);
+      if (!(px > 0)) return null;
+      const liveEtf = Number(quoteStore.value?.[sym]?.regular?.price || quoteStore.value?.[sym]?.price || 0);
+      if (perp === 'xyz:sp500' && sym === 'SPY') {
+        const est = liveEtf > 0 ? liveEtf : Number((px / 10).toFixed(2));
+        return { label: `≈ SPY $${est.toFixed(2)}`, title: '美股 SPY ETF 等效参考价（SP500 指数约 1/10）' };
+      }
+      if (perp === 'xyz:xyz100' && sym === 'QQQ' && liveEtf > 0) {
+        return { label: `≈ QQQ $${liveEtf.toFixed(2)}`, title: '美股 QQQ ETF 参考价' };
+      }
+      return null;
+    });
+
+    const CHART_RANGE_LADDER = ['1d', '1mo', '3mo', '6mo', '1y'];
+    function maybeAutoBackfillChartHistory(logicalRange) {
+      if (!logicalRange || page.value !== 'chart' || states.chart.loading) return;
+      if (klineInteractionMode.value !== 'history') return;
+      if (logicalRange.from > 4) return;
+      const nowMs = Date.now();
+      if (nowMs - lastAutoBackfillAt < 1200) return;
+      const curIdx = CHART_RANGE_LADDER.indexOf(chartRange.value);
+      if (curIdx < 0 || curIdx >= CHART_RANGE_LADDER.length - 1) return;
+      const bars = chart.value?.bars || [];
+      if (bars.length < 2) return;
+      const fromBarIdx = Math.max(0, Math.min(bars.length - 1, Math.floor(logicalRange.from)));
+      const toBarIdx = Math.max(fromBarIdx, Math.min(bars.length - 1, Math.ceil(logicalRange.to)));
+      pendingBackfillTimeWindow = {
+        symbol: chart.value?.symbol || symbol.value,
+        interval: chart.value?.interval || chartInterval.value,
+        fromTime: bars[fromBarIdx].time,
+        toTime: bars[toBarIdx].time
+      };
+      lastAutoBackfillAt = nowMs;
+      chartRange.value = CHART_RANGE_LADDER[curIdx + 1];
+    }
+
+    function applyLiveQuoteToMainChart(sym, livePrice) {
+      const px = Number(livePrice);
+      if (!(px > 0) || page.value !== 'chart' || !chart.value || chart.value.symbol !== sym) return;
+      if (chart.value.venue === 'hyperliquid') return;
+      const bars = chart.value.bars;
+      if (!Array.isArray(bars) || !bars.length) return;
+      const last = bars[bars.length - 1];
+      if (!last || !Number.isFinite(last.time)) return;
+      if (last.close === px) return;
+      last.close = px;
+      if (px > last.high) last.high = px;
+      if (px < last.low) last.low = px;
+      chart.value.price = px;
+      if (Number(chart.value.previousClose) > 0) {
+        chart.value.changePercent = Number(((px / chart.value.previousClose - 1) * 100).toFixed(2));
+      }
+      if (lwCandleSeries && typeof lwCandleSeries.update === 'function') {
+        try {
+          lwCandleSeries.update({
+            time: last.time,
+            open: last.open,
+            high: last.high,
+            low: last.low,
+            close: last.close
+          });
+        } catch (_) { }
+      }
+    }
 
     function toggleInflectionSignals() {
       showInflectionSignals.value = !showInflectionSignals.value;
@@ -488,6 +732,7 @@ createApp({
       const bars = chart.value?.bars;
       if (!bars || !bars.length || !showInflectionSignals.value) {
         clearInflectionMarkers();
+        clearChartPriceLines(lwCandleSeries, lwInflectionStopLines);
         return;
       }
       const snapshot = chartDerivedCache.getSnapshot(
@@ -502,6 +747,7 @@ createApp({
         { computeSignals: computeInflectionSignals, formatMarkers: formatSignalMarkers, dema }
       );
       setChartMarkers(snapshot.markers);
+      syncInflectionStopLine(snapshot);
     }
 
     function applyDemaLinesData() {
@@ -643,6 +889,9 @@ createApp({
       cancelMainChartOverlaySync();
       chartDerivedCache.invalidate();
       clearChartPriceLines(lwCandleSeries, lwMainWhalePriceLines);
+      clearChartPriceLines(lwCandleSeries, lwPdhPdlPriceLines);
+      clearChartPriceLines(lwCandleSeries, lwInflectionStopLines);
+      clearChartPriceLines(lwCandleSeries, lwOptionsWallLines);
       if (lwMainWhaleDotPrimitive && lwCandleSeries && typeof lwCandleSeries.detachPrimitive === 'function') {
         try { lwCandleSeries.detachPrimitive(lwMainWhaleDotPrimitive); } catch (_) { }
       }
@@ -669,6 +918,9 @@ createApp({
       }
       if (lwDemaSlowSeries) {
         lwDemaSlowSeries = null;
+      }
+      if (lwVwapSeries) {
+        lwVwapSeries = null;
       }
       if (lwPriceChart) {
         try { lwPriceChart.remove(); } catch (_) { }
