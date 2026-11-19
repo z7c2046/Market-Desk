@@ -29,6 +29,13 @@ export function createChartDerivedData(options = {}) {
     hour12: false,
   });
 
+  const nyDayFormatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+
   function calcMA(bars, period) {
     if (!bars || bars.length < period) return [];
     const result = [];
@@ -41,6 +48,72 @@ export function createChartDerivedData(options = {}) {
       }
     }
     return result;
+  }
+
+  function calcVWAP(bars, interval) {
+    if (!bars || !bars.length) return [];
+    const isIntraday = interval && interval !== '1d';
+    const result = [];
+    let curDay = '';
+    let cumPV = 0;
+    let cumVol = 0;
+    for (let i = 0; i < bars.length; i++) {
+      const b = bars[i];
+      if (isIntraday && b.time) {
+        const day = nyDayFormatter.format(new Date(b.time * 1000));
+        if (day !== curDay) {
+          curDay = day;
+          cumPV = 0;
+          cumVol = 0;
+        }
+      }
+      const tp = (Number(b.high) + Number(b.low) + Number(b.close)) / 3;
+      const vol = Number(b.volume) > 0 ? Number(b.volume) : 0;
+      if (vol > 0) {
+        cumPV += tp * vol;
+        cumVol += vol;
+      } else if (cumVol === 0) {
+        cumPV += tp;
+        cumVol += 1;
+      }
+      const val = cumVol > 0 ? cumPV / cumVol : tp;
+      if (Number.isFinite(val)) {
+        result.push({ time: b.time, value: Number(val.toFixed(4)) });
+      }
+    }
+    return result;
+  }
+
+  function calcPrevDayHighLow(bars, interval) {
+    if (!bars || bars.length < 2) return null;
+    const isIntraday = interval && interval !== '1d';
+    if (!isIntraday) {
+      const prev = bars[bars.length - 2];
+      const pdh = Number(prev?.high);
+      const pdl = Number(prev?.low);
+      if (!(pdh > 0 && pdl > 0)) return null;
+      return { pdh, pdl, date: prev?.time ? nyDayFormatter.format(new Date(prev.time * 1000)) : '' };
+    }
+    const dayStats = [];
+    let curDay = '';
+    let curObj = null;
+    for (let i = 0; i < bars.length; i++) {
+      const b = bars[i];
+      if (!b?.time) continue;
+      const day = nyDayFormatter.format(new Date(b.time * 1000));
+      if (day !== curDay) {
+        curDay = day;
+        curObj = { date: day, pdh: Number(b.high), pdl: Number(b.low) };
+        dayStats.push(curObj);
+      } else if (curObj) {
+        if (Number(b.high) > curObj.pdh) curObj.pdh = Number(b.high);
+        if (Number(b.low) < curObj.pdl) curObj.pdl = Number(b.low);
+      }
+    }
+    if (dayStats.length < 2) return null;
+    const prev = dayStats[dayStats.length - 2];
+    if (!(prev.pdh > 0 && prev.pdl > 0)) return null;
+    return prev;
   }
 
   function getSnapshot(context = {}, bars = [], calcDeps = {}) {
@@ -79,6 +152,8 @@ export function createChartDerivedData(options = {}) {
     for (const [key, p] of Object.entries(maPeriods)) {
       maByKey[key] = calcMA(safeBars, p);
     }
+    const vwapLineData = calcVWAP(safeBars, interval);
+    const prevDayHighLow = calcPrevDayHighLow(safeBars, interval);
 
     let fastDema = [];
     let slowDema = [];
@@ -87,6 +162,7 @@ export function createChartDerivedData(options = {}) {
     let signals = [];
     const signalsByTime = new Map();
     let markers = [];
+    let latestStopSignal = null;
 
     if (showSignals && safeBars.length) {
       const closes = safeBars.map(b => Number(b.close));
@@ -114,6 +190,9 @@ export function createChartDerivedData(options = {}) {
             }
             list.push(s);
           }
+          if (s && (s.side === 'B' || s.side === 'S') && Number.isFinite(Number(s.stopPrice)) && Number(s.stopPrice) > 0) {
+            latestStopSignal = s;
+          }
         }
       }
 
@@ -132,6 +211,8 @@ export function createChartDerivedData(options = {}) {
       bars: safeBars,
       indexByTime,
       maByKey,
+      vwapLineData,
+      prevDayHighLow,
       fastDema,
       slowDema,
       fastDemaLineData,
@@ -139,6 +220,7 @@ export function createChartDerivedData(options = {}) {
       signals,
       signalsByTime,
       markers,
+      latestStopSignal,
     };
 
     return cachedSnapshot;
@@ -193,7 +275,8 @@ export function createChartDerivedData(options = {}) {
         const isEarly = sig.side.startsWith('e') || sig.side.startsWith('E');
         const sigColor = isBuy ? (isEarly ? '#38bdf8' : '#10b981') : (isEarly ? '#f59e0b' : '#ef4444');
         const sigLabel = sig.side === 'EB' ? 'EB 买入观察' : sig.side === 'B' ? 'B 确认买入' : sig.side === 'ES' ? 'ES 卖出观察' : 'S 确认卖出';
-        inflectionTag = ` <span style="background:${sigColor}22;color:${sigColor};border:1px solid ${sigColor}55;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:700;margin-left:6px;">⚡ ${sigLabel}</span>`;
+        const stopHint = Number.isFinite(Number(sig.stopPrice)) && Number(sig.stopPrice) > 0 ? ` · 止损 ${Number(sig.stopPrice).toFixed(2)}` : '';
+        inflectionTag = ` <span style="background:${sigColor}22;color:${sigColor};border:1px solid ${sigColor}55;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:700;margin-left:6px;">⚡ ${sigLabel}${stopHint}</span>`;
       }
     }
 
