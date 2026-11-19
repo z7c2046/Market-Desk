@@ -1842,9 +1842,12 @@
                                 </div>
                                 <div class="cw-hud-cell">
                                   <span class="cw-hud-lbl">预估强平</span>
-                                  <strong class="cw-hud-val text-warning">{{ activeChartWhaleHud.whale.liquidationPx ?
-                                    ('$' + formatCryptoPrice(activeChartWhaleHud.whale.liquidationPx)) : '--'
-                                    }}</strong>
+                                  <strong class="cw-hud-val text-warning">
+                                    {{ activeChartWhaleHud.whale.liquidationPx ? ('$' + formatCryptoPrice(activeChartWhaleHud.whale.liquidationPx)) : '--' }}
+                                    <span v-if="activeChartWhaleHud.whale.liquidationPx && activeChartWhaleHud.whale.liqBufferPct != null"
+                                      class="cw-liq-dist"
+                                      :class="{ 'is-danger': activeChartWhaleHud.whale.isLiqDanger }">({{ activeChartWhaleHud.whale.liqBufferPct }}%)</span>
+                                  </strong>
                                 </div>
                                 <div class="cw-hud-cell">
                                   <span class="cw-hud-lbl">开仓时间</span>
@@ -2002,7 +2005,12 @@
                                   <div class="cw-card-stats-row font-mono">
                                     <div class="cw-card-stat">
                                       <span class="cw-card-lbl">持仓规模</span>
-                                      <strong>${{ formatWhaleUsd(p.positionValue) }}</strong>
+                                      <strong>
+                                        ${{ formatWhaleUsd(p.positionValue) }}
+                                        <span v-if="p.recentAction" class="cw-delta-tag"
+                                          :class="p.recentAction === 'add' ? 'is-add' : 'is-reduce'"
+                                          :title="p.recentAction === 'add' ? '近 4 小时净加仓' : '近 4 小时净减仓'">{{ p.recentAction === 'add' ? '▲加' : '▼减' }}</span>
+                                      </strong>
                                     </div>
                                     <div class="cw-card-stat">
                                       <span class="cw-card-lbl">浮动盈亏</span>
@@ -2013,8 +2021,11 @@
                                     </div>
                                     <div class="cw-card-stat is-right">
                                       <span class="cw-card-lbl">预估强平</span>
-                                      <strong class="text-warning">{{ p.liquidationPx ? ('$' +
-                                        formatCryptoPrice(p.liquidationPx)) : '--' }}</strong>
+                                      <strong class="text-warning">
+                                        {{ p.liquidationPx ? ('$' + formatCryptoPrice(p.liquidationPx)) : '--' }}
+                                        <span v-if="p.liquidationPx && p.liqBufferPct != null" class="cw-liq-dist"
+                                          :class="{ 'is-danger': p.isLiqDanger }">({{ p.liqBufferPct }}%)</span>
+                                      </strong>
                                     </div>
                                   </div>
                                 </article>
@@ -3052,6 +3063,9 @@
                                           <div class="cw-asset-cell">
                                             <span class="cw-monogram font-mono">{{ r.symbol.slice(0, 3) }}</span>
                                             <strong class="cw-ticker font-mono">{{ r.symbol }}</strong>
+                                            <span v-if="r.fundingAnnualPct != null" class="cw-funding-mini font-mono"
+                                              :class="r.fundingAnnualPct > 15 ? 'is-crowded-long' : (r.fundingAnnualPct < -15 ? 'is-crowded-short' : '')"
+                                              :title="'永续合约年化资金费率: ' + (r.fundingAnnualPct >= 0 ? '+' : '') + r.fundingAnnualPct + '%'">{{ (r.fundingAnnualPct >= 0 ? '+' : '') + r.fundingAnnualPct.toFixed(0) }}%</span>
                                           </div>
                                         </td>
                                         <td class="col-price text-right font-mono"
@@ -3295,6 +3309,9 @@
                                                     </td>
                                                     <td class="text-right font-mono">
                                                       <strong>${{ formatWhaleUsd(wp.positionValue) }}</strong>
+                                                      <span v-if="wp.recentAction" class="cw-delta-tag"
+                                                        :class="wp.recentAction === 'add' ? 'is-add' : 'is-reduce'"
+                                                        :title="wp.recentAction === 'add' ? '近 4 小时净加仓' : '近 4 小时净减仓'">{{ wp.recentAction === 'add' ? '▲加' : '▼减' }}</span>
                                                     </td>
                                                     <td class="text-right font-mono">
                                                       <span>${{ formatCryptoPrice(wp.entryPx) }}</span>
@@ -3305,8 +3322,11 @@
                                                         formatWhaleUsd(Math.abs(wp.unrealizedPnl)) }}</strong>
                                                     </td>
                                                     <td class="text-right font-mono">
-                                                      <span v-if="wp.liquidationPx" class="muted">${{
-                                                        formatCryptoPrice(wp.liquidationPx) }}</span>
+                                                      <span v-if="wp.liquidationPx" class="muted">
+                                                        ${{ formatCryptoPrice(wp.liquidationPx) }}
+                                                        <span v-if="wp.liqBufferPct != null" class="cw-liq-dist"
+                                                          :class="{ 'is-danger': wp.isLiqDanger }">({{ wp.liqBufferPct }}%)</span>
+                                                      </span>
                                                       <span v-else class="muted">—</span>
                                                     </td>
                                                     <td class="text-right">
