@@ -363,12 +363,52 @@ export const ONCHAIN_STOCK_CANDIDATES = [
 ];
 
 export class OnchainStocksService {
-  constructor({ cacheTtlMs = 3000, fetchQuoteFn = fetchYahooQuote } = {}) {
+  constructor({ cacheTtlMs = 3000, fetchQuoteFn = fetchYahooQuote, fetchHlFn = globalThis.fetch } = {}) {
     this.cacheTtlMs = cacheTtlMs;
     this.fetchQuote = fetchQuoteFn;
+    this.fetchHl = fetchHlFn;
     this.cachedData = null;
     this.cachedAt = 0;
     this.inFlightPromise = null;
+  }
+
+  /**
+   * 从 Hyperliquid L1 HIP-3 (dex='xyz') 获取真实链上美股/指数永续合约行情、24H成交额、真实OI与资金费率
+   */
+  async fetchHyperliquidXyzCtxs(timeoutMs = 4500) {
+    const map = new Map();
+    if (typeof this.fetchHl !== 'function') return map;
+    try {
+      const res = await this.fetchHl('https://api.hyperliquid.xyz/info', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'metaAndAssetCtxs', dex: 'xyz' }),
+        signal: AbortSignal.timeout(timeoutMs)
+      });
+      if (!res?.ok) return map;
+      const data = await res.json();
+      const universe = data?.[0]?.universe || [];
+      const ctxs = data?.[1] || [];
+      universe.forEach((u, idx) => {
+        const rawName = String(u?.name || '').trim();
+        const cleanSym = rawName.replace(/^[a-z0-9_-]+:/i, '').toUpperCase();
+        if (!cleanSym) return;
+        const c = ctxs[idx] || {};
+        const markPx = Number.parseFloat(c.markPx || 0) || 0;
+        const oraclePx = Number.parseFloat(c.oraclePx || 0) || 0;
+        const prevDayPx = Number.parseFloat(c.prevDayPx || 0) || 0;
+        const dayNtlVlm = Number.parseFloat(c.dayNtlVlm || 0) || 0;
+        const oiCoins = Number.parseFloat(c.openInterest || 0) || 0;
+        const oiUsd = Math.round(oiCoins * (markPx || oraclePx || 0));
+        const funding = Number.parseFloat(c.funding || 0) || 0;
+        if (markPx > 0) {
+          map.set(cleanSym, { markPx, oraclePx, prevDayPx, dayNtlVlm, oiUsd, funding });
+        }
+      });
+    } catch (_) {
+      // 网络受限或超时时静默回退至正股行情推导
+    }
+    return map;
   }
 
   /**
@@ -610,14 +650,17 @@ export class OnchainStocksService {
   }
 
   /**
-   * 计算单标的资金流向指标（支持实时行情驱动与静态离线保底）
+   * 计算单标的资金流向指标（优先融合 Hyperliquid HIP-3 真实链上合约价格/成交量/OI，支持实时正股行情驱动与离线保底）
    */
-  processStockItem(item, quote = null, index = 0) {
+  processStockItem(item, quote = null, index = 0, hlCtx = null) {
     let price = item.basePrice;
     let tradFiClose = item.tradFiClose || item.basePrice;
     let changePercent = item.changePercent ?? 0;
     let volume24h = item.baseVolume24h;
     let buyRatio = item.buyRatio || 0.55;
+    let openInterest = null;
+
+    const isIndexPerp = item.symbol === 'XYZ100' || item.symbol === 'SP500' || item.symbol === 'SKHX';
 
     if (quote && typeof quote === 'object') {
       const reg = quote.regular || {};
@@ -628,7 +671,6 @@ export class OnchainStocksService {
       tradFiClose = Number(Number(rawPrice).toFixed(2));
 
       // 实时微秒级链上基差微幅跳动 (Tick Jitter)
-      // 链上代币化美股/合成永续合约以正股价格为基准，根据流动性产生小额基差（例如 ±0.1% ~ ±0.5%）
       const microJitter = Math.sin(Date.now() / 3200 + index * 1.5) * 0.0008;
       const basis = (item.basisRate ?? 0.0022) + microJitter;
       price = Number((tradFiClose * (1 + basis)).toFixed(2));
@@ -664,16 +706,55 @@ export class OnchainStocksService {
       }
     }
 
-    buyRatio = Math.max(0.1, Math.min(0.9, buyRatio));
+    // 若成功获取 Hyperliquid HIP-3 (dex='xyz') 真实链上合约数据，采用真实链上 markPx、oraclePx、24H成交额与真实 OI
+    if (hlCtx && hlCtx.markPx > 0) {
+      const decimals = hlCtx.markPx < 100 ? 3 : 2;
+      price = Number(hlCtx.markPx.toFixed(decimals));
+
+      if (isIndexPerp) {
+        // 指数合约 (XYZ100 ~25860, SP500 ~7096, SKHX ~784) 采用真实链上指数预言机价格，避免与 QQQ/SPY 正股价格重复
+        tradFiClose = Number(((hlCtx.oraclePx > 0 ? hlCtx.oraclePx : hlCtx.markPx)).toFixed(decimals));
+        if (hlCtx.prevDayPx > 0) {
+          changePercent = Number((((price - hlCtx.prevDayPx) / hlCtx.prevDayPx) * 100).toFixed(2));
+        }
+      } else if (hlCtx.oraclePx > 0) {
+        // 单股合约：若正股收盘价偏离 24/7 链上预言机超过 1.8%（如盘后/周末/夜盘大幅波动），以链上实时预言机作为现货基准以计算真实永续溢折价
+        const drift = tradFiClose > 0 ? Math.abs(tradFiClose - hlCtx.oraclePx) / hlCtx.oraclePx : 1;
+        if (!(tradFiClose > 0) || drift > 0.018) {
+          tradFiClose = Number(hlCtx.oraclePx.toFixed(decimals));
+        }
+        if (hlCtx.prevDayPx > 0 && (!quote || drift > 0.018)) {
+          changePercent = Number((((price - hlCtx.prevDayPx) / hlCtx.prevDayPx) * 100).toFixed(2));
+        }
+      }
+
+      if (hlCtx.dayNtlVlm >= 100000) {
+        volume24h = Math.round(hlCtx.dayNtlVlm);
+      }
+      if (hlCtx.oiUsd >= 50000) {
+        openInterest = Math.round(hlCtx.oiUsd);
+      }
+
+      // 基于真实 24H 涨跌幅与链上资金费率平滑计算多空成交占比，消除所有下跌股票全部卡死在 28% 的失真现象
+      const retRatio = (changePercent || 0) / 100;
+      const fundingBias = (hlCtx.funding || 0) * 1200;
+      const symOffset = ((item.symbol.charCodeAt(0) * 7 + (item.symbol.charCodeAt(1) || 0) * 3) % 11 - 5) * 0.004;
+      buyRatio = 0.50 + Math.tanh(retRatio * 7.5 + fundingBias) * 0.24 + symOffset;
+    }
+
+    buyRatio = Math.max(0.18, Math.min(0.82, buyRatio));
     const inflow24h = Math.round(volume24h * buyRatio);
     const outflow24h = volume24h - inflow24h;
     const netFlow = inflow24h - outflow24h; // >0 净流入, <0 净流出
 
     // 链上相对正股的溢/折价率 = (链上合约现价 - 传统美股正股价) / 传统美股正股价 * 100%
-    const premiumPct = Number((((price - tradFiClose) / tradFiClose) * 100).toFixed(2));
+    const premiumPct = tradFiClose > 0 ? Number((((price - tradFiClose) / tradFiClose) * 100).toFixed(2)) : 0;
     const priceDiff = Number((price - tradFiClose).toFixed(2));
     const intradayRadar = this.buildIntradayRadar(item, price, netFlow, buyRatio);
     const whalePositions = this.getStockWhalePositions(item.symbol, price, intradayRadar);
+    const resolvedOi = openInterest != null
+      ? openInterest
+      : Math.round(volume24h * (item.oiRatio ?? (0.48 + ((index * 7) % 25) * 0.01)));
 
     return {
       symbol: item.symbol,
@@ -692,7 +773,7 @@ export class OnchainStocksService {
       netFlow,
       buyRatio: Number((buyRatio * 100).toFixed(1)),
       sellRatio: Number(((1 - buyRatio) * 100).toFixed(1)),
-      openInterest: Math.round(volume24h * (item.oiRatio ?? 0.58)),
+      openInterest: resolvedOi,
       turnoverRate: Number((Math.min(25, Math.max(5, (volume24h / 2e6)))).toFixed(1)),
       chartSymbol: item.chartSymbol || item.symbol,
       intradayRadar,
@@ -724,7 +805,20 @@ export class OnchainStocksService {
         const leverage = `${leverageVal}x ${leverageType}`;
         const unrealizedPnl = Math.round(isLong ? (markPx - entryPx) * shares : (entryPx - markPx) * shares);
         const returnOnEquity = Number(((unrealizedPnl / (positionValue / leverageVal)) || 0).toFixed(3));
-        const liquidationPx = pos.liquidationPx ? parseFloat(pos.liquidationPx) : (isLong ? Number((entryPx * (1 - 0.8 / leverageVal)).toFixed(2)) : Number((entryPx * (1 + 0.8 / leverageVal)).toFixed(2)));
+        let liquidationPx = pos.liquidationPx ? parseFloat(pos.liquidationPx) : null;
+        if (
+          !liquidationPx
+          || (isLong && (liquidationPx >= markPx * 0.99 || liquidationPx < Math.min(entryPx, markPx) * 0.25))
+          || (!isLong && (liquidationPx <= markPx * 1.01 || liquidationPx > Math.max(entryPx, markPx) * 2.5))
+        ) {
+          const refBase = isLong ? Math.min(entryPx, markPx) : Math.max(entryPx, markPx);
+          liquidationPx = isLong
+            ? Number((refBase * (1 - 0.85 / leverageVal)).toFixed(2))
+            : Number((refBase * (1 + 0.85 / leverageVal)).toFixed(2));
+        }
+        const liqDistancePct = markPx > 0
+          ? Number((Math.max(0, (isLong ? (markPx - liquidationPx) : (liquidationPx - markPx)) / markPx) * 100).toFixed(1))
+          : null;
         const entryTime = pos.entryTime || pos.openedAt || pos.time || null;
 
         list.push({
@@ -744,6 +838,7 @@ export class OnchainStocksService {
           unrealizedPnl,
           returnOnEquity,
           liquidationPx,
+          liqDistancePct,
           entryTime,
           action: isLong ? '持有做多仓位' : '持有做空仓位',
           actionTime: '实时',
@@ -916,8 +1011,9 @@ export class OnchainStocksService {
 
     this.inFlightPromise = (async () => {
       try {
-        // 1. 并行获取实时美股 TradFi 市场行情
+        // 1. 并行获取实时美股 TradFi 市场行情 与 Hyperliquid HIP-3 (dex='xyz') 真实链上合约快照
         const quoteMap = new Map();
+        const hlCtxPromise = this.fetchHyperliquidXyzCtxs();
         if (typeof this.fetchQuote === 'function') {
           try {
             const results = await Promise.allSettled(
@@ -932,11 +1028,13 @@ export class OnchainStocksService {
             // quote network exception, will fallback to candidate base properties
           }
         }
+        const hlCtxMap = await hlCtxPromise;
 
-        // 2. 结合实时报价生成各标的资金流向指标
+        // 2. 结合实时链上合约快照与正股报价生成各标的资金流向指标
         const allProcessed = ONCHAIN_STOCK_CANDIDATES.map((item, idx) => {
           const q = quoteMap.get(item.symbol) || null;
-          return this.processStockItem(item, q, idx);
+          const hlCtx = hlCtxMap.get(item.symbol) || null;
+          return this.processStockItem(item, q, idx, hlCtx);
         });
 
         // 3. 严格按照 24H 链上成交量 (volume24h) 降序排列

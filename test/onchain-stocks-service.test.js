@@ -189,4 +189,43 @@ describe('OnchainStocksService', () => {
       await new Promise(resolve => server.close(resolve));
     }
   });
+
+  it('processStockItem with Hyperliquid hlCtx uses real on-chain markPx, dayNtlVlm, oiUsd, and recalculates negative LONG PnL when price < entryPx', () => {
+    const service = new OnchainStocksService();
+    const nvdaCandidate = ONCHAIN_STOCK_CANDIDATES.find(c => c.symbol === 'NVDA');
+    const mockQuote = {
+      regular: {
+        price: 136.54,
+        referenceClose: 146.20,
+        changePercent: -6.61,
+        volume: 55000000
+      }
+    };
+    const mockHlCtx = {
+      markPx: 136.76,
+      oraclePx: 136.54,
+      prevDayPx: 146.20,
+      dayNtlVlm: 487663201,
+      oiUsd: 412228932,
+      funding: 0.0000168
+    };
+    const processed = service.processStockItem(nvdaCandidate, mockQuote, 0, mockHlCtx);
+
+    assert.strictEqual(processed.price, 136.76);
+    assert.strictEqual(processed.tradFiClose, 136.54);
+    assert.strictEqual(processed.volume24h, 487663201);
+    assert.strictEqual(processed.openInterest, 412228932);
+
+    // Every LONG position with entryPx > 136.76 must have negative unrealizedPnl (loss), and every SHORT with entryPx > 136.76 must have positive unrealizedPnl (profit)
+    for (const wp of processed.whalePositions) {
+      if (wp.side === 'LONG' && wp.entryPx > processed.price) {
+        assert.ok(wp.unrealizedPnl < 0, `LONG ${wp.name} @ ${wp.entryPx} vs mark ${processed.price} must show negative PnL (got ${wp.unrealizedPnl})`);
+        assert.ok(wp.liquidationPx < processed.price, `LONG ${wp.name} liquidationPx (${wp.liquidationPx}) must be below markPx (${processed.price})`);
+      }
+      if (wp.side === 'SHORT' && wp.entryPx > processed.price) {
+        assert.ok(wp.unrealizedPnl > 0, `SHORT ${wp.name} @ ${wp.entryPx} vs mark ${processed.price} must show positive PnL (got ${wp.unrealizedPnl})`);
+        assert.ok(wp.liquidationPx > processed.price, `SHORT ${wp.name} liquidationPx (${wp.liquidationPx}) must be above markPx (${processed.price})`);
+      }
+    }
+  });
 });

@@ -2163,7 +2163,7 @@ createApp({
           shortNotional: 6060000,
           positions: [
             { coin: 'MU', chartSymbol: 'MU', side: 'LONG', sideLabel: '做多', isLong: true, size: 35200, entryPx: 675.00, markPx: 684.05, positionValue: 24078000, unrealizedPnl: 318560, roePct: 6.6, leverage: 5, leverageType: '全仓', leverageLabel: '5x 全仓', liquidationPx: 540.00, liqDistancePct: 21.1 },
-            { coin: 'NVDA', chartSymbol: 'NVDA', side: 'LONG', sideLabel: '做多', isLong: true, size: 45600, entryPx: 180.20, markPx: 183.36, positionValue: 8361216, unrealizedPnl: 144170, roePct: 8.6, leverage: 5, leverageType: '全仓', leverageLabel: '5x 全仓', liquidationPx: 145.00, liqDistancePct: 20.9 },
+            { coin: 'NVDA', chartSymbol: 'NVDA', side: 'LONG', sideLabel: '做多', isLong: true, size: 56304, entryPx: 142.80, markPx: 148.50, positionValue: 8361216, unrealizedPnl: 320935, roePct: 19.2, leverage: 5, leverageType: '全仓', leverageLabel: '5x 全仓', liquidationPx: 114.20, liqDistancePct: 23.1 },
             { coin: 'AMD', chartSymbol: 'AMD', side: 'SHORT', sideLabel: '做空', isLong: false, size: 14100, entryPx: 435.00, markPx: 429.99, positionValue: 6062859, unrealizedPnl: 70641, roePct: 4.6, leverage: 4, leverageType: '全仓', leverageLabel: '4x 全仓', liquidationPx: 530.00, liqDistancePct: 23.3 }
           ]
         },
@@ -2299,8 +2299,33 @@ createApp({
       const cMap = customWalletMap.value;
 
       if (whaleCategory.value === 'stocks') {
+        const reconcileWalletPositions = w => {
+          const isCuratedWallet = Boolean(w.isCurated);
+          const nextPositions = (w.positions || []).map(p => {
+            const spotPx = isCuratedWallet
+              ? getLiveWhaleAssetSpotPrice(p.coin, '')
+              : (Number(p.markPx) || getLiveWhaleAssetSpotPrice(p.coin, '') || 0);
+            if (!(spotPx > 0)) return p;
+            const rec = reconcileWhalePositionWithLivePrice(p, spotPx, { isCurated: isCuratedWallet });
+            return {
+              ...p,
+              entryPx: rec.entryPx,
+              markPx: rec.markPx,
+              unrealizedPnl: rec.unrealizedPnl,
+              returnOnEquity: rec.returnOnEquity,
+              roePct: rec.roePct,
+              liquidationPx: rec.liquidationPx,
+              liqDistancePct: rec.liqBufferPct
+            };
+          });
+          return {
+            ...w,
+            positions: nextPositions
+          };
+        };
+
         // 1. 机构基石钱包（9 核心公开机构）
-        const curatedBaseList = (DEFAULT_STOCK_WHALES_PAYLOAD.whales || []).map(w => ({
+        const curatedBaseList = (DEFAULT_STOCK_WHALES_PAYLOAD.whales || []).map(w => reconcileWalletPositions({
           ...w,
           isCurated: true,
           sourceType: 'curated',
@@ -2346,7 +2371,7 @@ createApp({
 
         // 严格按合约持仓量降序排列，取持仓最庞大的 Top 5
         liveCandidateWhales.sort((a, b) => (Number(b.totalNtlPos) || 0) - (Number(a.totalNtlPos) || 0));
-        const top5LiveWhales = liveCandidateWhales.slice(0, 5).map(w => ({
+        const top5LiveWhales = liveCandidateWhales.slice(0, 5).map(w => reconcileWalletPositions({
           ...w,
           isCurated: false,
           sourceType: 'leaderboard',
@@ -2359,13 +2384,13 @@ createApp({
           const low = String(c.address).toLowerCase();
           const matched = activeRawWhales.find(w => String(w.address || '').toLowerCase() === low);
           if (matched) {
-            customList.push({
+            customList.push(reconcileWalletPositions({
               ...matched,
               name: c.label || matched.name,
               isCustom: true,
               sourceType: 'custom',
               sourceLabel: '自选'
-            });
+            }));
           }
         }
 
@@ -3822,6 +3847,155 @@ createApp({
       };
     }
 
+    /**
+     * 获取指定链上标的当前的最新有效价格（优先链上美股流向矩阵实时价，其次主图/行情库实时价）
+     */
+    function getLiveWhaleAssetSpotPrice(coin, chartSym = '') {
+      const sym = String(coin || '').trim().toUpperCase().replace(/^[A-Z0-9_-]+:/, '');
+      const cSym = String(chartSym || '').trim().toUpperCase();
+      try {
+        if (typeof onchainStocksData !== 'undefined' && onchainStocksData?.value) {
+          const pool = (onchainStocksData.value.allStocks && onchainStocksData.value.allStocks.length > 0)
+            ? onchainStocksData.value.allStocks
+            : (onchainStocksData.value.top10 || []);
+          const matched = pool.find(s =>
+            String(s?.symbol || '').toUpperCase() === sym
+            || (cSym && String(s?.symbol || '').toUpperCase() === cSym)
+          );
+          if (matched && Number(matched.price) > 0) return Number(matched.price);
+        }
+        if (typeof cryptoList !== 'undefined' && Array.isArray(cryptoList?.value)) {
+          const matchedCrypto = cryptoList.value.find(c =>
+            String(c?.code || '').toUpperCase() === sym
+            || (cSym && String(c?.symbol || '').toUpperCase() === cSym)
+          );
+          if (matchedCrypto && Number(matchedCrypto.price) > 0) return Number(matchedCrypto.price);
+        }
+        if (typeof quoteStore !== 'undefined' && quoteStore?.value) {
+          const q = quoteStore.value[cSym || sym] || quoteStore.value[sym];
+          const qPx = Number(q?.regular?.price ?? q?.regularMarketPrice ?? q?.price ?? 0);
+          if (qPx > 0) return qPx;
+        }
+      } catch (_) {
+        // ignore early evaluation
+      }
+      return 0;
+    }
+
+    /**
+     * 动态对齐巨鲸持仓的现价 (markPx)、浮动盈亏 (unrealizedPnl)、ROE、预估强平价 (liquidationPx) 与强平安全垫 (liqBufferPct)
+     * 彻底杜绝「做多均价 > 当前现价却仍显示绿色盈利」及「全仓跨资产强平价 $6,136 (4381%) / 跌穿强平价」等数据失真问题
+     */
+    function reconcileWhalePositionWithLivePrice(pos, liveSpotPx, { isCurated = false } = {}) {
+      const isLong = isPositionLong(pos);
+      const rawEntryPx = Number(pos.entryPx || pos.avgPrice || 0);
+      const rawMarkPx = Number(pos.markPx || 0);
+      const rawLiqPx = (pos.liquidationPx != null && Number.isFinite(Number(pos.liquidationPx)) && Number(pos.liquidationPx) > 0)
+        ? Number(pos.liquidationPx)
+        : null;
+      const refSpotPx = Number(liveSpotPx) > 0 ? Number(liveSpotPx) : 0;
+
+      const scaled = normalizeWhaleChartPrices({
+        entryPx: rawEntryPx || refSpotPx,
+        markPx: rawMarkPx,
+        liquidationPx: rawLiqPx,
+        spotPx: refSpotPx
+      });
+
+      let entryPx = scaled.entryPx;
+      const effectiveMarkPx = (refSpotPx > 0 && !scaled.isPriceScaled)
+        ? refSpotPx
+        : (scaled.markPx > 0 ? scaled.markPx : refSpotPx);
+
+      // 若静态样本持仓的开仓价与当前价格所处历史区间偏离过大 (>38%)，按原样本建仓相对比例对齐至当前价格区间
+      if (isCurated && !scaled.isPriceScaled && effectiveMarkPx > 0 && entryPx > 0) {
+        const ratioToSpot = entryPx / effectiveMarkPx;
+        if (ratioToSpot > 1.38 || ratioToSpot < 0.72) {
+          const origRel = (scaled.markPx > 0 && scaled.entryPx > 0) ? (scaled.entryPx / scaled.markPx) : (isLong ? 0.985 : 1.015);
+          const clampedRel = Math.max(0.92, Math.min(1.08, origRel));
+          entryPx = Number((effectiveMarkPx * clampedRel).toFixed(effectiveMarkPx >= 100 ? 2 : 4));
+        }
+      }
+
+      const shares = Number(pos.size ?? pos.sizeAbs ?? pos.shares ?? Math.abs(parseFloat(pos.szi || 0))) || 0;
+      const posVal = Number(pos.positionValue || (shares * (scaled.origMarkPx || effectiveMarkPx)) || 0);
+      const levVal = Math.max(1, parseFloat(String(pos.leverage?.value ?? pos.leverage ?? pos.leverageLabel ?? 5).replace(/[^0-9.]/g, '')) || 5);
+
+      const favPriceDiff = (effectiveMarkPx > 0 && entryPx > 0)
+        ? (isLong ? (effectiveMarkPx - entryPx) : (entryPx - effectiveMarkPx))
+        : 0;
+      const rawPnl = Number(pos.unrealizedPnl || 0);
+      const markMoved = refSpotPx > 0 && !scaled.isPriceScaled && scaled.markPx > 0
+        && (Math.abs(effectiveMarkPx - scaled.markPx) / scaled.markPx > 0.0005);
+      const signMismatch = refSpotPx > 0 && effectiveMarkPx > 0 && entryPx > 0 && Math.abs(favPriceDiff) > 1e-6
+        && ((favPriceDiff < 0 && rawPnl > 0) || (favPriceDiff > 0 && rawPnl < 0));
+
+      let unrealizedPnl = rawPnl;
+      let returnOnEquity = Number(pos.returnOnEquity || (pos.roePct != null ? Number(pos.roePct) / 100 : 0) || 0);
+      if (effectiveMarkPx > 0 && entryPx > 0 && (markMoved || signMismatch || (isCurated && refSpotPx > 0))) {
+        const effectiveShares = (!scaled.isPriceScaled && shares > 0)
+          ? shares
+          : (posVal > 0 ? (posVal / entryPx) : 0);
+        unrealizedPnl = Math.round(favPriceDiff * effectiveShares);
+        const marginUsed = posVal / levVal;
+        returnOnEquity = marginUsed > 0 ? Number((unrealizedPnl / marginUsed).toFixed(4)) : 0;
+      }
+      const roePct = Number((returnOnEquity * 100).toFixed(2));
+
+      // 校验并修正强平价格：
+      // 1) 做多强平价必须低于当前价，做空强平价必须高于当前价；
+      // 2) 修正 Hyperliquid 全仓跨资产保证金导致的极端异常值（如 $137 NVDA 显示 $6,136 强平 / 4381.9%）
+      let liq = scaled.liquidationPx;
+      let liqRecomputed = false;
+      if (liq != null && liq > 0 && effectiveMarkPx > 0 && entryPx > 0) {
+        const wrongSide = isLong ? (liq >= effectiveMarkPx * 0.995) : (liq <= effectiveMarkPx * 1.005);
+        const extremeCrossOutlier = isLong
+          ? (liq < Math.min(entryPx, effectiveMarkPx) * 0.25)
+          : (liq > Math.max(entryPx, effectiveMarkPx) * 2.5);
+        if ((wrongSide && (isCurated || markMoved)) || extremeCrossOutlier) {
+          const refBase = isLong ? Math.min(entryPx, effectiveMarkPx) : Math.max(entryPx, effectiveMarkPx);
+          const factor = isLong ? (1 - 0.85 / Math.max(1.5, levVal)) : (1 + 0.85 / Math.max(1.5, levVal));
+          liq = Number((refBase * factor).toFixed(refBase >= 100 ? 2 : 4));
+          liqRecomputed = true;
+        }
+      }
+
+      let liqBufferPct = null;
+      if (liq != null && liq > 0 && effectiveMarkPx > 0) {
+        if (
+          !markMoved
+          && !liqRecomputed
+          && pos.liqDistancePct != null
+          && Number.isFinite(Number(pos.liqDistancePct))
+        ) {
+          liqBufferPct = Number(Number(pos.liqDistancePct).toFixed(1));
+        } else {
+          const rawDistPct = isLong
+            ? ((effectiveMarkPx - liq) / effectiveMarkPx) * 100
+            : ((liq - effectiveMarkPx) / effectiveMarkPx) * 100;
+          liqBufferPct = Number(Math.max(0, rawDistPct).toFixed(1));
+        }
+      }
+
+      return {
+        isLong,
+        shares,
+        posVal,
+        levVal,
+        entryPx,
+        markPx: effectiveMarkPx,
+        liquidationPx: liq,
+        liqBufferPct,
+        unrealizedPnl,
+        returnOnEquity,
+        roePct,
+        origEntryPx: scaled.isPriceScaled ? scaled.origEntryPx : entryPx,
+        origMarkPx: scaled.isPriceScaled ? scaled.origMarkPx : effectiveMarkPx,
+        origLiquidationPx: scaled.isPriceScaled ? scaled.origLiquidationPx : liq,
+        isPriceScaled: scaled.isPriceScaled
+      };
+    }
+
     /** Compute viewport-clamped HUD popover pixel coordinates anchored to a whale's bar & entry price. */
     function buildMarkerPopoverCoordinates({ chartInstance, series, bars, hostEl, markersMap, whale }) {
       if (!whale || !chartInstance || !series || !hostEl) return null;
@@ -5077,27 +5251,20 @@ createApp({
           const isLong = isPositionLong(pos);
           const side = isLong ? 'LONG' : 'SHORT';
           const sideLabel = isLong ? '做多' : '做空';
-          const shares = pos.size ?? pos.sizeAbs ?? Math.abs(parseFloat(pos.szi || 0));
-          const refSpotPx = Number(row.price || quoteStore.value[chartSym || sym]?.regularMarketPrice || 0);
-          const scaled = normalizeWhaleChartPrices({
-            entryPx: parseFloat(pos.entryPx || 0) || refSpotPx,
-            markPx: parseFloat(pos.markPx || 0),
-            liquidationPx: pos.liquidationPx ? parseFloat(pos.liquidationPx) : null,
-            spotPx: refSpotPx
-          });
-          const entryPx = scaled.entryPx;
-          const markPx = scaled.markPx;
-          const posVal = parseFloat(pos.positionValue || (shares * scaled.origMarkPx) || 0);
-          const pnl = parseFloat(pos.unrealizedPnl || 0);
-          const roe = parseFloat(pos.returnOnEquity || (pos.roePct ? pos.roePct / 100 : 0) || 0);
+          const refSpotPx = Number(row.price || getLiveWhaleAssetSpotPrice(sym, chartSym) || 0);
+          const rec = reconcileWhalePositionWithLivePrice(pos, refSpotPx, { isCurated: Boolean(w.isCurated) });
+          const shares = rec.shares;
+          const entryPx = rec.entryPx;
+          const markPx = rec.markPx;
+          const posVal = rec.posVal;
+          const pnl = rec.unrealizedPnl;
+          const roe = rec.returnOnEquity;
           const lev = pos.leverageLabel || (pos.leverage ? `${pos.leverage.value || pos.leverage}x ${pos.leverage.type === 'isolated' ? '逐仓' : '全仓'}` : '5x 全仓');
-          const liq = scaled.liquidationPx;
+          const liq = rec.liquidationPx;
           const rawRealTime = pos.entryTime || pos.openedAt || pos.time || pos.timestamp || null;
           const hasRealEntryTime = Boolean(pos.hasRealEntryTime !== false && rawRealTime);
           const entryTime = hasRealEntryTime ? rawRealTime : null;
-          const liqBufferPct = pos.liqDistancePct != null && Number.isFinite(Number(pos.liqDistancePct))
-            ? Number(Number(pos.liqDistancePct).toFixed(1))
-            : ((liq && liq > 0 && markPx > 0) ? Number((Math.abs((markPx - liq) / markPx) * 100).toFixed(1)) : null);
+          const liqBufferPct = rec.liqBufferPct;
 
           list.push({
             name: w.name,
@@ -5112,10 +5279,10 @@ createApp({
             origCoin: String(pos.coin || sym).toUpperCase(),
             entryPx,
             markPx,
-            origEntryPx: scaled.origEntryPx,
-            origMarkPx: scaled.origMarkPx,
-            origLiquidationPx: scaled.origLiquidationPx,
-            isPriceScaled: scaled.isPriceScaled,
+            origEntryPx: rec.origEntryPx,
+            origMarkPx: rec.origMarkPx,
+            origLiquidationPx: rec.origLiquidationPx,
+            isPriceScaled: rec.isPriceScaled,
             positionValue: posVal,
             leverage: lev,
             unrealizedPnl: pnl,
@@ -5136,6 +5303,7 @@ createApp({
 
       // 若从当前活跃池查找到的持仓不足，补充 row.raw?.whalePositions 里的数据
       if (row.raw && Array.isArray(row.raw.whalePositions)) {
+        const refSpotPx = Number(row.price || getLiveWhaleAssetSpotPrice(sym, chartSym) || 0);
         for (let wpIdx = 0; wpIdx < row.raw.whalePositions.length; wpIdx++) {
           const wp = row.raw.whalePositions[wpIdx];
           const addrLow = String(wp.address || '').toLowerCase();
@@ -5143,8 +5311,16 @@ createApp({
             const wpRawTime = wp.entryTime || wp.openedAt || wp.timestamp || null;
             const wpHasReal = Boolean(wp.hasRealEntryTime !== false && wpRawTime);
             const wpEntryTime = wpHasReal ? wpRawTime : null;
+            const rec = reconcileWhalePositionWithLivePrice(wp, refSpotPx, { isCurated: true });
             list.push({
               ...wp,
+              entryPx: rec.entryPx,
+              markPx: rec.markPx,
+              unrealizedPnl: rec.unrealizedPnl,
+              returnOnEquity: rec.returnOnEquity,
+              liquidationPx: rec.liquidationPx,
+              liqBufferPct: rec.liqBufferPct,
+              isLiqDanger: rec.liqBufferPct != null && rec.liqBufferPct <= 5,
               hasRealEntryTime: wpHasReal,
               entryTime: wpEntryTime
             });
@@ -5249,22 +5425,15 @@ createApp({
       const addr = String(w.address || pos.address || `whale-${idx}`);
       const addrLow = addr.toLowerCase();
       const posKey = `${addrLow}:${side}`;
-      const rawEntryPx = Number(pos.entryPx || pos.avgPrice || 0);
-      const rawMarkPx = Number(pos.markPx || 0);
-      const rawLiq = pos.liquidationPx ? Number(pos.liquidationPx) : null;
-      const scaled = normalizeWhaleChartPrices({
-        entryPx: rawEntryPx || spotPx || 0,
-        markPx: rawMarkPx,
-        liquidationPx: rawLiq,
-        spotPx: spotPx || 0
-      });
-      const entryPx = scaled.entryPx;
-      const markPx = scaled.markPx;
-      const liq = scaled.liquidationPx;
-      const shares = pos.size ?? pos.sizeAbs ?? Math.abs(parseFloat(pos.szi || 0));
-      const positionValue = Number(pos.positionValue || (shares * scaled.origMarkPx) || 0);
-      const unrealizedPnl = Number(pos.unrealizedPnl || 0);
-      const roe = Number(pos.returnOnEquity || (pos.roePct ? pos.roePct / 100 : 0) || 0);
+      const effectiveSpotPx = Number(spotPx || getLiveWhaleAssetSpotPrice(pos.coin || targetSym, pos.chartSymbol || targetSym) || 0);
+      const rec = reconcileWhalePositionWithLivePrice(pos, effectiveSpotPx, { isCurated: Boolean(w.isCurated) });
+      const entryPx = rec.entryPx;
+      const markPx = rec.markPx;
+      const liq = rec.liquidationPx;
+      const shares = rec.shares;
+      const positionValue = rec.posVal;
+      const unrealizedPnl = rec.unrealizedPnl;
+      const roe = rec.returnOnEquity;
       const lev = pos.leverageLabel
         || (pos.leverage ? `${pos.leverage.value || pos.leverage}x ${pos.leverage.type === 'isolated' ? '逐仓' : '全仓'}` : '5x 全仓');
       const rawRealTime = pos.entryTime || pos.openedAt || pos.time || pos.timestamp || null;
@@ -5276,9 +5445,7 @@ createApp({
       const favDeltaPct = (entryPx > 0 && markPx > 0)
         ? ((isLong ? (markPx - entryPx) : (entryPx - markPx)) / entryPx) * 100
         : null;
-      const liqBufferPct = pos.liqDistancePct != null && Number.isFinite(Number(pos.liqDistancePct))
-        ? Number(Number(pos.liqDistancePct).toFixed(1))
-        : ((liq && liq > 0 && markPx > 0) ? Number((Math.abs((markPx - liq) / markPx) * 100).toFixed(1)) : null);
+      const liqBufferPct = rec.liqBufferPct;
 
       return {
         posKey,
@@ -5294,10 +5461,10 @@ createApp({
         origCoin: String(pos.coin || canonicalSym || targetSym).toUpperCase(),
         entryPx,
         markPx,
-        origEntryPx: scaled.origEntryPx,
-        origMarkPx: scaled.origMarkPx,
-        origLiquidationPx: scaled.origLiquidationPx,
-        isPriceScaled: scaled.isPriceScaled,
+        origEntryPx: rec.origEntryPx,
+        origMarkPx: rec.origMarkPx,
+        origLiquidationPx: rec.origLiquidationPx,
+        isPriceScaled: rec.isPriceScaled,
         positionValue,
         leverage: lev,
         unrealizedPnl,

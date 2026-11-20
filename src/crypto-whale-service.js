@@ -275,7 +275,7 @@ export const CURATED_STOCK_WHALES = [
     totalNtlPos: 38500000,
     positions: [
       { coin: 'MU', szi: '35200.0', entryPx: '675.00', markPx: '684.05', positionValue: '24078000', unrealizedPnl: '318560', returnOnEquity: '0.066', leverage: { value: 5, type: 'cross' }, liquidationPx: '540.00' },
-      { coin: 'NVDA', szi: '45600.0', entryPx: '180.20', markPx: '183.36', positionValue: '8361216', unrealizedPnl: '144170', returnOnEquity: '0.086', leverage: { value: 5, type: 'cross' }, liquidationPx: '145.00' },
+      { coin: 'NVDA', szi: '56304.5', entryPx: '142.80', markPx: '148.50', positionValue: '8361216', unrealizedPnl: '320935', returnOnEquity: '0.192', leverage: { value: 5, type: 'cross' }, liquidationPx: '114.20' },
       { coin: 'AMD', szi: '-14100.0', entryPx: '435.00', markPx: '429.99', positionValue: '6062859', unrealizedPnl: '70641', returnOnEquity: '0.046', leverage: { value: 4, type: 'cross' }, liquidationPx: '530.00' }
     ]
   },
