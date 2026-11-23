@@ -4625,4 +4625,46 @@ test('Trader workflow upgrades: VWAP + PDH/PDL, Options Wall on K-line, live tic
   assert.deepEqual(ui.errors, []);
 });
 
+test('Topbar clock: renders real-time Beijing time with seconds, avoids HTTP Date truncation lag, and aligns ticks to second boundary', async t => {
+  const scheduledDelays = [];
+  let realSetTimeout = null;
+  const ui = await mount(t, async url => {
+    const truncatedHeader = new Date(Math.floor(Date.now() / 1000) * 1000).toUTCString();
+    return {
+      ok: true,
+      headers: { get: name => (String(name).toLowerCase() === 'date' ? truncatedHeader : null) },
+      json: async () => fixture(url)
+    };
+  }, null, w => {
+    realSetTimeout = w.setTimeout.bind(w);
+    w.setTimeout = (fn, delay, ...args) => {
+      if (typeof delay === 'number' && delay >= 4 && delay <= 1000) {
+        scheduledDelays.push(delay);
+      }
+      return realSetTimeout(fn, delay, ...args);
+    };
+  });
+
+  await tick();
+  const clockEl = ui.w.document.querySelector('.topbar-clock-group .clock-line-bj strong');
+  assert.ok(clockEl, 'Top-right clock element exists');
+  const initialText = clockEl.textContent.trim();
+  assert.match(initialText, /^\d{2}\/\d{2} \d{2}:\d{2}:\d{2} 北京$/, 'Top-right clock displays MM/DD HH:mm:ss 北京');
+
+  // Verify boundary-aligned timer delay is scheduled strictly within (0, 1000] ms
+  assert.ok(scheduledDelays.length > 0, 'Clock schedules boundary-aligned timeout');
+  assert.ok(scheduledDelays.some(d => d <= 1000 && d >= 4), 'Clock tick aligns to exact next second boundary');
+
+  // Wait just over 1 second and confirm the displayed second advances with zero lag
+  await new Promise(resolve => setTimeout(resolve, 1100));
+  await tick();
+  const updatedText = clockEl.textContent.trim();
+  assert.match(updatedText, /^\d{2}\/\d{2} \d{2}:\d{2}:\d{2} 北京$/);
+  assert.notEqual(updatedText, initialText, 'Top-right clock seconds tick live in real time');
+
+  const css = await fs.readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
+  assert.match(css, /\.clock-line-bj strong\s*\{[^}]*font-variant-numeric:\s*tabular-nums;/);
+  assert.deepEqual(ui.errors, []);
+});
+
 
