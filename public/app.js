@@ -11168,6 +11168,7 @@ createApp({
       if (document.hidden) {
         stopShortPolling();
       } else {
+        syncClockTick();
         followSystemTheme();
         fetchWatchlistQuotes({ silent: true });
         if (page.value === 'crypto' && !isWhaleDatasetSample.value) {
@@ -11277,9 +11278,10 @@ createApp({
       window.addEventListener('popstate', onPopState);
       document.addEventListener('visibilitychange', handleVisibilityChange);
       window.addEventListener('focus', followSystemTheme);
+      window.addEventListener('focus', syncClockTick);
       if (systemTheme?.addEventListener) systemTheme.addEventListener('change', followSystemTheme);
       else systemTheme?.addListener?.(followSystemTheme);
-      clockTimer = setInterval(() => { clock.value = getAuthoritativeTime(); }, 1000);
+      syncClockTick();
       earningsRefreshTimer = setInterval(refreshVisibleEarnings, 60_000);
       document.addEventListener('visibilitychange', refreshVisibleEarnings);
       window.addEventListener('click', e => {
@@ -11377,7 +11379,9 @@ createApp({
       document.removeEventListener('visibilitychange', scheduleAiSearchRefresh);
       if (navTimer) clearTimeout(navTimer);
       if (initialTimer) clearTimeout(initialTimer);
-      clearInterval(clockTimer);
+      clearTimeout(clockTimer);
+      clockTimer = null;
+      window.removeEventListener('focus', syncClockTick);
       stopShortPolling();
       if (cryptoWhaleTimer) {
         clearInterval(cryptoWhaleTimer);
