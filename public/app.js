@@ -6459,7 +6459,7 @@ createApp({
       ];
     });
 
-    // ── Tier 4: Periodic & Timing Store (Server Clock Calibration) ──
+    // ── Tier 4: Periodic & Timing Store (Zero-Delay Boundary-Aligned Clock) ──
     const clockOffset = ref(0);
     function getAuthoritativeTime() {
       return new Date(Date.now() + clockOffset.value);
@@ -6467,48 +6467,56 @@ createApp({
     function calibrateClock(serverDateHeader) {
       if (!serverDateHeader) return;
       const serverTimeMs = new Date(serverDateHeader).getTime();
-      if (!Number.isNaN(serverTimeMs)) {
-        clockOffset.value = serverTimeMs - Date.now();
+      if (Number.isNaN(serverTimeMs)) return;
+      // HTTP Date header is truncated to whole seconds (RFC 7231), which otherwise creates
+      // an artificial 0~999ms lag against a local NTP-synced clock. Only apply offset when
+      // real clock skew exceeds 2s, using +500ms midpoint compensation.
+      const rawDelta = serverTimeMs - Date.now();
+      const nextOffset = Math.abs(rawDelta) > 2000 ? (rawDelta + 500) : 0;
+      if (clockOffset.value !== nextOffset) {
+        clockOffset.value = nextOffset;
+        if (clockTimer != null) syncClockTick();
       }
     }
 
     const toast = ref(''), undoAction = ref(null), importing = ref(false), clock = ref(getAuthoritativeTime());
+    function syncClockTick() {
+      clearTimeout(clockTimer);
+      const nowDate = getAuthoritativeTime();
+      clock.value = nowDate;
+      const msIntoSecond = ((nowDate.getTime() % 1000) + 1000) % 1000;
+      const delay = Math.max(4, 1000 - msIntoSecond);
+      clockTimer = setTimeout(syncClockTick, delay);
+    }
     const serverSession = ref(null);
     const currentSession = computed(() => {
       return serverSession.value || (typeof getCurrentSession === 'function' ? getCurrentSession(clock.value) : { session: 'regular', isExt: false, desc: '常规交易' });
     });
-    const nyClock = computed(() => new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', hour12: false }).format(clock.value));
-    const nyClockDetailed = computed(() => new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(clock.value));
+    const nyClockDtf = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', hour12: false });
+    const nyClockDetailedDtf = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+    const nyInfoDtf = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', timeZoneName: 'short', hour12: false });
+    const nyDateDtf = new Intl.DateTimeFormat('zh-CN', { timeZone: 'America/New_York', month: '2-digit', day: '2-digit' });
+    const bjClockSecondsDtf = new Intl.DateTimeFormat('zh-CN', {
+      timeZone: 'Asia/Shanghai',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
+    const nyClock = computed(() => nyClockDtf.format(clock.value));
+    const nyClockDetailed = computed(() => nyClockDetailedDtf.format(clock.value));
     const nyClockInfo = computed(() => {
       const d = clock.value;
       try {
-        const dtf = new Intl.DateTimeFormat('en-US', {
-          timeZone: 'America/New_York',
-          hour: '2-digit',
-          minute: '2-digit',
-          timeZoneName: 'short',
-          hour12: false
-        });
-        const parts = dtf.formatToParts(d);
+        const parts = nyInfoDtf.formatToParts(d);
         const tz = parts.find(p => p.type === 'timeZoneName')?.value || 'ET';
         const hour = parts.find(p => p.type === 'hour')?.value || '00';
         const minute = parts.find(p => p.type === 'minute')?.value || '00';
         const nyTime = `${hour}:${minute}`;
-
-        const nyDate = new Intl.DateTimeFormat('zh-CN', {
-          timeZone: 'America/New_York',
-          month: '2-digit',
-          day: '2-digit'
-        }).format(d);
-
-        const bjTime = new Intl.DateTimeFormat('zh-CN', {
-          timeZone: 'Asia/Shanghai',
-          month: '2-digit',
-          day: '2-digit',
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: false
-        }).format(d);
+        const nyDate = nyDateDtf.format(d);
+        const bjTime = bjClockSecondsDtf.format(d);
 
         return {
           nyTime,
