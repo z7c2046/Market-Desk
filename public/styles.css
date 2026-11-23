@@ -15966,6 +15966,13 @@ th.num,
   font-family: var(--font-mono);
   font-weight: 600;
   font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.rw-bj-time {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .clock-live-dot {
