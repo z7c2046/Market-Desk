@@ -2479,6 +2479,14 @@
                             </div>
 
                             <div class="cw-ph-tools">
+                              <div class="cw-seg-tabs cw-sort-seg" role="group" aria-label="右侧标的排序方式">
+                                <button type="button" class="cw-seg-btn" :class="{ active: sankeyAssetSort === 'position' }"
+                                  :aria-pressed="sankeyAssetSort === 'position'" @click="setSankeyAssetSort('position')"
+                                  title="按右侧巨鲸持仓规模降序排列">按持仓</button>
+                                <button type="button" class="cw-seg-btn" :class="{ active: sankeyAssetSort === 'volume' }"
+                                  :aria-pressed="sankeyAssetSort === 'volume'" @click="setSankeyAssetSort('volume')"
+                                  title="按链上 24H 市场成交量降序排列">按成交</button>
+                              </div>
                               <div class="cw-seg-tabs cw-mode-seg" role="group" aria-label="按仓位方向查看">
                                 <button type="button" class="cw-seg-btn" :class="{ active: sankeyMode === 'all' }"
                                   :aria-pressed="sankeyMode === 'all'" @click="setSankeyMode('all')">全部</button>
@@ -2982,10 +2990,12 @@
                               class="panel onchain-stocks-panel cw-flow-panel">
                               <div class="cw-panel-head">
                                 <div class="cw-ph-left">
-                                  <span class="cw-live-dot" aria-hidden="true"></span>
+                                  <span class="cw-live-dot" :title="onchainStreamStatusTitle" aria-hidden="true"></span>
                                   <h2>资金流向</h2>
                                   <span class="cw-tag-pill font-mono">{{ whaleCategory === 'stocks' ? 'TradFi' :
                                     'CRYPTO' }}</span>
+                                  <span v-if="onchainStreamStatusLabel" class="cw-tag-pill font-mono"
+                                    :title="onchainStreamStatusTitle">{{ onchainStreamStatusLabel }}</span>
                                 </div>
                                 <div class="cw-ph-right font-mono">
                                   <span class="cw-kv"><span>成交</span><strong>${{
@@ -3167,31 +3177,28 @@
 
                                               <div class="cw-axis-graphic font-mono">
                                                 <div class="cw-axis-labels">
-                                                  <span class="text-pos">多均 ${{ formatCryptoPrice(axis.bullAvg)
+                                                  <span class="cw-avg-lbl is-bull text-pos"><i class="cw-avg-swatch" aria-hidden="true"></i>多均 ${{ formatCryptoPrice(axis.bullAvg)
                                                     }}</span>
-                                                  <span class="cw-spot-lbl">现 ${{ formatCryptoPrice(axis.spot) }}</span>
+                                                  <span class="cw-spot-lbl"><i class="cw-spot-caret" aria-hidden="true"></i>现 ${{ formatCryptoPrice(axis.spot) }}</span>
                                                   <span v-if="axis.tradFiClose" class="cw-tradfi-lbl"
                                                     :title="'正股对照价 $' + formatCryptoPrice(axis.tradFiClose)">正股 ${{
                                                     formatCryptoPrice(axis.tradFiClose) }}</span>
-                                                  <span class="text-neg">空均 ${{ formatCryptoPrice(axis.bearAvg)
+                                                  <span class="cw-avg-lbl is-bear text-neg"><i class="cw-avg-swatch" aria-hidden="true"></i>空均 ${{ formatCryptoPrice(axis.bearAvg)
                                                     }}</span>
                                                 </div>
                                                 <div class="cw-axis-rail" aria-hidden="true">
                                                   <i class="cw-axis-pin is-bull" :style="{ left: axis.bullPct + '%' }"
                                                     title="多头均价"></i>
-                                                  <i class="cw-axis-pin is-spot" :style="{ left: axis.spotPct + '%' }"
-                                                    title="链上现价"></i>
                                                   <i v-if="axis.tradFiPct != null" class="cw-axis-pin is-tradfi"
                                                     :style="{ left: axis.tradFiPct + '%' }" title="正股对照价"></i>
                                                   <i class="cw-axis-pin is-bear" :style="{ left: axis.bearPct + '%' }"
                                                     title="空头均价"></i>
+                                                  <i class="cw-axis-pin is-spot cw-axis-pointer" :style="{ left: axis.spotPct + '%' }"
+                                                    title="链上现价"></i>
                                                 </div>
                                               </div>
 
                                               <div class="cw-axis-actions">
-                                                <button type="button" class="cw-open-main-chart-btn font-mono"
-                                                  title="跳转至大屏 K 线查看全部机构买卖点与多空均价"
-                                                  @click.stop="openSymbolInWhaleMainChart(r.symbol, r)">⤢ 大屏K线</button>
                                                 <button class="onchain-whale-btn cw-filter-link font-mono"
                                                   @click.stop="r.isCrypto ? (cryptoWhaleSearch = r.symbol) : viewStockWhale(r.symbol)"
                                                   title="筛选该标的钱包">
@@ -3200,7 +3207,7 @@
                                               </div>
                                             </div>
 
-                                            <!-- 机构持仓明细表格 (7 列：右侧一键跳转大屏 K 线看该机构买点) -->
+                                            <!-- 机构持仓明细表格 (6 列：顶部标的右侧保留唯一大屏 K 线入口) -->
                                             <div class="cw-drawer-table-wrap">
                                               <table class="stock-whale-table cw-drawer-table">
                                                 <thead>
@@ -3275,7 +3282,6 @@
                                                         aria-hidden="true">{{ whaleDrawerSortField === 'liquidationPx' ?
                                                         (whaleDrawerSortDir === 'desc' ? '↓' : '↑') : '↕' }}</span>
                                                     </th>
-                                                    <th class="text-right">K 线点位</th>
                                                   </tr>
                                                 </thead>
                                                 <tbody>
@@ -3329,13 +3335,9 @@
                                                       </span>
                                                       <span v-else class="muted">—</span>
                                                     </td>
-                                                    <td class="text-right">
-                                                      <button type="button"
-                                                        class="cw-open-main-chart-btn cw-wp-kline-btn font-mono"
-                                                        :title="'跳转至大屏 K 线查看 ' + wp.name + ' 买点、机构均价与多空均价'"
-                                                        @click.stop="openSymbolInWhaleMainChart(r.symbol, r, wp)">⤢
-                                                        大屏K线</button>
-                                                    </td>
+                                                  </tr>
+                                                  <tr v-if="getUnifiedWhalePositions(r).length === 0" class="cw-drawer-empty-row">
+                                                    <td colspan="6" class="text-center muted">当前追踪的链上巨鲸池暂无 {{ r.symbol }} 活跃持仓</td>
                                                   </tr>
                                                 </tbody>
                                               </table>
@@ -3423,8 +3425,25 @@
                       </div>
 
                       <section v-if="flowTab==='rotation'" class="panel" style="padding-top:16px;">
+                        <!-- Quick KPI Overview Cards Skeleton (4 Grid) -->
+                        <div v-if="isFlowsSkeleton" class="kpi-grid-4 flows-kpi-skeleton" aria-hidden="true">
+                          <div v-for="i in 4" :key="'fkpi-' + i" class="kpi-card sk-kpi-card">
+                            <div class="kpi-head">
+                              <span class="sk sk-small" style="width: 96px;"></span>
+                            </div>
+                            <div class="kpi-body">
+                              <span class="sk sk-val" style="width: 112px; height: 22px;"></span>
+                              <span class="sk sk-pill" style="width: 54px; height: 18px;"></span>
+                            </div>
+                            <div class="kpi-foot">
+                              <span class="sk sk-small" style="width: 108px;"></span>
+                              <span class="sk sk-small" style="width: 68px;"></span>
+                            </div>
+                          </div>
+                        </div>
+
                         <!-- Quick KPI Overview Cards (4 Grid) -->
-                        <div class="kpi-grid-4">
+                        <div v-else class="kpi-grid-4">
                           <!-- Card 1: Top Gainer -->
                           <div class="kpi-card">
                             <div class="kpi-head">
@@ -3517,22 +3536,25 @@
 
                           <div v-if="states.overview.error" class="error-box">{{states.overview.error}} <button
                               @click="loadOverview">重试</button></div>
-                          <div v-if="states.overview.loading || !overview" class="flows-skeleton-wrap"
+                          <div v-if="isFlowsSkeleton" class="flows-skeleton-wrap"
                             aria-hidden="true">
-                            <!-- Quadrant Rotation Chart Skeleton -->
-                            <div class="panel"
-                              style="padding: 20px; background: var(--surface-card); border-radius: 8px;">
-                              <div class="chart-skeleton" style="opacity: 1; height: 320px; position: relative;">
-                                <div class="sk-chart-grid" style="inset: 10px 20px;"></div>
-                                <div class="sk-quadrant-cross-x"></div>
-                                <div class="sk-quadrant-cross-y"></div>
-                                <div v-for="(b, idx) in flowsBubbleSkeletons" :key="idx" class="sk sk-bubble"
-                                  :style="{ left: b.x + '%', top: b.y + '%', width: b.size + 'px', height: b.size + 'px' }">
-                                </div>
+                            <!-- Quadrant Rotation Chart Skeleton (matches .wide-chart 480px height) -->
+                            <div class="chart-skeleton flows-quadrant-skeleton">
+                              <div class="sk-chart-grid" style="inset: 14px 20px 28px 54px;"></div>
+                              <div class="skeleton-y sk-quadrant-y">
+                                <span v-for="i in 6" :key="'fy-' + i" class="sk sk-small" style="width: 34px;"></span>
+                              </div>
+                              <div class="sk-quadrant-cross-x"></div>
+                              <div class="sk-quadrant-cross-y"></div>
+                              <div v-for="(b, idx) in flowsBubbleSkeletons" :key="idx" class="sk sk-bubble sk-sector-block"
+                                :style="{ left: b.x + '%', top: b.y + '%', width: b.size + 'px', height: b.size + 'px' }">
+                              </div>
+                              <div class="skeleton-x sk-quadrant-x">
+                                <span v-for="i in 6" :key="'fx-' + i" class="sk sk-small" style="width: 30px;"></span>
                               </div>
                             </div>
                           </div>
-                          <div v-show="overview && !states.overview.loading" id="rotation-chart" class="wide-chart"
+                          <div v-show="!isFlowsSkeleton && Boolean(overview)" id="rotation-chart" class="wide-chart"
                             role="img" aria-label="板块涨跌幅与成交额散点图"></div>
                         </div>
 
@@ -3553,7 +3575,7 @@
                                   <th style="text-align:right;">操作</th>
                                 </tr>
                               </thead>
-                              <tbody v-if="states.overview.loading || !overview" aria-hidden="true">
+                              <tbody v-if="isFlowsSkeleton" aria-hidden="true">
                                 <tr v-for="i in 11" :key="i">
                                   <td><span class="sk sk-line" style="width: 75px;"></span></td>
                                   <td><span class="sk sk-pill" style="width: 44px; height: 18px;"></span></td>

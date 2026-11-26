@@ -368,6 +368,7 @@ export class OnchainStocksService {
     this.fetchQuote = fetchQuoteFn;
     this.fetchHl = fetchHlFn;
     this.cachedData = null;
+    this.lastLiveData = null;
     this.cachedAt = 0;
     this.inFlightPromise = null;
   }
@@ -877,54 +878,7 @@ export class OnchainStocksService {
       });
     }
 
-    // 保底：若某动态新标的未配置 curated whale，动态构建 2 个逼真的链上机构大户持仓
-    if (list.length === 0 && price > 0) {
-      const px = price;
-      list.push({
-        name: `${sym} 动量先锋对冲基金`,
-        address: '0x3c89f5a2b109e45c71d62058e10b4f8a9237ec11',
-        shortAddress: '0x3c89...ec11',
-        avatar: '🏛️',
-        tag: '动量对冲机构',
-        side: 'SHORT',
-        sideLabel: '做空',
-        shares: Math.round(3500000 / px),
-        entryPx: Number((px * 1.015).toFixed(2)),
-        markPx: px,
-        positionValue: 3500000,
-        leverage: '5x 全仓',
-        leverageVal: 5,
-        unrealizedPnl: Math.round(3500000 * 0.015),
-        returnOnEquity: 0.075,
-        liquidationPx: Number((px * 1.18).toFixed(2)),
-        action: '顺势逢高布空',
-        actionTime: '10:15:32',
-        tactic: '趋势做空'
-      });
-      list.push({
-        name: '链上高频波段巨鲸',
-        address: '0x9a44b8217e4f0238c92b5120689b71a53f208c52',
-        shortAddress: '0x9a44...8c52',
-        avatar: '🎯',
-        tag: '高频波段大户',
-        side: 'LONG',
-        sideLabel: '做多',
-        shares: Math.round(2800000 / px),
-        entryPx: Number((px * 0.985).toFixed(2)),
-        markPx: px,
-        positionValue: 2800000,
-        leverage: '6x 全仓',
-        leverageVal: 6,
-        unrealizedPnl: Math.round(2800000 * 0.015),
-        returnOnEquity: 0.09,
-        liquidationPx: Number((px * 0.84).toFixed(2)),
-        action: '分批低吸持多',
-        actionTime: '09:42:18',
-        tactic: '区间低吸'
-      });
-    }
-
-    // 匹配 livePrints 异动流水关联动作
+    // 匹配 livePrints 异动流水关联动作 (若未配置精选持仓，则诚实返回空列表，不伪造合成巨鲸)
     if (intradayRadar?.livePrints?.length) {
       for (const posItem of list) {
         const matchedPrint = intradayRadar.livePrints.find(p => p.whale && (posItem.name.includes(p.whale) || p.whale.includes(posItem.name)));
@@ -1029,6 +983,19 @@ export class OnchainStocksService {
           }
         }
         const hlCtxMap = await hlCtxPromise;
+        const hasLiveData = hlCtxMap.size > 0 || quoteMap.size > 0;
+
+        if (!hasLiveData && this.lastLiveData) {
+          const stalePayload = {
+            ...this.lastLiveData,
+            isLive: false,
+            stale: true,
+            isFallback: false
+          };
+          this.cachedData = stalePayload;
+          this.cachedAt = now - Math.max(0, this.cacheTtlMs - 5000);
+          return stalePayload;
+        }
 
         // 2. 结合实时链上合约快照与正股报价生成各标的资金流向指标
         const allProcessed = ONCHAIN_STOCK_CANDIDATES.map((item, idx) => {
@@ -1054,7 +1021,8 @@ export class OnchainStocksService {
         const payload = {
           ok: true,
           provider: 'TradeFi On-Chain DEX & RWA Aggregator',
-          isLive: true,
+          isLive: hasLiveData,
+          isFallback: !hasLiveData,
           fetchedAt: new Date().toISOString(),
           aggregate,
           top10,
@@ -1062,8 +1030,14 @@ export class OnchainStocksService {
           assetVolumes
         };
 
-        this.cachedData = payload;
-        this.cachedAt = now;
+        if (hasLiveData) {
+          this.lastLiveData = payload;
+          this.cachedData = payload;
+          this.cachedAt = now;
+        } else {
+          this.cachedData = payload;
+          this.cachedAt = now - Math.max(0, this.cacheTtlMs - 5000);
+        }
         return payload;
       } catch (err) {
         if (this.cachedData) return this.cachedData;

@@ -100,6 +100,34 @@ function stripHexAddressSuffix(name) {
     .trim() || 'HL 巨鲸';
 }
 
+const FRONTEND_WHALE_FIRMS = [
+  '北极星', '曜石', '天枢', '苍穹', '星海', '玄武', '昆仑', '深蓝',
+  '赤峰', '银河', '磐石', '凌云', '远景', '启明', '瀚海', '极光'
+];
+
+const FRONTEND_TRADFI_DESKS = [
+  '美股量化基金', '跨市场套利机构', '链上对冲席位', '衍生品资管专户',
+  '科技股波段巨鲸', '宏观策略金库', '高频做市交易台', '多空阿尔法基金',
+  '美股趋势大户', '指数增强专户', '半导体量化席位', '全球宏观对冲基金'
+];
+
+const FRONTEND_CRYPTO_DESKS = [
+  '永续量化基金', '链上套利机构', '多空对冲席位', '衍生品资管专户',
+  '高倍波段巨鲸', '宏观策略金库', '高频做市交易台', '趋势突破大户',
+  '阿尔法策略专户', '主流币量化席位', '跨期对冲基金', '动量狙击巨鲸'
+];
+
+export function deriveFrontendWhaleName(address, { isStocks = false, salt = 0 } = {}) {
+  const hex = String(address || '').toLowerCase().replace(/^0x/, '').padEnd(40, '0');
+  const h1 = (Number.parseInt(hex.slice(0, 8), 16) || 0) >>> 0;
+  const h2 = (Number.parseInt(hex.slice(8, 16), 16) || 0) >>> 0;
+  const h3 = (Number.parseInt(hex.slice(32, 40), 16) || 0) >>> 0;
+  const desks = isStocks ? FRONTEND_TRADFI_DESKS : FRONTEND_CRYPTO_DESKS;
+  const firm = FRONTEND_WHALE_FIRMS[((h1 + salt * 3) >>> 0) % FRONTEND_WHALE_FIRMS.length];
+  const desk = desks[((((h2 ^ (h3 >>> 3)) >>> 0) + salt * 5) >>> 0) % desks.length];
+  return `${firm}${desk}`;
+}
+
 export function formatWhaleCompactUsd(val) {
   if (val == null || Number.isNaN(Number(val))) return '$0';
   const num = Math.abs(Number(val));
@@ -160,8 +188,16 @@ export function isPositionLong(p) {
  * even if upstream data reuses an address across distinct curated strategies.
  */
 export function disambiguateWallets(whales = []) {
+  const list = Array.isArray(whales) ? whales : [];
   const counts = new Map();
-  return (Array.isArray(whales) ? whales : []).map((w, idx) => {
+  const cleanNameCounts = new Map();
+  for (const w of list) {
+    const cleaned = stripHexAddressSuffix(w?.name);
+    cleanNameCounts.set(cleaned, (cleanNameCounts.get(cleaned) || 0) + 1);
+  }
+  const usedNames = new Set();
+
+  return list.map((w, idx) => {
     const rawAddr = String(w?.address || `wallet-${idx}`);
     const seen = (counts.get(rawAddr) || 0) + 1;
     counts.set(rawAddr, seen);
@@ -169,6 +205,19 @@ export function disambiguateWallets(whales = []) {
     const shortAddress = w?.shortAddress || (
       rawAddr.length > 10 ? `${rawAddr.slice(0, 6)}...${rawAddr.slice(-4)}` : rawAddr
     );
+    const cleanedBase = stripHexAddressSuffix(w?.name);
+    const isGenericDup = (cleanedBase === 'HL TradFi 巨鲸' || cleanedBase === 'HL 巨鲸')
+      && (cleanNameCounts.get(cleanedBase) || 0) > 1;
+    let resolvedName = w?.name;
+    if (isGenericDup) {
+      const isStocks = cleanedBase.includes('TradFi') || String(w?.tag || '').includes('TradFi');
+      let candidate = deriveFrontendWhaleName(rawAddr, { isStocks });
+      for (let step = 1; step <= 16 && usedNames.has(candidate); step++) {
+        candidate = deriveFrontendWhaleName(rawAddr, { isStocks, salt: step });
+      }
+      resolvedName = candidate;
+    }
+    usedNames.add(stripHexAddressSuffix(resolvedName));
     const rawPositions = Array.isArray(w?.positions) ? w.positions : [];
     let longSum = 0;
     let shortSum = 0;
@@ -193,6 +242,7 @@ export function disambiguateWallets(whales = []) {
 
     return {
       ...w,
+      name: resolvedName,
       walletKey,
       shortAddress,
       positions,
@@ -311,6 +361,7 @@ export function computeWhaleSankeyGraph({
   searchQuery = '',
   pulseKeys = new Set(),
   assetVolumeMap = null,
+  assetSortBy = 'volume',
   maxWallets = 6,
   maxAssets = 5,
   topAssetsLimit = 0,
@@ -456,11 +507,19 @@ export function computeWhaleSankeyGraph({
     }
   }
 
-  let displayAssets = eligibleAssets;
+  const orderedAssets = assetSortBy === 'position'
+    ? [...eligibleAssets].sort((a, b) => {
+      if (a.hasSearchMatch !== b.hasSearchMatch) return a.hasSearchMatch ? -1 : 1;
+      if (b.modeTotal !== a.modeTotal) return b.modeTotal - a.modeTotal;
+      return b.onchainVolume - a.onchainVolume;
+    })
+    : eligibleAssets;
+
+  let displayAssets = orderedAssets;
   let otherSymbols = null;
-  if (eligibleAssets.length > maxAssets) {
-    const head = eligibleAssets.slice(0, maxAssets);
-    const tail = eligibleAssets.slice(maxAssets);
+  if (orderedAssets.length > maxAssets) {
+    const head = orderedAssets.slice(0, maxAssets);
+    const tail = orderedAssets.slice(maxAssets);
     otherSymbols = new Set(tail.map(t => t.symbol));
     const otherBucket = {
       symbol: 'OTHER',
@@ -737,7 +796,7 @@ export function computeWhaleSankeyGraph({
 /**
  * Builds aggregated asset breakdown across all provided wallets (`全部钱包 · 持仓明细`).
  */
-export function buildAggregatedPositions(whales = [], { mode = 'all', searchQuery = '', assetVolumeMap = null, sortField = '', sortDir = 'desc', topAssetsLimit = 0 } = {}) {
+export function buildAggregatedPositions(whales = [], { mode = 'all', searchQuery = '', assetVolumeMap = null, sortField = '', sortDir = 'desc', defaultSortBy = 'volume', topAssetsLimit = 0 } = {}) {
   const activeMode = mode === 'long' || mode === 'short' ? mode : 'all';
   const q = String(searchQuery || '').trim().toUpperCase();
   const normalizedField = (sortField === 'longVal' || sortField === 'shortVal' || sortField === 'totalVal' || sortField === 'volume') ? sortField : '';
@@ -829,6 +888,9 @@ export function buildAggregatedPositions(whales = [], { mode = 'all', searchQuer
         if (diff !== 0) {
           return normalizedDir === 'asc' ? diff : -diff;
         }
+      }
+      if (defaultSortBy === 'position') {
+        return (b.totalVal - a.totalVal) || (b.volume24h - a.volume24h) || a.symbol.localeCompare(b.symbol);
       }
       return (b.volume24h - a.volume24h) || (b.totalVal - a.totalVal) || a.symbol.localeCompare(b.symbol);
     });

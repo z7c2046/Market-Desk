@@ -172,7 +172,7 @@ async function mount(t, fetchImpl, initStorage = null, configureWindow = null) {
     .replace("import { parseFlows } from './flows.js';", 'const parseFlows = window.parseFlows;')
     .replace("import { bindKlineGestures } from './composables/klineGesture.js';", 'const bindKlineGestures = window.bindKlineGestures;')
     .replace("import { createChartDerivedData } from './composables/chartDerivedData.js';", 'const { createChartDerivedData } = window;')
-    .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/composables\/whaleSankeyModel\.js';/, 'const { getAssetLabel, formatWhaleCompactUsd, disambiguateWallets, isPositionLong, computeWhaleSankeyGraph, buildAggregatedPositions, detectPositionDeltas } = window;')
+    .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/composables\/whaleSankeyModel\.js';/, 'const { getAssetLabel, formatWhaleCompactUsd, disambiguateWallets, deriveFrontendWhaleName, isPositionLong, computeWhaleSankeyGraph, buildAggregatedPositions, detectPositionDeltas } = window;')
     .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/composables\/whaleMarkerCanvasPrimitive\.js';/, 'const { createWhaleDotCanvasPrimitive } = window;')
     .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/watchlist-model\.js';/, 'const { WatchlistManager, sortWatchlistRows, getSelectedExtQuote, getCurrentSession, getNyTime, SESSION_TYPES, MAX_UNIQUE_SYMBOLS, validSymbol, SYMBOL_NAMES, NASDAQ100_STOCKS, SP500_STOCKS, isLeveragedEtf, isCryptoSymbol, STOCK_MARKET_CAPS, getStockMarketCap, sortSymbolsByMarketCap } = window;')
     .replace(/import\s*\{[\s\S]*?\}\s*from\s*'\.\/earnings-calendar-model\.js';/, 'const { AI_SECTOR_FILTERS, CORPORATE_LOGOS, getEarningsCalendarDate, getEarningsWeeks, MACRO_CALENDAR_ITEMS, filterEarningsByDay, parseMetricNumber, getMetricSurprise, getMetricYoy } = window;')
@@ -513,6 +513,7 @@ test('AI automatic refresh pauses on hidden pages, uses submitted query and stag
 });
 test('Vue page mounts, navigates all modules, wires chart data and handles watchlist', async t => {
   const ui = await mount(t, async url => ({ ok: true, json: async () => fixture(url) }));
+  assert.match(ui.w.document.querySelector('.clock-line-bj strong')?.textContent?.trim() || '', /\d{2}\/\d{2}\s+\d{2}:\d{2}:\d{2}\s+北京/, 'Top-right Beijing clock includes live seconds (:SS)');
   assert.ok(ui.w.document.querySelector('#heatmap-chart')); assert.ok(ui.configs.get('heatmap-chart').series[0].data.length > 0);
   await ui.click('个股行情'); assert.equal(ui.configs.get('price-chart').series[0].data[0][1], 100);
   const search = ui.w.document.querySelector('[aria-label="搜索美股代码"]'); search.value = 'BABA'; search.dispatchEvent(new ui.w.Event('input', { bubbles: true })); await tick(); search.form.dispatchEvent(new ui.w.Event('submit', { bubbles: true, cancelable: true })); await tick(); await tick();
@@ -1885,10 +1886,24 @@ test('Crypto Workspace: Sankey distribution, 4 scoped KPIs, 2-column whale-posit
   const tradfiAssetOrder = [...sankeySvg.querySelectorAll('.cw-sk-asset-node')].map(n => n.getAttribute('data-asset'));
   assert.deepEqual(
     tradfiAssetOrder.slice(0, 3),
-    ['NVDA', 'TSLA', 'AMD'],
-    'TradFi Sankey assets sort strictly by 24h on-chain volume descending (NVDA $64.8M > TSLA $20M > AMD $8M)'
+    ['MU', 'NVDA', 'SPY'],
+    'TradFi Sankey defaults to sorting by bold whale holding notional descending (MU $62.7M > NVDA $54.1M > SPY $28.9M)'
   );
   assert.equal(tradfiAssetOrder.at(-1), 'OTHER', 'Long-tail bucket remains pinned at bottom');
+
+  const sortBtns = sankeyPanel.querySelectorAll('.cw-sort-seg .cw-seg-btn');
+  assert.equal(sortBtns.length, 2, 'Sankey header displays 按持仓 / 按成交 sort toggle');
+  sortBtns[1].click();
+  await tick();
+  const tradfiVolOrder = [...sankeySvg.querySelectorAll('.cw-sk-asset-node')].map(n => n.getAttribute('data-asset'));
+  assert.deepEqual(
+    tradfiVolOrder.slice(0, 3),
+    ['NVDA', 'TSLA', 'AMD'],
+    'Clicking 按成交 switches TradFi Sankey assets to strict 24h on-chain volume descending (NVDA $64.8M > TSLA $20M > AMD $8M)'
+  );
+  assert.equal(tradfiVolOrder.at(-1), 'OTHER', 'Long-tail bucket stays pinned at bottom in 按成交 mode');
+  sortBtns[0].click();
+  await tick();
   assert.match(whalePanel.textContent, /TradFi · 巨鲸钱包/);
   assert.equal(ui.w.document.querySelector('#cw-positions-title').textContent.trim(), '全部钱包 · 持仓明细', 'Market switch uses independent TradFi selection state');
 
@@ -1956,6 +1971,10 @@ test('Crypto Workspace: Sankey distribution, 4 scoped KPIs, 2-column whale-posit
   const radarContainer = onchainPanel.querySelector('.stock-radar-container');
   assert.ok(radarContainer, 'stock-radar-container inline drawer rendered');
   assert.ok(radarContainer.querySelector('.cw-axis-rail'), 'Horizontal price cost/spot axis graphic rendered');
+  assert.ok(radarContainer.querySelector('.cw-avg-lbl.is-bull'), 'Bull avg label with color swatch rendered');
+  assert.ok(radarContainer.querySelector('.cw-avg-lbl.is-bear'), 'Bear avg label with color swatch rendered');
+  assert.ok(radarContainer.querySelector('.cw-spot-lbl'), 'Prominent spot price badge rendered');
+  assert.ok(radarContainer.querySelector('.cw-axis-pin.is-spot.cw-axis-pointer'), 'Moving pointer needle rendered for live spot price');
   assert.ok(radarContainer.querySelector('.cw-axis-pin.is-tradfi'), 'TradFi stock reference pin rendered');
   assert.ok(radarContainer.querySelector('.cw-spread-tag'), 'TradFi spread tag rendered');
 
@@ -1988,14 +2007,14 @@ test('Crypto Workspace: Sankey distribution, 4 scoped KPIs, 2-column whale-posit
   // Verify inline table drawer opens directly to cost-axis summary + institution position table (no inline K-line clutter)
   assert.equal(activeDrawerTr.querySelector('.cw-whale-chart-deck'), null, 'Inline mini K-line chart is removed from horizontal table row');
   assert.ok(activeDrawerTr.querySelector('.cw-axis-bar'), 'Cost axis bar (多均/现/空均) renders cleanly above position table');
-  assert.ok(activeDrawerTr.querySelector('.cw-open-main-chart-btn'), 'Jump-to-main-chart button renders in drawer axis bar');
+  assert.equal(activeDrawerTr.querySelector('.cw-axis-bar .cw-open-main-chart-btn'), null, 'Duplicate K-line jump button is omitted inside drawer axis bar');
   const firstFlowKlineBtn = ui.w.document.querySelector('.cw-flow-row .cw-row-kline-btn');
-  assert.ok(firstFlowKlineBtn, 'Main flow row right-side renders jump button to fullscreen K-line chart');
+  assert.ok(firstFlowKlineBtn, 'Main flow row right-side renders single jump button to fullscreen K-line chart');
 
-  // Verify institution table row hover & right-side K-line jump action
+  // Verify institution table row hover & clean 6-column layout (no redundant per-row K-line jump column)
   const firstWhaleRow = activeDrawerTr.querySelector('.stock-whale-table tbody tr');
   assert.ok(firstWhaleRow, 'First whale position row exists');
-  assert.ok(firstWhaleRow.querySelector('.cw-wp-kline-btn'), 'Each institution row renders right-side K-line jump button');
+  assert.equal(firstWhaleRow.querySelector('.cw-wp-kline-btn'), null, 'Institution row omits redundant right-side K-line jump button');
   firstWhaleRow.dispatchEvent(new ui.w.MouseEvent('mouseenter', { bubbles: true }));
   await tick();
   assert.ok(firstWhaleRow.classList.contains('is-highlighted'), 'Table row receives is-highlighted class on hover');
@@ -3635,8 +3654,7 @@ test('#crypto Mini K-Line Drawer keeps inline preview and jumps directly to #cha
   assert.equal(ui.w.document.querySelector('.cw-whale-chart-deck'), null, 'Inline mini K-line chart is omitted from table row');
   const jumpBtn = ui.w.document.querySelector('.cw-flow-row .cw-row-kline-btn');
   assert.ok(jumpBtn, 'Direct #chart jump button renders on the right side of the row');
-  const instJumpBtn = ui.w.document.querySelector('.cw-drawer-tr .stock-whale-row .cw-wp-kline-btn');
-  assert.ok(instJumpBtn, 'Institution row right-side K-line jump button renders inside expanded table');
+  assert.equal(ui.w.document.querySelector('.cw-drawer-tr .stock-whale-row .cw-wp-kline-btn'), null, 'Redundant per-institution K-line jump button is removed from expanded table');
 
   // 2. Click "⤢ 大屏分析" -> navigates directly to #chart with BTC-USD + 15m/1d + Crypto whales
   jumpBtn.click();
@@ -3674,9 +3692,9 @@ test('#crypto Mini K-Line Drawer keeps inline preview and jumps directly to #cha
   const nvdaInstRow = ui.w.document.querySelector('.cw-drawer-tr .stock-whale-row');
   assert.ok(nvdaInstRow, 'Expanded TradFi NVDA drawer shows institution position rows');
   assert.equal(chartRequests.some(r => r.symbol === 'NVDA'), false, 'Expanding NVDA row in #crypto does not fetch inline chart bars');
-  const expectedInstAddr = nvdaInstRow.getAttribute('data-address');
-  const tradfiJumpBtn = nvdaInstRow.querySelector('.cw-wp-kline-btn');
-  assert.ok(tradfiJumpBtn, 'Jump button exists on right side of NVDA institution row');
+  assert.equal(nvdaInstRow.querySelector('.cw-wp-kline-btn'), null, 'Institution row omits redundant right-side K-line button');
+  const tradfiJumpBtn = nvdaBtn.querySelector('.cw-row-kline-btn');
+  assert.ok(tradfiJumpBtn, 'Single jump button exists on right side of parent NVDA row');
   tradfiJumpBtn.click();
   await tick();
   await new Promise(resolve => setTimeout(resolve, 60));
@@ -3689,10 +3707,13 @@ test('#crypto Mini K-Line Drawer keeps inline preview and jumps directly to #cha
   assert.ok(lastNvdaReq && lastNvdaReq.range === '1d' && lastNvdaReq.interval === '15m', 'TradFi NVDA jumps to #chart with 15m/1d preset');
   assert.equal(lastNvdaReq.venue, 'hyperliquid', 'TradFi NVDA jump to #chart switches to Hyperliquid 24/7 perp K-line');
   assert.equal(lastNvdaReq.coin, 'xyz:NVDA', 'TradFi NVDA jump passes xyz:NVDA HIP-3 contract coin');
-  assert.ok(ui.w.document.querySelectorAll('.chart-whale-card').length >= 1, 'NVDA whale cards render on #chart Dock');
+  const nvdaCards = [...ui.w.document.querySelectorAll('.chart-whale-card')];
+  assert.ok(nvdaCards.length >= 1, 'NVDA whale cards render on #chart Dock');
+  nvdaCards[0].click();
+  await tick();
   const selectedDockCard = ui.w.document.querySelector('.chart-whale-card.is-selected');
-  assert.ok(selectedDockCard && selectedDockCard.getAttribute('data-pos-key')?.startsWith(expectedInstAddr.toLowerCase()), 'Jumping from institution row pre-selects that specific institution on #chart');
-  assert.ok(ui.w.document.querySelector('.chart-whale-hud-popover'), 'Jumping from institution row opens that institution HUD card on #chart');
+  assert.ok(selectedDockCard, 'Clicking institution card on #chart Dock selects that institution');
+  assert.ok(ui.w.document.querySelector('.chart-whale-hud-popover'), 'Selecting institution opens HUD card on #chart');
   const nvdaLines = lwSpy.getActivePriceLines();
   assert.ok(nvdaLines.some(pl => pl.title.includes('开仓均价')), 'Fullscreen chart shows clicked institution entry avg PriceLine');
   assert.ok(nvdaLines.some(pl => pl.title.includes('多头均价')), 'Fullscreen chart shows aggregate LONG avg PriceLine');
@@ -4283,8 +4304,8 @@ test('#crypto & #chart Whale Open Time: omits synthetic Date.now()-3h*N open tim
   assert.equal(unknownTimeRow.querySelector('.cw-wp-meta'), null, 'Position without real entryTime omits fabricated 开仓 timestamp');
   assert.ok(realTimeRow.querySelector('.cw-wp-entry-time')?.textContent.trim().length > 0, 'Position with real entryTime renders open timestamp');
 
-  // Jump to #chart and inspect Dock card + HUD popover for position without real entryTime
-  unknownTimeRow.querySelector('.cw-wp-kline-btn').click();
+  // Jump to #chart via parent BTC row button and inspect Dock card + HUD popover for position without real entryTime
+  btcRow.querySelector('.cw-row-kline-btn').click();
   await tick();
   await new Promise(resolve => setTimeout(resolve, 60));
   await tick();
@@ -4294,6 +4315,8 @@ test('#crypto & #chart Whale Open Time: omits synthetic Date.now()-3h*N open tim
   const realCard = cards.find(c => c.dataset.posKey?.startsWith('0xbbbb'));
   assert.equal(unknownCard.querySelector('.cw-card-time')?.textContent.trim(), '--', 'Dock card shows -- when open time is unavailable from snapshot');
   assert.match(realCard.querySelector('.cw-card-time')?.textContent.trim() || '', /^\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/, 'Dock card preserves real open timestamp');
+  unknownCard.click();
+  await tick();
 
   const hudTime = ui.w.document.querySelector('.chart-whale-hud-popover .cw-hud-time');
   const hudDur = ui.w.document.querySelector('.chart-whale-hud-popover .cw-hud-duration');
@@ -4664,6 +4687,332 @@ test('Topbar clock: renders real-time Beijing time with seconds, avoids HTTP Dat
 
   const css = await fs.readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
   assert.match(css, /\.clock-line-bj strong\s*\{[^}]*font-variant-numeric:\s*tabular-nums;/);
+  assert.deepEqual(ui.errors, []);
+});
+
+test('On-Chain WebSocket Stream (/api/crypto/stream): updates TradFi stock prices, recalculates LONG/SHORT whale PnL live, displays failover tier badge, and ticks Hyperliquid K-line candles', async t => {
+  const cryptoStreams = [];
+  const hlCandleUpdates = [];
+
+  const stubSeries = {
+    applyOptions() { },
+    setData() { },
+    update(bar) { hlCandleUpdates.push(bar); },
+    createPriceLine() { return {}; },
+    removePriceLine() { },
+    attachPrimitive() { },
+    detachPrimitive() { },
+    coordinateToPrice: () => 148,
+    priceToCoordinate: () => 120,
+    priceScale: () => ({ applyOptions() { }, setAutoScale() { } })
+  };
+  const stubChart = {
+    applyOptions() { },
+    resize() { },
+    remove() { },
+    paneSize: () => ({ width: 800, height: 420 }),
+    subscribeCrosshairMove() { },
+    unsubscribeCrosshairMove() { },
+    timeScale: () => ({
+      fitContent() { },
+      getVisibleLogicalRange: () => ({ from: 0, to: 10 }),
+      setVisibleLogicalRange() { },
+      subscribeVisibleLogicalRangeChange() { },
+      unsubscribeVisibleLogicalRangeChange() { },
+      timeToCoordinate: () => 300
+    }),
+    priceScale: () => ({ applyOptions() { }, setAutoScale() { } }),
+    addSeries: type => (type === 'Candlestick' ? stubSeries : {
+      applyOptions() { }, setData() { }, update() { }, createPriceLine() { return {}; }, removePriceLine() { }
+    })
+  };
+
+  const ui = await mount(t, async url => {
+    const u = new URL(url, 'http://localhost');
+    if (u.pathname === '/api/market/chart') {
+      return {
+        ok: true,
+        json: async () => ({
+          symbol: u.searchParams.get('symbol') || 'NVDA',
+          perpCoin: 'xyz:NVDA',
+          venue: 'hyperliquid',
+          interval: u.searchParams.get('interval') || '15m',
+          range: u.searchParams.get('range') || '1d',
+          price: 148.50,
+          previousClose: 147.80,
+          changePercent: 0.47,
+          bars: [
+            { time: 1795598100, open: 147.8, high: 148.6, low: 147.5, close: 148.2, volume: 12000 },
+            { time: 1795599000, open: 148.2, high: 148.9, low: 148.0, close: 148.5, volume: 15000 }
+          ]
+        })
+      };
+    }
+    return { ok: true, json: async () => fixture(url) };
+  }, null, w => {
+    w.EventSource = class {
+      constructor(url) {
+        this.url = String(url);
+        this.readyState = 1;
+        if (this.url.includes('/api/crypto/stream')) {
+          cryptoStreams.push(this);
+        }
+      }
+      close() {
+        this.readyState = 2;
+      }
+    };
+    w.LightweightCharts = {
+      ColorType: { Solid: 'solid' },
+      CrosshairMode: { Normal: 1 },
+      LineStyle: { Dashed: 2, Dotted: 3 },
+      CandlestickSeries: 'Candlestick',
+      HistogramSeries: 'Histogram',
+      LineSeries: 'Line',
+      createChart: () => stubChart
+    };
+  });
+
+  // 1. Enter #crypto -> connects /api/crypto/stream
+  await ui.click('加密货币');
+  await tick();
+  await tick();
+  assert.ok(cryptoStreams.length >= 1, 'Navigating to #crypto opens /api/crypto/stream EventSource');
+
+  // Expand secondary Capital Flow Matrix & NVDA whale drawer
+  const secToggleBtn = ui.w.document.querySelector('.cw-sec-toggle-btn');
+  secToggleBtn.click();
+  await tick();
+  const radarBtn = ui.w.document.querySelector('.onchain-jump-btn');
+  radarBtn.click();
+  await tick();
+
+  // Push live WebSocket tick dropping NVDA from $148.50 -> $136.76 + tier status
+  const activeStream = cryptoStreams.at(-1);
+  activeStream.onmessage({
+    data: JSON.stringify({
+      type: 'ticks',
+      tier: 'hyperliquid-ws',
+      stocks: {
+        NVDA: {
+          symbol: 'NVDA',
+          price: 136.76,
+          tradFiClose: 136.54,
+          changePercent: -6.47,
+          premiumPct: 0.16,
+          priceDiff: 0.22,
+          volume24h: 487660000,
+          openInterest: 412220000,
+          buyRatio: 36.4,
+          sellRatio: 63.6,
+          netFlow: -132640000
+        }
+      },
+      crypto: {}
+    })
+  });
+  await tick();
+
+  // Verify tier badge ("WS 实时"), live $136.76 row price, and LONG @ $146.20 recalculated into negative RED loss!
+  const panelHead = ui.w.document.querySelector('.onchain-stocks-panel .cw-panel-head');
+  assert.match(panelHead.textContent, /WS 实时/, 'Displays active Hyperliquid WS tier pill');
+  const nvdaRowPrice = ui.w.document.querySelector('.cw-flow-row[data-symbol="NVDA"] .cw-price-num');
+  assert.equal(nvdaRowPrice.textContent.trim(), '$136.76', 'NVDA matrix price updated live via stream');
+
+  const drawerRows = [...ui.w.document.querySelectorAll('.stock-whale-table tbody tr')];
+  const alphaLongRow = drawerRows.find(r => r.textContent.includes('HL 科技股阿尔法对冲基金'));
+  assert.ok(alphaLongRow, 'Curated LONG NVDA whale row rendered');
+  assert.match(alphaLongRow.textContent, /-\$1\.17M/, 'LONG @ $146.20 dynamically flips to -$1.17M loss when NVDA drops to $136.76');
+
+  // Simulate failover to Tier 2 (binance-ws+hl-rest) -> badge updates cleanly
+  activeStream.onmessage({
+    data: JSON.stringify({ type: 'status', tier: 'binance-ws+hl-rest' })
+  });
+  await tick();
+  assert.match(panelHead.textContent, /容灾 · 币安WS/, 'Displays failover tier pill when switched to Tier 2');
+
+  // 2. Click "⤢ 大屏K线" on NVDA -> switches to #chart (venue=hyperliquid) & subscribes ?coin=xyz%3ANVDA&interval=15m
+  const jumpBtn = ui.w.document.querySelector('.cw-flow-row[data-symbol="NVDA"] .cw-row-kline-btn');
+  jumpBtn.click();
+  await tick();
+  await new Promise(r => setTimeout(r, 50));
+  await tick();
+
+  const chartStream = cryptoStreams.at(-1);
+  assert.match(chartStream.url, /coin=xyz%3ANVDA/, 'On-chain #chart subscribes /api/crypto/stream with coin=xyz:NVDA');
+  assert.match(chartStream.url, /interval=15m/, 'On-chain #chart subscribes 15m candle stream');
+
+  chartStream.onmessage({
+    data: JSON.stringify({
+      type: 'candle',
+      tier: 'hyperliquid-ws',
+      coin: 'xyz:NVDA',
+      interval: '15m',
+      bar: { time: 1795599000, open: 148.2, high: 149.4, low: 147.9, close: 149.15, volume: 18400 }
+    })
+  });
+  await tick();
+  assert.ok(hlCandleUpdates.some(c => c.close === 149.15 && c.high === 149.4), 'Live Hyperliquid WebSocket candle frame updates #chart candlestick series in real time');
+
+  assert.deepEqual(ui.errors, []);
+});
+
+test('Flows Workspace Skeleton: renders 4 KPI cards, quadrant scatter blocks, and 11-row table skeleton while loading and transitions smoothly on data arrival', async t => {
+  let resolveOverview;
+  const overviewPromise = new Promise(resolve => {
+    resolveOverview = resolve;
+  });
+
+  const ui = await mount(t, async url => {
+    if (String(url).includes('/api/market/overview')) {
+      return { ok: true, json: async () => overviewPromise };
+    }
+    return { ok: true, json: async () => fixture(url) };
+  }, { 'market-desk-default-page': 'flows' });
+
+  await tick();
+
+  // While /api/market/overview is pending, all 3 sections display matching skeleton states
+  const kpiSkels = ui.w.document.querySelectorAll('.flows-kpi-skeleton .sk-kpi-card');
+  const quadrantWrap = ui.w.document.querySelector('.flows-skeleton-wrap');
+  const quadrantBlocks = ui.w.document.querySelectorAll('.flows-skeleton-wrap .sk-bubble');
+  const tableSkelRows = ui.w.document.querySelectorAll('.sector-table tbody[aria-hidden="true"] tr');
+
+  assert.equal(kpiSkels.length, 4, 'Top 4 KPI cards show shimmering skeleton cards while #flows loads');
+  assert.ok(quadrantWrap && ui.w.document.querySelector('.flows-quadrant-skeleton'), '480px quadrant scatter skeleton renders');
+  assert.equal(quadrantBlocks.length, 11, 'Quadrant skeleton renders 11 shimmering sector blocks');
+  assert.equal(tableSkelRows.length, 11, 'Sector breakdown table renders 11 skeleton rows while loading');
+  assert.equal(ui.w.document.querySelector('#rotation-chart')?.style.display, 'none', 'Real ECharts container stays hidden until overview resolves');
+
+  // Resolve overview data -> skeletons vanish cleanly and real KPI / scatter / sector rows appear
+  resolveOverview({
+    benchmarks: [{ symbol: 'SPY', name: '标普 500', price: 580, changePercent: 0.5, turnover: 1500000000 }],
+    stocks: [],
+    sectors: [
+      { symbol: 'XLP', name: '必需消费', price: 82, changePercent: 0.44, turnover: 413960000 },
+      { symbol: 'XLK', name: '科技', price: 225, changePercent: -4.07, turnover: 642670000 }
+    ],
+    unavailable: []
+  });
+  await tick();
+  await tick();
+
+  assert.equal(ui.w.document.querySelector('.flows-kpi-skeleton'), null, 'KPI skeleton clears once overview data arrives');
+  assert.equal(ui.w.document.querySelector('.flows-skeleton-wrap'), null, 'Quadrant skeleton clears once overview data arrives');
+  assert.equal(ui.w.document.querySelectorAll('.sector-table tbody[aria-hidden="true"] tr').length, 0, 'Table skeleton clears once overview data arrives');
+  assert.ok(ui.w.document.querySelector('.sector-table tbody tr td'), 'Real sector breakdown rows render');
+  assert.ok(ui.configs.has('rotation-chart'), 'ECharts quadrant rotation scatter renders cleanly');
+  assert.deepEqual(ui.errors, []);
+});
+
+test('Live TradFi Flow Drawer shows honest empty state for tickers without live whale positions instead of fabricated mock whales', async t => {
+  const sampleLiveNvdaWhale = {
+    address: '0x1111222233334444555566667777888899990001',
+    shortAddress: '0x1111...0001',
+    name: '凌云美股量化基金',
+    avatar: '🦅',
+    tag: 'HIP-3 TradFi 巨鲸',
+    accountValue: 25000000,
+    totalNtlPos: 15000000,
+    positions: [
+      {
+        coin: 'NVDA',
+        side: 'LONG',
+        isLong: true,
+        entryPx: 145.0,
+        markPx: 142.85,
+        positionValue: 15000000,
+        unrealizedPnl: -222414,
+        returnOnEquity: -0.074,
+        liquidationPx: 118.5,
+        leverage: { value: 5, type: 'cross' }
+      }
+    ]
+  };
+  const ui = await mount(t, async url => {
+    const u = String(url);
+    if (u.includes('/api/crypto/whales')) {
+      return {
+        ok: true,
+        json: async () => ({
+          ok: true,
+          isLive: true,
+          isSample: false,
+          stockWhales: {
+            ok: true,
+            isLive: true,
+            isSample: false,
+            whales: [sampleLiveNvdaWhale],
+            positions: sampleLiveNvdaWhale.positions
+          },
+          whales: [sampleLiveNvdaWhale]
+        })
+      };
+    }
+    if (u.includes('/api/crypto/onchain-stocks')) {
+      return {
+        ok: true,
+        json: async () => ({
+          ok: true,
+          isLive: true,
+          isFallback: false,
+          aggregate: { totalVolume24h: 341000000, totalNetFlow24h: -12000000, overallBuyRatio: 48, overallSentiment: '偏空' },
+          top10: [
+            {
+              rank: 1,
+              symbol: 'SOXL',
+              name: '3x 做多半导体 ETF',
+              price: 25.78,
+              tradFiClose: 25.70,
+              changePercent: -19.4,
+              premiumPct: 0.31,
+              priceDiff: 0.08,
+              volume24h: 341000000,
+              openInterest: 42000000,
+              buyRatio: 48,
+              sellRatio: 52,
+              netFlow: -12000000,
+              whalePositions: []
+            }
+          ],
+          assetVolumes: { SOXL: 341000000 }
+        })
+      };
+    }
+    return { ok: true, json: async () => fixture(url) };
+  });
+
+  await ui.click('加密货币');
+  await tick();
+  await new Promise(r => setTimeout(r, 40));
+  await tick();
+
+  // Expand secondary Capital Flow Matrix and ensure TradFi category is active
+  const secToggleBtn = ui.w.document.querySelector('.cw-sec-toggle-btn');
+  assert.ok(secToggleBtn, 'Secondary flow matrix toggle exists');
+  secToggleBtn.click();
+  await tick();
+
+  const tradFiBtn = [...ui.w.document.querySelectorAll('button')].find(b => b.textContent.trim().includes('TradFi'));
+  if (tradFiBtn) {
+    tradFiBtn.click();
+    await tick();
+  }
+  const soxlRow = ui.w.document.querySelector('.cw-flow-row[data-symbol="SOXL"]');
+  assert.ok(soxlRow, 'SOXL TradFi flow row renders with live $25.78 price');
+  assert.match(soxlRow.textContent, /\$25\.78/);
+
+  const jumpBtn = soxlRow.querySelector('.onchain-jump-btn') || soxlRow;
+  jumpBtn.click();
+  await tick();
+
+  const drawer = ui.w.document.querySelector('.cw-drawer-tr');
+  assert.ok(drawer, 'SOXL drawer opens cleanly');
+  const emptyRow = drawer.querySelector('.cw-drawer-empty-row');
+  assert.ok(emptyRow, 'Honest empty row renders when no live whale holds SOXL');
+  assert.match(emptyRow.textContent, /暂无 SOXL 活跃持仓/);
+  assert.equal(drawer.textContent.includes('SOXL 核心主力基金'), false, 'Fabricated SOXL 核心主力基金 must not appear');
+  assert.equal(drawer.textContent.includes('SOXL 动量先锋对冲基金'), false, 'Fabricated SOXL 动量先锋对冲基金 must not appear');
   assert.deepEqual(ui.errors, []);
 });
 

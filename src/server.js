@@ -10,6 +10,7 @@ import { getAiSearchService } from './ai-search-service.js';
 import { getTreeNewsService } from './tree-news-service.js';
 import { getCryptoWhaleService } from './crypto-whale-service.js';
 import { getOnchainStocksService } from './onchain-stocks-service.js';
+import { getOnchainStreamService } from './onchain-stream-service.js';
 import { createEarningsCalendarService } from './earnings-calendar-service.js';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const publicDir = path.join(root, 'public');
@@ -20,9 +21,10 @@ const vendor = {
 };
 const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.json': 'application/json', '.csv': 'text/csv; charset=utf-8' };
 function json(res, status, data) { res.writeHead(status, { 'Content-Type': mime['.json'], 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' }); res.end(JSON.stringify(data)); }
-export function createServer({ workspace = createMarketWorkspace(), watchlist = fetchWatchlistSymbols, quoteService = getWatchlistQuoteService(), aiSearchService = getAiSearchService(), treeNewsService = null, whaleService = getCryptoWhaleService(), onchainStockService = getOnchainStocksService(), earningsService = createEarningsCalendarService() } = {}) {
+export function createServer({ workspace = createMarketWorkspace(), watchlist = fetchWatchlistSymbols, quoteService = getWatchlistQuoteService(), aiSearchService = getAiSearchService(), treeNewsService = null, whaleService = getCryptoWhaleService(), onchainStockService = getOnchainStocksService(), onchainStreamService = null, earningsService = createEarningsCalendarService() } = {}) {
   const treeNews = treeNewsService;
-  return http.createServer(async (req, res) => {
+  const onchainStream = onchainStreamService || getOnchainStreamService({ onchainStockService });
+  const srv = http.createServer(async (req, res) => {
     try {
       const url = new URL(req.url, 'http://localhost');
       if (!['GET', 'HEAD'].includes(req.method)) { res.setHeader('Allow', 'GET, HEAD'); json(res, 405, { error: 'Method not allowed' }); return; }
@@ -31,6 +33,15 @@ export function createServer({ workspace = createMarketWorkspace(), watchlist = 
         const symbols = (params.symbols || '').split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
         quoteService.addClient(req, res, symbols);
         return;
+      }
+      if (url.pathname === '/api/crypto/stream') {
+        if (onchainStream?.addClient) {
+          onchainStream.addClient(req, res, {
+            coin: params.coin || '',
+            interval: params.interval || ''
+          });
+          return;
+        }
       }
       if (url.pathname === '/api/news/live/stream') {
         if (treeNews?.addClient) {
@@ -84,6 +95,10 @@ export function createServer({ workspace = createMarketWorkspace(), watchlist = 
       } catch { json(res, 404, { error: '页面不存在' }); }
     } catch (error) { json(res, error instanceof URIError ? 400 : error.status || 502, { error: error.message || '数据暂不可用' }); }
   });
+  srv.on('close', () => {
+    onchainStream?.stop?.();
+  });
+  return srv;
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const port = Number(process.env.PORT || 5174);

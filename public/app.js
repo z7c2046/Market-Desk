@@ -64,6 +64,7 @@ import {
 import { computeInflectionSignals, formatSignalMarkers, dema } from './inflection-signals.js';
 import {
   disambiguateWallets,
+  deriveFrontendWhaleName,
   isPositionLong,
   computeWhaleSankeyGraph,
   buildAggregatedPositions,
@@ -664,6 +665,100 @@ createApp({
             close: last.close
           });
         } catch (_) { }
+      }
+    }
+
+    /**
+     * 将 Hyperliquid / 币安容灾 WebSocket 推送的链上合约实时价格或 K 线同步到 #chart 画布
+     */
+    function applyOnchainTickToMainChart(livePrice, liveChangePct = null) {
+      const px = Number(livePrice);
+      if (!(px > 0) || page.value !== 'chart' || !chart.value) return;
+      if (!(chart.value.venue === 'hyperliquid' || isCryptoSymbol(chart.value.symbol))) return;
+      const bars = chart.value.bars;
+      if (!Array.isArray(bars) || !bars.length) return;
+      const last = bars[bars.length - 1];
+      if (!last || !Number.isFinite(last.time)) return;
+      if (last.close === px) return;
+      last.close = px;
+      if (px > last.high) last.high = px;
+      if (px < last.low) last.low = px;
+      chart.value.price = px;
+      if (liveChangePct != null && Number.isFinite(Number(liveChangePct))) {
+        chart.value.changePercent = Number(liveChangePct);
+      } else if (Number(chart.value.previousClose) > 0) {
+        chart.value.changePercent = Number(((px / chart.value.previousClose - 1) * 100).toFixed(2));
+      }
+      if (lwCandleSeries && typeof lwCandleSeries.update === 'function') {
+        try {
+          lwCandleSeries.update({
+            time: last.time,
+            open: last.open,
+            high: last.high,
+            low: last.low,
+            close: last.close
+          });
+        } catch (_) { }
+      }
+    }
+
+    function applyOnchainCandleToMainChart(bar) {
+      if (!bar || !(Number(bar.close) > 0) || !Number.isFinite(Number(bar.time))) return;
+      if (page.value !== 'chart' || !chart.value) return;
+      if (!(chart.value.venue === 'hyperliquid' || isCryptoSymbol(chart.value.symbol))) return;
+      const bars = chart.value.bars;
+      if (!Array.isArray(bars) || !bars.length) return;
+      const bTime = Number(bar.time);
+      const nextBar = {
+        time: bTime,
+        open: Number(bar.open),
+        high: Number(bar.high),
+        low: Number(bar.low),
+        close: Number(bar.close),
+        volume: Number(bar.volume || 0)
+      };
+      const last = bars[bars.length - 1];
+      let isNewBar = false;
+      if (last && bTime === last.time) {
+        last.open = nextBar.open;
+        last.high = nextBar.high;
+        last.low = nextBar.low;
+        last.close = nextBar.close;
+        last.volume = nextBar.volume;
+      } else if (last && bTime > last.time) {
+        bars.push(nextBar);
+        isNewBar = true;
+      } else {
+        return;
+      }
+
+      chart.value.price = nextBar.close;
+      if (Number(chart.value.previousClose) > 0) {
+        chart.value.changePercent = Number(((nextBar.close / chart.value.previousClose - 1) * 100).toFixed(2));
+      }
+      if (lwCandleSeries && typeof lwCandleSeries.update === 'function') {
+        try {
+          lwCandleSeries.update({
+            time: nextBar.time,
+            open: nextBar.open,
+            high: nextBar.high,
+            low: nextBar.low,
+            close: nextBar.close
+          });
+        } catch (_) { }
+      }
+      if (lwVolumeSeries && typeof lwVolumeSeries.update === 'function') {
+        try {
+          const curKline = KLINE_SCHEMES[klineScheme.value] || KLINE_SCHEMES.classic;
+          lwVolumeSeries.update({
+            time: nextBar.time,
+            value: nextBar.volume,
+            color: nextBar.close >= nextBar.open ? (curKline.volUp || 'rgba(16,185,129,0.38)') : (curKline.volDown || 'rgba(239,68,68,0.38)')
+          });
+        } catch (_) { }
+      }
+      if (isNewBar) {
+        klineGestureCtrl?.notifyLatestBarChanged?.();
       }
     }
 
@@ -2007,6 +2102,49 @@ createApp({
         .trim() || 'HL 巨鲸';
     }
 
+    function disambiguatePositionWalletNames(items = [], isStocks = false) {
+      if (!Array.isArray(items) || items.length <= 1) return items;
+      const counts = new Map();
+      for (const item of items) {
+        const clean = formatWhaleDisplayName(item?.name);
+        counts.set(clean, (counts.get(clean) || 0) + 1);
+      }
+      const nameByAddr = new Map();
+      const usedNames = new Set();
+      for (const item of items) {
+        const clean = formatWhaleDisplayName(item?.name);
+        if (clean !== 'HL TradFi 巨鲸' && clean !== 'HL 巨鲸') {
+          usedNames.add(clean);
+        }
+      }
+      const avatars = ['🐋', '🏛️', '⚡', '🎯', '🌐', '🦅', '🧭', '💎'];
+      return items.map((item, idx) => {
+        const clean = formatWhaleDisplayName(item?.name);
+        if ((clean !== 'HL TradFi 巨鲸' && clean !== 'HL 巨鲸') || (counts.get(clean) || 0) <= 1) {
+          return item;
+        }
+        const addrKey = String(item?.address || `pos-${idx}`).toLowerCase();
+        let assigned = nameByAddr.get(addrKey);
+        if (!assigned) {
+          const stocksFlag = isStocks || clean.includes('TradFi') || String(item?.tag || '').includes('TradFi');
+          let candidate = deriveFrontendWhaleName(addrKey, { isStocks: stocksFlag });
+          for (let step = 1; step <= 16 && usedNames.has(candidate); step++) {
+            candidate = deriveFrontendWhaleName(addrKey, { isStocks: stocksFlag, salt: step });
+          }
+          usedNames.add(candidate);
+          const hex = addrKey.replace(/^0x/, '').padEnd(8, '0');
+          const avatar = avatars[(Number.parseInt(hex.slice(0, 6), 16) || idx) % avatars.length];
+          assigned = { name: candidate, avatar };
+          nameByAddr.set(addrKey, assigned);
+        }
+        return {
+          ...item,
+          name: assigned.name,
+          avatar: (!item.avatar || item.avatar === '🐋') ? assigned.avatar : item.avatar
+        };
+      });
+    }
+
     function loadStoredCustomWallets() {
       const raw = readStorage(CUSTOM_WHALES_STORAGE_KEY, []);
       if (!Array.isArray(raw)) return [];
@@ -2051,6 +2189,7 @@ createApp({
     // Sankey & Two-Column Whale Split Layout State
     const selectedWhaleKeys = reactive({ crypto: '', stocks: '' });
     const sankeyModes = reactive({ crypto: 'all', stocks: 'all' }); // 'all' | 'long' | 'short'
+    const sankeyAssetSorts = reactive({ crypto: 'volume', stocks: 'position' }); // per-category 'position' | 'volume'
     const aggPositionSorts = reactive({
       crypto: { field: '', dir: 'desc' },
       stocks: { field: '', dir: 'desc' }
@@ -2477,6 +2616,13 @@ createApp({
 
     const selectedWhaleKey = computed(() => selectedWhaleKeys[whaleCategory.value] || '');
     const sankeyMode = computed(() => sankeyModes[whaleCategory.value] || 'all');
+    const sankeyAssetSort = computed(() => sankeyAssetSorts[whaleCategory.value === 'stocks' ? 'stocks' : 'crypto'] || 'position');
+
+    function setSankeyAssetSort(sort) {
+      const next = sort === 'volume' ? 'volume' : 'position';
+      const cat = whaleCategory.value === 'stocks' ? 'stocks' : 'crypto';
+      sankeyAssetSorts[cat] = next;
+    }
 
     function setSankeyMode(mode) {
       const valid = mode === 'long' || mode === 'short' ? mode : 'all';
@@ -2600,45 +2746,43 @@ createApp({
     const sankeyAssetVolumeMap = computed(() => {
       const map = new Map();
       if (whaleCategory.value === 'stocks') {
-        // 1. 绝对第一优先级：严格以资金流向矩阵 (activeFlowRows / onchainStocksData) 的真实 24H 成交量为权威来源
-        const flowList = (activeFlowRows.value && activeFlowRows.value.length > 0)
-          ? activeFlowRows.value
+        // 1. 绝对第一优先级：以未经搜索过滤/截断的权威链上美股全量列表 (allStocks / top10) 真实 24H 成交量为准
+        // 严禁将 chartSymbol 代理标的（如 SKHX -> EWY）克隆成交量，也严禁用低成交量 ETF 覆盖高成交量链上指数合约（XYZ100 / SP500）
+        const flowList = (onchainStocksData.value?.allStocks && onchainStocksData.value.allStocks.length > 0)
+          ? onchainStocksData.value.allStocks
           : (onchainStocksData.value?.top10 || DEFAULT_ONCHAIN_STOCKS_PAYLOAD.top10 || []);
 
         for (const s of flowList) {
           const sym = String(s?.symbol || '').trim().toUpperCase();
-          const csym = String(s?.chartSymbol || '').trim().toUpperCase();
           const vol = Number(s?.volume24h) || 0;
-          if (vol > 0) {
-            if (sym) map.set(sym, vol);
-            if (csym && !map.has(csym)) map.set(csym, vol);
-            // 双向绑定 HIP-3 / TradeXYZ 别名，确保无论以 QQQ/SPY 还是以 XYZ100/SP500 索引，成交量严格与矩阵对齐
-            if (sym === 'QQQ' || csym === 'QQQ') map.set('XYZ100', vol);
-            if (sym === 'SPY' || csym === 'SPY') map.set('SP500', vol);
-            if (sym === 'XYZ100') map.set('QQQ', vol);
-            if (sym === 'SP500') map.set('SPY', vol);
+          if (sym && vol > 0) {
+            map.set(sym, Math.max(map.get(sym) || 0, vol));
           }
         }
 
-        // 2. 补充资金流向候选全量标的（若有未排进 top10 的其他美股候选标的）
+        // 2. 补充资金流向候选全量标的成交量映射
         const apiVols = onchainStocksData.value?.assetVolumes;
         if (apiVols && typeof apiVols === 'object') {
           for (const [k, v] of Object.entries(apiVols)) {
-            const sym = String(k).toUpperCase();
+            const sym = String(k).trim().toUpperCase();
             const n = Number(v);
             if (sym && !map.has(sym) && Number.isFinite(n) && n > 0) {
               map.set(sym, n);
-              if (sym === 'QQQ') map.set('XYZ100', n);
-              if (sym === 'SPY') map.set('SP500', n);
             }
           }
         }
+
+        // 仅当配对指数合约/ETF 缺失自身成交量时才兜底回填，绝不用 QQQ/SPY 低成交额覆盖 XYZ100/SP500 真实链上成交额
+        if (map.has('XYZ100') && !map.has('QQQ')) map.set('QQQ', map.get('XYZ100'));
+        if (map.has('QQQ') && !map.has('XYZ100')) map.set('XYZ100', map.get('QQQ'));
+        if (map.has('SP500') && !map.has('SPY')) map.set('SPY', map.get('SP500'));
+        if (map.has('SPY') && !map.has('SP500')) map.set('SP500', map.get('SPY'));
 
         // 3. 兜底补充未在流向矩阵中的长尾代币（长尾代币成交量限额，避免喧宾夺主）
         const stockVols = (stockWhaleData.value || cryptoWhaleData.value?.stockWhales)?.assetVolumes;
         if (stockVols && typeof stockVols === 'object') {
           for (const [k, v] of Object.entries(stockVols)) {
-            const sym = String(k).toUpperCase();
+            const sym = String(k).trim().toUpperCase();
             const n = Number(v);
             if (sym && !map.has(sym) && Number.isFinite(n) && n > 0) {
               map.set(sym, Math.min(n, 20000000));
@@ -2713,6 +2857,7 @@ createApp({
         assetVolumeMap: sankeyAssetVolumeMap.value,
         sortField: aggPositionSort.value.field,
         sortDir: aggPositionSort.value.dir,
+        defaultSortBy: sankeyAssetSort.value,
         topAssetsLimit: whaleCategory.value === 'stocks' ? 10 : 0
       });
     });
@@ -2844,6 +2989,7 @@ createApp({
         searchQuery: cryptoWhaleSearch.value,
         pulseKeys: sankeyPulseMap.value,
         assetVolumeMap: sankeyAssetVolumeMap.value,
+        assetSortBy: sankeyAssetSort.value,
         maxWallets: 6,
         maxAssets: 5,
         topAssetsLimit: whaleCategory.value === 'stocks' ? 10 : 0,
@@ -4863,6 +5009,10 @@ createApp({
         if (res.ok) {
           const data = await res.json();
           if (data?.ok && data.top10) {
+            if (data.isFallback === true && onchainStocksData.value?.isLive) {
+              onchainStocksError.value = '链上实时数据源暂不可达，已保留最近实时快照';
+              return;
+            }
             const oldMap = new Map((onchainStocksData.value?.top10 || []).map(x => [x.symbol, x.price]));
             data.top10.forEach(s => {
               const oldPx = oldMap.get(s.symbol);
@@ -4996,6 +5146,7 @@ createApp({
           fundingAnnualPct: fundingInfo?.annualPct ?? null,
           premiumPct: null,
           bars: c.bars || [],
+          _streamPrice: c._streamPrice || 0,
           isCrypto: true
         };
       });
@@ -5251,7 +5402,10 @@ createApp({
           const isLong = isPositionLong(pos);
           const side = isLong ? 'LONG' : 'SHORT';
           const sideLabel = isLong ? '做多' : '做空';
-          const refSpotPx = Number(row.price || getLiveWhaleAssetSpotPrice(sym, chartSym) || 0);
+          const useLiveHlCryptoMark = Boolean(row.isCrypto && cryptoWhaleData.value?.isLive && !row._streamPrice && Number(pos.markPx) > 0);
+          const refSpotPx = useLiveHlCryptoMark
+            ? Number(pos.markPx)
+            : Number(row._streamPrice || row.price || getLiveWhaleAssetSpotPrice(sym, chartSym) || 0);
           const rec = reconcileWhalePositionWithLivePrice(pos, refSpotPx, { isCurated: Boolean(w.isCurated) });
           const shares = rec.shares;
           const entryPx = rec.entryPx;
@@ -5301,8 +5455,13 @@ createApp({
         }
       }
 
-      // 若从当前活跃池查找到的持仓不足，补充 row.raw?.whalePositions 里的数据
-      if (row.raw && Array.isArray(row.raw.whalePositions)) {
+      const activeDataset = row.isCrypto
+        ? cryptoWhaleData.value
+        : (stockWhaleData.value || cryptoWhaleData.value?.stockWhales);
+      const isLivePool = Boolean(activeDataset?.isLive && !activeDataset?.isSample);
+
+      // 若在非实时样本模式下从当前活跃池查找到的持仓不足，补充 row.raw?.whalePositions 里的数据
+      if (!isLivePool && row.raw && Array.isArray(row.raw.whalePositions)) {
         const refSpotPx = Number(row.price || getLiveWhaleAssetSpotPrice(sym, chartSym) || 0);
         for (let wpIdx = 0; wpIdx < row.raw.whalePositions.length; wpIdx++) {
           const wp = row.raw.whalePositions[wpIdx];
@@ -5329,55 +5488,14 @@ createApp({
         }
       }
 
-      const px = Number(row.price) || 100;
-      const candidateList = list.length > 0 ? list : [
-        {
-          name: `${sym} 核心主力基金`,
-          address: '0x0242468165b4c483a9fba11b8ca605481747ffa1',
-          shortAddress: '0x0242...ffa1',
-          avatar: '🏛️',
-          tag: '核心机构',
-          side: 'LONG',
-          sideLabel: '做多',
-          shares: Number((28700000 / px).toFixed(2)),
-          unit: sym,
-          entryPx: Number((px * 0.985).toFixed(2)),
-          markPx: px,
-          positionValue: 28700000,
-          leverage: '5x 全仓',
-          unrealizedPnl: 430500,
-          returnOnEquity: 0.075,
-          liquidationPx: Number((px * 0.82).toFixed(2)),
-          hasRealEntryTime: false,
-          entryTime: null
-        },
-        {
-          name: `${sym} 链上量化对冲空头`,
-          address: '0xfc66b5952f9547d216f9f302061244bb6888ca06',
-          shortAddress: '0xfc66...ca06',
-          avatar: '⚡',
-          tag: '实时巨鲸',
-          side: 'SHORT',
-          sideLabel: '做空',
-          shares: Number((11100000 / px).toFixed(2)),
-          unit: sym,
-          entryPx: Number((px * 1.018).toFixed(2)),
-          markPx: px,
-          positionValue: 11100000,
-          leverage: '6x 全仓',
-          unrealizedPnl: 199800,
-          returnOnEquity: 0.108,
-          liquidationPx: Number((px * 1.16).toFixed(2)),
-          hasRealEntryTime: false,
-          entryTime: null
-        }
-      ];
+      const candidateList = list;
 
       // 支持用户对表头任意字段进行动态排序（方向/仓位/均价/盈亏/强平/地址）
       const field = whaleDrawerSortField.value || 'positionValue';
       const dir = whaleDrawerSortDir.value === 'asc' ? 1 : -1;
+      const distinctList = disambiguatePositionWalletNames(candidateList, !row.isCrypto);
 
-      return [...candidateList].sort((a, b) => {
+      return [...distinctList].sort((a, b) => {
         let diff = 0;
         if (field === 'positionValue') {
           diff = (Number(a.positionValue) || 0) - (Number(b.positionValue) || 0);
@@ -5543,7 +5661,7 @@ createApp({
         }
       }
 
-      return list;
+      return disambiguatePositionWalletNames(list, !isCryptoSymbol(targetSym));
     }
 
     const chartWhalePositions = computed(() => getChartWhalePositionsForSymbol(symbol.value));
@@ -6568,6 +6686,12 @@ createApp({
       }
       // 未加载出巨鲸数据时，只要处于拉取中、旧行情加载中或初始挂载阶段，均展示与桑基图结构严格对齐的骨架屏
       return Boolean(cryptoWhaleLoading.value || states.crypto.loading || isInitialLoading.value || !targetData);
+    });
+    const isFlowsSkeleton = computed(() => {
+      if (page.value !== 'flows') return false;
+      if (states.overview.loading) return true;
+      if (states.overview.error && !overview.value) return false;
+      return !overview.value;
     });
 
     watch(isPageLoading, (loading) => {
@@ -8213,6 +8337,26 @@ createApp({
     const flowDates = computed(() => [...new Set(flows.value.map(f => f.date))]);
     const dayFlows = computed(() => flows.value.filter(f => f.date === flowDate.value).sort((a, b) => b.netFlowUsd - a.netFlowUsd));
     let clockTimer, eventSource = null, pollTimer = null;
+    let onchainEventSource = null, onchainStreamReconnectTimer = null, lastOnchainStreamUrl = '';
+    const onchainStreamTier = ref('');
+
+    const onchainStreamStatusLabel = computed(() => {
+      const t = onchainStreamTier.value;
+      if (t === 'hyperliquid-ws') return 'WS 实时';
+      if (t === 'binance-ws+hl-rest') return '容灾 · 币安WS';
+      if (t === 'hl-rest') return '容灾 · HL快照';
+      if (t === 'yahoo-fallback') return '容灾 · 备用源';
+      return '';
+    });
+
+    const onchainStreamStatusTitle = computed(() => {
+      const t = onchainStreamTier.value;
+      if (t === 'hyperliquid-ws') return '主通道：Hyperliquid L1 去中心化交易所 WebSocket 毫秒级实时同步';
+      if (t === 'binance-ws+hl-rest') return '二级链式容灾：币安合约 WebSocket + Hyperliquid 高频快照无缝接管';
+      if (t === 'hl-rest') return '二级链式容灾：Hyperliquid REST 高频快照轮询接管中（后台自动重连 WS）';
+      if (t === 'yahoo-fallback') return '三级终极容灾：公开市场行情备用源兜底中（后台自动重连链上 WS）';
+      return '链上实时行情流';
+    });
 
     const findQuote = s => [...(overview.value?.stocks || []), ...(overview.value?.benchmarks || []), ...(overview.value?.sectors || [])].find(q => q.symbol === s);
     const barWidth = value => `${Math.max(2, Math.min(100, Math.abs(value || 0) / Math.max(0.5, ...rankedSectors.value.map(q => Math.abs(q.changePercent || 0))) * 100))}%`;
@@ -9659,6 +9803,186 @@ createApp({
         clearInterval(pollTimer);
         pollTimer = null;
       }
+    }
+
+    function closeOnchainStream() {
+      clearTimeout(onchainStreamReconnectTimer);
+      onchainStreamReconnectTimer = null;
+      if (onchainEventSource) {
+        try { onchainEventSource.close(); } catch { }
+        onchainEventSource = null;
+      }
+      lastOnchainStreamUrl = '';
+    }
+
+    function syncOnchainStream() {
+      const EventSourceCtor = typeof EventSource !== 'undefined'
+        ? EventSource
+        : (typeof window !== 'undefined' ? window.EventSource : undefined);
+      if (typeof EventSourceCtor !== 'function') return;
+
+      const isCryptoPage = page.value === 'crypto';
+      const isOnchainChart = page.value === 'chart' && (
+        chartVenue.value === 'hyperliquid'
+        || chart.value?.venue === 'hyperliquid'
+        || isCryptoSymbol(symbol.value)
+      );
+
+      if (!isCryptoPage && !isOnchainChart) {
+        closeOnchainStream();
+        return;
+      }
+
+      let activeCoin = '';
+      let activeInterval = '';
+      if (isOnchainChart) {
+        activeCoin = chart.value?.perpCoin || chartPerpCoin.value || resolveHyperliquidCoinForChart(symbol.value);
+        activeInterval = chartInterval.value || '15m';
+      }
+
+      const params = new URLSearchParams();
+      if (activeCoin) params.set('coin', activeCoin);
+      if (activeInterval) params.set('interval', activeInterval);
+      const qs = params.toString();
+      const url = qs ? `/api/crypto/stream?${qs}` : '/api/crypto/stream';
+
+      if (onchainEventSource && lastOnchainStreamUrl === url && onchainEventSource.readyState !== 2) {
+        return;
+      }
+
+      closeOnchainStream();
+      try {
+        const es = new EventSourceCtor(url);
+        onchainEventSource = es;
+        lastOnchainStreamUrl = url;
+
+        es.onmessage = event => {
+          try {
+            const msg = JSON.parse(event.data);
+            if (!msg || typeof msg !== 'object') return;
+            if (msg.tier) onchainStreamTier.value = msg.tier;
+
+            if (msg.type === 'ticks') {
+              // 1. 实时更新 TradFi 链上美股流向矩阵 (价格跳动闪烁 + 溢折率 + 成交额 + OI + 联动重算巨鲸浮动盈亏)
+              const stockTicks = msg.stocks;
+              if (stockTicks && typeof stockTicks === 'object' && onchainStocksData.value) {
+                let changedStocks = false;
+                const applyToStockRow = row => {
+                  const tick = stockTicks[String(row?.symbol || '').toUpperCase()];
+                  if (!tick || !(Number(tick.price) > 0)) return;
+                  const oldPx = Number(row.price || 0);
+                  const nextPx = Number(tick.price);
+                  if (oldPx > 0 && Math.abs(nextPx - oldPx) >= 0.005) {
+                    row._priceDir = nextPx > oldPx ? 'up' : 'down';
+                  }
+                  row.price = nextPx;
+                  if (Number(tick.tradFiClose) > 0) row.tradFiClose = Number(tick.tradFiClose);
+                  if (tick.changePercent != null) row.changePercent = Number(tick.changePercent);
+                  if (tick.premiumPct != null) row.premiumPct = Number(tick.premiumPct);
+                  if (tick.priceDiff != null) row.priceDiff = Number(tick.priceDiff);
+                  if (Number(tick.volume24h) > 0) row.volume24h = Number(tick.volume24h);
+                  if (Number(tick.openInterest) > 0) row.openInterest = Number(tick.openInterest);
+                  if (tick.buyRatio != null) row.buyRatio = Number(tick.buyRatio);
+                  if (tick.sellRatio != null) row.sellRatio = Number(tick.sellRatio);
+                  if (tick.netFlow != null) row.netFlow = Number(tick.netFlow);
+                  changedStocks = true;
+                };
+
+                (onchainStocksData.value.top10 || []).forEach(applyToStockRow);
+                (onchainStocksData.value.allStocks || []).forEach(applyToStockRow);
+
+                if (changedStocks) {
+                  const nextAssetVols = { ...(onchainStocksData.value.assetVolumes || {}) };
+                  const sourceRows = (onchainStocksData.value.allStocks && onchainStocksData.value.allStocks.length > 0)
+                    ? onchainStocksData.value.allStocks
+                    : (onchainStocksData.value.top10 || []);
+                  for (const r of sourceRows) {
+                    const sym = String(r?.symbol || '').trim().toUpperCase();
+                    const v = Number(r?.volume24h) || 0;
+                    if (sym && v > 0) nextAssetVols[sym] = v;
+                  }
+                  if (Array.isArray(onchainStocksData.value.allStocks) && onchainStocksData.value.allStocks.length > 0) {
+                    onchainStocksData.value.allStocks.sort((a, b) => (Number(b.volume24h) || 0) - (Number(a.volume24h) || 0));
+                    onchainStocksData.value.allStocks.forEach((r, idx) => { r.rank = idx + 1; });
+                    onchainStocksData.value.top10 = onchainStocksData.value.allStocks.slice(0, 10).map((r, idx) => ({ ...r, rank: idx + 1 }));
+                  } else if (Array.isArray(onchainStocksData.value.top10)) {
+                    onchainStocksData.value.top10.sort((a, b) => (Number(b.volume24h) || 0) - (Number(a.volume24h) || 0));
+                    onchainStocksData.value.top10.forEach((r, idx) => { r.rank = idx + 1; });
+                  }
+                  onchainStocksData.value.assetVolumes = nextAssetVols;
+                  const topRows = onchainStocksData.value.top10 || [];
+                  if (topRows.length > 0 && onchainStocksData.value.aggregate) {
+                    const totalVol = topRows.reduce((s, r) => s + (Number(r.volume24h) || 0), 0);
+                    const totalNet = topRows.reduce((s, r) => s + (Number(r.netFlow) || 0), 0);
+                    onchainStocksData.value.aggregate = {
+                      ...onchainStocksData.value.aggregate,
+                      totalVolume24h: totalVol,
+                      totalNetFlow24h: totalNet
+                    };
+                  }
+                  onchainStocksData.value = { ...onchainStocksData.value };
+                }
+              }
+
+              // 2. 实时更新主流加密货币实时价格与涨跌幅
+              const cryptoTicks = msg.crypto;
+              if (cryptoTicks && typeof cryptoTicks === 'object') {
+                const targetList = overview.value?.crypto || cryptoData.value?.items;
+                if (Array.isArray(targetList)) {
+                  for (const item of targetList) {
+                    const code = String(item?.code || item?.symbol?.replace(/-USD$/i, '') || '').toUpperCase();
+                    const ct = cryptoTicks[code];
+                    if (ct && Number(ct.price) > 0) {
+                      item.price = Number(ct.price);
+                      item._streamPrice = Number(ct.price);
+                      if (ct.changePercent != null) item.changePercent = Number(ct.changePercent);
+                      if (Number(ct.high24h) > 0) item.high24h = Number(ct.high24h);
+                      if (Number(ct.low24h) > 0) item.low24h = Number(ct.low24h);
+                    }
+                  }
+                } else {
+                  const seeded = DEFAULT_CRYPTOS.map(def => {
+                    const ct = cryptoTicks[def.code];
+                    return ct && Number(ct.price) > 0
+                      ? { ...def, price: Number(ct.price), changePercent: ct.changePercent ?? def.changePercent }
+                      : { ...def };
+                  });
+                  cryptoData.value = { items: seeded };
+                }
+              }
+
+              // 3. 若当前正在 #chart 查看链上合约，同步跳动最后一根蜡烛价格
+              if (isOnchainChart && chart.value) {
+                const rawCoin = String(chart.value.perpCoin || resolveHyperliquidCoinForChart(chart.value.symbol) || '');
+                const cleanSym = rawCoin.replace(/^[a-z0-9_-]+:/i, '').toUpperCase();
+                const matchedTick = rawCoin.includes(':')
+                  ? msg.stocks?.[cleanSym]
+                  : msg.crypto?.[cleanSym];
+                if (matchedTick && Number(matchedTick.price) > 0) {
+                  applyOnchainTickToMainChart(matchedTick.price, matchedTick.changePercent);
+                }
+              }
+            } else if (msg.type === 'candle' && msg.bar) {
+              if (isOnchainChart && chart.value) {
+                const expectedCoin = String(chart.value.perpCoin || resolveHyperliquidCoinForChart(chart.value.symbol) || '').toUpperCase();
+                const incomingCoin = String(msg.coin || '').toUpperCase();
+                if (!incomingCoin || incomingCoin === expectedCoin) {
+                  applyOnchainCandleToMainChart(msg.bar);
+                }
+              }
+            }
+          } catch { }
+        };
+
+        es.onerror = () => {
+          if (onchainEventSource === es && es.readyState === 2) {
+            closeOnchainStream();
+            onchainStreamReconnectTimer = setTimeout(() => {
+              if (typeof document === 'undefined' || !document.hidden) syncOnchainStream();
+            }, 3500);
+          }
+        };
+      } catch { }
     }
 
     let watchlistDebounceTimer = null;
@@ -11146,6 +11470,7 @@ createApp({
       lwDrawerWhaleDotPrimitive?.requestUpdate?.();
     });
     watch([page, whaleCategory, isWhaleDatasetSample], () => { syncCryptoWhalePolling(); });
+    watch([page, symbol, chartInterval, chartVenue], () => { syncOnchainStream(); });
     watch([selectedCrypto, cryptoTimeframe], async () => { if (page.value === 'crypto') { await nextTick(); renderCryptoChart(); } });
     watch(newsSymbol, () => { if (page.value === 'news') loadNews(); });
     watch(optionExpiry, value => { if (page.value === 'options' && value && value !== options.value?.expiration) loadOptions(); });
@@ -11165,6 +11490,7 @@ createApp({
 
     function handleVisibilityChange() {
       syncCryptoWhalePolling();
+      syncOnchainStream();
       if (document.hidden) {
         stopShortPolling();
       } else {
@@ -11266,6 +11592,7 @@ createApp({
       fetchWatchlistQuotes();
       setupEventSource();
       syncCryptoWhalePolling();
+      syncOnchainStream();
       setupTreeNewsStream();
       fetchTreeNewsHistory();
       initialTimer = setTimeout(() => { isInitialLoading.value = false; }, 800);
@@ -11390,6 +11717,7 @@ createApp({
       clearTimeout(sseReconnectTimer);
       clearTimeout(treeNewsReconnectTimer);
       clearTimeout(watchlistDebounceTimer);
+      closeOnchainStream();
       eventSource?.close();
       treeNewsEventSource?.close();
       window.removeEventListener('resize', resizeLayout);
@@ -11479,14 +11807,15 @@ createApp({
       setWhaleTopN, toggleWalletScopeFilter, openCustomWalletManager, closeCustomWalletManager,
       addCustomWhaleWallet, removeCustomWhaleWallet, focusCustomWallet, getCustomWalletLiveRecord, formatShortAddr, formatWhaleDisplayName,
       // Whale Sankey & Two-Column Split Layout
-      selectedWhaleKey, sankeyMode, hoveredSankeyWalletKey, hoveredAssetSymbol, hoveredSankeyLinkId,
+      selectedWhaleKey, sankeyMode, sankeyAssetSort, hoveredSankeyWalletKey, hoveredAssetSymbol, hoveredSankeyLinkId,
       showSecondaryMarketFlow, secondaryFlowTab, lastWhaleSyncAt,
-      setSankeyMode, selectWhaleWallet, clearWhaleSelection, resetCryptoSankeyFilters,
+      setSankeyMode, setSankeyAssetSort, selectWhaleWallet, clearWhaleSelection, resetCryptoSankeyFilters,
       leftWalletRows, selectedWhaleRecord, aggregatedAssetPositions, nowRebalanceItems,
       sankeyGraph, sankeyKpiSummary, sankeyMarketMeta,
       getAssetLabel, formatWhaleCompactUsd,
       // On-Chain US Equities Flow Top 10 & Unified Graphic Flow
       onchainStocksData, onchainStocksLoading, onchainStocksError, onchainStockSearch, onchainStockSortField, onchainStockSortDir,
+      onchainStreamTier, onchainStreamStatusLabel, onchainStreamStatusTitle, syncOnchainStream,
       onchainAggregate, onchainStocksList, toggleOnchainSort, formatOnchainUsd, formatOnchainFlowUsd, loadOnchainStocks,
       expandedStockSymbol, focusedFlowSymbol, toggleStockRadar, focusAssetInFlowMatrix, formatWhaleShares, getWhalePositionsForStock,
       activeFlowRows, activeFlowSummary, whaleDonutSpec, getUnifiedWhalePositions, getPriceAxisSpec, formatSpreadPct, formatSpreadDiff, refreshCryptoWorkspace,
@@ -11531,7 +11860,7 @@ createApp({
       stockModal, openHeatmapStockModal, closeStockModal, viewStockFromModal,
       undoAction, isInteractingWithTable,
       toast, importing, nyClock, nyClockDetailed, nyClockInfo, sessionStatusText, dateLabel,
-      isPageLoading, isWatchlistSkeleton, isCryptoSkeleton, rwSkeletonRows, cryptoWhaleSkeletonRows, cryptoAssetSkeletonRows, sankeySkeletonWallets, sankeySkeletonAssets, sankeySkeletonRibbons, skeletonPattern, butterflySkeletonRows, klineCandleSkeletons, flowsBubbleSkeletons, triggerPageLoadingPulse,
+      isPageLoading, isWatchlistSkeleton, isCryptoSkeleton, isFlowsSkeleton, rwSkeletonRows, cryptoWhaleSkeletonRows, cryptoAssetSkeletonRows, sankeySkeletonWallets, sankeySkeletonAssets, sankeySkeletonRibbons, skeletonPattern, butterflySkeletonRows, klineCandleSkeletons, flowsBubbleSkeletons, triggerPageLoadingPulse,
       isDeleteMode, pendingDeleteSymbol, toggleDeleteMode, handleChipClick,
       breadcrumbLabel, upSectorsCount, downSectorsCount, upSectorsRatio, isStockGainer, getSparkline,
       stockSectors, rankedSectors, quoteWindow, breadth, findQuote, barWidth, getSectorBarHeight, walls, num, formatWatchlistSymbol, compact, pct, pctNoPlus, tone, time,

@@ -10,6 +10,75 @@ export const WHALE_MAX_CUSTOM_WALLETS = 20;
 
 const VALID_EVM_ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
 
+const DISCOVERED_WHALE_FIRMS = [
+  '北极星', '曜石', '天枢', '苍穹', '星海', '玄武', '昆仑', '深蓝',
+  '赤峰', '银河', '磐石', '凌云', '远景', '启明', '瀚海', '极光'
+];
+
+const DISCOVERED_TRADFI_DESKS = [
+  '美股量化基金', '跨市场套利机构', '链上对冲席位', '衍生品资管专户',
+  '科技股波段巨鲸', '宏观策略金库', '高频做市交易台', '多空阿尔法基金',
+  '美股趋势大户', '指数增强专户', '半导体量化席位', '全球宏观对冲基金'
+];
+
+const DISCOVERED_CRYPTO_DESKS = [
+  '永续量化基金', '链上套利机构', '多空对冲席位', '衍生品资管专户',
+  '高倍波段巨鲸', '宏观策略金库', '高频做市交易台', '趋势突破大户',
+  '阿尔法策略专户', '主流币量化席位', '跨期对冲基金', '动量狙击巨鲸'
+];
+
+const DISCOVERED_WHALE_AVATARS = ['🐋', '🏛️', '⚡', '🎯', '🌐', '🦅', '🧭', '💎'];
+
+export function deriveDiscoveredWhaleIdentity(address, { isStocks = false, salt = 0 } = {}) {
+  const hex = String(address || '').toLowerCase().replace(/^0x/, '').padEnd(40, '0');
+  const h1 = (Number.parseInt(hex.slice(0, 8), 16) || 0) >>> 0;
+  const h2 = (Number.parseInt(hex.slice(8, 16), 16) || 0) >>> 0;
+  const h3 = (Number.parseInt(hex.slice(32, 40), 16) || 0) >>> 0;
+  const desks = isStocks ? DISCOVERED_TRADFI_DESKS : DISCOVERED_CRYPTO_DESKS;
+  const firmIdx = ((h1 + salt * 3) >>> 0) % DISCOVERED_WHALE_FIRMS.length;
+  const deskIdx = ((((h2 ^ (h3 >>> 3)) >>> 0) + salt * 5) >>> 0) % desks.length;
+  const avatarIdx = ((((h1 ^ h3) >>> 0) + salt) >>> 0) % DISCOVERED_WHALE_AVATARS.length;
+  return {
+    name: `${DISCOVERED_WHALE_FIRMS[firmIdx]}${desks[deskIdx]}`,
+    avatar: DISCOVERED_WHALE_AVATARS[avatarIdx]
+  };
+}
+
+function ensureUniqueWhaleNames(whales = [], { isStocks = false } = {}) {
+  const usedNames = new Set();
+  const romanNumerals = ['II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII'];
+  for (const w of whales) {
+    if (!w) continue;
+    let candidate = String(w.name || '').trim();
+    if (!candidate || candidate === 'HL TradFi 巨鲸' || candidate === 'HL 巨鲸') {
+      const derived = deriveDiscoveredWhaleIdentity(w.address, { isStocks });
+      candidate = derived.name;
+      if (!w.avatar || w.avatar === '🐋') w.avatar = derived.avatar;
+    }
+    if (usedNames.has(candidate) && !w.isCustom) {
+      let resolved = '';
+      for (let step = 1; step <= 16; step++) {
+        const alt = deriveDiscoveredWhaleIdentity(w.address, { isStocks, salt: step });
+        if (!usedNames.has(alt.name)) {
+          resolved = alt.name;
+          break;
+        }
+      }
+      if (!resolved) {
+        let suffixIdx = 0;
+        while (usedNames.has(`${candidate} · ${romanNumerals[suffixIdx] || (suffixIdx + 2)}`)) {
+          suffixIdx++;
+        }
+        resolved = `${candidate} · ${romanNumerals[suffixIdx] || (suffixIdx + 2)}`;
+      }
+      candidate = resolved;
+    }
+    w.name = candidate;
+    usedNames.add(candidate);
+  }
+  return whales;
+}
+
 export function isValidWhaleAddress(addr) {
   return VALID_EVM_ADDRESS_RE.test(String(addr || '').trim());
 }
@@ -1011,9 +1080,14 @@ export class CryptoWhaleService {
     const isCustom = Boolean(candidateMeta?.isCustom);
     const isCurated = Boolean(curated);
 
+    const discoveredIdentity = (!customLabel && !lbName && !curated)
+      ? deriveDiscoveredWhaleIdentity(address, { isStocks })
+      : null;
+
     const name = customLabel
       || (isStocks ? (lbName || curated?.name) : (curated?.name || lbName))
-      || (isCustom ? '自选钱包' : (isStocks ? 'HL TradFi 巨鲸' : 'HL 巨鲸'));
+      || (isCustom ? '自选钱包' : discoveredIdentity?.name)
+      || (isStocks ? 'HL TradFi 巨鲸' : 'HL 巨鲸');
 
     const tag = isCustom
       ? (curated ? `自选 · ${curated.tag}` : (accountValue >= 10_000_000 ? '自选 · 千万级大户' : '自选链上钱包'))
@@ -1030,7 +1104,7 @@ export class CryptoWhaleService {
       shortAddress,
       name,
       tag,
-      avatar: curated?.avatar || (isCustom ? '⭐' : '🐋'),
+      avatar: curated?.avatar || (isCustom ? '⭐' : (discoveredIdentity?.avatar || '🐋')),
       isCustom,
       isCurated,
       sourceType: isCustom ? 'custom' : (isCurated ? 'curated' : 'leaderboard'),
@@ -1426,10 +1500,13 @@ export class CryptoWhaleService {
           }
         }
 
-        const selectedWhales = [...finalByAddr.values()].sort((a, b) =>
-          (b.totalNtlPos - a.totalNtlPos)
-          || ((b.isCustom ? 1 : 0) - (a.isCustom ? 1 : 0))
-          || (b.accountValue - a.accountValue)
+        const selectedWhales = ensureUniqueWhaleNames(
+          [...finalByAddr.values()].sort((a, b) =>
+            (b.totalNtlPos - a.totalNtlPos)
+            || ((b.isCustom ? 1 : 0) - (a.isCustom ? 1 : 0))
+            || (b.accountValue - a.accountValue)
+          ),
+          { isStocks }
         );
 
         // 4. 智能配额保护获取近 12H userFillsByTime 成交（仅限最终入选列表，按市场分键缓存）

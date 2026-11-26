@@ -7,6 +7,7 @@ import {
   formatWhaleCompactUsd,
   formatSignedWhaleCompactUsd,
   disambiguateWallets,
+  deriveFrontendWhaleName,
   computeWhaleSankeyGraph,
   buildAggregatedPositions,
   detectPositionDeltas
@@ -718,6 +719,147 @@ test('computeWhaleSankeyGraph excludes zero-contribution wallets under topAssets
     graph.walletNodes.map(w => w.name),
     ['W7-Top10', 'W2-Top10', 'W1-Top10', 'W8-Top10', 'W6-Top10', 'W4-Top10']
   );
+});
+
+test('computeWhaleSankeyGraph sorts right-column TradFi assets strictly by 24H volume top-to-bottom and disambiguates generic HL TradFi whale names', () => {
+  // Real-world scenario: SKHX ($532.4M), XYZ100 ($512.8M), NVDA ($459.6M), SP500 ($378.0M), SOXL ($342.7M), MU ($140.7M), EWY ($3.2M)
+  const volumeMap = new Map([
+    ['SKHX', 532_400_000],
+    ['XYZ100', 512_770_000],
+    ['NVDA', 459_620_000],
+    ['SP500', 378_040_000],
+    ['SOXL', 342_740_000],
+    ['MU', 140_730_000],
+    ['SPY', 81_960_000],
+    ['QQQ', 57_450_000],
+    ['EWY', 3_200_000]
+  ]);
+
+  const whales = [
+    {
+      address: '0x1111222233334444555566667777888899990001',
+      name: 'HL TradFi 巨鲸',
+      tag: 'HIP-3 TradFi 超大巨鲸',
+      positions: [
+        { coin: 'SKHX', side: 'SHORT', isLong: false, positionValue: 46_000_000 },
+        { coin: 'SOXL', side: 'SHORT', isLong: false, positionValue: 7_400_000 }
+      ]
+    },
+    {
+      address: '0x2222333344445555666677778888999900000002',
+      name: 'HL TradFi 巨鲸',
+      tag: 'HIP-3 TradFi 千万级巨鲸',
+      positions: [
+        { coin: 'XYZ100', side: 'LONG', isLong: true, positionValue: 39_900_000 },
+        { coin: 'SP500', side: 'SHORT', isLong: false, positionValue: 28_500_000 }
+      ]
+    },
+    {
+      address: '0x3333444455556666777788889999000011110003',
+      name: 'HL TradFi 巨鲸',
+      tag: 'HIP-3 TradFi 榜单巨鲸',
+      positions: [
+        { coin: 'NVDA', side: 'SHORT', isLong: false, positionValue: 35_800_000 },
+        { coin: 'MU', side: 'LONG', isLong: true, positionValue: 18_200_000 },
+        { coin: 'EWY', side: 'SHORT', isLong: false, positionValue: 1_400_000 }
+      ]
+    }
+  ];
+
+  const graph = computeWhaleSankeyGraph({
+    whales,
+    mode: 'all',
+    assetVolumeMap: volumeMap,
+    maxWallets: 6,
+    maxAssets: 5,
+    topAssetsLimit: 10
+  });
+
+  const nonOtherAssets = graph.assetNodes.filter(a => !a.isOther);
+  assert.deepEqual(
+    nonOtherAssets.map(a => a.symbol),
+    ['SKHX', 'XYZ100', 'NVDA', 'SP500', 'SOXL'],
+    'Top 5 Sankey assets must strictly follow 24H volume descending order without EWY cloning SKHX or QQQ/SPY overwriting XYZ100/SP500'
+  );
+  for (let i = 0; i < nonOtherAssets.length - 1; i++) {
+    assert.ok(
+      nonOtherAssets[i].volumeVal >= nonOtherAssets[i + 1].volumeVal,
+      `Expected ${nonOtherAssets[i].symbol} (${nonOtherAssets[i].volumeVal}) >= ${nonOtherAssets[i + 1].symbol} (${nonOtherAssets[i + 1].volumeVal})`
+    );
+  }
+
+  // All 3 generic "HL TradFi 巨鲸" wallets receive unique institutional names
+  const walletNames = graph.walletNodes.map(w => w.name);
+  assert.equal(new Set(walletNames).size, 3, 'Duplicate generic HL TradFi 巨鲸 wallets must receive distinct institutional names');
+  for (const wn of walletNames) {
+    assert.notEqual(wn, 'HL TradFi 巨鲸');
+  }
+});
+
+test('computeWhaleSankeyGraph supports assetSortBy=position descending within Top 10 volume pool and guards high-bit address hashes', () => {
+  const volumeMap = new Map([
+    ['XYZ100', 565_800_000],
+    ['SKHX', 487_300_000],
+    ['NVDA', 383_700_000],
+    ['SP500', 361_400_000],
+    ['SOXL', 348_400_000],
+    ['MU', 140_700_000]
+  ]);
+  const whales = [
+    {
+      address: '0xffffffffffffffffffffffffffffffffffffffff',
+      name: 'W-Alpha',
+      positions: [
+        { coin: 'MU', side: 'SHORT', isLong: false, positionValue: 80_500_000 },
+        { coin: 'SOXL', side: 'SHORT', isLong: false, positionValue: 2_800_000 }
+      ]
+    },
+    {
+      address: '0x800000001234567890abcdef1234567890abcdef',
+      name: 'W-Beta',
+      positions: [
+        { coin: 'NVDA', side: 'SHORT', isLong: false, positionValue: 55_300_000 },
+        { coin: 'SKHX', side: 'SHORT', isLong: false, positionValue: 8_600_000 }
+      ]
+    },
+    {
+      address: '0x9f1234567890abcdef1234567890abcdef123456',
+      name: 'W-Gamma',
+      positions: [
+        { coin: 'XYZ100', side: 'LONG', isLong: true, positionValue: 49_300_000 },
+        { coin: 'SP500', side: 'SHORT', isLong: false, positionValue: 36_500_000 }
+      ]
+    }
+  ];
+
+  const posGraph = computeWhaleSankeyGraph({
+    whales,
+    mode: 'all',
+    assetVolumeMap: volumeMap,
+    assetSortBy: 'position',
+    maxWallets: 6,
+    maxAssets: 5,
+    topAssetsLimit: 10
+  });
+
+  const nonOtherPos = posGraph.assetNodes.filter(a => !a.isOther);
+  assert.deepEqual(
+    nonOtherPos.map(a => a.symbol),
+    ['MU', 'NVDA', 'XYZ100', 'SP500', 'SKHX'],
+    'assetSortBy=position orders right-side assets strictly descending by whale position notional'
+  );
+  for (let i = 0; i < nonOtherPos.length - 1; i++) {
+    assert.ok(nonOtherPos[i].totalVal >= nonOtherPos[i + 1].totalVal);
+  }
+
+  for (const highBitAddr of [
+    '0xffffffffffffffffffffffffffffffffffffffff',
+    '0x800000001234567890abcdef1234567890abcdef',
+    '0x9f1234567890abcdef1234567890abcdef123456'
+  ]) {
+    const derived = deriveFrontendWhaleName(highBitAddr, { isStocks: true });
+    assert.ok(derived && !derived.includes('undefined'), `High-bit address hash must never contain undefined: ${derived}`);
+  }
 });
 
 

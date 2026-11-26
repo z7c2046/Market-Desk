@@ -228,4 +228,50 @@ describe('OnchainStocksService', () => {
       }
     }
   });
+
+  it('reports isLive:false & isFallback:true when all upstreams fail, omits synthetic SOXL whales, and preserves last live snapshot across transient outages', async () => {
+    let allowLive = false;
+    const service = new OnchainStocksService({
+      cacheTtlMs: 60000,
+      fetchQuoteFn: async () => null,
+      fetchHlFn: async () => {
+        if (!allowLive) throw new Error('TLS disconnect');
+        return {
+          ok: true,
+          json: async () => [
+            { universe: [{ name: 'xyz:SOXL' }, { name: 'xyz:NVDA' }] },
+            [
+              { markPx: '25.78', oraclePx: '25.70', prevDayPx: '32.00', dayNtlVlm: '341000000', openInterest: '310000', funding: '0.00001' },
+              { markPx: '142.85', oraclePx: '142.80', prevDayPx: '145.00', dayNtlVlm: '378000000', openInterest: '2100000', funding: '0.00001' }
+            ]
+          ]
+        };
+      }
+    });
+
+    // 1. Offline initial fetch: must report honest isLive:false + isFallback:true and never fabricate SOXL whales
+    const offlineFirst = await service.getOnchainStocksData({ force: true });
+    assert.strictEqual(offlineFirst.isLive, false);
+    assert.strictEqual(offlineFirst.isFallback, true);
+    const offlineSoxl = offlineFirst.allStocks.find(s => s.symbol === 'SOXL');
+    assert.ok(offlineSoxl);
+    assert.strictEqual(offlineSoxl.whalePositions.length, 0, 'Uncurated SOXL must not fabricate synthetic whale rows');
+
+    // 2. Live fetch succeeds -> captures real $25.78 SOXL price
+    allowLive = true;
+    const liveSnap = await service.getOnchainStocksData({ force: true });
+    assert.strictEqual(liveSnap.isLive, true);
+    assert.strictEqual(liveSnap.isFallback, false);
+    const liveSoxl = liveSnap.allStocks.find(s => s.symbol === 'SOXL');
+    assert.strictEqual(liveSoxl.price, 25.78);
+
+    // 3. Subsequent transient total outage -> preserves last live $25.78 snapshot with stale:true instead of clobbering with basePrice
+    allowLive = false;
+    const staleAfterOutage = await service.getOnchainStocksData({ force: true });
+    assert.strictEqual(staleAfterOutage.isLive, false);
+    assert.strictEqual(staleAfterOutage.stale, true);
+    assert.strictEqual(staleAfterOutage.isFallback, false);
+    const staleSoxl = staleAfterOutage.allStocks.find(s => s.symbol === 'SOXL');
+    assert.strictEqual(staleSoxl.price, 25.78, 'Must preserve live $25.78 price instead of reverting to hardcoded basePrice');
+  });
 });

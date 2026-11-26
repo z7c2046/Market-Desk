@@ -5,6 +5,7 @@ import {
   getCryptoWhaleService,
   CURATED_WHALES,
   COIN_CHART_SYMBOLS,
+  deriveDiscoveredWhaleIdentity,
   isValidWhaleAddress,
   normalizeWhaleTopN,
   sanitizeWhaleLabel,
@@ -737,5 +738,92 @@ test('CryptoWhaleService: discovers live HIP-3 (xyz) TradFi whales, strips xyz: 
   assert.equal(data.activityLogs[0].chartSymbol, 'QQQ');
   assert.equal(data.activityLogs[1].coin, 'NVDA');
   assert.ok(!data.activityLogs.some(l => l.coin === 'BTC'), 'Mainnet crypto fills filtered from TradFi logs');
+});
+
+test('CryptoWhaleService: assigns distinct institutional names to anonymous leaderboard whales without displayName', async () => {
+  const anonAddrs = [
+    '0xaa11bb22cc33dd44ee55ff667788990011223344',
+    '0xbb22cc33dd44ee55ff6677889900112233445566',
+    '0xcc33dd44ee55ff66778899001122334455667788',
+    '0xdd44ee55ff667788990011223344556677889900',
+    '0xee55ff6677889900112233445566778899001122'
+  ];
+
+  const mockFetch = async (url, opts) => {
+    if (String(url).includes('/Mainnet/leaderboard')) {
+      return {
+        ok: true,
+        json: async () => ({
+          leaderboardRows: anonAddrs.map((ethAddress, idx) => ({
+            ethAddress,
+            accountValue: String((30 - idx * 3) * 1_000_000),
+            displayName: '',
+            windowPerformances: [['day', { vlm: '10000000' }], ['week', { vlm: '50000000' }]]
+          }))
+        })
+      };
+    }
+    const body = JSON.parse(opts.body);
+    if (body.type === 'metaAndAssetCtxs') {
+      return {
+        ok: true,
+        json: async () => [
+          { universe: [{ name: 'xyz:NVDA' }] },
+          [{ markPx: '148.5', dayNtlVlm: '460000000' }]
+        ]
+      };
+    }
+    if (body.type === 'clearinghouseState') {
+      const idx = anonAddrs.indexOf(body.user.toLowerCase());
+      if (idx === -1) {
+        return { ok: true, json: async () => ({ marginSummary: { accountValue: '0', totalNtlPos: '0' }, assetPositions: [] }) };
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          marginSummary: { accountValue: String((30 - idx * 3) * 1_000_000), totalNtlPos: String((16 - idx * 2) * 1_000_000) },
+          assetPositions: [{
+            position: {
+              coin: 'xyz:NVDA',
+              szi: String(-(100000 - idx * 10000)),
+              entryPx: '152.0',
+              positionValue: String((16 - idx * 2) * 1_000_000),
+              unrealizedPnl: '240000',
+              returnOnEquity: '0.15',
+              leverage: { type: 'cross', value: 10 },
+              liquidationPx: '185.0'
+            }
+          }]
+        })
+      };
+    }
+    if (body.type === 'userFillsByTime') {
+      return { ok: true, json: async () => [] };
+    }
+    throw new Error(`Unexpected request: ${url}`);
+  };
+
+  const service = new CryptoWhaleService({ fetchFn: mockFetch, ttlMs: 60000 });
+  const data = await service.getWhaleTrackerData({ category: 'stocks', topN: 6 });
+  assert.equal(data.whales.length, 5);
+  const names = data.whales.map(w => w.name);
+  assert.equal(new Set(names).size, 5, 'Every anonymous discovered whale must receive a unique institutional name');
+  for (const name of names) {
+    assert.notEqual(name, 'HL TradFi 巨鲸', 'Must not fall back to identical generic HL TradFi 巨鲸 label');
+    assert.ok(!/0x[a-f0-9]{4}/i.test(name), 'Clean institutional name omits raw hex clutter');
+  }
+
+  // High-bit addresses producing negative signed XOR intermediate values must use unsigned modulo
+  for (const highBitAddr of [
+    '0xffffffffffffffffffffffffffffffffffffffff',
+    '0x800000001234567890abcdef1234567890abcdef',
+    '0x9f1234567890abcdef1234567890abcdef123456'
+  ]) {
+    for (const isStocks of [true, false]) {
+      const id = deriveDiscoveredWhaleIdentity(highBitAddr, { isStocks });
+      assert.ok(id.name && !id.name.includes('undefined'), `Valid name for ${highBitAddr}: ${id.name}`);
+      assert.ok(id.avatar && !String(id.avatar).includes('undefined'), `Valid avatar for ${highBitAddr}: ${id.avatar}`);
+    }
+  }
 });
 
